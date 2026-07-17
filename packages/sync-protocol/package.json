@@ -1,0 +1,22 @@
+{
+  "name": "@lane1/sync-protocol",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Push/Pull-Vertragsdefinition und Konfliktregeln für die Sync-API (siehe Backend-Entwicklungsplan, Abschnitte 6+7). Wird in Phase 3 von apps/api konsumiert.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint . --ext .ts"
+  },
+  "dependencies": {
+    "@lane1/shared-types": "*"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.4"
+  }
+}
