@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint-test-build:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: lane1_test
+          POSTGRES_USER: lane1_app
+          POSTGRES_PASSWORD: lane1_test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U lane1_app -d lane1_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://lane1_app:lane1_test_password@localhost:5432/lane1_test
+      JWT_SIGNING_KEY: ci-only-test-signing-key-not-for-production-0000
+      CORS_ORIGIN: http://localhost:5173
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies (alle Workspaces)
+        run: npm ci
+
+      - name: Debug — Repo-/Workspace-Struktur anzeigen
+        run: |
+          echo "--- Arbeitsverzeichnis ---"
+          pwd
+          echo "--- Inhalt des Wurzelverzeichnisses ---"
+          ls -la
+          echo "--- workspaces-Feld in package.json ---"
+          node -e "console.log(require('./package.json').workspaces)"
+          echo "--- Von npm erkannte Workspaces ---"
+          npm ls --workspaces --depth=0 || true
+          echo "--- apps/api vorhanden? ---"
+          ls -la apps/api || echo "apps/api NICHT gefunden!"
+
+      - name: Build gemeinsame Pakete (shared-types, sync-protocol)
+        run: |
+          npm run build --workspace=packages/shared-types
+          npm run build --workspace=packages/sync-protocol
+
+      - name: Prisma Client generieren
+        # Direktes 'cd' statt --workspace=apps/api — unabhängig von npms
+        # Pfad-/Namensauflösung für Workspaces, daher robuster gegen genau
+        # diese Fehlerklasse ("No workspaces found").
+        run: cd apps/api && npm run prisma:generate
+
+      - name: Lint (alle Workspaces)
+        run: npm run lint --workspaces --if-present
+
+      - name: Test (alle Workspaces)
+        run: npm run test --workspaces --if-present
+
+      - name: Build apps/api
+        run: cd apps/api && npm run build
