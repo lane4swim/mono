@@ -1,0 +1,383 @@
+// apps/api/prisma/schema.prisma
+//
+// Phase 2 (Datenmodell & Migrationen): vollständiges fachliches Datenmodell
+// gemäß Abschnitt 4 des Backend-Entwicklungsplans — Mapping der bestehenden
+// IndexedDB-Stores aus apps/web (js/db.js) auf Server-Tabellen.
+//
+// Wiederkehrende Konventionen für alle fachlichen Modelle:
+//   - id: client-generierte UUID wird beibehalten (siehe apps/web/js/db.js:
+//     uid()) — verhindert ID-Konflikte bei künftiger Offline-Erstellung und
+//     macht einen Datensatz geräteübergreifend eindeutig identifizierbar.
+//   - clubId: Mandantenfähigkeit — jede fachliche Zeile gehört zu genau
+//     einem Verein.
+//   - deletedAt: Soft-Delete statt Hard-Delete, wichtig für die künftige
+//     Sync-API (Phase 3) — ein "Löschen" muss beim Pull auf einem anderen
+//     Gerät als Löschung ankommen, nicht einfach fehlen.
+//   - Verschachtelte/variable Strukturen (Sets/Blöcke in Plänen und
+//     Vorlagen, Anwesenheitslisten in Einheiten) liegen als Json, da sie in
+//     apps/web strukturgleich zum Frontend bleiben sollen (kein Mapping-
+//     Verlust beim Sync).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Club {
+  id          String       @id @default(uuid())
+  name        String
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  users       User[]
+  invitations Invitation[]
+
+  groups       Group[]
+  athletes     Athlete[]
+  competitions Competition[]
+  entries      StartlistEntry[]
+  results      Result[]
+  exercises    Exercise[]
+  templates    Template[]
+  plans        Plan[]
+  sessions     TrainingSession[]
+  actionItems  ActionItem[]
+
+  @@map("clubs")
+}
+
+model User {
+  id                String    @id @default(uuid())
+  // null nur für role === "superadmin".
+  clubId            String?
+  club              Club?     @relation(fields: [clubId], references: [id])
+  name              String
+  email             String    @unique
+  passwordHash      String
+  role              String
+  athleteId         String?
+  locale            String    @default("de-DE")
+  // DSGVO: Zeitpunkt/Version der zuletzt bestätigten Einwilligung zur
+  // Datenverarbeitung — wird bei jedem Login/jeder Registrierung erneut
+  // gesetzt (siehe auth.service.ts: CURRENT_CONSENT_VERSION).
+  consentGivenAt    DateTime?
+  consentVersion    String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  // Sofort gesetzt, sobald eine Löschung beantragt wird (Recht auf
+  // Löschung, Art. 17 DSGVO) — der Account ist ab dann funktionslos
+  // (Login wird verweigert), der endgültige Hard-Purge aus der Datenbank
+  // erfolgt zeitversetzt über DataDeletionRequest.purgeAfter.
+  deletedAt         DateTime?
+  refreshTokens     RefreshToken[]
+  sentInvitations   Invitation[] @relation("InvitationSender")
+  deletionRequest   DataDeletionRequest?
+
+  @@map("users")
+}
+
+// Recht auf Löschung (Art. 17 DSGVO): eine Löschanfrage wird sofort
+// dokumentiert; der tatsächliche, unwiderrufliche Hard-Purge aus der
+// Datenbank erfolgt erst nach Ablauf von purgeAfter (siehe
+// src/jobs/purgeExpiredDeletions.ts) — das gibt eine kurze, angemessene
+// Frist (Standard: 30 Tage, siehe DATA_ERASURE_RETENTION_DAYS in .env),
+// z. B. für versehentliche Löschungen oder laufende Backup-Zyklen, erfüllt
+// aber weiterhin die Pflicht zur Löschung "ohne unangemessene Verzögerung".
+model DataDeletionRequest {
+  id          String    @id @default(uuid())
+  userId      String    @unique
+  user        User      @relation(fields: [userId], references: [id])
+  requestedAt DateTime  @default(now())
+  purgeAfter  DateTime
+  purgedAt    DateTime?
+  status      String    @default("pending") // "pending" | "purged"
+
+  @@index([status, purgeAfter])
+  @@map("data_deletion_requests")
+}
+
+model RefreshToken {
+  id         String    @id @default(uuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id])
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model Invitation {
+  id           String    @id @default(uuid())
+  tokenHash    String    @unique
+  email        String
+  // "admin" | "trainer" | "athlete" — "superadmin" wird nie per Einladung
+  // vergeben (siehe scripts/createSuperAdmin.ts).
+  role         String
+  clubId       String?
+  club         Club?     @relation(fields: [clubId], references: [id])
+  athleteId    String?
+  invitedById  String
+  invitedBy    User      @relation("InvitationSender", fields: [invitedById], references: [id])
+  expiresAt    DateTime
+  usedAt       DateTime?
+  revokedAt    DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([clubId])
+  @@map("invitations")
+}
+
+// ============================================================
+// Fachliches Datenmodell (Phase 2) — Mapping siehe Tabelle in
+// docs/backend-plan.md, Abschnitt 4.
+// ============================================================
+
+model Group {
+  id          String    @id @default(uuid())
+  clubId      String
+  club        Club      @relation(fields: [clubId], references: [id])
+  name        String
+  description String    @default("")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  athletes Athlete[]
+  plans    Plan[]
+  sessions TrainingSession[]
+
+  @@index([clubId])
+  @@map("groups")
+}
+
+model Athlete {
+  id        String    @id @default(uuid())
+  clubId    String
+  club      Club      @relation(fields: [clubId], references: [id])
+  firstName String
+  lastName  String
+  birthdate DateTime?
+  gender    String    @default("d") // "w" | "m" | "d"
+  groupId   String?
+  group     Group?    @relation(fields: [groupId], references: [id])
+  joinDate  DateTime?
+  active    Boolean   @default(true)
+  notes     String    @default("")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  entries     StartlistEntry[]
+  results     Result[]
+  actionItems ActionItem[]
+
+  @@index([clubId])
+  @@index([groupId])
+  @@map("athletes")
+}
+
+model Competition {
+  id        String    @id @default(uuid())
+  clubId    String
+  club      Club      @relation(fields: [clubId], references: [id])
+  name      String
+  date      DateTime
+  location  String    @default("")
+  course    String    @default("LCM") // "LCM" | "SCM"
+  notes     String    @default("")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  entries StartlistEntry[]
+  results Result[]
+
+  @@index([clubId])
+  @@map("competitions")
+}
+
+// Startlisten-Einträge (Wettkampfnummer/Lauf/Bahn/Meldezeit) — entspricht
+// dem "entries"-Store im Frontend.
+model StartlistEntry {
+  id            String       @id @default(uuid())
+  clubId        String
+  club          Club         @relation(fields: [clubId], references: [id])
+  competitionId String
+  competition   Competition  @relation(fields: [competitionId], references: [id])
+  athleteId     String
+  athlete       Athlete      @relation(fields: [athleteId], references: [id])
+  event         String
+  eventNumber   String       @default("")
+  heat          Int?
+  lane          Int?
+  seedTime      Float?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  deletedAt     DateTime?
+
+  @@index([clubId])
+  @@index([competitionId])
+  @@index([athleteId])
+  @@map("startlist_entries")
+}
+
+model Result {
+  id            String       @id @default(uuid())
+  clubId        String
+  club          Club         @relation(fields: [clubId], references: [id])
+  athleteId     String
+  athlete       Athlete      @relation(fields: [athleteId], references: [id])
+  event         String
+  time          Float
+  date          DateTime
+  course        String       @default("LCM")
+  competitionId String?
+  competition   Competition? @relation(fields: [competitionId], references: [id])
+  place         Int?
+  isPB          Boolean      @default(false)
+  // Rundenzeiten aus der Stoppuhr-Funktion (kumulierte Sekunden je Runde),
+  // optional — siehe apps/web js/modules/competitions.js (buildStopwatchPanel).
+  laps          Json?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  deletedAt     DateTime?
+
+  @@index([clubId])
+  @@index([athleteId])
+  @@index([competitionId])
+  @@map("results")
+}
+
+model Exercise {
+  id              String    @id @default(uuid())
+  clubId          String
+  club            Club      @relation(fields: [clubId], references: [id])
+  name            String
+  category        String
+  stroke          String?
+  description     String    @default("")
+  defaultDistance Int?
+  tags            String[]  @default([])
+  equipment       String[]  @default([])
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+
+  @@index([clubId])
+  @@map("exercises")
+}
+
+// Wiederverwendbare Trainingsplan-Vorlagen. `sets` bleibt strukturgleich
+// zum Frontend (Mix aus einzelnen Sätzen und Wiederholungsblöcken, siehe
+// apps/web js/modules/setEditor.js) und liegt daher als Json statt in
+// normalisierten Zeilen — vermeidet verlustbehaftetes Mapping beim Sync.
+model Template {
+  id          String    @id @default(uuid())
+  clubId      String
+  club        Club      @relation(fields: [clubId], references: [id])
+  name        String
+  description String    @default("")
+  tags        String[]  @default([])
+  sets        Json
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  @@index([clubId])
+  @@map("templates")
+}
+
+model Plan {
+  id        String    @id @default(uuid())
+  clubId    String
+  club      Club      @relation(fields: [clubId], references: [id])
+  name      String
+  weekStart DateTime
+  groupId   String?
+  group     Group?    @relation(fields: [groupId], references: [id])
+  status    String    @default("aktiv") // "aktiv" | "archiv"
+  // Array von { date, sets } — je Tag dieselbe Sets/Blöcke-Struktur wie
+  // Template.sets.
+  days      Json
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  sessions TrainingSession[]
+
+  @@index([clubId])
+  @@index([groupId])
+  @@map("plans")
+}
+
+// Heißt "TrainingSession" (nicht "Session"), um Verwechslung mit
+// Auth-/HTTP-Session-Konzepten zu vermeiden — Tabelle bleibt "sessions".
+model TrainingSession {
+  id          String    @id @default(uuid())
+  clubId      String
+  club        Club      @relation(fields: [clubId], references: [id])
+  date        DateTime
+  groupId     String?
+  group       Group?    @relation(fields: [groupId], references: [id])
+  planId      String?
+  plan        Plan?     @relation(fields: [planId], references: [id])
+  trainerNote String    @default("")
+  // Array von { athleteId, present, rpe, note } — ein Eintrag je Athlet:in.
+  attendance  Json
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  @@index([clubId])
+  @@index([groupId])
+  @@index([planId])
+  @@map("sessions")
+}
+
+model ActionItem {
+  id          String    @id @default(uuid())
+  clubId      String
+  club        Club      @relation(fields: [clubId], references: [id])
+  athleteId   String
+  athlete     Athlete   @relation(fields: [athleteId], references: [id])
+  title       String
+  description String    @default("")
+  category    String
+  status      String    @default("offen") // "offen" | "progress" | "done"
+  createdDate DateTime
+  dueDate     DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  @@index([clubId])
+  @@index([athleteId])
+  @@map("action_items")
+}
+
+// ============================================================
+// Phase 3 — Sync-API (Push/Pull, Idempotenz, Konfliktlogik).
+// ============================================================
+
+// Idempotenz-Ledger für POST /api/sync/push: die Client-generierte
+// Event-id (identisch mit der id in der lokalen Sync-Warteschlange,
+// siehe apps/web/js/db.js: enqueueSyncEvent) wird hier als Primärschlüssel
+// geführt. Ein wiederholt gesendetes Event (z. B. nach Verbindungsabbruch
+// mitten in der Antwort) wird dadurch nicht doppelt angewendet — vor dem
+// Verarbeiten wird geprüft, ob die id schon existiert.
+model SyncedEvent {
+  id        String   @id // = SyncEvent.id vom Client, keine eigene UUID
+  clubId    String
+  store     String
+  action    String   // "create" | "update" | "delete"
+  appliedAt DateTime @default(now())
+
+  @@index([clubId])
+  @@map("synced_events")
+}

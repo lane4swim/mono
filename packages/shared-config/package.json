@@ -1,0 +1,12 @@
+{
+  "name": "@lane1/shared-config",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Gemeinsame ESLint-/Prettier-/tsconfig-Basis für alle Lane-1-Workspaces.",
+  "main": "eslint-preset.cjs",
+  "files": [
+    "eslint-preset.cjs",
+    "prettier-preset.cjs",
+    "tsconfig.base.json"
+  ]
+}

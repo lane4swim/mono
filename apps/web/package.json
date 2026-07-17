@@ -1,0 +1,10 @@
+{
+  "name": "@lane1/web",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Lane 1 — Trainingsmanagement PWA (Offline-first, Vanilla JS, kein Build-Schritt nötig).",
+  "scripts": {
+    "dev": "npx --yes serve . -l 5173",
+    "test": "echo \"apps/web hat aktuell keine automatisierten Tests (reines HTML/JS ohne Build-Schritt)\" && exit 0"
+  }
+}

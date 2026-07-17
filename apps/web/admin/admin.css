@@ -1,0 +1,12 @@
+/* admin/admin.css — kleine Ergänzungen zur Hauptstildatei ../css/styles.css */
+
+#admin-shell .view.admin-view {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 24px 20px 60px;
+}
+
+#admin-shell .topbar {
+  position: sticky;
+  top: 0;
+}

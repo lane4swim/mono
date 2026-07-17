@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lane 1 · Superadmin</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="../icons/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../css/styles.css">
+<link rel="stylesheet" href="./admin.css">
+</head>
+<body>
+
+<!--
+  Bewusst KEINE Service-Worker-Registrierung auf dieser Seite (siehe
+  admin.js) und explizit vom Precache/Fetch-Handling des Haupt-Service-
+  Workers ausgeschlossen (siehe ../sw.js) — diese Oberfläche ist absichtlich
+  NUR ONLINE verfügbar, nie aus dem Cache. Superadmin-Aktionen (Vereine
+  anlegen, E-Mails versenden) ergeben ohne Backend-Verbindung ohnehin
+  keinen Sinn; eine "funktionierende" Offline-Kopie wäre irreführend.
+-->
+<div id="auth-screen" class="auth-screen"></div>
+<div id="admin-shell" hidden>
+  <header class="topbar">
+    <div class="topbar-brand">
+      <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+        <path d="M2 22c3 0 3-3 6-3s3 3 6 3 3-3 6-3 3 3 6 3" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+      </svg>
+      <span class="brand-name">Lane 1 · Superadmin</span>
+    </div>
+    <div class="topbar-user">
+      <span id="current-user-label" class="current-user-label"></span>
+      <button id="btn-logout" class="btn btn-ghost btn-sm" type="button"></button>
+    </div>
+  </header>
+  <main id="view" class="view admin-view" tabindex="-1"></main>
+</div>
+
+<div id="toast-region" class="toast-region" aria-live="polite"></div>
+<div id="modal-root" class="modal-root" hidden></div>
+
+<script type="module" src="./admin.js"></script>
+</body>
+</html>
