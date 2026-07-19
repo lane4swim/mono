@@ -6,3 +6,4 @@
  
 # Sekundär
 - Kommentare bei Trainingsplänen
+- Import/Export von Übungen via JSON
