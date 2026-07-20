@@ -228,6 +228,30 @@ function showInviteLinkModal(invitation) {
   openModal({ title: t('usermgmt.inviteLinkTitle'), bodyNode: body, wide: true });
 }
 
+// Zeigt den Einladungslink für eine BEREITS bestehende, noch nicht
+// angenommene Einladung erneut an — z. B. um ihn per SMS statt E-Mail zu
+// teilen. Wichtig: das Klartext-Token wird serverseitig NIE gespeichert
+// (nur sein Hash, analog zu einem Passwort) und lässt sich daher nicht
+// nachträglich auslesen. Diese Funktion widerruft die alte Einladung und
+// stellt eine neue mit denselben Daten (E-Mail/Rolle/Verein) aus — der
+// alte Link wird dadurch ungültig, was auch so kommuniziert wird
+// (siehe usermgmt.regenerateLinkConfirm).
+async function regenerateInvitationLink(invitation, onChanged) {
+  try {
+    await api.revokeInvitation(invitation.id);
+    const fresh = await api.createInvitation({
+      email: invitation.email,
+      role: invitation.role,
+      clubId: invitation.clubId || undefined,
+    });
+    toast(t('usermgmt.linkRegenerated'));
+    onChanged?.();
+    showInviteLinkModal(fresh);
+  } catch (err) {
+    toast(describeError(err), 'error');
+  }
+}
+
 // ---------------- Ausstehende/verwendete Einladungen ----------------
 function renderInvitationsList(invitations, clubs, onChanged) {
   const card = el('div', { class: 'card mb-16' }, [el('h3', { class: 'mt-0' }, t('usermgmt.pendingInvitesSection'))]);
@@ -246,18 +270,26 @@ function renderInvitationsList(invitations, clubs, onChanged) {
       el('td', {}, invitation.email), el('td', {}, badge(t(`settings.role_${invitation.role}`), 'neutral')),
       el('td', {}, club?.name || (invitation.clubId ? t('usermgmt.yourClubLabel') : '—')), el('td', {}, statusBadge(status)),
       el('td', {}, fmtDateShort((invitation.expiresAt || '').slice(0, 10))),
-      el('td', {}, status === 'pending' ? el('button', {
-        class: 'btn btn-danger btn-sm',
-        onclick: () => confirmAction(t('usermgmt.revokeConfirm'), async () => {
-          try {
-            await api.revokeInvitation(invitation.id);
-            toast(t('usermgmt.inviteRevoked'));
-            onChanged?.();
-          } catch (err) {
-            toast(describeError(err), 'error');
-          }
-        }),
-      }, t('usermgmt.revokeInvite')) : null),
+      el('td', {}, status === 'pending' ? el('div', { class: 'flex gap-8' }, [
+        el('button', {
+          class: 'btn btn-ghost btn-sm',
+          onclick: () => confirmAction(t('usermgmt.regenerateLinkConfirm'), () => regenerateInvitationLink(invitation, onChanged), {
+            title: t('usermgmt.regenerateLinkTitle'), confirmLabel: t('usermgmt.regenerateLinkButton'),
+          }),
+        }, t('usermgmt.regenerateLinkButton')),
+        el('button', {
+          class: 'btn btn-danger btn-sm',
+          onclick: () => confirmAction(t('usermgmt.revokeConfirm'), async () => {
+            try {
+              await api.revokeInvitation(invitation.id);
+              toast(t('usermgmt.inviteRevoked'));
+              onChanged?.();
+            } catch (err) {
+              toast(describeError(err), 'error');
+            }
+          }),
+        }, t('usermgmt.revokeInvite')),
+      ]) : null),
     ]));
   });
   table.appendChild(tbody);
