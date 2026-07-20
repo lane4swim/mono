@@ -39,19 +39,6 @@ jobs:
       - name: Install dependencies (alle Workspaces)
         run: npm ci
 
-      - name: Debug — Repo-/Workspace-Struktur anzeigen
-        run: |
-          echo "--- Arbeitsverzeichnis ---"
-          pwd
-          echo "--- Inhalt des Wurzelverzeichnisses ---"
-          ls -la
-          echo "--- workspaces-Feld in package.json ---"
-          node -e "console.log(require('./package.json').workspaces)"
-          echo "--- Von npm erkannte Workspaces ---"
-          npm ls --workspaces --depth=0 || true
-          echo "--- apps/api vorhanden? ---"
-          ls -la apps/api || echo "apps/api NICHT gefunden!"
-
       - name: Build gemeinsame Pakete (shared-types, sync-protocol)
         run: |
           npm run build --workspace=packages/shared-types
@@ -62,6 +49,13 @@ jobs:
         # Pfad-/Namensauflösung für Workspaces, daher robuster gegen genau
         # diese Fehlerklasse ("No workspaces found").
         run: cd apps/api && npm run prisma:generate
+
+      - name: Typecheck apps/api (inkl. test/, scripts/, prisma/)
+        # WICHTIG: "Build apps/api" (unten) prüft per tsconfig.json NUR
+        # src/ — Typfehler in Testdateien blieben dadurch lange unentdeckt,
+        # obwohl vitest (esbuild, ohne Typprüfung) grün lief. Dieser Schritt
+        # schließt genau diese Lücke.
+        run: cd apps/api && npm run typecheck
 
       - name: Lint (alle Workspaces)
         run: npm run lint --workspaces --if-present
