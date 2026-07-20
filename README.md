@@ -28,9 +28,6 @@ synchronisiert wirklich mit dem Backend, und die Nutzerverwaltung
 - **Kein `GET /api/users`-Endpunkt:** Die Nutzerverwaltung im Frontend kann
   daher keine Liste bestehender Vereinsmitglieder anzeigen (nur Vereine und
   Einladungen).
-- **Refresh Token in `localStorage`** statt eines httpOnly-Cookies (siehe
-  `apps/web/js/apiClient.js`) — bewusste Vereinfachung, da der aktuelle
-  JSON-basierte Refresh-Endpunkt kein Cookie setzt.
 - **`purgeExpiredDeletions` läuft nicht automatisch** — das CLI-Skript
   (`npm run purge-deleted-data`) muss per Cron eingerichtet werden (siehe
   Abschnitt „DSGVO: Auskunft & Löschung" unten); ohne eingerichteten Cron
@@ -269,10 +266,16 @@ unverändert weiterbesteht.
 
 `apps/web` ist jetzt vollständig mit `apps/api` verbunden:
 
-- **`js/apiClient.js`** — einziger Ort für HTTP-Aufrufe ans Backend. Access
-  Token im Speicher, Refresh Token in `localStorage`, automatisches
-  Refresh+Retry bei 401. API-Basis-URL überschreibbar für lokale
-  Entwicklung: `localStorage.setItem('lane1-api-base-url', 'http://localhost:3000')`.
+- **`js/apiClient.js`** — einziger Ort für HTTP-Aufrufe ans Backend.
+  **Bewusst vollständig cookie-frei:** `/auth/login`, `/auth/register` und
+  `/auth/refresh` liefern Access- und Refresh-Token direkt im JSON-Body
+  zurück (kein `Set-Cookie`, kein `@fastify/cookie` im Backend); das
+  Access Token bleibt nur im Speicher (Modulvariable, mindert XSS-Risiko),
+  das Refresh Token wird in `localStorage` persistiert
+  (`getStoredRefreshToken()`/`setTokens()`/`clearTokens()`), damit
+  `restoreSession()` die Sitzung nach einem Seiten-Reload wiederherstellen
+  kann. Automatisches Refresh+Retry bei 401. API-Basis-URL überschreibbar
+  für lokale Entwicklung: `localStorage.setItem('lane1-api-base-url', 'http://localhost:3000')`.
 - **`js/state.js`** — echte Sitzung statt lokalem Profil-Umschalter:
   `login()`, `acceptInvitation()`, `logout()`, `restoreSession()`.
 - **`js/modules/authScreens.js`** — Login-Bildschirm (E-Mail/Passwort +
