@@ -4,12 +4,18 @@
 // Speicher. Ermöglicht vollständige Tests von sync.service.ts (Idempotenz,
 // Konfliktlogik, Vereins-Scoping, Pagination) ohne Datenbank.
 import type { EntityStoreName } from '@lane1/shared-types';
-import type { SyncGateway, SyncRecord, ChangedRecord } from './sync.gateway.js';
+import type { SyncGateway, SyncRecord, ChangedRecord, TombstoneRecord } from './sync.gateway.js';
 
 export class InMemorySyncGateway implements SyncGateway {
   // store -> (id -> record)
   private data = new Map<EntityStoreName, Map<string, SyncRecord>>();
   private processedEvents = new Set<string>();
+
+  // Von außen injizierbar (z. B. dieselbe Array-Referenz, die auch
+  // InMemoryErasureJobGateway befüllt) — ermöglicht Tests, die den
+  // Zusammenspiel "Purge-Job schreibt Tombstone -> Sync-Gateway meldet
+  // ihn beim nächsten Pull" end-to-end nachstellen, ohne echte Datenbank.
+  constructor(private readonly tombstones: TombstoneRecord[] = []) {}
 
   private table(store: EntityStoreName): Map<string, SyncRecord> {
     if (!this.data.has(store)) this.data.set(store, new Map());
@@ -28,12 +34,30 @@ export class InMemorySyncGateway implements SyncGateway {
   }
 
   async create(store: EntityStoreName, payload: Record<string, unknown>): Promise<void> {
+    this.assertReferencedEntityExists(payload);
     this.table(store).set(payload.id as string, this.normalizeDates(payload));
   }
 
   async update(store: EntityStoreName, id: string, payload: Record<string, unknown>): Promise<void> {
+    this.assertReferencedEntityExists(payload);
     const merged = { ...(this.table(store).get(id) ?? {}), ...payload };
     this.table(store).set(id, this.normalizeDates(merged));
+  }
+
+  // Simuliert den Postgres-Fremdschlüssel-Verstoß (Prisma-Fehlercode
+  // "P2003"), der real auftritt, wenn ein Datensatz auf eine bereits
+  // endgültig gelöschte (per Purge-Job entfernte) Person verweist — siehe
+  // sync.service.ts: describeSyncError() übersetzt genau diesen Fall in
+  // eine verständliche Meldung statt einer rohen DB-Fehlermeldung.
+  private assertReferencedEntityExists(payload: Record<string, unknown>): void {
+    const athleteId = payload.athleteId as string | undefined;
+    if (!athleteId) return;
+    const isPurged = this.tombstones.some((t) => t.store === 'athletes' && t.entityId === athleteId);
+    if (isPurged) {
+      const err = new Error('Foreign key constraint failed on the field: `athleteId`') as Error & { code: string };
+      err.code = 'P2003';
+      throw err;
+    }
   }
 
   // Ankommende Payloads (aus dem Client-JSON bzw. zod-validierten Events)
@@ -72,6 +96,11 @@ export class InMemorySyncGateway implements SyncGateway {
           updatedAt: record.updatedAt,
         });
       }
+    }
+    for (const t of this.tombstones) {
+      if (t.clubId !== clubId) continue;
+      if (since && t.deletedAt.getTime() <= since.getTime()) continue;
+      changes.push({ store: t.store, entityId: t.entityId, action: 'delete', payload: null, updatedAt: t.deletedAt });
     }
     changes.sort((a, b) => a.updatedAt.getTime() - b.updatedAt.getTime());
     return changes.slice(0, limit);

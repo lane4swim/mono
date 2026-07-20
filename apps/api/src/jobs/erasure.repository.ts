@@ -44,6 +44,28 @@ export class PrismaErasureJobGateway implements ErasureJobGateway {
       await tx.refreshToken.deleteMany({ where: { userId } });
 
       if (user.athleteId) {
+        const [results, entries, actionItems] = await Promise.all([
+          tx.result.findMany({ where: { athleteId: user.athleteId }, select: { id: true } }),
+          tx.startlistEntry.findMany({ where: { athleteId: user.athleteId }, select: { id: true } }),
+          tx.actionItem.findMany({ where: { athleteId: user.athleteId }, select: { id: true } }),
+        ]);
+
+        // Verbesserung "Tombstones": bevor die Zeilen unwiderruflich
+        // gelöscht werden, je eine schlanke Löschmarkierung (nur id +
+        // Zeitpunkt, keine Personendaten) anlegen. So kann die Sync-API
+        // (siehe sync.gateway.ts: listChangedSince()) die Löschung auch
+        // Geräten melden, die die gesamte Aufbewahrungsfrist verpasst
+        // haben und sonst nie ein "delete"-Signal für diese Zeilen
+        // bekommen hätten (die Zeile ist ja physisch weg).
+        const now = new Date();
+        const tombstones = [
+          ...results.map((r: { id: string }) => ({ clubId: user.clubId!, store: 'results', entityId: r.id, deletedAt: now })),
+          ...entries.map((e: { id: string }) => ({ clubId: user.clubId!, store: 'entries', entityId: e.id, deletedAt: now })),
+          ...actionItems.map((a: { id: string }) => ({ clubId: user.clubId!, store: 'actionItems', entityId: a.id, deletedAt: now })),
+          { clubId: user.clubId!, store: 'athletes', entityId: user.athleteId, deletedAt: now },
+        ];
+        await tx.syncTombstone.createMany({ data: tombstones, skipDuplicates: true });
+
         await tx.result.deleteMany({ where: { athleteId: user.athleteId } });
         await tx.startlistEntry.deleteMany({ where: { athleteId: user.athleteId } });
         await tx.actionItem.deleteMany({ where: { athleteId: user.athleteId } });

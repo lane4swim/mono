@@ -26,6 +26,19 @@ export interface ChangedRecord {
   updatedAt: Date;
 }
 
+// Schlanke Löschmarkierung (siehe schema.prisma: SyncTombstone) — nur id +
+// Zeitpunkt, keine Personendaten. Wird vom Purge-Job (siehe
+// jobs/erasure.repository.ts) angelegt, bevor eine Zeile unwiderruflich
+// gelöscht wird, damit listChangedSince() die Löschung auch dann noch
+// melden kann, wenn ein Client die gesamte Aufbewahrungsfrist verpasst hat
+// (die eigentliche Zeile existiert dann ja physisch nicht mehr).
+export interface TombstoneRecord {
+  clubId: string;
+  store: EntityStoreName;
+  entityId: string;
+  deletedAt: Date;
+}
+
 export interface SyncGateway {
   findById(store: EntityStoreName, id: string): Promise<SyncRecord | null>;
   create(store: EntityStoreName, payload: Record<string, unknown>): Promise<void>;
@@ -70,25 +83,40 @@ export class PrismaSyncGateway implements SyncGateway {
   }
 
   async listChangedSince(clubId: string, since: Date | null, limit: number): Promise<ChangedRecord[]> {
-    const results = await Promise.all(
-      ALL_STORES.map(async (store) => {
-        const delegate = getEntityDelegate(this.prisma, store);
-        const rows = (await delegate.findMany({
-          where: { clubId, ...(since ? { updatedAt: { gt: since } } : {}) },
-          orderBy: { updatedAt: 'asc' },
-          take: limit,
-        })) as SyncRecord[];
-        return rows.map((row): ChangedRecord => ({
-          store,
-          entityId: row.id,
-          action: row.deletedAt ? 'delete' : (since ? 'update' : 'create'),
-          payload: row.deletedAt ? null : row,
-          updatedAt: row.updatedAt,
-        }));
+    const [storeResults, tombstones] = await Promise.all([
+      Promise.all(
+        ALL_STORES.map(async (store) => {
+          const delegate = getEntityDelegate(this.prisma, store);
+          const rows = (await delegate.findMany({
+            where: { clubId, ...(since ? { updatedAt: { gt: since } } : {}) },
+            orderBy: { updatedAt: 'asc' },
+            take: limit,
+          })) as SyncRecord[];
+          return rows.map((row): ChangedRecord => ({
+            store,
+            entityId: row.id,
+            action: row.deletedAt ? 'delete' : (since ? 'update' : 'create'),
+            payload: row.deletedAt ? null : row,
+            updatedAt: row.updatedAt,
+          }));
+        }),
+      ),
+      this.prisma.syncTombstone.findMany({
+        where: { clubId, ...(since ? { deletedAt: { gt: since } } : {}) },
+        orderBy: { deletedAt: 'asc' },
+        take: limit,
       }),
-    );
-    return results
-      .flat()
+    ]);
+
+    const tombstoneChanges: ChangedRecord[] = tombstones.map((t: { store: string; entityId: string; deletedAt: Date }) => ({
+      store: t.store as EntityStoreName,
+      entityId: t.entityId,
+      action: 'delete',
+      payload: null,
+      updatedAt: t.deletedAt,
+    }));
+
+    return [...storeResults.flat(), ...tombstoneChanges]
       .sort((a, b) => a.updatedAt.getTime() - b.updatedAt.getTime())
       .slice(0, limit);
   }

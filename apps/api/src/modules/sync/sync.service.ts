@@ -106,7 +106,7 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
           await deps.gateway.markEventProcessed(event.id, requester.clubId, store, event.action);
           results.push({ eventId: event.id, status: 'applied' });
         } catch (err) {
-          results.push({ eventId: event.id, status: 'error', message: err instanceof Error ? err.message : 'Unbekannter Fehler.' });
+          results.push({ eventId: event.id, status: 'error', message: describeSyncError(err) });
         }
       }
 
@@ -138,3 +138,21 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
 }
 
 export type SyncService = ReturnType<typeof createSyncService>;
+
+// Verbesserung: Prismas Fremdschlüssel-Verletzung (Fehlercode "P2003")
+// tritt konkret dann auf, wenn ein Event auf eine Person verweist, die
+// zwischenzeitlich endgültig gelöscht wurde (siehe
+// jobs/purgeExpiredDeletions.ts) — die referenzierte Zeile existiert dann
+// physisch nicht mehr. Statt der rohen, technischen Postgres-Meldung
+// ("Foreign key constraint failed on the field: ...") bekommt der Client
+// eine verständliche Erklärung. Bewusst als eigenständige, exportierte
+// Funktion (statt Prisma.PrismaClientKnownRequestError zu importieren) —
+// so lässt sie sich direkt testen, ohne einen echten generierten Prisma-
+// Client zu brauchen, und funktioniert unabhängig davon, welche konkrete
+// Fehlerklasse eine Gateway-Implementierung tatsächlich wirft.
+export function describeSyncError(err: unknown): string {
+  if (err && typeof err === 'object' && 'code' in err && (err as { code?: string }).code === 'P2003') {
+    return 'Die referenzierte Person oder der referenzierte Datensatz existiert nicht mehr (wurde vermutlich zwischenzeitlich endgültig gelöscht).';
+  }
+  return err instanceof Error ? err.message : 'Unbekannter Fehler.';
+}

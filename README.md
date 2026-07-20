@@ -254,6 +254,25 @@ Vervollständigt die bereits in Phase 1 vorbereitete Consent-Infrastruktur
    selbst (per `onDelete: Cascade` verschwindet der `DataDeletionRequest`
    damit automatisch mit).
 
+**Grenzfall „Gerät war länger offline als die Aufbewahrungsfrist" — zwei
+Verbesserungen:**
+
+1. **Tombstones** (`SyncTombstone`-Modell): Bevor der Purge-Job eine Zeile
+   unwiderruflich löscht, legt er eine schlanke Löschmarkierung an (nur
+   `clubId`/`store`/`entityId`/`deletedAt`, keine Personendaten, bewusst
+   ohne Fremdschlüssel-Beziehung). `GET /api/sync/pull` (siehe
+   `sync.gateway.ts`) meldet Löschungen jetzt auch anhand dieser
+   Tombstones — so erfährt ein Gerät, das während der **gesamten**
+   Aufbewahrungsfrist nie online war, trotzdem noch von der Löschung,
+   obwohl die eigentliche Zeile physisch längst weg ist.
+2. **Verständliche Fehlermeldung statt roher Datenbank-Fehler:** Versucht
+   ein solches Gerät danach trotzdem, einen neuen Datensatz für die
+   endgültig gelöschte Person zu pushen, scheitert das an der
+   Datenbank-Fremdschlüsselbeziehung (Prisma-Fehlercode `P2003`).
+   `sync.service.ts`s `describeSyncError()` erkennt das gezielt und liefert
+   eine klare Meldung („… existiert nicht mehr …") statt der rohen
+   Postgres-Fehlermeldung.
+
 **Frontend:** „Mein Profil" ruft beide Endpunkte direkt auf. Der
 Export-Button fällt bei nicht erreichbarem Server auf einen Export der
 lokal zwischengespeicherten Daten zurück (mit entsprechendem Hinweis); der

@@ -386,3 +386,21 @@ model SyncedEvent {
   @@index([clubId])
   @@map("synced_events")
 }
+
+// Verbesserung: Löschungen bleiben auch nach dem endgültigen Hard-Purge
+// eines Kontos (siehe jobs/purgeExpiredDeletions.ts) über die Sync-API
+// meldbar. Bewusst OHNE Fremdschlüssel-Beziehung zu irgendeiner Tabelle —
+// das ist der ganze Zweck: ein Tombstone muss unabhängig vom (bereits
+// gelöschten) referenzierten Datensatz weiterbestehen können. Enthält
+// keine Personendaten, nur die id und den Löschzeitpunkt.
+model SyncTombstone {
+  id        String   @id @default(uuid())
+  clubId    String
+  store     String
+  entityId  String
+  deletedAt DateTime @default(now())
+
+  @@unique([clubId, store, entityId])
+  @@index([clubId, deletedAt])
+  @@map("sync_tombstones")
+}

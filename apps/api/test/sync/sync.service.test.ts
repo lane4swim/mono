@@ -1,6 +1,6 @@
 // apps/api/test/sync/sync.service.test.ts
 import { describe, it, expect } from 'vitest';
-import { createSyncService } from '../../src/modules/sync/sync.service.js';
+import { createSyncService, describeSyncError } from '../../src/modules/sync/sync.service.js';
 import { InMemorySyncGateway } from '../../src/modules/sync/sync.gateway.memory.js';
 
 const CLUB_A = '11111111-1111-1111-1111-111111111111';
@@ -233,5 +233,93 @@ describe('syncService.pull', () => {
     const { service } = makeService();
     const result = await service.pull({}, { clubId: CLUB_A });
     expect(result).toEqual({ changes: [], nextCursor: null, hasMore: false });
+  });
+});
+
+describe('syncService.pull — Tombstones (Löschmarkierungen für endgültig entfernte Daten)', () => {
+  it('meldet eine Löschung anhand eines Tombstones, obwohl die Zeile nie im Server-Stand existierte', async () => {
+    // Simuliert genau den Grenzfall "Gerät war länger offline als die
+    // Aufbewahrungsfrist": der Server-Stand kennt den Datensatz gar nicht
+    // (er wurde bereits endgültig gelöscht) — nur der Tombstone existiert.
+    const tombstones = [{ clubId: CLUB_A, store: 'athletes' as const, entityId: 'ath-1', deletedAt: new Date('2026-07-01T00:00:00.000Z') }];
+    const gateway = new InMemorySyncGateway(tombstones);
+    const service = createSyncService({ gateway });
+
+    const result = await service.pull({}, { clubId: CLUB_A });
+    expect(result.changes).toEqual([
+      { store: 'athletes', entityId: 'ath-1', action: 'delete', payload: null, updatedAt: '2026-07-01T00:00:00.000Z' },
+    ]);
+  });
+
+  it('berücksichtigt "since" auch für Tombstones', async () => {
+    const tombstones = [
+      { clubId: CLUB_A, store: 'athletes' as const, entityId: 'alt', deletedAt: new Date('2026-01-01T00:00:00.000Z') },
+      { clubId: CLUB_A, store: 'athletes' as const, entityId: 'neu', deletedAt: new Date('2026-06-01T00:00:00.000Z') },
+    ];
+    const gateway = new InMemorySyncGateway(tombstones);
+    const service = createSyncService({ gateway });
+
+    const result = await service.pull({ since: '2026-03-01T00:00:00.000Z' }, { clubId: CLUB_A });
+    expect(result.changes).toHaveLength(1);
+    expect(result.changes[0]!.entityId).toBe('neu');
+  });
+
+  it('meldet Tombstones nur für den eigenen Verein', async () => {
+    const tombstones = [
+      { clubId: CLUB_A, store: 'athletes' as const, entityId: 'a1', deletedAt: new Date() },
+      { clubId: CLUB_B, store: 'athletes' as const, entityId: 'b1', deletedAt: new Date() },
+    ];
+    const gateway = new InMemorySyncGateway(tombstones);
+    const service = createSyncService({ gateway });
+
+    const result = await service.pull({}, { clubId: CLUB_A });
+    expect(result.changes).toHaveLength(1);
+    expect(result.changes[0]!.entityId).toBe('a1');
+  });
+});
+
+describe('syncService.push — verständliche Fehlermeldung bei endgültig gelöschten Referenzen', () => {
+  it('übersetzt einen Push-Versuch für eine bereits endgültig gelöschte (tombstoned) Person in eine klare Meldung', async () => {
+    const ATHLETE_ID = '55555555-5555-5555-5555-555555555555';
+    const tombstones = [{ clubId: CLUB_A, store: 'athletes' as const, entityId: ATHLETE_ID, deletedAt: new Date() }];
+    const gateway = new InMemorySyncGateway(tombstones);
+    const service = createSyncService({ gateway });
+
+    const now = new Date().toISOString();
+    const payload = {
+      id: '66666666-6666-6666-6666-666666666666', clubId: CLUB_A, athleteId: ATHLETE_ID,
+      event: '100 Freistil', time: 60, date: now, course: 'LCM', competitionId: null, place: null, isPB: false,
+      createdAt: now, updatedAt: now,
+    };
+    const results = await service.push(
+      [{ id: 'evt-x', store: 'results', entityId: payload.id, action: 'create', payload, clientUpdatedAt: payload.updatedAt }],
+      { clubId: CLUB_A },
+    );
+
+    expect(results[0]!.status).toBe('error');
+    expect(results[0]!.message).toContain('existiert nicht mehr');
+  });
+});
+
+describe('describeSyncError()', () => {
+  it('übersetzt einen Fehler mit Prisma-Code "P2003" (Fremdschlüssel-Verletzung) in eine verständliche deutsche Meldung', () => {
+    const fakeError = { code: 'P2003', message: 'Foreign key constraint failed on the field: `athleteId`' };
+    expect(describeSyncError(fakeError)).toBe(
+      'Die referenzierte Person oder der referenzierte Datensatz existiert nicht mehr (wurde vermutlich zwischenzeitlich endgültig gelöscht).',
+    );
+  });
+
+  it('gibt die Original-Fehlermeldung für einen normalen Error unverändert zurück', () => {
+    expect(describeSyncError(new Error('Etwas anderes ist schiefgelaufen'))).toBe('Etwas anderes ist schiefgelaufen');
+  });
+
+  it('liefert einen generischen Text für Fehler ohne erkennbare Form', () => {
+    expect(describeSyncError('nur ein String')).toBe('Unbekannter Fehler.');
+    expect(describeSyncError(undefined)).toBe('Unbekannter Fehler.');
+  });
+
+  it('behandelt einen Fehler mit anderem Code nicht als Fremdschlüssel-Verletzung', () => {
+    const fakeError = { code: 'P2002', message: 'Unique constraint failed' };
+    expect(describeSyncError(fakeError)).toBe('Unbekannter Fehler.');
   });
 });
