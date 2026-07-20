@@ -14,7 +14,9 @@
 // ============================================================
 import { getAll, put, remove } from '../db.js';
 import { el, clear, field, textInput, toast, laneWave, badge, fullName, beginRender, confirmAction, openModal } from '../utils.js';
-import { getCurrentUser, updateProfile, setUserLocale } from '../state.js';
+import { getCurrentUser, updateProfile, setUserLocale, logout } from '../state.js';
+import * as api from '../apiClient.js';
+import { ApiError, NetworkError } from '../apiClient.js';
 import { t, getLocale, getAvailableLocales } from '../i18n.js';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -143,50 +145,78 @@ function renderView(container, athletes, results, entries, actionItems, sessions
   const dataCard = el('div', { class: 'card' }, [el('h3', { class: 'mt-0' }, t('profileData.section'))]);
   const exportBtn = el('button', {
     class: 'btn btn-ghost',
-    onclick: () => {
-      const bundle = collectMyData(user, athletes, results, entries, actionItems, sessions);
-      downloadJSON(`lane1-meine-daten-${user.id}-${new Date().toISOString().slice(0, 10)}.json`, bundle);
-      toast(t('profileData.exportStarted'));
+    onclick: async () => {
+      try {
+        const bundle = await api.exportMyData();
+        downloadJSON(`lane1-meine-daten-${user.id}-${new Date().toISOString().slice(0, 10)}.json`, bundle);
+        toast(t('profileData.exportStarted'));
+      } catch (err) {
+        // Backend nicht erreichbar (offline) — lokal zwischengespeicherte
+        // Daten als Ausweichlösung exportieren, statt die Aktion ganz
+        // scheitern zu lassen.
+        if (err instanceof NetworkError) {
+          const bundle = collectMyData(user, athletes, results, entries, actionItems, sessions);
+          downloadJSON(`lane1-meine-daten-lokal-${user.id}-${new Date().toISOString().slice(0, 10)}.json`, bundle);
+          toast(t('profileData.exportOfflineFallback'));
+        } else {
+          toast(describeError(err), 'error');
+        }
+      }
     },
   }, t('profileData.exportButton'));
 
   const deleteBtn = el('button', { class: 'btn btn-danger', onclick: () => openDeleteAccountModal(user, athletes) }, t('profileData.deleteButton'));
 
   dataCard.appendChild(el('div', { class: 'flex gap-8', style: 'flex-wrap:wrap' }, [exportBtn, deleteBtn]));
-  dataCard.appendChild(el('p', { class: 'hint', style: 'margin-top:12px' }, t('profileData.serverDeletionNote')));
   wrap.appendChild(dataCard);
 
   container.appendChild(wrap);
 }
 
-// Löscht das eigene Konto sowie alle damit verbundenen fachlichen Daten
-// unwiderruflich aus IndexedDB — verlangt zur Bestätigung die exakte
-// Eingabe von "LÖSCHEN"/"DELETE" (stärker als das einfache confirmAction()-
-// Muster, da diese Aktion nicht rückgängig gemacht werden kann). Meldet den
-// aktuellen Nutzer danach ab, indem die Seite neu geladen wird — initSession()
-// wählt beim nächsten Start automatisch ein verbleibendes Konto.
+function describeError(err) {
+  if (err instanceof NetworkError) return t('profileData.errorNetwork');
+  if (err instanceof ApiError) return err.message;
+  return t('profileData.errorUnknown');
+}
+
+// Beantragt die echte, serverseitige Löschung (Art. 17 DSGVO — sofortiger
+// Soft-Delete, endgültiger Hard-Purge folgt zeitversetzt, siehe Backend-
+// README) und räumt erst NACH deren Bestätigung auch den lokalen Cache auf.
+// Verlangt zur Bestätigung die exakte Eingabe von "LÖSCHEN"/"DELETE"
+// (stärker als das einfache confirmAction()-Muster, da diese Aktion nicht
+// rückgängig gemacht werden kann).
 function openDeleteAccountModal(user, athletes) {
   const body = el('div');
   body.appendChild(el('p', {}, t('profileData.deleteIntro')));
-  body.appendChild(el('p', { class: 'form-error', style: 'font-weight:600' }, t('profileData.serverDeletionWarning')));
   body.appendChild(el('p', { class: 'text-sm' }, t('profileData.deleteConfirmPrompt')));
   const confirmInput = textInput('', { placeholder: t('profileData.deleteConfirmWord') });
   body.appendChild(confirmInput);
+  const errorBox = el('p', { class: 'form-error', style: 'display:none' });
+  body.appendChild(errorBox);
   const confirmDeleteBtn = el('button', { class: 'btn btn-danger', style: 'margin-top:16px', onclick: async () => {
+    errorBox.style.display = 'none';
     if (confirmInput.value.trim().toUpperCase() !== t('profileData.deleteConfirmWord').toUpperCase()) {
       toast(t('profileData.deleteConfirmMismatch'), 'error');
       return;
     }
-    await eraseMyAccountAndData(user, athletes);
-    toast(t('profileData.deleted'));
-    close();
-    // Abmelden statt nur neu zu laden: das Konto besteht serverseitig
-    // weiterhin (siehe serverDeletionWarning) — ohne Logout würde ein
-    // nachfolgender Sync-Pull die eben lokal gelöschten Daten sofort
-    // wieder vom Server herunterladen.
-    const { logout } = await import('../state.js');
-    await logout();
-    setTimeout(() => location.reload(), 600);
+    confirmDeleteBtn.disabled = true;
+    try {
+      const result = await api.deleteMyAccount();
+      // Erst NACH erfolgreicher serverseitiger Löschanfrage auch den
+      // lokalen Cache aufräumen — ein fehlgeschlagener Serveraufruf darf
+      // niemals dazu führen, dass nur lokal etwas verschwindet, während
+      // das Konto serverseitig unverändert weiterbesteht (das war genau
+      // der frühere Irreführungs-Bug, siehe Änderungsprotokoll).
+      await eraseMyAccountAndData(user, athletes);
+      toast(t('profileData.deleted', { date: new Date(result.purgeAfter).toLocaleDateString('de-DE') }));
+      close();
+      await logout();
+      setTimeout(() => location.reload(), 600);
+    } catch (err) {
+      errorBox.textContent = describeError(err);
+      errorBox.style.display = 'block';
+      confirmDeleteBtn.disabled = false;
+    }
   } }, t('profileData.deleteButtonConfirm'));
   body.appendChild(el('div', { class: 'form-actions' }, [
     el('button', { class: 'btn btn-ghost', onclick: () => close() }, t('common.cancel')),
@@ -195,11 +225,11 @@ function openDeleteAccountModal(user, athletes) {
   const { close } = openModal({ title: t('profileData.deleteButton'), bodyNode: body, wide: true });
 }
 
-// Entfernt: eigenen Nutzer-Datensatz, verknüpftes Athletenprofil (falls
-// vorhanden) sowie dessen Ergebnisse/Startlisteneinträge/Handlungsfelder,
-// und streicht die eigenen Anwesenheitseinträge aus allen Trainingseinheiten
-// (statt die ganze Einheit zu löschen, da sie auch andere Athlet:innen
-// betrifft).
+// Räumt den lokalen Cache auf (Athletenprofil, Ergebnisse, Startlisten-
+// einträge, Handlungsfelder, eigene Anwesenheitseinträge) — wird NUR nach
+// erfolgreicher serverseitiger Löschanfrage aufgerufen (siehe oben). Die
+// serverseitige Löschung selbst erfolgt zeitversetzt per Purge-Job
+// (siehe apps/api/src/jobs/purgeExpiredDeletions.ts).
 async function eraseMyAccountAndData(user, athletes) {
   const linkedAthlete = user.athleteId ? athletes.find(a => a.id === user.athleteId) : null;
 

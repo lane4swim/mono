@@ -85,7 +85,7 @@ export const InvitationSummarySchema = z.object({
   email: z.string().email(),
   role: InvitationRoleSchema,
   clubId: z.string().uuid().nullable(),
-  invitedById: z.string().uuid(),
+  invitedById: z.string().uuid().nullable(),
   expiresAt: z.string().datetime(),
   usedAt: z.string().datetime().nullable(),
   revokedAt: z.string().datetime().nullable(),

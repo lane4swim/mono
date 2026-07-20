@@ -9,6 +9,7 @@ import { InMemoryClubRepository, InMemoryInvitationRepository } from '../../src/
 import { createSyncService } from '../../src/modules/sync/sync.service.js';
 import { InMemorySyncGateway } from '../../src/modules/sync/sync.gateway.memory.js';
 import { InMemoryMailSender } from '../../src/mail/mailer.memory.js';
+import { InMemoryProfileDataGateway } from '../../src/modules/profile/profile.repository.memory.js';
 import { generateFreshKeyPair, type KeyPair } from '../../src/auth/keys.js';
 import { signAccessToken } from '../../src/auth/tokens.js';
 
@@ -27,6 +28,8 @@ async function buildTestApp() {
     users: new InMemoryUserRepository(),
     refreshTokens: new InMemoryRefreshTokenRepository(),
     invitations,
+    profileGateway: new InMemoryProfileDataGateway({ users: [], athletes: [], results: [], entries: [], actionItems: [], sessions: [] }),
+    dataErasureRetentionDays: 30,
     keyPair,
     accessTtlSeconds: 900,
     refreshTtlDays: 30,

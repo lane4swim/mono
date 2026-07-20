@@ -28,16 +28,13 @@ synchronisiert wirklich mit dem Backend, und die Nutzerverwaltung
 - **Kein `GET /api/users`-Endpunkt:** Die Nutzerverwaltung im Frontend kann
   daher keine Liste bestehender Vereinsmitglieder anzeigen (nur Vereine und
   Einladungen).
-- **Kein `GET /api/me/export` / `DELETE /api/me`:** Die DSGVO-Export-/
-  Löschfunktion unter „Mein Profil" wirkt bewusst nur auf lokal
-  zwischengespeicherte Daten (mit deutlichem Hinweis in der Oberfläche) —
-  eine vollständige serverseitige Löschung erfordert diese beiden noch
-  fehlenden Endpunkte sowie den in Phase 1 vorbereiteten, aber nicht
-  verdrahteten Purge-Job (`DataDeletionRequest`-Modell existiert bereits im
-  Schema).
 - **Refresh Token in `localStorage`** statt eines httpOnly-Cookies (siehe
   `apps/web/js/apiClient.js`) — bewusste Vereinfachung, da der aktuelle
   JSON-basierte Refresh-Endpunkt kein Cookie setzt.
+- **`purgeExpiredDeletions` läuft nicht automatisch** — das CLI-Skript
+  (`npm run purge-deleted-data`) muss per Cron eingerichtet werden (siehe
+  Abschnitt „DSGVO: Auskunft & Löschung" unten); ohne eingerichteten Cron
+  bleiben zur Löschung vorgemerkte Konten dauerhaft im Soft-Delete-Zustand.
 
 ## Struktur
 
@@ -233,6 +230,41 @@ Zeitmessung soll nie stillschweigend verschwinden. Nur `trainer`, `admin`
 und `athlete` dürfen synchronisieren; `superadmin` wird abgewiesen (gehört
 zu keinem Verein).
 
+## DSGVO: Auskunft & Löschung (Art. 15 + 17)
+
+Vervollständigt die bereits in Phase 1 vorbereitete Consent-Infrastruktur
+(`consentGivenAt`/`consentVersion` auf `User`, `DataDeletionRequest`-Modell):
+
+| Endpunkt | Zweck |
+|---|---|
+| `GET /api/me/export` | Recht auf Auskunft (Art. 15) — bündelt eigenes Profil + (falls verknüpft) Athletenprofil, Ergebnisse, Startlisteneinträge, Handlungsfelder, Anwesenheitseinträge als JSON |
+| `DELETE /api/me` | Recht auf Löschung (Art. 17) — sofortiger Soft-Delete + Widerruf aller Sitzungen, liefert das Datum der endgültigen Löschung (`purgeAfter`) |
+
+**Zweistufiger Löschprozess:**
+1. `DELETE /api/me` löst sofort einen Soft-Delete aus (Konto + verknüpfte
+   fachliche Daten bekommen `deletedAt` gesetzt, alle Refresh Tokens werden
+   widerrufen) und legt einen `DataDeletionRequest` mit `purgeAfter` an
+   (Standard: 30 Tage, konfigurierbar über `DATA_ERASURE_RETENTION_DAYS`).
+2. Ein täglicher Cron-Job führt den endgültigen, unwiderruflichen Hard-Purge
+   aus, sobald `purgeAfter` erreicht ist:
+   ```bash
+   0 3 * * * cd /pfad/zu/apps/api && npm run purge-deleted-data >> /var/log/lane1-purge.log 2>&1
+   ```
+   Löscht dabei: RefreshTokens, (falls verknüpft) Athletenprofil samt
+   Ergebnissen/Startlisteneinträgen/Handlungsfeldern, entfernt die
+   Anwesenheits-Einträge dieser Person aus den JSON-Anwesenheitslisten
+   aller Trainingseinheiten des Vereins, und zuletzt den `User`-Datensatz
+   selbst (per `onDelete: Cascade` verschwindet der `DataDeletionRequest`
+   damit automatisch mit).
+
+**Frontend:** „Mein Profil" ruft beide Endpunkte direkt auf. Der
+Export-Button fällt bei nicht erreichbarem Server auf einen Export der
+lokal zwischengespeicherten Daten zurück (mit entsprechendem Hinweis); der
+Lösch-Button verlangt eine erfolgreiche Server-Antwort, bevor der lokale
+Cache aufgeräumt wird — ein fehlgeschlagener Serveraufruf darf nie dazu
+führen, dass nur lokal etwas verschwindet, während das Konto serverseitig
+unverändert weiterbesteht.
+
 ## Frontend-Integration (Phase 4)
 
 `apps/web` ist jetzt vollständig mit `apps/api` verbunden:
@@ -311,10 +343,10 @@ npm run build      # baut alle Workspaces (packages zuerst, dann apps/api)
 ## Nächste Schritte
 
 Phasen 0–4 des Plans (`docs/backend-plan.md`, Abschnitt 11) sind
-umgesetzt. Es verbleiben: Phase 5 (Sicherheitshärtung & Tests — u. a. die
-oben unter „Bekannte offene Punkte" genannten fehlenden Endpunkte und der
-Purge-Job) und Phase 6 (optionale Erweiterungen, z. B. Echtzeit-Sync,
-`GET /api/users`).
+umgesetzt, ebenso die DSGVO-Auskunfts-/Löschfunktion (Art. 15 + 17). Es
+verbleiben: Phase 5 (weitere Sicherheitshärtung & Tests, siehe „Bekannte
+offene Punkte" oben) und Phase 6 (optionale Erweiterungen, z. B.
+Echtzeit-Sync, `GET /api/users`).
 
 Für die Veröffentlichung auf einem Hetzner-Server siehe die separat
 erstellte `hetzner-deployment-anleitung.md`.

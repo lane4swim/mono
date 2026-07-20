@@ -26,7 +26,7 @@ describe('buildDemoData — referenzielle Integrität', () => {
   it('genau ein Superadmin-Konto, dessen clubId null ist', () => {
     const superadmins = data.users.filter((u) => u.role === 'superadmin');
     expect(superadmins).toHaveLength(1);
-    expect(superadmins[0].clubId).toBeNull();
+    expect(superadmins[0]!.clubId).toBeNull();
   });
 
   it('das Athlet:innen-Konto verweist über athleteId auf ein tatsächlich existierendes Athletenprofil', () => {

@@ -307,9 +307,10 @@ export default {
     deleteConfirmWord: 'DELETE',
     deleteConfirmMismatch: 'Please type exactly "DELETE" to proceed.',
     deleteButtonConfirm: 'Permanently delete',
-    deleted: 'Local data deleted. You have been logged out.',
-    serverDeletionNote: "Note: export and deletion currently only affect locally cached data. Fully deleting your account with the club currently requires a request to your administrator (server-side deletion isn't wired up yet).",
-    serverDeletionWarning: 'Important: this only deletes data cached on this device, NOT your account with the club. For full deletion, please contact your administrator.',
+    deleted: 'Account marked for deletion (final by {date}). Local data removed, you have been logged out.',
+    exportOfflineFallback: 'Server unreachable — exported locally cached data instead.',
+    errorNetwork: 'Server unreachable. Please check your internet connection.',
+    errorUnknown: 'An unexpected error occurred.',
   },
   syncqueue: {
     eyebrow: '{count} events total', title: 'Sync Queue',

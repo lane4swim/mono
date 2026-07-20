@@ -14,6 +14,7 @@ import type { LoginRequest, AcceptInvitationRequest, AccessTokenClaims } from '@
 import { CURRENT_CONSENT_VERSION } from '@lane1/shared-types';
 import type { UserRepository, RefreshTokenRepository, UserRecord } from './auth.repository.js';
 import type { InvitationRepository } from '../invitations/invitations.repository.js';
+import type { ProfileDataGateway } from '../profile/profile.repository.js';
 import { hashPassword, verifyPassword } from '../../auth/password.js';
 import { signAccessToken, generateRefreshToken, hashRefreshToken, hashInvitationToken } from '../../auth/tokens.js';
 import type { KeyPair } from '../../auth/keys.js';
@@ -56,6 +57,8 @@ export interface AuthServiceDeps {
   users: UserRepository;
   refreshTokens: RefreshTokenRepository;
   invitations: InvitationRepository;
+  profileGateway: ProfileDataGateway;
+  dataErasureRetentionDays: number;
   keyPair: KeyPair;
   accessTtlSeconds: number;
   refreshTtlDays: number;
@@ -184,6 +187,25 @@ export function createAuthService(deps: AuthServiceDeps) {
 
       const updated = await deps.users.update(userId, patch);
       return toPublicUser(updated);
+    },
+
+    // Art. 15 DSGVO (Recht auf Auskunft): bündelt den eigenen Nutzer-
+    // Datensatz sowie — falls über athleteId verknüpft — das
+    // Athletenprofil und dessen Ergebnisse/Startlisteneinträge/
+    // Handlungsfelder/Anwesenheitseinträge.
+    async exportMyData(userId: string) {
+      return deps.profileGateway.exportUserData(userId);
+    },
+
+    // Art. 17 DSGVO (Recht auf Löschung): sofortiger Soft-Delete von
+    // Konto + verknüpften fachlichen Daten, Widerruf aller Sitzungen
+    // (Refresh Tokens), und Planung des endgültigen, unwiderruflichen
+    // Hard-Purge nach der Aufbewahrungsfrist (siehe
+    // jobs/purgeExpiredDeletions.ts).
+    async requestAccountDeletion(userId: string) {
+      const request = await deps.profileGateway.requestErasure(userId, deps.dataErasureRetentionDays);
+      await deps.refreshTokens.revokeAllForUser(userId);
+      return { purgeAfter: request.purgeAfter };
     },
   };
 }

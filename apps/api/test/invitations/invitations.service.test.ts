@@ -180,7 +180,7 @@ describe('invitationsService.list / revoke', () => {
 
     const listA = await service.list(requesterA);
     expect(listA).toHaveLength(1);
-    expect(listA[0].email).toBe('a@a.de');
+    expect(listA[0]!.email).toBe('a@a.de');
   });
 
   it('superadmin sieht alle Einladungen aller Vereine', async () => {
@@ -218,7 +218,7 @@ describe('invitationsService — Einladungs-E-Mail-Versand', () => {
     await service.createClub({ name: 'SV Wasserfreunde', adminEmail: 'admin@sv.de', adminName: 'Petra Klein' }, SUPERADMIN);
     expect(mailer.sentEmails).toHaveLength(1);
     expect(mailer.sentEmails[0]).toMatchObject({ to: 'admin@sv.de', role: 'admin', clubName: 'SV Wasserfreunde' });
-    expect(mailer.sentEmails[0].inviteUrl).toContain('https://app.example.org/#/accept-invite/');
+    expect(mailer.sentEmails[0]!.inviteUrl).toContain('https://app.example.org/#/accept-invite/');
   });
 
   it('createInvitation() versendet eine Einladungs-E-Mail an die eingeladene Person', async () => {
@@ -234,7 +234,7 @@ describe('invitationsService — Einladungs-E-Mail-Versand', () => {
     const { service, mailer, clubs } = makeService();
     const club = await clubs.create({ name: 'Club A' });
     const invitation = await service.createInvitation({ email: 'trainer@a.de', role: 'trainer' }, { ...ADMIN_OF_CLUB_A, clubId: club.id });
-    expect(mailer.sentEmails[0].inviteUrl).toBe(`https://app.example.org/#/accept-invite/${invitation.token}`);
+    expect(mailer.sentEmails[0]!.inviteUrl).toBe(`https://app.example.org/#/accept-invite/${invitation.token}`);
   });
 });
 
@@ -256,7 +256,7 @@ describe('invitationsService.listClubs — Mitgliederzahlen', () => {
 
     const result = await service.listClubs(SUPERADMIN);
     expect(result).toHaveLength(1);
-    expect(result[0].memberCounts).toEqual({ admin: 1, trainer: 2, athlete: 1 });
+    expect(result[0]!.memberCounts).toEqual({ admin: 1, trainer: 2, athlete: 1 });
   });
 
   it('zählt nur nicht-gelöschte Nutzer:innen', async () => {

@@ -18,6 +18,7 @@ import {
   InvalidInvitationError,
   UserNotFoundError,
 } from './auth.service.js';
+import { UserNotFoundForExportError, ErasureAlreadyRequestedError } from '../profile/profile.repository.js';
 
 export async function authRoutes(app: FastifyInstance, opts: { authService: AuthService }) {
   const { authService } = opts;
@@ -131,6 +132,42 @@ export async function authRoutes(app: FastifyInstance, opts: { authService: Auth
       }
       if (err instanceof UserNotFoundError) {
         return reply.code(404).send({ error: 'not_found', message: err.message });
+      }
+      throw err;
+    }
+  });
+
+  // Art. 15 DSGVO — Recht auf Auskunft: bündelt sämtliche zum eigenen
+  // Konto gespeicherten Daten als JSON.
+  app.get('/api/me/export', { preHandler: app.authenticate }, async (request, reply) => {
+    try {
+      const data = await authService.exportMyData(request.user!.sub);
+      return reply.code(200).send(data);
+    } catch (err) {
+      if (err instanceof UserNotFoundForExportError) {
+        return reply.code(404).send({ error: 'not_found', message: err.message });
+      }
+      throw err;
+    }
+  });
+
+  // Art. 17 DSGVO — Recht auf Löschung: sofortiger Soft-Delete, endgültiger
+  // Hard-Purge folgt zeitversetzt (siehe jobs/purgeExpiredDeletions.ts).
+  // 200 statt 204, da die Antwort das Datum des endgültigen Löschens
+  // mitteilt (Transparenzpflicht).
+  app.delete('/api/me', { preHandler: app.authenticate }, async (request, reply) => {
+    try {
+      const { purgeAfter } = await authService.requestAccountDeletion(request.user!.sub);
+      return reply.code(200).send({
+        message: 'Ihr Konto wurde zur Löschung vorgemerkt und ist ab sofort deaktiviert.',
+        purgeAfter: purgeAfter.toISOString(),
+      });
+    } catch (err) {
+      if (err instanceof UserNotFoundForExportError) {
+        return reply.code(404).send({ error: 'not_found', message: err.message });
+      }
+      if (err instanceof ErasureAlreadyRequestedError) {
+        return reply.code(409).send({ error: 'erasure_already_requested', message: err.message });
       }
       throw err;
     }

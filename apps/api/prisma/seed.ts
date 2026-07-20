@@ -16,6 +16,7 @@
 //     Prisma in die Datenbank. Läuft über `npx prisma db seed` bzw.
 //     `npm run prisma:seed` — braucht eine echte Postgres-Verbindung.
 import { randomUUID } from 'node:crypto';
+import type { SetEntry } from '@lane1/shared-types';
 
 function id(): string {
   return randomUUID();
@@ -58,7 +59,7 @@ export function buildDemoData() {
   const superAdminUser = { id: id(), clubId: null as string | null, name: 'System-Superadmin', role: 'superadmin', athleteId: null as string | null, email: 'superadmin@example.org', locale: 'de-DE', password: 'ChangeMe123!' };
   const trainerUser = { id: id(), clubId: club.id, name: 'Sabine Reuter', role: 'trainer', athleteId: null as string | null, email: 'sabine.reuter@example.org', locale: 'de-DE', password: 'ChangeMe123!' };
   const adminUser = { id: id(), clubId: club.id, name: 'Team-Administrator', role: 'admin', athleteId: null as string | null, email: 'admin@example.org', locale: 'de-DE', password: 'ChangeMe123!' };
-  const athleteUser = { id: id(), clubId: club.id, name: `${athletes[0].firstName} ${athletes[0].lastName}`, role: 'athlete', athleteId: athletes[0].id, email: 'mara.vogel@example.org', locale: 'en-US', password: 'ChangeMe123!' };
+  const athleteUser = { id: id(), clubId: club.id, name: `${athletes[0]!.firstName} ${athletes[0]!.lastName}`, role: 'athlete', athleteId: athletes[0]!.id, email: 'mara.vogel@example.org', locale: 'en-US', password: 'ChangeMe123!' };
   const users = [superAdminUser, trainerUser, adminUser, athleteUser];
 
   const exercises = [
@@ -104,7 +105,7 @@ export function buildDemoData() {
   };
   const templates = [template1, template2];
 
-  function cloneSets(sets: typeof template1.sets) {
+  function cloneSets(sets: SetEntry[]): SetEntry[] {
     return sets.map((s) =>
       s.kind === 'block'
         ? { ...s, id: id(), sets: s.sets.map((x) => ({ ...x, id: id() })) }
@@ -135,9 +136,9 @@ export function buildDemoData() {
   const sessions = [session1, session2];
 
   const actionItems = [
-    { id: id(), clubId: club.id, athleteId: athletes[1].id, title: 'Atemtechnik bei Sprints', description: 'Neigt zum Luftanhalten in den letzten 15m. Bilaterales Atmen in Drills festigen.', status: 'progress', category: 'technik', createdDate: addDays(todayISO(), -14), dueDate: addDays(todayISO(), 14) },
-    { id: id(), clubId: club.id, athleteId: athletes[5].id, title: 'Rückenlage stabilisieren', description: 'Hüfte sinkt bei längeren Rückenserien ab. Rumpfkraft priorisieren.', status: 'offen', category: 'technik', createdDate: addDays(todayISO(), -5), dueDate: addDays(todayISO(), 25) },
-    { id: id(), clubId: club.id, athleteId: athletes[0].id, title: 'Wettkampf-Nervosität', description: 'Zeigt vor Wettkämpfen erhöhte Anspannung. Mentale Routine erarbeiten.', status: 'offen', category: 'mental', createdDate: addDays(todayISO(), -3), dueDate: addDays(todayISO(), 20) },
+    { id: id(), clubId: club.id, athleteId: athletes[1]!.id, title: 'Atemtechnik bei Sprints', description: 'Neigt zum Luftanhalten in den letzten 15m. Bilaterales Atmen in Drills festigen.', status: 'progress', category: 'technik', createdDate: addDays(todayISO(), -14), dueDate: addDays(todayISO(), 14) },
+    { id: id(), clubId: club.id, athleteId: athletes[5]!.id, title: 'Rückenlage stabilisieren', description: 'Hüfte sinkt bei längeren Rückenserien ab. Rumpfkraft priorisieren.', status: 'offen', category: 'technik', createdDate: addDays(todayISO(), -5), dueDate: addDays(todayISO(), 25) },
+    { id: id(), clubId: club.id, athleteId: athletes[0]!.id, title: 'Wettkampf-Nervosität', description: 'Zeigt vor Wettkämpfen erhöhte Anspannung. Mentale Routine erarbeiten.', status: 'offen', category: 'mental', createdDate: addDays(todayISO(), -3), dueDate: addDays(todayISO(), 20) },
   ];
 
   const competition1 = { id: id(), clubId: club.id, name: 'Bezirksmeisterschaften Kurzbahn', date: addDays(todayISO(), 21), location: 'Hallenbad Nord', course: 'SCM', notes: 'Meldeschluss 10 Tage vorher' };
@@ -178,7 +179,7 @@ async function main() {
     await prisma.competition.createMany({ data: data.competitions.map((c) => ({ ...c, date: new Date(c.date) })) });
 
     console.log(`✔ Demo-Daten eingefügt: 1 Verein, ${data.athletes.length} Athlet:innen, ${data.users.length} Nutzer:innen, ${data.exercises.length} Übungen, ${data.templates.length} Vorlagen, ${data.plans.length} Plan(e), ${data.sessions.length} Einheit(en), ${data.actionItems.length} Handlungsfeld(er), ${data.competitions.length} Wettkampf/-kämpfe.`);
-    console.log(`   Demo-Login (bitte nach dem ersten Login ändern): ${data.users[2].email} / ${data.users[2].password}`);
+    console.log(`   Demo-Login (bitte nach dem ersten Login ändern): ${data.users[2]!.email} / ${data.users[2]!.password}`);
   } finally {
     await prisma.$disconnect();
   }

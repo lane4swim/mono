@@ -39,7 +39,9 @@ export interface InvitationRecord {
   role: string; // 'admin' | 'trainer' | 'athlete'
   clubId: string | null;
   athleteId: string | null;
-  invitedById: string;
+  // null nur, wenn das einladende Konto zwischenzeitlich selbst gelöscht
+  // wurde (siehe schema.prisma: Invitation.invitedById, onDelete: SetNull).
+  invitedById: string | null;
   expiresAt: Date;
   usedAt: Date | null;
   revokedAt: Date | null;

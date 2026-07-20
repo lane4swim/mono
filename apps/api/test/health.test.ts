@@ -11,6 +11,7 @@ import { generateFreshKeyPair } from '../src/auth/keys.js';
 import { createSyncService } from '../src/modules/sync/sync.service.js';
 import { InMemorySyncGateway } from '../src/modules/sync/sync.gateway.memory.js';
 import { InMemoryMailSender } from '../src/mail/mailer.memory.js';
+import { InMemoryProfileDataGateway } from '../src/modules/profile/profile.repository.memory.js';
 
 const testEnv = loadEnv({
   NODE_ENV: 'test',
@@ -31,6 +32,8 @@ async function buildTestApp(): Promise<FastifyInstance> {
     users: new InMemoryUserRepository(),
     refreshTokens: new InMemoryRefreshTokenRepository(),
     invitations,
+    profileGateway: new InMemoryProfileDataGateway({ users: [], athletes: [], results: [], entries: [], actionItems: [], sessions: [] }),
+    dataErasureRetentionDays: 30,
     keyPair,
     accessTtlSeconds: 900,
     refreshTtlDays: 30,

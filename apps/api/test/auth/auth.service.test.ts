@@ -9,6 +9,7 @@ import {
 } from '../../src/modules/auth/auth.service.js';
 import { InMemoryUserRepository, InMemoryRefreshTokenRepository } from '../../src/modules/auth/auth.repository.memory.js';
 import { InMemoryInvitationRepository } from '../../src/modules/invitations/invitations.repository.memory.js';
+import { InMemoryProfileDataGateway } from '../../src/modules/profile/profile.repository.memory.js';
 import { generateFreshKeyPair } from '../../src/auth/keys.js';
 import { verifyAccessToken } from '../../src/auth/tokens.js';
 import { generateInvitationToken } from '../../src/auth/tokens.js';
@@ -20,9 +21,15 @@ function makeService() {
   const users = new InMemoryUserRepository();
   const refreshTokens = new InMemoryRefreshTokenRepository();
   const invitations = new InMemoryInvitationRepository();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const profileDb: any = { users: [], athletes: [], results: [], entries: [], actionItems: [], sessions: [] };
+  const profileGateway = new InMemoryProfileDataGateway(profileDb);
   const keyPair = generateFreshKeyPair();
-  const service = createAuthService({ users, refreshTokens, invitations, keyPair, accessTtlSeconds: 900, refreshTtlDays: 30 });
-  return { service, users, refreshTokens, invitations, keyPair };
+  const service = createAuthService({
+    users, refreshTokens, invitations, profileGateway, dataErasureRetentionDays: 30,
+    keyPair, accessTtlSeconds: 900, refreshTtlDays: 30,
+  });
+  return { service, users, refreshTokens, invitations, keyPair, profileDb };
 }
 
 // Erzeugt eine gültige Trainer-Einladung und liefert das Klartext-Token,
@@ -52,7 +59,7 @@ describe('authService.acceptInvitation', () => {
     const { service, invitations, keyPair } = makeService();
     const token = await seedInvitation(invitations, { role: 'trainer', clubId: CLUB_ID });
 
-    const result = await service.acceptInvitation({ token, name: 'Sabine Reuter', password: 'ein-sicheres-passwort' });
+    const result = await service.acceptInvitation({ token, name: 'Sabine Reuter', password: 'ein-sicheres-passwort', consent: true });
 
     expect(result.user.email).toBe('sabine.reuter@example.org');
     expect(result.user.role).toBe('trainer');
@@ -72,16 +79,16 @@ describe('authService.acceptInvitation', () => {
     // Felder mitzuschicken, kennt AcceptInvitationRequest gar keine
     // role/clubId/email-Felder (siehe shared-types) — hier wird nur
     // geprüft, dass die tatsächlich vergebene Rolle aus der Einladung stammt.
-    const result = await service.acceptInvitation({ token, name: 'Neue Admin', password: 'ein-sicheres-passwort' });
+    const result = await service.acceptInvitation({ token, name: 'Neue Admin', password: 'ein-sicheres-passwort', consent: true });
     expect(result.user.role).toBe('admin');
   });
 
   it('markiert die Einladung nach Verwendung als verbraucht (kein zweites Einlösen möglich)', async () => {
     const { service, invitations } = makeService();
     const token = await seedInvitation(invitations);
-    await service.acceptInvitation({ token, name: 'X', password: 'ein-sicheres-passwort' });
+    await service.acceptInvitation({ token, name: 'X', password: 'ein-sicheres-passwort', consent: true });
 
-    await expect(service.acceptInvitation({ token, name: 'Y', password: 'ein-anderes-passwort' })).rejects.toThrow(
+    await expect(service.acceptInvitation({ token, name: 'Y', password: 'ein-anderes-passwort', consent: true })).rejects.toThrow(
       InvalidInvitationError,
     );
   });
@@ -89,14 +96,14 @@ describe('authService.acceptInvitation', () => {
   it('lehnt ein unbekanntes/erfundenes Einladungs-Token ab', async () => {
     const { service } = makeService();
     await expect(
-      service.acceptInvitation({ token: 'kein-echtes-token', name: 'X', password: 'ein-sicheres-passwort' }),
+      service.acceptInvitation({ token: 'kein-echtes-token', name: 'X', password: 'ein-sicheres-passwort', consent: true }),
     ).rejects.toThrow(InvalidInvitationError);
   });
 
   it('lehnt eine abgelaufene Einladung ab', async () => {
     const { service, invitations } = makeService();
     const token = await seedInvitation(invitations, { expiresAt: new Date(Date.now() - 1000) });
-    await expect(service.acceptInvitation({ token, name: 'X', password: 'ein-sicheres-passwort' })).rejects.toThrow(
+    await expect(service.acceptInvitation({ token, name: 'X', password: 'ein-sicheres-passwort', consent: true })).rejects.toThrow(
       InvalidInvitationError,
     );
   });
@@ -115,25 +122,25 @@ describe('authService.acceptInvitation', () => {
     });
     await invitations.revoke(invitation.id);
     await expect(
-      service.acceptInvitation({ token: plainToken, name: 'X', password: 'ein-sicheres-passwort' }),
+      service.acceptInvitation({ token: plainToken, name: 'X', password: 'ein-sicheres-passwort', consent: true }),
     ).rejects.toThrow(InvalidInvitationError);
   });
 
   it('lehnt ab, wenn die E-Mail der Einladung bereits ein Konto hat', async () => {
     const { service, invitations } = makeService();
     const tokenA = await seedInvitation(invitations, { email: 'doppel@example.org' });
-    await service.acceptInvitation({ token: tokenA, name: 'Erste Person', password: 'ein-sicheres-passwort' });
+    await service.acceptInvitation({ token: tokenA, name: 'Erste Person', password: 'ein-sicheres-passwort', consent: true });
 
     const tokenB = await seedInvitation(invitations, { email: 'doppel@example.org' });
     await expect(
-      service.acceptInvitation({ token: tokenB, name: 'Zweite Person', password: 'ein-anderes-passwort' }),
+      service.acceptInvitation({ token: tokenB, name: 'Zweite Person', password: 'ein-anderes-passwort', consent: true }),
     ).rejects.toThrow(EmailAlreadyRegisteredError);
   });
 
   it('speichert das Passwort niemals im Klartext', async () => {
     const { service, invitations, users } = makeService();
     const token = await seedInvitation(invitations);
-    const result = await service.acceptInvitation({ token, name: 'X', password: 'ein-sicheres-passwort' });
+    const result = await service.acceptInvitation({ token, name: 'X', password: 'ein-sicheres-passwort', consent: true });
     const stored = await users.findById(result.user.id);
     expect(stored?.passwordHash).not.toBe('ein-sicheres-passwort');
   });
@@ -141,7 +148,7 @@ describe('authService.acceptInvitation', () => {
   it('unterstützt clubId: null (z. B. bei einer — hier nur zu Testzwecken erzeugten — Einladung ohne Verein)', async () => {
     const { service, invitations } = makeService();
     const token = await seedInvitation(invitations, { role: 'trainer', clubId: null });
-    const result = await service.acceptInvitation({ token, name: 'X', password: 'ein-sicheres-passwort' });
+    const result = await service.acceptInvitation({ token, name: 'X', password: 'ein-sicheres-passwort', consent: true });
     expect(result.user.clubId).toBeNull();
   });
 });
@@ -152,7 +159,7 @@ async function registerViaInvitation(
   overrides: Partial<{ email: string; role: string; clubId: string | null }> = {},
 ) {
   const token = await seedInvitation(invitations, overrides);
-  return service.acceptInvitation({ token, name: 'Test Person', password: 'ein-sicheres-passwort' });
+  return service.acceptInvitation({ token, name: 'Test Person', password: 'ein-sicheres-passwort', consent: true });
 }
 function createAuthServiceForFixture() {
   return makeService().service;
@@ -162,7 +169,7 @@ describe('authService.login', () => {
   it('meldet mit korrekten Zugangsdaten erfolgreich an', async () => {
     const { service, invitations } = makeService();
     await registerViaInvitation(service, invitations, { email: 'sabine.reuter@example.org' });
-    const result = await service.login({ email: 'sabine.reuter@example.org', password: 'ein-sicheres-passwort' });
+    const result = await service.login({ email: 'sabine.reuter@example.org', password: 'ein-sicheres-passwort', consent: true });
     expect(result.user.email).toBe('sabine.reuter@example.org');
   });
 
@@ -170,7 +177,7 @@ describe('authService.login', () => {
     const { service, invitations } = makeService();
     await registerViaInvitation(service, invitations, { email: 'sabine.reuter@example.org' });
     await expect(
-      service.login({ email: 'sabine.reuter@example.org', password: 'falsches-passwort' }),
+      service.login({ email: 'sabine.reuter@example.org', password: 'falsches-passwort', consent: true }),
     ).rejects.toThrow(InvalidCredentialsError);
   });
 
@@ -181,12 +188,12 @@ describe('authService.login', () => {
     let unknownEmailMessage = '';
     let wrongPasswordMessage = '';
     try {
-      await service.login({ email: 'unbekannt@example.org', password: 'irgendwas' });
+      await service.login({ email: 'unbekannt@example.org', password: 'irgendwas', consent: true });
     } catch (err) {
       unknownEmailMessage = (err as Error).message;
     }
     try {
-      await service.login({ email: 'sabine.reuter@example.org', password: 'falsch' });
+      await service.login({ email: 'sabine.reuter@example.org', password: 'falsch', consent: true });
     } catch (err) {
       wrongPasswordMessage = (err as Error).message;
     }
@@ -270,5 +277,46 @@ describe('authService.getMe / updateMe', () => {
     const updated = await service.updateMe(user.id, { email: 'gleich@example.org', name: 'Trotzdem geändert' });
     expect(updated.email).toBe('gleich@example.org');
     expect(updated.name).toBe('Trotzdem geändert');
+  });
+});
+
+describe('authService.exportMyData / requestAccountDeletion', () => {
+  // Hinweis: InMemoryUserRepository (Login/Registrierung) und
+  // InMemoryProfileDataGateway (Export/Löschung) sind in den Tests bewusst
+  // getrennte In-Memory-Stores — in der echten Prisma-Implementierung
+  // greifen beide auf dieselbe "users"-Tabelle zu, hier muss der
+  // profileDb-Eintrag daher manuell nachgezogen werden, um denselben
+  // Zustand zu simulieren.
+  it('exportMyData() liefert das eigene Profil ohne Passwort-Hash', async () => {
+    const { service, invitations, profileDb } = makeService();
+    const { user } = await registerViaInvitation(service, invitations, { email: 'export@example.org' });
+    profileDb.users.push({ id: user.id, clubId: CLUB_ID, athleteId: null, deletedAt: null, name: user.name, email: user.email });
+
+    const result = await service.exportMyData(user.id);
+    expect(result.user.email).toBe('export@example.org');
+    expect(result.format).toBe('lane1-user-data-export-v1');
+  });
+
+  it('requestAccountDeletion() widerruft alle Refresh Tokens des Kontos', async () => {
+    const { service, invitations, profileDb } = makeService();
+    const { user, refreshToken } = await registerViaInvitation(service, invitations, { email: 'delete@example.org' });
+    profileDb.users.push({ id: user.id, clubId: CLUB_ID, athleteId: null, deletedAt: null, name: user.name, email: user.email });
+
+    await service.requestAccountDeletion(user.id);
+
+    // Das Refresh Token, das bei der Registrierung ausgestellt wurde, ist
+    // jetzt widerrufen — ein Refresh damit muss fehlschlagen.
+    await expect(service.refresh(refreshToken)).rejects.toThrow(InvalidRefreshTokenError);
+  });
+
+  it('requestAccountDeletion() liefert das Datum des geplanten endgültigen Löschens (purgeAfter)', async () => {
+    const { service, invitations, profileDb } = makeService();
+    const { user } = await registerViaInvitation(service, invitations, { email: 'delete2@example.org' });
+    profileDb.users.push({ id: user.id, clubId: CLUB_ID, athleteId: null, deletedAt: null, name: user.name, email: user.email });
+
+    const before = Date.now();
+    const result = await service.requestAccountDeletion(user.id);
+    const expectedMs = before + 30 * 24 * 60 * 60 * 1000; // dataErasureRetentionDays: 30 in makeService()
+    expect(Math.abs(result.purgeAfter.getTime() - expectedMs)).toBeLessThan(5000);
   });
 });

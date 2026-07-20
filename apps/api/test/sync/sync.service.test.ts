@@ -80,12 +80,12 @@ describe('syncService.push — Idempotenz', () => {
     const event = { id: 'evt-repeat', store: 'groups' as const, entityId: payload.id, action: 'create' as const, payload, clientUpdatedAt: payload.updatedAt };
 
     const first = await service.push([event], { clubId: CLUB_A });
-    expect(first[0].status).toBe('applied');
+    expect(first[0]!.status).toBe('applied');
 
     // Zweites Senden desselben Events (z. B. nach Verbindungsabbruch) —
     // darf keinen Fehler werfen und keinen zweiten Datensatz anlegen.
     const second = await service.push([event], { clubId: CLUB_A });
-    expect(second[0].status).toBe('applied');
+    expect(second[0]!.status).toBe('applied');
 
     const stored = await gateway.findById('groups', payload.id);
     expect(stored).not.toBeNull();
@@ -103,8 +103,8 @@ describe('syncService.push — Konfliktlogik (last-write-wins, z. B. "groups")',
       [{ id: 'evt3', store: 'groups', entityId: staleClientVersion.id, action: 'update', payload: staleClientVersion, clientUpdatedAt: staleClientVersion.updatedAt }],
       { clubId: CLUB_A },
     );
-    expect(results[0].status).toBe('conflict');
-    expect((results[0].serverVersion as { name: string }).name).toBe('Serverstand');
+    expect(results[0]!.status).toBe('conflict');
+    expect((results[0]!.serverVersion as { name: string }).name).toBe('Serverstand');
 
     // Der Serverstand bleibt unverändert — das veraltete Event wurde nicht angewendet.
     const stored = await gateway.findById('groups', staleClientVersion.id);
@@ -126,8 +126,8 @@ describe('syncService.push — Konfliktlogik ("results": never-overwrite)', () =
     // "insert-as-new" wird als "applied" gemeldet, mit einer neuen
     // Server-id in serverVersion, damit der Client seinen lokalen
     // Datensatz nachziehen kann.
-    expect(results[0].status).toBe('applied');
-    const newId = (results[0].serverVersion as { id: string }).id;
+    expect(results[0]!.status).toBe('applied');
+    const newId = (results[0]!.serverVersion as { id: string }).id;
     expect(newId).not.toBe(staleClientResult.id);
 
     // Die ursprüngliche (serverseitige) Zeitmessung bleibt unangetastet —
@@ -150,7 +150,7 @@ describe('syncService.push — Validierung', () => {
       [{ id: 'evt5', store: 'groups', entityId: 'x', action: 'create', payload: invalidPayload, clientUpdatedAt: new Date().toISOString() }],
       { clubId: CLUB_A },
     );
-    expect(results[0].status).toBe('error');
+    expect(results[0]!.status).toBe('error');
   });
 
   it('lehnt ein Event ab, dessen Payload-clubId nicht dem eigenen Verein entspricht', async () => {
@@ -160,7 +160,7 @@ describe('syncService.push — Validierung', () => {
       [{ id: 'evt6', store: 'groups', entityId: payload.id, action: 'create', payload, clientUpdatedAt: payload.updatedAt }],
       { clubId: CLUB_A },
     );
-    expect(results[0].status).toBe('error');
+    expect(results[0]!.status).toBe('error');
   });
 });
 
@@ -174,7 +174,7 @@ describe('syncService.push — Löschung', () => {
       [{ id: 'evt7', store: 'groups', entityId: payload.id, action: 'delete', payload: null, clientUpdatedAt: new Date().toISOString() }],
       { clubId: CLUB_A },
     );
-    expect(results[0].status).toBe('applied');
+    expect(results[0]!.status).toBe('applied');
     const stored = await gateway.findById('groups', payload.id);
     expect(stored?.deletedAt).not.toBeNull();
   });
@@ -189,7 +189,7 @@ describe('syncService.pull', () => {
 
     const result = await service.pull({}, { clubId: CLUB_A });
     expect(result.changes).toHaveLength(1);
-    expect(result.changes[0].entityId).toBe('g1');
+    expect(result.changes[0]!.entityId).toBe('g1');
   });
 
   it('liefert nur Änderungen nach dem angegebenen "since"-Zeitpunkt', async () => {
@@ -199,7 +199,7 @@ describe('syncService.pull', () => {
 
     const result = await service.pull({ since: '2026-03-01T00:00:00.000Z' }, { clubId: CLUB_A });
     expect(result.changes).toHaveLength(1);
-    expect(result.changes[0].entityId).toBe('new');
+    expect(result.changes[0]!.entityId).toBe('new');
   });
 
   it('markiert gelöschte Datensätze mit action: "delete" und payload: null', async () => {
@@ -207,8 +207,8 @@ describe('syncService.pull', () => {
     gateway.seed('groups', { id: 'deleted', clubId: CLUB_A, name: 'X', updatedAt: new Date(), deletedAt: new Date() });
 
     const result = await service.pull({}, { clubId: CLUB_A });
-    expect(result.changes[0].action).toBe('delete');
-    expect(result.changes[0].payload).toBeNull();
+    expect(result.changes[0]!.action).toBe('delete');
+    expect(result.changes[0]!.payload).toBeNull();
   });
 
   it('paginiert bei mehr als einer Seite Änderungen und liefert einen nextCursor', async () => {

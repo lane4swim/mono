@@ -307,9 +307,10 @@ export default {
     deleteConfirmWord: 'LÖSCHEN',
     deleteConfirmMismatch: 'Bitte exakt "LÖSCHEN" eingeben, um fortzufahren.',
     deleteButtonConfirm: 'Endgültig löschen',
-    deleted: 'Lokale Daten gelöscht. Du wurdest abgemeldet.',
-    serverDeletionNote: 'Hinweis: Der Export und die Löschung wirken derzeit nur auf lokal zwischengespeicherte Daten. Eine vollständige Löschung des Kontos beim Verein erfordert derzeit eine Anfrage an Ihre:n Administrator:in (die serverseitige Löschfunktion ist noch nicht angebunden).',
-    serverDeletionWarning: 'Wichtig: Dies löscht nur die auf diesem Gerät zwischengespeicherten Daten, NICHT dein Konto beim Verein. Für eine vollständige Löschung wende dich bitte an deine:n Administrator:in.',
+    deleted: 'Konto zur Löschung vorgemerkt (endgültig ab {date}). Lokale Daten entfernt, du wurdest abgemeldet.',
+    exportOfflineFallback: 'Server nicht erreichbar — stattdessen lokal zwischengespeicherte Daten exportiert.',
+    errorNetwork: 'Server nicht erreichbar. Bitte Internetverbindung prüfen.',
+    errorUnknown: 'Ein unerwarteter Fehler ist aufgetreten.',
   },
   syncqueue: {
     eyebrow: '{count} Events insgesamt', title: 'Sync-Warteschlange',

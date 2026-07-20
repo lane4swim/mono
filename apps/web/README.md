@@ -18,7 +18,7 @@ Laden keine Internetverbindung mehr.
 - **Statistiken & Auswertungen** — Anwesenheitsquote, RPE-Trend, Leistungsentwicklung
 - **Sync-Warteschlange** — Event-Queue (Outbox-Pattern) zur Vorbereitung einer künftigen Backend-Synchronisation, inkl. simulierter Übertragung in der Demo
 - **Mehrsprachigkeit** — Deutsch (de-DE) und Englisch (en-US) von Anfang an, Sprachumschalter in der Kopfzeile, pro Nutzer:in gespeichert, leicht um weitere Sprachen erweiterbar
-- **Mein Profil** — jede:r Nutzer:in kann eigene Kontodaten (Name, E-Mail) sowie die bevorzugte Sprache selbst verwalten
+- **Mein Profil** — jede:r Nutzer:in kann eigene Kontodaten (Name, E-Mail) sowie die bevorzugte Sprache selbst verwalten; zusätzlich Auskunft (JSON-Export) und Löschung des eigenen Kontos gemäß DSGVO (Art. 15 + 17) — ruft die echten Backend-Endpunkte auf, mit lokalem Export als Ausweichlösung bei fehlender Internetverbindung
 - **Nutzerverwaltung** — Superadministrator:innen legen Vereine an und laden deren ersten Admin per zeitlich befristetem Einladungslink ein; Admins laden Trainer:innen/Athlet:innen ihres Vereins ebenso ein (aktuell als lokale Simulation, echte Backend-Anbindung folgt in Phase 4). Hinweis für bereits laufende Installationen: `js/db.js` wurde auf `DB_VERSION = 2` angehoben, damit die dafür neu benötigten IndexedDB-Stores (`clubs`, `invitations`) bei bestehenden Datenbanken automatisch nachträglich angelegt werden.
 
 Drei Rollen: **Trainer**, **Athlet** und **Administrator** (siehe unten).

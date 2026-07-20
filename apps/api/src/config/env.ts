@@ -40,6 +40,13 @@ const EnvSchema = z.object({
   SMTP_PASSWORD: z.string().optional(),
   SMTP_FROM_EMAIL: z.string().email().default('noreply@lane1.example.org'),
   SMTP_FROM_NAME: z.string().default('Lane 1'),
+
+  // DSGVO (Art. 17): Anzahl Tage zwischen einer Löschanfrage (sofortiger
+  // Soft-Delete) und dem endgültigen, unwiderruflichen Hard-Purge durch
+  // scripts/purgeDeletedData.ts. 30 Tage ist gängige Praxis ("ohne
+  // unangemessene Verzögerung", aber mit kurzer Frist z. B. für
+  // versehentliche Löschungen oder laufende Backup-Zyklen).
+  DATA_ERASURE_RETENTION_DAYS: z.coerce.number().int().positive().default(30),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

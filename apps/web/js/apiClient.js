@@ -143,6 +143,17 @@ export function getMe() {
 export function updateMe(patch) {
   return request('/api/me', { method: 'PATCH', body: JSON.stringify(patch) });
 }
+// Art. 15 DSGVO — Recht auf Auskunft: bündelt alle zum eigenen Konto
+// gespeicherten Daten.
+export function exportMyData() {
+  return request('/api/me/export');
+}
+// Art. 17 DSGVO — Recht auf Löschung: sofortiger Soft-Delete, endgültiger
+// Hard-Purge folgt serverseitig zeitversetzt (siehe Backend-README). Liefert
+// { message, purgeAfter }.
+export function deleteMyAccount() {
+  return request('/api/me', { method: 'DELETE' });
+}
 
 // ---- Vereine & Einladungen (Nutzerverwaltung) --------------------------
 export function createClub({ name, adminEmail, adminName }) {

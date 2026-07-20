@@ -12,6 +12,7 @@ import { generateInvitationToken } from '../../src/auth/tokens.js';
 import { createSyncService } from '../../src/modules/sync/sync.service.js';
 import { InMemorySyncGateway } from '../../src/modules/sync/sync.gateway.memory.js';
 import { InMemoryMailSender } from '../../src/mail/mailer.memory.js';
+import { InMemoryProfileDataGateway } from '../../src/modules/profile/profile.repository.memory.js';
 
 const testEnv = loadEnv({
   NODE_ENV: 'test',
@@ -34,8 +35,15 @@ async function buildTestApp() {
   const refreshTokens = new InMemoryRefreshTokenRepository();
   const clubs = new InMemoryClubRepository();
   const invitations = new InMemoryInvitationRepository();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const profileDb: any = { users: [], athletes: [], results: [], entries: [], actionItems: [], sessions: [] };
 
-  const authService = createAuthService({ users, refreshTokens, invitations, keyPair, accessTtlSeconds: 900, refreshTtlDays: 30 });
+  const authService = createAuthService({
+    users, refreshTokens, invitations,
+    profileGateway: new InMemoryProfileDataGateway(profileDb),
+    dataErasureRetentionDays: 30,
+    keyPair, accessTtlSeconds: 900, refreshTtlDays: 30,
+  });
   const invitationsService = createInvitationsService({
     clubs,
     invitations,
@@ -51,7 +59,7 @@ async function buildTestApp() {
   // nutzen, während authService oben mit einem separaten Schlüsselpaar
   // signiert (führt sonst zu 401 auf jeder geschützten Route).
   const app = await buildApp(testEnv, { authService, invitationsService, syncService, keyPair });
-  return { app, invitations };
+  return { app, invitations, profileDb };
 }
 
 async function seedInvitationToken(
@@ -211,5 +219,76 @@ describe('POST /auth/refresh + /auth/logout', () => {
     await app.inject({ method: 'POST', url: '/auth/logout', payload: { refreshToken } });
     const response = await app.inject({ method: 'POST', url: '/auth/refresh', payload: { refreshToken } });
     expect(response.statusCode).toBe(401);
+  });
+});
+
+describe('GET /api/me/export (Art. 15 DSGVO)', () => {
+  it('liefert 401 ohne Authentifizierung', async () => {
+    const { app } = await buildTestApp();
+    const response = await app.inject({ method: 'GET', url: '/api/me/export' });
+    expect(response.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it('liefert das eigene Profil als Export, wenn eingeloggt', async () => {
+    const { app, invitations, profileDb } = await buildTestApp();
+    const token = await seedInvitationToken(invitations, { email: 'export@example.org' });
+    const registerResponse = await app.inject({ method: 'POST', url: '/auth/register', payload: { token, name: 'X', password: 'ein-sicheres-passwort', consent: true } });
+    const { accessToken, user } = registerResponse.json();
+    profileDb.users.push({ id: user.id, clubId: user.clubId, athleteId: user.athleteId, deletedAt: null, name: user.name, email: user.email });
+
+    const response = await app.inject({ method: 'GET', url: '/api/me/export', headers: { authorization: `Bearer ${accessToken}` } });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().format).toBe('lane1-user-data-export-v1');
+    expect(response.json().user.email).toBe('export@example.org');
+    await app.close();
+  });
+});
+
+describe('DELETE /api/me (Art. 17 DSGVO)', () => {
+  it('liefert 401 ohne Authentifizierung', async () => {
+    const { app } = await buildTestApp();
+    const response = await app.inject({ method: 'DELETE', url: '/api/me' });
+    expect(response.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it('markiert das Konto zur Löschung vor und liefert das purgeAfter-Datum', async () => {
+    const { app, invitations, profileDb } = await buildTestApp();
+    const token = await seedInvitationToken(invitations, { email: 'delete@example.org' });
+    const registerResponse = await app.inject({ method: 'POST', url: '/auth/register', payload: { token, name: 'X', password: 'ein-sicheres-passwort', consent: true } });
+    const { accessToken, user } = registerResponse.json();
+    profileDb.users.push({ id: user.id, clubId: user.clubId, athleteId: user.athleteId, deletedAt: null, name: user.name, email: user.email });
+
+    const response = await app.inject({ method: 'DELETE', url: '/api/me', headers: { authorization: `Bearer ${accessToken}` } });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().purgeAfter).toBeTruthy();
+    await app.close();
+  });
+
+  it('invalidiert alle Refresh Tokens des Kontos', async () => {
+    const { app, invitations, profileDb } = await buildTestApp();
+    const token = await seedInvitationToken(invitations, { email: 'delete2@example.org' });
+    const registerResponse = await app.inject({ method: 'POST', url: '/auth/register', payload: { token, name: 'X', password: 'ein-sicheres-passwort', consent: true } });
+    const { accessToken, refreshToken: rt, user } = registerResponse.json();
+    profileDb.users.push({ id: user.id, clubId: user.clubId, athleteId: user.athleteId, deletedAt: null, name: user.name, email: user.email });
+
+    await app.inject({ method: 'DELETE', url: '/api/me', headers: { authorization: `Bearer ${accessToken}` } });
+    const refreshResponse = await app.inject({ method: 'POST', url: '/auth/refresh', payload: { refreshToken: rt } });
+    expect(refreshResponse.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it('liefert 409 bei einer zweiten Löschanfrage für dasselbe Konto', async () => {
+    const { app, invitations, profileDb } = await buildTestApp();
+    const token = await seedInvitationToken(invitations, { email: 'delete3@example.org' });
+    const registerResponse = await app.inject({ method: 'POST', url: '/auth/register', payload: { token, name: 'X', password: 'ein-sicheres-passwort', consent: true } });
+    const { accessToken, user } = registerResponse.json();
+    profileDb.users.push({ id: user.id, clubId: user.clubId, athleteId: user.athleteId, deletedAt: null, name: user.name, email: user.email });
+
+    await app.inject({ method: 'DELETE', url: '/api/me', headers: { authorization: `Bearer ${accessToken}` } });
+    const second = await app.inject({ method: 'DELETE', url: '/api/me', headers: { authorization: `Bearer ${accessToken}` } });
+    expect(second.statusCode).toBe(409);
+    await app.close();
   });
 });

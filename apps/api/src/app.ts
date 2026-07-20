@@ -22,6 +22,7 @@ import { createInvitationsService, type InvitationsService } from './modules/inv
 import { PrismaClubRepository, PrismaInvitationRepository } from './modules/invitations/invitations.repository.js';
 import { createSyncService, type SyncService } from './modules/sync/sync.service.js';
 import { PrismaSyncGateway } from './modules/sync/sync.gateway.js';
+import { PrismaProfileDataGateway } from './modules/profile/profile.repository.js';
 import { SmtpMailSender, ConsoleMailSender, type MailSender } from './mail/mailer.js';
 import { resolveKeyPair } from './auth/keys.js';
 import { getPrisma } from './db/prisma.js';
@@ -89,6 +90,8 @@ export async function buildApp(env: Env, overrides: BuildAppOverrides = {}): Pro
       users: new PrismaUserRepository(getPrisma()),
       refreshTokens: new PrismaRefreshTokenRepository(getPrisma()),
       invitations: new PrismaInvitationRepository(getPrisma()),
+      profileGateway: new PrismaProfileDataGateway(getPrisma()),
+      dataErasureRetentionDays: env.DATA_ERASURE_RETENTION_DAYS,
       keyPair,
       accessTtlSeconds: env.JWT_ACCESS_TTL_SECONDS,
       refreshTtlDays: env.JWT_REFRESH_TTL_DAYS,

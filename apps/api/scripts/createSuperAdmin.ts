@@ -19,7 +19,7 @@ function parseArgs(argv: string[]): Record<string, string> {
   const args: Record<string, string> = {};
   for (const arg of argv) {
     const match = /^--([^=]+)=(.*)$/.exec(arg);
-    if (match) args[match[1]] = match[2];
+    if (match) args[match[1]!] = match[2]!;
   }
   return args;
 }

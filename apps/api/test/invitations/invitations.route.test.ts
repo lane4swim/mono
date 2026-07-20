@@ -9,6 +9,7 @@ import { InMemoryClubRepository, InMemoryInvitationRepository } from '../../src/
 import { createSyncService } from '../../src/modules/sync/sync.service.js';
 import { InMemorySyncGateway } from '../../src/modules/sync/sync.gateway.memory.js';
 import { InMemoryMailSender } from '../../src/mail/mailer.memory.js';
+import { InMemoryProfileDataGateway } from '../../src/modules/profile/profile.repository.memory.js';
 import { generateFreshKeyPair, type KeyPair } from '../../src/auth/keys.js';
 import { signAccessToken } from '../../src/auth/tokens.js';
 
@@ -28,7 +29,12 @@ async function buildTestApp() {
   const invitations = new InMemoryInvitationRepository();
   const mailer = new InMemoryMailSender();
 
-  const authService = createAuthService({ users, refreshTokens, invitations, keyPair, accessTtlSeconds: 900, refreshTtlDays: 30 });
+  const authService = createAuthService({
+    users, refreshTokens, invitations,
+    profileGateway: new InMemoryProfileDataGateway({ users: [], athletes: [], results: [], entries: [], actionItems: [], sessions: [] }),
+    dataErasureRetentionDays: 30,
+    keyPair, accessTtlSeconds: 900, refreshTtlDays: 30,
+  });
   const invitationsService = createInvitationsService({
     clubs, invitations, mailer, frontendBaseUrl: 'https://app.example.org',
     clubInvitationTtlDays: 14, memberInvitationTtlDays: 7,

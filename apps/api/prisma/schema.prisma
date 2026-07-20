@@ -89,7 +89,7 @@ model User {
 model DataDeletionRequest {
   id          String    @id @default(uuid())
   userId      String    @unique
-  user        User      @relation(fields: [userId], references: [id])
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   requestedAt DateTime  @default(now())
   purgeAfter  DateTime
   purgedAt    DateTime?
@@ -102,7 +102,7 @@ model DataDeletionRequest {
 model RefreshToken {
   id         String    @id @default(uuid())
   userId     String
-  user       User      @relation(fields: [userId], references: [id])
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   tokenHash  String    @unique
   expiresAt  DateTime
   revokedAt  DateTime?
@@ -122,8 +122,13 @@ model Invitation {
   clubId       String?
   club         Club?     @relation(fields: [clubId], references: [id])
   athleteId    String?
-  invitedById  String
-  invitedBy    User      @relation("InvitationSender", fields: [invitedById], references: [id])
+  // Nullable + SetNull: eine Einladung soll als historischer Datensatz
+  // bestehen bleiben, auch wenn das einladende Konto später selbst
+  // gelöscht wird (z. B. ein ausscheidender Admin, der zuvor Trainer:innen
+  // eingeladen hat) — die Löschung DIESES Kontos darf nicht an den von
+  // ihm ausgestellten Einladungen scheitern.
+  invitedById  String?
+  invitedBy    User?     @relation("InvitationSender", fields: [invitedById], references: [id], onDelete: SetNull)
   expiresAt    DateTime
   usedAt       DateTime?
   revokedAt    DateTime?
