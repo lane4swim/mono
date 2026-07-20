@@ -118,8 +118,22 @@ export class PrismaProfileDataGateway implements ProfileDataGateway {
       }
     });
 
-    return this.prisma.dataDeletionRequest.create({
+    const created = await this.prisma.dataDeletionRequest.create({
       data: { userId, requestedAt: now, purgeAfter, status: 'pending' },
     });
+    // 'status' ist im Schema eine einfache String-Spalte (kein Prisma-
+    // Enum), Prisma leitet ihren Typ daher als generisches 'string' ab —
+    // breiter als unser 'pending' | 'purged'. Das Objekt wird deshalb
+    // explizit konstruiert statt das Create-Ergebnis direkt
+    // zurückzugeben; unmittelbar nach der Anlage ist der Status
+    // garantiert 'pending' (entspricht auch dem Schema-Default).
+    return {
+      id: created.id,
+      userId: created.userId,
+      requestedAt: created.requestedAt,
+      purgeAfter: created.purgeAfter,
+      purgedAt: created.purgedAt,
+      status: 'pending',
+    };
   }
 }
