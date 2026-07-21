@@ -65,5 +65,19 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
       'JWT_PRIVATE_KEY und JWT_PUBLIC_KEY müssen in Produktion gesetzt sein (siehe .env.example, Abschnitt RS256-Schlüssel).',
     );
   }
+  // Sicherheitshärtung (siehe Sicherheitsreview, Punkt 4): CORS wird mit
+  // credentials: true betrieben (siehe plugins/security.ts) — Browser
+  // lehnen die Kombination "Access-Control-Allow-Origin: *" +
+  // "Access-Control-Allow-Credentials: true" zwar ohnehin ab, aber sich
+  // allein darauf zu verlassen ist fragil (abhängig vom jeweiligen
+  // Client/Browser-Verhalten, nicht serverseitig erzwungen). Ein
+  // versehentliches CORS_ORIGIN=* in Produktion wird daher explizit und
+  // frühzeitig beim Start abgelehnt, statt sich stillschweigend auf
+  // Browser-Verhalten zu verlassen.
+  if (env.NODE_ENV === 'production' && env.CORS_ORIGIN.trim() === '*') {
+    throw new Error(
+      'CORS_ORIGIN darf in Produktion nicht "*" sein (kombiniert mit credentials: true unsicher) — bitte die konkrete(n) Frontend-Origin(s) angeben (siehe .env.example).',
+    );
+  }
   return env;
 }

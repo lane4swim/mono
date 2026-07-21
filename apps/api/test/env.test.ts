@@ -44,4 +44,32 @@ describe('loadEnv', () => {
   it('lehnt einen ungültigen NODE_ENV-Wert ab', () => {
     expect(() => loadEnv({ ...validEnv, NODE_ENV: 'sandbox' })).toThrow();
   });
+
+  it('lehnt CORS_ORIGIN="*" in Produktion ab (Sicherheitshärtung, Patch #5)', () => {
+    expect(() =>
+      loadEnv({
+        ...validEnv,
+        NODE_ENV: 'production',
+        CORS_ORIGIN: '*',
+        JWT_PRIVATE_KEY: 'dummy-private-key',
+        JWT_PUBLIC_KEY: 'dummy-public-key',
+      }),
+    ).toThrow(/CORS_ORIGIN/);
+  });
+
+  it('akzeptiert CORS_ORIGIN="*" AUSSERHALB von Produktion (z. B. lokale Entwicklung)', () => {
+    const env = loadEnv({ ...validEnv, NODE_ENV: 'development', CORS_ORIGIN: '*' });
+    expect(env.CORS_ORIGIN).toBe('*');
+  });
+
+  it('akzeptiert eine konkrete Origin in Produktion', () => {
+    const env = loadEnv({
+      ...validEnv,
+      NODE_ENV: 'production',
+      CORS_ORIGIN: 'https://app.lane1.example.org',
+      JWT_PRIVATE_KEY: 'dummy-private-key',
+      JWT_PUBLIC_KEY: 'dummy-public-key',
+    });
+    expect(env.CORS_ORIGIN).toBe('https://app.lane1.example.org');
+  });
 });
