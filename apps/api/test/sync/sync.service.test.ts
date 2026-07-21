@@ -164,6 +164,47 @@ describe('syncService.push — Validierung', () => {
   });
 });
 
+describe('syncService.push — Mass-Assignment-Schutz (Sicherheitsregression, Patch #4)', () => {
+  it('lehnt ein Event ab, dessen Payload ein im Schema unbekanntes Feld enthält (z. B. "deletedAt")', async () => {
+    const { service } = makeService();
+    const payload = { ...makeGroupPayload(), deletedAt: null };
+    const results = await service.push(
+      [{ id: 'evt-mass-1', store: 'groups', entityId: payload.id, action: 'create', payload, clientUpdatedAt: payload.updatedAt }],
+      { clubId: CLUB_A },
+    );
+    // Vorher (Sicherheitslücke): der rohe Payload inkl. "deletedAt" wurde
+    // unvalidiert an Prisma weitergereicht. Jetzt: .strict() lässt das
+    // Schema fehlschlagen -> "error", kein Schreibzugriff.
+    expect(results[0]!.status).toBe('error');
+  });
+
+  it('speichert bei einem gültigen Update NUR die im Schema definierten Felder (validatedPayload statt rohem event.payload)', async () => {
+    const { service, gateway } = makeService();
+    const seedPayload = makeGroupPayload({ id: '66666666-6666-6666-6666-666666666666' });
+    gateway.seed('groups', { ...seedPayload, updatedAt: new Date(seedPayload.updatedAt), createdAt: new Date(seedPayload.createdAt), deletedAt: null });
+
+    // Ein manipulierter Client versucht, per unbekanntem Zusatzfeld
+    // "extraField" beliebige Daten mitzuschicken.
+    const maliciousPayload = {
+      ...seedPayload,
+      name: 'Neuer Name',
+      updatedAt: new Date(Date.now() + 60_000).toISOString(),
+      extraField: 'sollte niemals gespeichert werden',
+    };
+    const results = await service.push(
+      [{ id: 'evt-mass-2', store: 'groups', entityId: seedPayload.id, action: 'update', payload: maliciousPayload, clientUpdatedAt: maliciousPayload.updatedAt }],
+      { clubId: CLUB_A },
+    );
+
+    // .strict() lehnt das unbekannte Feld ab -> das Update wird insgesamt
+    // zurückgewiesen (kein teilweises/stillschweigendes Anwenden).
+    expect(results[0]!.status).toBe('error');
+    const stored = await gateway.findById('groups', seedPayload.id);
+    expect(stored?.name).toBe(seedPayload.name); // unverändert
+    expect((stored as Record<string, unknown>).extraField).toBeUndefined();
+  });
+});
+
 describe('syncService.push — Löschung', () => {
   it('markiert einen Datensatz als gelöscht (Soft-Delete), scoped auf den eigenen Verein', async () => {
     const { service, gateway } = makeService();

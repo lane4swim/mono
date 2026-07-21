@@ -51,6 +51,19 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
         }
 
         // Payload-Validierung (nur bei create/update — delete hat kein Payload).
+        // WICHTIG: `validatedPayload` (das Ergebnis von Zods .strict()-Parsing)
+        // wird ab hier für ALLES verwendet — die clubId-Prüfung, die
+        // Konfliktentscheidung und vor allem die eigentlichen
+        // create()/update()-Aufrufe weiter unten. Der rohe `event.payload`
+        // wird NICHT mehr an das Gateway durchgereicht: Da die Entity-Schemas
+        // jetzt `.strict()` sind, würde Zod zusätzliche, im Schema nicht
+        // vorgesehene Felder (z. B. "deletedAt", das kein Zod-Feld ist, aber
+        // eine echte Prisma-Spalte) zwar ablehnen — das nützt aber nichts,
+        // wenn hinterher trotzdem der ungeprüfte Rohwert an Prisma
+        // weitergereicht wird. Erst die Verwendung von validatedPayload
+        // schließt das Mass-Assignment-Risiko tatsächlich (siehe
+        // Sicherheitsreview, Punkt 8/Nachtrag).
+        let validatedPayload: Record<string, unknown> | null = null;
         if (event.action !== 'delete') {
           const entitySchema = ENTITY_SCHEMAS[store];
           const parsedPayload = entitySchema.safeParse(event.payload);
@@ -58,12 +71,13 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
             results.push({ eventId: event.id, status: 'error', message: `Payload entspricht nicht dem Schema für "${store}".` });
             continue;
           }
+          validatedPayload = parsedPayload.data as Record<string, unknown>;
         }
 
         // Vereins-Scoping: ein Event darf nur Daten des eigenen Vereins
         // betreffen — verhindert, dass ein manipulierter Client Daten
         // eines fremden Vereins schreibt/löscht.
-        const payloadClubId = (event.payload as { clubId?: string } | null)?.clubId;
+        const payloadClubId = (validatedPayload as { clubId?: string } | null)?.clubId;
         if (event.action !== 'delete' && payloadClubId !== requester.clubId) {
           results.push({ eventId: event.id, status: 'error', message: 'clubId des Events stimmt nicht mit dem eigenen Verein überein.' });
           continue;
@@ -101,14 +115,14 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
             // serverVersion und muss seinen lokalen Datensatz entsprechend
             // nachziehen (z. B. die alte id durch die neue ersetzen).
             const newId = randomUUID();
-            await deps.gateway.create(store, { ...(event.payload as Record<string, unknown>), id: newId });
+            await deps.gateway.create(store, { ...(validatedPayload as Record<string, unknown>), id: newId });
             await deps.gateway.markEventProcessed(event.id, requester.clubId, store, event.action);
             results.push({ eventId: event.id, status: 'applied', serverVersion: { id: newId } });
             continue;
           } else if (existing) {
-            await deps.gateway.update(store, event.entityId, requester.clubId, event.payload as Record<string, unknown>);
+            await deps.gateway.update(store, event.entityId, requester.clubId, validatedPayload as Record<string, unknown>);
           } else {
-            await deps.gateway.create(store, event.payload as Record<string, unknown>);
+            await deps.gateway.create(store, validatedPayload as Record<string, unknown>);
           }
           await deps.gateway.markEventProcessed(event.id, requester.clubId, store, event.action);
           results.push({ eventId: event.id, status: 'applied' });

@@ -18,7 +18,7 @@ export const GroupSchema = z.object({
   description: z.string().default(''),
   createdAt: isoDate,
   updatedAt: isoDate,
-});
+}).strict();
 export type Group = z.infer<typeof GroupSchema>;
 
 export const AthleteGenderSchema = z.enum(['w', 'm', 'd']);
@@ -36,7 +36,7 @@ export const AthleteSchema = z.object({
   notes: z.string().default(''),
   createdAt: isoDate,
   updatedAt: isoDate,
-});
+}).strict();
 export type Athlete = z.infer<typeof AthleteSchema>;
 
 export const CourseSchema = z.enum(['LCM', 'SCM']);
@@ -51,7 +51,7 @@ export const CompetitionSchema = z.object({
   notes: z.string().default(''),
   createdAt: isoDate,
   updatedAt: isoDate,
-});
+}).strict();
 export type Competition = z.infer<typeof CompetitionSchema>;
 
 export const StartlistEntrySchema = z.object({
@@ -66,7 +66,7 @@ export const StartlistEntrySchema = z.object({
   seedTime: z.number().nullable(),
   createdAt: isoDate,
   updatedAt: isoDate,
-});
+}).strict();
 export type StartlistEntry = z.infer<typeof StartlistEntrySchema>;
 
 export const ResultSchema = z.object({
@@ -84,7 +84,7 @@ export const ResultSchema = z.object({
   laps: z.array(z.number().positive()).nullable().optional(),
   createdAt: isoDate,
   updatedAt: isoDate,
-});
+}).strict();
 export type Result = z.infer<typeof ResultSchema>;
 
 export const ExerciseSchema = z.object({
@@ -99,7 +99,7 @@ export const ExerciseSchema = z.object({
   equipment: z.array(z.string()).default([]),
   createdAt: isoDate,
   updatedAt: isoDate,
-});
+}).strict();
 export type Exercise = z.infer<typeof ExerciseSchema>;
 
 // Sets/Wiederholungsblöcke — identische Struktur wie im Frontend
@@ -115,7 +115,7 @@ export const PlainSetSchema = z.object({
   intensity: z.string(),
   restSec: z.number().int().nonnegative(),
   exerciseId: z.string().uuid().nullable().optional(),
-});
+}).strict();
 export type PlainSet = z.infer<typeof PlainSetSchema>;
 
 export const RepeatBlockSchema = z.object({
@@ -124,7 +124,7 @@ export const RepeatBlockSchema = z.object({
   label: z.string().default(''),
   repeatCount: z.number().int().positive(),
   sets: z.array(PlainSetSchema),
-});
+}).strict();
 export type RepeatBlock = z.infer<typeof RepeatBlockSchema>;
 
 export const SetEntrySchema = z.discriminatedUnion('kind', [PlainSetSchema, RepeatBlockSchema]);
@@ -139,13 +139,13 @@ export const TemplateSchema = z.object({
   sets: z.array(SetEntrySchema),
   createdAt: isoDate,
   updatedAt: isoDate,
-});
+}).strict();
 export type Template = z.infer<typeof TemplateSchema>;
 
 export const PlanDaySchema = z.object({
   date: isoDate,
   sets: z.array(SetEntrySchema),
-});
+}).strict();
 export type PlanDay = z.infer<typeof PlanDaySchema>;
 
 export const PlanStatusSchema = z.enum(['aktiv', 'archiv']);
@@ -160,7 +160,7 @@ export const PlanSchema = z.object({
   days: z.array(PlanDaySchema),
   createdAt: isoDate,
   updatedAt: isoDate,
-});
+}).strict();
 export type Plan = z.infer<typeof PlanSchema>;
 
 export const AttendanceRecordSchema = z.object({
@@ -168,7 +168,7 @@ export const AttendanceRecordSchema = z.object({
   present: z.boolean(),
   rpe: z.number().int().min(1).max(10).nullable(),
   note: z.string().default(''),
-});
+}).strict();
 export type AttendanceRecord = z.infer<typeof AttendanceRecordSchema>;
 
 export const TrainingSessionSchema = z.object({
@@ -181,7 +181,7 @@ export const TrainingSessionSchema = z.object({
   attendance: z.array(AttendanceRecordSchema),
   createdAt: isoDate,
   updatedAt: isoDate,
-});
+}).strict();
 export type TrainingSession = z.infer<typeof TrainingSessionSchema>;
 
 export const ActionItemStatusSchema = z.enum(['offen', 'progress', 'done']);
@@ -198,7 +198,7 @@ export const ActionItemSchema = z.object({
   dueDate: nullableIsoDate,
   createdAt: isoDate,
   updatedAt: isoDate,
-});
+}).strict();
 export type ActionItem = z.infer<typeof ActionItemSchema>;
 
 // ---- Registry: SyncStore -> Zod-Schema -------------------------------
