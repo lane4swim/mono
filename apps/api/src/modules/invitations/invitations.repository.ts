@@ -68,6 +68,22 @@ export interface InvitationRepository {
   revoke(id: string): Promise<void>;
 }
 
+// Minimale, athletenbezogene Nachschlagemöglichkeit — wird ausschließlich
+// gebraucht, um bei createInvitation() zu prüfen, dass eine mitgeschickte
+// athleteId tatsächlich zum Zielverein gehört (siehe Sicherheitsreview,
+// Punkt 3: ohne diese Prüfung könnte ein Admin ein neues Konto an das
+// Athletenprofil eines FREMDEN Vereins koppeln). Bewusst kein volles
+// AthleteRepository (mit allen CRUD-Operationen) — die Einladungslogik
+// braucht nur `clubId` des referenzierten Athletenprofils.
+export interface AthleteLookup {
+  id: string;
+  clubId: string;
+}
+
+export interface AthleteRepository {
+  findById(id: string): Promise<AthleteLookup | null>;
+}
+
 // ---- Prisma-Implementierungen (Produktionsbetrieb) ------------------------
 
 export class PrismaClubRepository implements ClubRepository {
@@ -131,5 +147,14 @@ export class PrismaInvitationRepository implements InvitationRepository {
   }
   async revoke(id: string): Promise<void> {
     await this.prisma.invitation.update({ where: { id }, data: { revokedAt: new Date() } });
+  }
+}
+
+export class PrismaAthleteRepository implements AthleteRepository {
+  constructor(private readonly prisma: PrismaClient) {}
+
+  async findById(id: string): Promise<AthleteLookup | null> {
+    const athlete = await this.prisma.athlete.findUnique({ where: { id }, select: { id: true, clubId: true } });
+    return athlete;
   }
 }

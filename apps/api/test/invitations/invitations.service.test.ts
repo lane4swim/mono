@@ -5,12 +5,14 @@ import {
   createInvitationsService,
   ForbiddenError,
   ClubNotFoundError,
+  AthleteNotFoundError,
+  AthleteClubMismatchError,
   InvitationNotFoundError,
   InvitationExpiredError,
   InvitationAlreadyUsedError,
   InvitationRevokedError,
 } from '../../src/modules/invitations/invitations.service.js';
-import { InMemoryClubRepository, InMemoryInvitationRepository } from '../../src/modules/invitations/invitations.repository.memory.js';
+import { InMemoryClubRepository, InMemoryInvitationRepository, InMemoryAthleteRepository } from '../../src/modules/invitations/invitations.repository.memory.js';
 
 const SUPERADMIN = { id: 'super-1', role: 'superadmin', clubId: null };
 const ADMIN_OF_CLUB_A = { id: 'admin-a', role: 'admin', clubId: 'club-a' };
@@ -21,12 +23,13 @@ const ATHLETE = { id: 'athlete-1', role: 'athlete', clubId: 'club-a' };
 function makeService() {
   const clubs = new InMemoryClubRepository();
   const invitations = new InMemoryInvitationRepository();
+  const athletes = new InMemoryAthleteRepository();
   const mailer = new InMemoryMailSender();
   const service = createInvitationsService({
-    clubs, invitations, mailer, frontendBaseUrl: 'https://app.example.org',
+    clubs, invitations, athletes, mailer, frontendBaseUrl: 'https://app.example.org',
     clubInvitationTtlDays: 14, memberInvitationTtlDays: 7,
   });
-  return { service, clubs, invitations, mailer };
+  return { service, clubs, invitations, athletes, mailer };
 }
 
 describe('invitationsService.createClub', () => {
@@ -120,6 +123,64 @@ describe('invitationsService.createInvitation — Autorisierungsmatrix', () => {
     await expect(
       service.createInvitation({ email: 'x@y.de', role: 'admin', clubId: '00000000-0000-0000-0000-000000000000' }, SUPERADMIN),
     ).rejects.toThrow(ClubNotFoundError);
+  });
+});
+
+describe('invitationsService.createInvitation — athleteId muss zum Zielverein gehören (Sicherheitsregression)', () => {
+  it('lehnt eine athlete-Einladung ab, deren athleteId zu einem FREMDEN Verein gehört', async () => {
+    const { service, clubs, athletes } = makeService();
+    const clubA = await clubs.create({ name: 'Club A' });
+    const clubB = await clubs.create({ name: 'Club B' });
+    // Athletenprofil gehört zu Verein B ...
+    athletes.seed({ id: 'athlete-in-club-b', clubId: clubB.id });
+    const requester = { ...ADMIN_OF_CLUB_A, clubId: clubA.id };
+
+    // ... aber der Admin von Verein A versucht, ein Konto dafür einzuladen.
+    await expect(
+      service.createInvitation({ email: 'x@y.de', role: 'athlete', athleteId: 'athlete-in-club-b' }, requester),
+    ).rejects.toThrow(AthleteClubMismatchError);
+  });
+
+  it('lehnt eine athlete-Einladung mit einer nicht existierenden athleteId ab', async () => {
+    const { service, clubs } = makeService();
+    const club = await clubs.create({ name: 'Club A' });
+    const requester = { ...ADMIN_OF_CLUB_A, clubId: club.id };
+
+    await expect(
+      service.createInvitation({ email: 'x@y.de', role: 'athlete', athleteId: '00000000-0000-0000-0000-000000000000' }, requester),
+    ).rejects.toThrow(AthleteNotFoundError);
+  });
+
+  it('akzeptiert eine athlete-Einladung, deren athleteId zum EIGENEN Verein gehört', async () => {
+    const { service, clubs, athletes } = makeService();
+    const club = await clubs.create({ name: 'Club A' });
+    athletes.seed({ id: 'athlete-in-club-a', clubId: club.id });
+    const requester = { ...ADMIN_OF_CLUB_A, clubId: club.id };
+
+    const invitation = await service.createInvitation(
+      { email: 'x@y.de', role: 'athlete', athleteId: 'athlete-in-club-a' },
+      requester,
+    );
+    expect(invitation.clubId).toBe(club.id);
+  });
+
+  it('superadmin: die athleteId muss zum explizit angegebenen Zielverein gehören, nicht irgendeinem', async () => {
+    const { service, clubs, athletes } = makeService();
+    const clubA = await clubs.create({ name: 'Club A' });
+    const clubB = await clubs.create({ name: 'Club B' });
+    athletes.seed({ id: 'athlete-in-club-a', clubId: clubA.id });
+
+    await expect(
+      service.createInvitation({ email: 'x@y.de', role: 'athlete', athleteId: 'athlete-in-club-a', clubId: clubB.id }, SUPERADMIN),
+    ).rejects.toThrow(AthleteClubMismatchError);
+  });
+
+  it('ohne athleteId findet keine Athleten-Prüfung statt (trainer-Einladungen bleiben unberührt)', async () => {
+    const { service, clubs } = makeService();
+    const club = await clubs.create({ name: 'Club A' });
+    const requester = { ...ADMIN_OF_CLUB_A, clubId: club.id };
+    const invitation = await service.createInvitation({ email: 'trainer@a.de', role: 'trainer' }, requester);
+    expect(invitation.clubId).toBe(club.id);
   });
 });
 
@@ -244,7 +305,7 @@ describe('invitationsService.listClubs — Mitgliederzahlen', () => {
     const clubs = new InMemoryClubRepository(() => users);
     const invitations = new InMemoryInvitationRepository();
     const mailer = new InMemoryMailSender();
-    const service = createInvitationsService({ clubs, invitations, mailer, frontendBaseUrl: 'https://app.example.org', clubInvitationTtlDays: 14, memberInvitationTtlDays: 7 });
+    const service = createInvitationsService({ clubs, invitations, athletes: new InMemoryAthleteRepository(), mailer, frontendBaseUrl: 'https://app.example.org', clubInvitationTtlDays: 14, memberInvitationTtlDays: 7 });
 
     const club = await clubs.create({ name: 'Club A' });
     users = [

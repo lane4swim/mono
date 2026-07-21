@@ -8,6 +8,8 @@ import type { InvitationsService } from './invitations.service.js';
 import {
   ForbiddenError,
   ClubNotFoundError,
+  AthleteNotFoundError,
+  AthleteClubMismatchError,
   InvitationNotFoundError,
   InvitationExpiredError,
   InvitationAlreadyUsedError,
@@ -77,6 +79,8 @@ export async function invitationsRoutes(app: FastifyInstance, opts: InvitationsR
       } catch (err) {
         if (err instanceof ForbiddenError) return reply.code(403).send({ error: 'forbidden', message: err.message });
         if (err instanceof ClubNotFoundError) return reply.code(404).send({ error: 'club_not_found', message: err.message });
+        if (err instanceof AthleteNotFoundError) return reply.code(404).send({ error: 'athlete_not_found', message: err.message });
+        if (err instanceof AthleteClubMismatchError) return reply.code(400).send({ error: 'athlete_club_mismatch', message: err.message });
         throw err;
       }
     },

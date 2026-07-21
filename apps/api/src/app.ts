@@ -19,7 +19,7 @@ import { invitationsRoutes } from './modules/invitations/invitations.route.js';
 import { createAuthService, type AuthService } from './modules/auth/auth.service.js';
 import { PrismaUserRepository, PrismaRefreshTokenRepository } from './modules/auth/auth.repository.js';
 import { createInvitationsService, type InvitationsService } from './modules/invitations/invitations.service.js';
-import { PrismaClubRepository, PrismaInvitationRepository } from './modules/invitations/invitations.repository.js';
+import { PrismaClubRepository, PrismaInvitationRepository, PrismaAthleteRepository } from './modules/invitations/invitations.repository.js';
 import { createSyncService, type SyncService } from './modules/sync/sync.service.js';
 import { PrismaSyncGateway } from './modules/sync/sync.gateway.js';
 import { PrismaProfileDataGateway } from './modules/profile/profile.repository.js';
@@ -78,6 +78,7 @@ export async function buildApp(env: Env, overrides: BuildAppOverrides = {}): Pro
     createInvitationsService({
       clubs: new PrismaClubRepository(getPrisma()),
       invitations: new PrismaInvitationRepository(getPrisma()),
+      athletes: new PrismaAthleteRepository(getPrisma()),
       mailer,
       frontendBaseUrl: env.FRONTEND_BASE_URL,
       clubInvitationTtlDays: CLUB_INVITATION_TTL_DAYS,

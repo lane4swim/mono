@@ -11,6 +11,8 @@ import type {
   InvitationRepository,
   InvitationRecord,
   CreateInvitationInput,
+  AthleteRepository,
+  AthleteLookup,
 } from './invitations.repository.js';
 
 // Minimale Form eines Nutzer-Datensatzes, wie sie für die Zählung
@@ -113,5 +115,21 @@ export class InMemoryInvitationRepository implements InvitationRepository {
   async revoke(id: string): Promise<void> {
     const existing = this.invitationsById.get(id);
     if (existing) this.invitationsById.set(id, { ...existing, revokedAt: new Date() });
+  }
+}
+
+// Test-Double für AthleteRepository — Athlet:innen werden per seed()
+// direkt eingetragen (analog zu InMemorySyncGateway.seed()), ohne den
+// gesamten Athleten-CRUD-Stack nachzubilden, der für die Einladungslogik
+// nicht gebraucht wird.
+export class InMemoryAthleteRepository implements AthleteRepository {
+  private athletesById = new Map<string, AthleteLookup>();
+
+  seed(athlete: AthleteLookup): void {
+    this.athletesById.set(athlete.id, athlete);
+  }
+
+  async findById(id: string): Promise<AthleteLookup | null> {
+    return this.athletesById.get(id) ?? null;
   }
 }

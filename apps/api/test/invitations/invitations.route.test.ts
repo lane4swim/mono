@@ -5,7 +5,7 @@ import { loadEnv } from '../../src/config/env.js';
 import { createAuthService } from '../../src/modules/auth/auth.service.js';
 import { InMemoryUserRepository, InMemoryRefreshTokenRepository } from '../../src/modules/auth/auth.repository.memory.js';
 import { createInvitationsService } from '../../src/modules/invitations/invitations.service.js';
-import { InMemoryClubRepository, InMemoryInvitationRepository } from '../../src/modules/invitations/invitations.repository.memory.js';
+import { InMemoryClubRepository, InMemoryInvitationRepository, InMemoryAthleteRepository } from '../../src/modules/invitations/invitations.repository.memory.js';
 import { createSyncService } from '../../src/modules/sync/sync.service.js';
 import { InMemorySyncGateway } from '../../src/modules/sync/sync.gateway.memory.js';
 import { InMemoryMailSender } from '../../src/mail/mailer.memory.js';
@@ -27,6 +27,7 @@ async function buildTestApp() {
   const refreshTokens = new InMemoryRefreshTokenRepository();
   const clubs = new InMemoryClubRepository();
   const invitations = new InMemoryInvitationRepository();
+  const athletes = new InMemoryAthleteRepository();
   const mailer = new InMemoryMailSender();
 
   const authService = createAuthService({
@@ -36,13 +37,13 @@ async function buildTestApp() {
     keyPair, accessTtlSeconds: 900, refreshTtlDays: 30,
   });
   const invitationsService = createInvitationsService({
-    clubs, invitations, mailer, frontendBaseUrl: 'https://app.example.org',
+    clubs, invitations, athletes, mailer, frontendBaseUrl: 'https://app.example.org',
     clubInvitationTtlDays: 14, memberInvitationTtlDays: 7,
   });
   const syncService = createSyncService({ gateway: new InMemorySyncGateway() });
 
   const app = await buildApp(testEnv, { authService, invitationsService, syncService, keyPair });
-  return { app, keyPair, clubs, invitations, mailer };
+  return { app, keyPair, clubs, invitations, athletes, mailer };
 }
 
 // Baut ein gültiges Access Token für eine Rolle, ohne den kompletten

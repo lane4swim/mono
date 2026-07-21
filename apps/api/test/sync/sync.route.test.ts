@@ -5,7 +5,7 @@ import { loadEnv } from '../../src/config/env.js';
 import { createAuthService } from '../../src/modules/auth/auth.service.js';
 import { InMemoryUserRepository, InMemoryRefreshTokenRepository } from '../../src/modules/auth/auth.repository.memory.js';
 import { createInvitationsService } from '../../src/modules/invitations/invitations.service.js';
-import { InMemoryClubRepository, InMemoryInvitationRepository } from '../../src/modules/invitations/invitations.repository.memory.js';
+import { InMemoryClubRepository, InMemoryInvitationRepository, InMemoryAthleteRepository } from '../../src/modules/invitations/invitations.repository.memory.js';
 import { createSyncService } from '../../src/modules/sync/sync.service.js';
 import { InMemorySyncGateway } from '../../src/modules/sync/sync.gateway.memory.js';
 import { InMemoryMailSender } from '../../src/mail/mailer.memory.js';
@@ -37,6 +37,7 @@ async function buildTestApp() {
   const invitationsService = createInvitationsService({
     clubs: new InMemoryClubRepository(),
     invitations,
+    athletes: new InMemoryAthleteRepository(),
     mailer: new InMemoryMailSender(),
     frontendBaseUrl: 'https://app.example.org',
     clubInvitationTtlDays: 14,

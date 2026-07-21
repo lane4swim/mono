@@ -11,7 +11,7 @@
 //   - listClubs(): liefert für die Superadmin-Oberfläche ("/admin") je
 //     Verein zusätzlich die Anzahl aktiver Admins/Trainer:innen/Athlet:innen.
 import type { CreateInvitationRequest, InvitationRole } from '@lane1/shared-types';
-import type { ClubRepository, InvitationRepository, InvitationRecord, ClubRecord, ClubMemberCounts } from './invitations.repository.js';
+import type { ClubRepository, InvitationRepository, InvitationRecord, ClubRecord, ClubMemberCounts, AthleteRepository } from './invitations.repository.js';
 import { generateInvitationToken, hashInvitationToken } from '../../auth/tokens.js';
 import type { MailSender } from '../../mail/mailer.js';
 
@@ -23,6 +23,16 @@ export class ForbiddenError extends Error {
 export class ClubNotFoundError extends Error {
   constructor() {
     super('Verein wurde nicht gefunden.');
+  }
+}
+export class AthleteNotFoundError extends Error {
+  constructor() {
+    super('Das referenzierte Athletenprofil wurde nicht gefunden.');
+  }
+}
+export class AthleteClubMismatchError extends Error {
+  constructor() {
+    super('Das referenzierte Athletenprofil gehört nicht zum Zielverein dieser Einladung.');
   }
 }
 export class InvitationNotFoundError extends Error {
@@ -55,6 +65,11 @@ export interface RequesterContext {
 export interface InvitationsServiceDeps {
   clubs: ClubRepository;
   invitations: InvitationRepository;
+  // Für die Validierung einer mitgeschickten athleteId gegen den
+  // Zielverein (siehe Sicherheitsreview, Punkt 3) — verhindert, dass ein
+  // Admin ein neues Konto an das Athletenprofil eines FREMDEN Vereins
+  // koppelt.
+  athletes: AthleteRepository;
   mailer: MailSender;
   // Basis-URL des Frontends, um den Einladungslink zu bauen (z. B.
   // "https://training.mein-verein.de") — die eigentliche Annahme-Seite
@@ -151,6 +166,20 @@ export function createInvitationsService(deps: InvitationsServiceDeps) {
       if (targetClubId) {
         club = await deps.clubs.findById(targetClubId);
         if (!club) throw new ClubNotFoundError();
+      }
+
+      // Sicherheitsrelevante Prüfung: eine mitgeschickte athleteId muss
+      // tatsächlich zum ZIELVEREIN dieser Einladung gehören. Ohne diese
+      // Prüfung könnte ein Admin (der createInvitation nur für den
+      // eigenen Verein aufrufen darf) ein neues Nutzerkonto an das
+      // Athletenprofil eines FREMDEN Vereins koppeln, indem er dessen
+      // athleteId einfach mitschickt — targetClubId wird ja unabhängig
+      // davon aus requester.clubId abgeleitet (siehe resolveTargetClubId),
+      // die athleteId selbst wurde bislang nicht gegengeprüft.
+      if (input.athleteId) {
+        const athlete = await deps.athletes.findById(input.athleteId);
+        if (!athlete) throw new AthleteNotFoundError();
+        if (athlete.clubId !== targetClubId) throw new AthleteClubMismatchError();
       }
 
       const ttlDays = input.role === 'admin' ? deps.clubInvitationTtlDays : deps.memberInvitationTtlDays;
