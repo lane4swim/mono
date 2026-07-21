@@ -29,18 +29,45 @@ export class InMemorySyncGateway implements SyncGateway {
     this.table(store).set(record.id, record);
   }
 
-  async findById(store: EntityStoreName, id: string): Promise<SyncRecord | null> {
-    return this.table(store).get(id) ?? null;
+  async findById(store: EntityStoreName, id: string, clubId?: string): Promise<SyncRecord | null> {
+    const record = this.table(store).get(id) ?? null;
+    // Spiegelt das Scoping von PrismaSyncGateway.findById(): ein Treffer,
+    // der einem anderen Verein gehört, gilt für einen scoped Aufruf als
+    // "nicht gefunden".
+    if (record && clubId !== undefined && record.clubId !== clubId) return null;
+    return record;
   }
 
   async create(store: EntityStoreName, payload: Record<string, unknown>): Promise<void> {
     this.assertReferencedEntityExists(payload);
-    this.table(store).set(payload.id as string, this.normalizeDates(payload));
+    // Spiegelt Prismas Unique-Constraint auf der Primärspalte "id": ein
+    // real generierter Prisma-Client würde bei create() mit bereits
+    // existierender id mit Fehlercode "P2002" fehlschlagen, statt die
+    // bestehende Zeile stillschweigend zu überschreiben. Ohne diese Prüfung
+    // könnte ein Datensatz eines fremden Vereins, der über das
+    // Club-Scoping von findById() als "nicht existent" erscheint (siehe
+    // Sicherheitsreview, Punkt 2), über diesen create()-Fallback-Pfad
+    // trotzdem überschrieben werden.
+    const id = payload.id as string;
+    if (this.table(store).has(id)) {
+      const err = new Error(`Unique constraint failed on the fields: (\`id\`)`) as Error & { code: string };
+      err.code = 'P2002';
+      throw err;
+    }
+    this.table(store).set(id, this.normalizeDates(payload));
   }
 
-  async update(store: EntityStoreName, id: string, payload: Record<string, unknown>): Promise<void> {
+  async update(store: EntityStoreName, id: string, clubId: string, payload: Record<string, unknown>): Promise<void> {
+    const current = this.table(store).get(id);
+    // Vereins-Scoping analog zu PrismaSyncGateway.update()/softDelete():
+    // existiert der Datensatz, gehört aber einem anderen Verein, wird das
+    // Update stillschweigend nicht angewandt — statt den fremden
+    // Datensatz zu überschreiben. (Prisma würde stattdessen "P2025"
+    // werfen; für den In-Memory-Zweck genügt No-Op, das Sicherheits-
+    // verhalten — kein Schreibzugriff auf fremde Daten — ist identisch.)
+    if (current && current.clubId !== clubId) return;
     this.assertReferencedEntityExists(payload);
-    const merged = { ...(this.table(store).get(id) ?? {}), ...payload };
+    const merged = { ...(current ?? {}), ...payload };
     this.table(store).set(id, this.normalizeDates(merged));
   }
 

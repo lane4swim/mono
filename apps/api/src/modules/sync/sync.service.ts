@@ -69,7 +69,14 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
           continue;
         }
 
-        const existing = await deps.gateway.findById(store, event.entityId);
+        // WICHTIG: clubId wird IMMER mitgegeben. Ein Datensatz eines
+        // fremden Vereins gilt dadurch für den gesamten weiteren Ablauf
+        // (Konfliktentscheidung, serverVersion im Response, update()) als
+        // nicht existent — verhindert sowohl einen Infoleak über das
+        // "conflict"-Ergebnis (Punkt 2 des Sicherheitsreviews) als auch,
+        // dass unten fälschlich der update()-Zweig statt insert-as-new/
+        // create() gewählt wird.
+        const existing = await deps.gateway.findById(store, event.entityId, requester.clubId);
         const decision = resolveConflict(
           store,
           { clientUpdatedAt: event.clientUpdatedAt },
@@ -99,7 +106,7 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
             results.push({ eventId: event.id, status: 'applied', serverVersion: { id: newId } });
             continue;
           } else if (existing) {
-            await deps.gateway.update(store, event.entityId, event.payload as Record<string, unknown>);
+            await deps.gateway.update(store, event.entityId, requester.clubId, event.payload as Record<string, unknown>);
           } else {
             await deps.gateway.create(store, event.payload as Record<string, unknown>);
           }

@@ -40,9 +40,23 @@ export interface TombstoneRecord {
 }
 
 export interface SyncGateway {
-  findById(store: EntityStoreName, id: string): Promise<SyncRecord | null>;
+  // `clubId` ist optional, damit interne/administrative Aufrufe (z. B.
+  // Tests, die den rohen Serverstand unabhängig vom anfragenden Verein
+  // prüfen wollen) weiterhin ungescoped nachsehen können. sync.service.ts
+  // MUSS jedoch beim Verarbeiten eines eingehenden Events IMMER die
+  // requester.clubId mitgeben — sonst könnte ein Datensatz eines fremden
+  // Vereins gefunden und (siehe Sicherheitsreview) über den Umweg des
+  // Konfliktergebnisses ausgelesen werden.
+  findById(store: EntityStoreName, id: string, clubId?: string): Promise<SyncRecord | null>;
   create(store: EntityStoreName, payload: Record<string, unknown>): Promise<void>;
-  update(store: EntityStoreName, id: string, payload: Record<string, unknown>): Promise<void>;
+  // clubId ist PFLICHT (nicht optional wie bei findById): update() darf
+  // niemals versehentlich ungescoped aufgerufen werden, da es — anders als
+  // findById — tatsächlich Daten verändert. Die where-Klausel muss daher
+  // immer sowohl id als auch clubId enthalten (analog zu softDelete()),
+  // sonst könnte ein manipuliertes Event mit einer fremden entityId, aber
+  // der eigenen clubId im Payload, den Datensatz eines fremden Vereins
+  // überschreiben (siehe Sicherheitsreview, Punkt 1).
+  update(store: EntityStoreName, id: string, clubId: string, payload: Record<string, unknown>): Promise<void>;
   softDelete(store: EntityStoreName, id: string, clubId: string): Promise<void>;
   // Änderungen eines Vereins seit einem Zeitpunkt, über alle Stores hinweg,
   // absteigend nach updatedAt limitiert (Pagination via `limit`).
@@ -59,10 +73,16 @@ const ALL_STORES: EntityStoreName[] = [
 export class PrismaSyncGateway implements SyncGateway {
   constructor(private readonly prisma: PrismaClient) {}
 
-  async findById(store: EntityStoreName, id: string): Promise<SyncRecord | null> {
+  async findById(store: EntityStoreName, id: string, clubId?: string): Promise<SyncRecord | null> {
     const delegate = getEntityDelegate(this.prisma, store);
-    const record = await delegate.findUnique({ where: { id } });
-    return record as SyncRecord | null;
+    const record = (await delegate.findUnique({ where: { id } })) as SyncRecord | null;
+    // Vereins-Scoping: wenn eine clubId übergeben wurde und der gefundene
+    // Datensatz einem ANDEREN Verein gehört, wird er behandelt, als
+    // existiere er nicht — verhindert, dass ein Aufrufer über eine ihm
+    // bekannte fremde entityId Daten eines fremden Vereins einsehen kann
+    // (z. B. via des serverVersion-Felds bei einem Konfliktergebnis).
+    if (record && clubId !== undefined && record.clubId !== clubId) return null;
+    return record;
   }
 
   async create(store: EntityStoreName, payload: Record<string, unknown>): Promise<void> {
@@ -70,9 +90,17 @@ export class PrismaSyncGateway implements SyncGateway {
     await delegate.create({ data: payload });
   }
 
-  async update(store: EntityStoreName, id: string, payload: Record<string, unknown>): Promise<void> {
+  async update(store: EntityStoreName, id: string, clubId: string, payload: Record<string, unknown>): Promise<void> {
     const delegate = getEntityDelegate(this.prisma, store);
-    await delegate.update({ where: { id }, data: payload });
+    // clubId in der where-Klausel: analog zu softDelete() — verhindert,
+    // dass ein manipuliertes Event mit einer fremden entityId (aber
+    // korrekter eigener clubId im Payload) einen Datensatz eines FREMDEN
+    // Vereins überschreibt (siehe Sicherheitsreview, Punkt 1). Trifft die
+    // where-Klausel nicht (fremder Verein oder id existiert nicht mehr),
+    // wirft Prisma "P2025" (Record not found) — wird im Service wie ein
+    // regulärer Anwendungsfehler behandelt und als "error" gemeldet, statt
+    // den Datensatz eines anderen Vereins stillschweigend zu verändern.
+    await delegate.update({ where: { id, clubId }, data: payload });
   }
 
   async softDelete(store: EntityStoreName, id: string, clubId: string): Promise<void> {
