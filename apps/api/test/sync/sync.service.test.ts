@@ -301,6 +301,75 @@ describe('syncService.push — verständliche Fehlermeldung bei endgültig gelö
   });
 });
 
+describe('syncService.push — Vereins-Scoping bei UPDATE eines bestehenden fremden Datensatzes (Sicherheitsregression)', () => {
+  it('darf einen bestehenden Datensatz eines FREMDEN Vereins nicht überschreiben, selbst wenn die Payload-clubId dem eigenen Verein entspricht', async () => {
+    const { service, gateway } = makeService();
+    const foreignId = '77777777-7777-7777-7777-777777777777';
+    const originalUpdatedAt = new Date('2026-01-01T00:00:00.000Z');
+    // Bestehender Datensatz gehört CLUB_B.
+    gateway.seed('groups', {
+      id: foreignId,
+      clubId: CLUB_B,
+      name: 'Original (Verein B)',
+      updatedAt: originalUpdatedAt,
+      deletedAt: null,
+    });
+
+    // Angreifer aus CLUB_A versucht, unter der bekannten fremden entityId
+    // ein Update mit eigener clubId im Payload einzuschleusen.
+    const maliciousPayload = makeGroupPayload({
+      id: foreignId,
+      clubId: CLUB_A, // Payload-clubId ist "korrekt" (die eigene) — die Lücke lag in der fehlenden Prüfung von existing.clubId.
+      name: 'Übernommen von Verein A',
+      updatedAt: new Date('2026-06-01T00:00:00.000Z').toISOString(),
+    });
+
+    const results = await service.push(
+      [{ id: 'evt-cross-update', store: 'groups', entityId: foreignId, action: 'update', payload: maliciousPayload, clientUpdatedAt: maliciousPayload.updatedAt as string }],
+      { clubId: CLUB_A },
+    );
+
+    // Der Versuch muss fehlschlagen (id-Kollision mit fremdem Datensatz),
+    // NICHT still als "applied" durchgehen.
+    expect(results[0]!.status).toBe('error');
+
+    // Der fremde Datensatz muss in jedem Fall unverändert (Verein B,
+    // Originalname) bleiben — das ist die eigentliche Sicherheitsaussage.
+    const stillForeign = await gateway.findById('groups', foreignId);
+    expect(stillForeign?.clubId).toBe(CLUB_B);
+    expect(stillForeign?.name).toBe('Original (Verein B)');
+  });
+
+  it('lässt einen scoped findById()-Aufruf einen Datensatz eines fremden Vereins nicht mehr finden (verhindert Infoleak über Konfliktergebnisse)', async () => {
+    const { gateway } = makeService();
+    const foreignId = '88888888-8888-8888-8888-888888888888';
+    gateway.seed('groups', { id: foreignId, clubId: CLUB_B, name: 'Geheim (Verein B)', updatedAt: new Date(), deletedAt: null });
+
+    // Ungescoped (z. B. für interne/Test-Zwecke) weiterhin auffindbar …
+    expect(await gateway.findById('groups', foreignId)).not.toBeNull();
+    // … aber mit der clubId des anfragenden (fremden) Vereins gescoped: nicht auffindbar.
+    expect(await gateway.findById('groups', foreignId, CLUB_A)).toBeNull();
+  });
+
+  it('meldet keinen "conflict" mit fremder serverVersion, wenn der bestehende Datensatz einem anderen Verein gehört', async () => {
+    const { service, gateway } = makeService();
+    const foreignId = '99999999-9999-9999-9999-999999999999';
+    gateway.seed('groups', { id: foreignId, clubId: CLUB_B, name: 'Geheim (Verein B)', updatedAt: new Date('2026-06-01T00:00:00.000Z'), deletedAt: null });
+
+    const payload = makeGroupPayload({ id: foreignId, clubId: CLUB_A, updatedAt: new Date('2026-01-01T00:00:00.000Z').toISOString() });
+    const results = await service.push(
+      [{ id: 'evt-leak-attempt', store: 'groups', entityId: foreignId, action: 'update', payload, clientUpdatedAt: payload.updatedAt as string }],
+      { clubId: CLUB_A },
+    );
+
+    // Vorher (Sicherheitslücke): status "conflict" mit serverVersion, die
+    // den kompletten fremden Datensatz enthielt. Jetzt: kein Leak über
+    // diesen Pfad — der fremde Datensatz gilt als nicht existent.
+    expect(results[0]!.status).not.toBe('conflict');
+    expect(JSON.stringify(results[0])).not.toContain('Geheim (Verein B)');
+  });
+});
+
 describe('describeSyncError()', () => {
   it('übersetzt einen Fehler mit Prisma-Code "P2003" (Fremdschlüssel-Verletzung) in eine verständliche deutsche Meldung', () => {
     const fakeError = { code: 'P2003', message: 'Foreign key constraint failed on the field: `athleteId`' };
