@@ -32,3 +32,13 @@ export const UserSchema = z.object({
   updatedAt: z.string().datetime(),
 });
 export type User = z.infer<typeof UserSchema>;
+
+// Antwort von GET /api/users (Nutzerverwaltung: bestehende
+// Vereinsmitglieder anzeigen) — dieselbe öffentliche Nutzer-Form wie
+// UserSchema, nur als Liste. Server sortiert bereits nach Rolle
+// (admin → trainer → athlete) und danach nach Namen; das Frontend gruppiert
+// zusätzlich visuell nach Rolle.
+export const ClubMembersResponseSchema = z.object({
+  users: z.array(UserSchema),
+});
+export type ClubMembersResponse = z.infer<typeof ClubMembersResponseSchema>;

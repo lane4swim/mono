@@ -171,6 +171,14 @@ export function listInvitations() {
 export function revokeInvitation(id) {
   return request(`/api/invitations/${id}`, { method: 'DELETE' });
 }
+// Nutzerverwaltung: bestehende Vereinsmitglieder, sortiert nach Rolle
+// (admin -> trainer -> athlete) und danach nach Namen. Für admin genügt
+// der Aufruf ohne clubId (Server nutzt den eigenen Verein); superadmin
+// muss clubId explizit angeben.
+export function listClubMembers(clubId) {
+  const query = clubId ? `?clubId=${encodeURIComponent(clubId)}` : '';
+  return request(`/api/users${query}`);
+}
 
 // ---- Sync (Push/Pull) --------------------------------------------------
 export function syncPush(events) {

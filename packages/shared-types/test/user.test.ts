@@ -1,6 +1,30 @@
 // packages/shared-types/test/user.test.ts
 import { describe, it, expect } from 'vitest';
-import { UserSchema, RoleSchema } from '../src/user.js';
+import { UserSchema, RoleSchema, ClubMembersResponseSchema } from '../src/user.js';
+
+describe('ClubMembersResponseSchema', () => {
+  const validUser = {
+    id: '11111111-1111-1111-1111-111111111111',
+    clubId: '22222222-2222-2222-2222-222222222222',
+    name: 'Sabine Reuter',
+    email: 'sabine.reuter@example.org',
+    role: 'trainer',
+    athleteId: null,
+    locale: 'de-DE',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  it('akzeptiert eine Liste gültiger Nutzer:innen', () => {
+    expect(ClubMembersResponseSchema.safeParse({ users: [validUser] }).success).toBe(true);
+  });
+  it('akzeptiert eine leere Liste', () => {
+    expect(ClubMembersResponseSchema.safeParse({ users: [] }).success).toBe(true);
+  });
+  it('lehnt eine Liste mit ungültigem Eintrag ab', () => {
+    expect(ClubMembersResponseSchema.safeParse({ users: [{ ...validUser, email: 'keine-email' }] }).success).toBe(false);
+  });
+});
 
 describe('UserSchema', () => {
   const validUser = {

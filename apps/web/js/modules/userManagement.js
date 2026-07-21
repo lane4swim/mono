@@ -1,15 +1,9 @@
 // ============================================================
 // modules/userManagement.js — "Nutzerverwaltung"
 //
-// Phase 4: ruft jetzt die echten Backend-Endpunkte auf (POST/GET /api/clubs,
-// POST/GET/DELETE /api/invitations — alle bereits in Phase 1 implementiert),
-// statt den Ablauf nur lokal in IndexedDB zu simulieren.
-//
-// Bewusste Lücke: Es gibt (noch) keinen Endpunkt, um bestehende Nutzer:innen
-// eines Vereins aufzulisten (kein GET /api/users) — das frühere Element
-// "Bestehende Nutzer:innen" entfällt daher hier ersatzlos, statt eine
-// erfundene/unvollständige Ansicht zu zeigen. Siehe README für diesen
-// offenen Punkt.
+// Phase 4: ruft die echten Backend-Endpunkte auf (POST/GET /api/clubs,
+// POST/GET/DELETE /api/invitations, GET /api/users), statt den Ablauf nur
+// lokal in IndexedDB zu simulieren.
 // ============================================================
 import {
   el, clear, field, textInput, selectInput, openModal, confirmAction, toast, badge,
@@ -28,12 +22,15 @@ export const userManagementModule = {
     const isCurrent = beginRender(container);
     clear(container);
     try {
-      const [clubs, invitationsResp] = await Promise.all([
+      const [clubs, invitationsResp, membersResp] = await Promise.all([
         isSuperAdmin() ? api.listClubs() : Promise.resolve({ clubs: [] }),
         api.listInvitations(),
+        // superadmin gehört zu keinem Verein und sieht Mitglieder stattdessen
+        // je Verein über einen Button in der Vereinsliste (on demand).
+        isSuperAdmin() ? Promise.resolve({ users: [] }) : api.listClubMembers(),
       ]);
       if (!isCurrent()) return;
-      renderView(container, clubs.clubs, invitationsResp.invitations);
+      renderView(container, clubs.clubs, invitationsResp.invitations, membersResp.users);
     } catch (err) {
       if (!isCurrent()) return;
       renderError(container, err);
@@ -67,7 +64,7 @@ function buildInviteUrl(token) {
   return `${location.origin}${location.pathname}#/accept-invite/${token}`;
 }
 
-function renderView(container, clubs, invitations) {
+function renderView(container, clubs, invitations, members) {
   const me = getCurrentUser();
   const wrap = el('div');
   wrap.appendChild(el('div', { class: 'page-head' }, [
@@ -78,6 +75,8 @@ function renderView(container, clubs, invitations) {
 
   if (isSuperAdmin()) {
     wrap.appendChild(renderClubsSection(clubs, refresh));
+  } else {
+    wrap.appendChild(renderMembersSection(members));
   }
 
   wrap.appendChild(renderInviteSection(clubs, refresh));
@@ -90,18 +89,74 @@ function renderView(container, clubs, invitations) {
   async function refresh() {
     clear(container);
     try {
-      const [c2, i2] = await Promise.all([
+      const [c2, i2, m2] = await Promise.all([
         isSuperAdmin() ? api.listClubs() : Promise.resolve({ clubs: [] }),
         api.listInvitations(),
+        isSuperAdmin() ? Promise.resolve({ users: [] }) : api.listClubMembers(),
       ]);
-      renderView(container, c2.clubs, i2.invitations);
+      renderView(container, c2.clubs, i2.invitations, m2.users);
     } catch (err) {
       renderError(container, err);
     }
   }
 }
 
-// ---------------- Superadmin: Vereine anlegen ----------------
+// ---------------- Bestehende Vereinsmitglieder ----------------
+// Für admin: immer der eigene Verein, direkt auf der Seite. Für
+// superadmin: je Verein über einen Button in der Vereinsliste (siehe
+// renderClubsSection), da ein Superadmin-Konto selbst zu keinem Verein
+// gehört und daher explizit wählen muss, welchen Verein es ansehen will.
+function renderMembersSection(members) {
+  const card = el('div', { class: 'card mb-16' }, [el('h3', { class: 'mt-0' }, t('usermgmt.membersSection'))]);
+  card.appendChild(renderMembersGroupedByRole(members));
+  return card;
+}
+
+// Gruppiert eine (bereits vom Server nach Rolle+Namen sortierte) Liste
+// visuell nach Rolle — Admins, Trainer:innen, Athlet:innen je eigene
+// Tabelle, nur sichtbar, wenn es in dieser Rolle tatsächlich Mitglieder
+// gibt.
+function renderMembersGroupedByRole(members) {
+  const wrap = el('div');
+  if (!members || members.length === 0) {
+    wrap.appendChild(el('p', {}, t('usermgmt.noMembersYet')));
+    return wrap;
+  }
+  const groups = [
+    { role: 'admin', label: t('usermgmt.groupAdmins') },
+    { role: 'trainer', label: t('usermgmt.groupTrainers') },
+    { role: 'athlete', label: t('usermgmt.groupAthletes') },
+  ];
+  groups.forEach(({ role, label }) => {
+    const inRole = members.filter((m) => m.role === role);
+    if (inRole.length === 0) return;
+    wrap.appendChild(el('h4', { style: 'margin-bottom:8px' }, `${label} (${inRole.length})`));
+    const table = el('table');
+    table.appendChild(el('thead', {}, el('tr', {}, [el('th', {}, t('usermgmt.colName')), el('th', {}, t('usermgmt.colEmail'))])));
+    const tbody = el('tbody');
+    inRole.forEach((member) => tbody.appendChild(el('tr', {}, [el('td', {}, member.name), el('td', {}, member.email)])));
+    table.appendChild(tbody);
+    wrap.appendChild(el('div', { class: 'table-wrap mb-16' }, table));
+  });
+  return wrap;
+}
+
+function openClubMembersModal(club) {
+  const body = el('div', {}, el('p', {}, t('common.loading')));
+  const { close } = openModal({ title: t('usermgmt.membersModalTitle', { club: club.name }), bodyNode: body, wide: true });
+  api.listClubMembers(club.id)
+    .then((resp) => {
+      clear(body);
+      body.appendChild(renderMembersGroupedByRole(resp.users));
+    })
+    .catch((err) => {
+      clear(body);
+      body.appendChild(el('p', { class: 'form-error' }, describeError(err)));
+    });
+  return close;
+}
+
+
 function renderClubsSection(clubs, onChanged) {
   const card = el('div', { class: 'card mb-16' }, [
     el('div', { class: 'flex justify-between items-center mb-16' }, [
@@ -113,9 +168,13 @@ function renderClubsSection(clubs, onChanged) {
     card.appendChild(emptyState(t('usermgmt.clubsSection'), t('usermgmt.noClubsYet'), null));
   } else {
     const table = el('table');
-    table.appendChild(el('thead', {}, el('tr', {}, [el('th', {}, t('usermgmt.formClubName')), el('th', {}, '')])));
+    table.appendChild(el('thead', {}, el('tr', {}, [el('th', {}, t('usermgmt.formClubName')), el('th', {}, ''), el('th', {}, '')])));
     const tbody = el('tbody');
-    clubs.forEach(club => tbody.appendChild(el('tr', {}, [el('td', {}, club.name), el('td', {}, fmtDateShort((club.createdAt || '').slice(0, 10)))])));
+    clubs.forEach(club => tbody.appendChild(el('tr', {}, [
+      el('td', {}, club.name),
+      el('td', {}, fmtDateShort((club.createdAt || '').slice(0, 10))),
+      el('td', {}, el('button', { class: 'btn btn-ghost btn-sm', onclick: () => openClubMembersModal(club) }, t('usermgmt.showMembers'))),
+    ])));
     table.appendChild(tbody);
     card.appendChild(el('div', { class: 'table-wrap' }, table));
   }

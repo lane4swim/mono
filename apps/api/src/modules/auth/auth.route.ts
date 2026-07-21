@@ -17,8 +17,10 @@ import {
   InvalidRefreshTokenError,
   InvalidInvitationError,
   UserNotFoundError,
+  ClubIdRequiredError,
 } from './auth.service.js';
 import { UserNotFoundForExportError, ErasureAlreadyRequestedError } from '../profile/profile.repository.js';
+import { requireRole } from '../../plugins/authorize.js';
 
 export async function authRoutes(app: FastifyInstance, opts: { authService: AuthService }) {
   const { authService } = opts;
@@ -106,6 +108,29 @@ export async function authRoutes(app: FastifyInstance, opts: { authService: Auth
     await authService.logout(parsed.data.refreshToken);
     return reply.code(204).send();
   });
+
+  // Nutzerverwaltung: bestehende Vereinsmitglieder anzeigen, sortiert
+  // nach Rolle (admin -> trainer -> athlete) und danach nach Namen (siehe
+  // authService.listClubMembers()). Nur admin/superadmin — admin sieht
+  // immer den eigenen Verein, superadmin muss ?clubId=<uuid> angeben.
+  app.get<{ Querystring: { clubId?: string } }>(
+    '/api/users',
+    { preHandler: [app.authenticate, requireRole('admin', 'superadmin')] },
+    async (request, reply) => {
+      try {
+        const users = await authService.listClubMembers(
+          { role: request.user!.role, clubId: request.user!.clubId },
+          request.query.clubId,
+        );
+        return reply.code(200).send({ users });
+      } catch (err) {
+        if (err instanceof ClubIdRequiredError) {
+          return reply.code(400).send({ error: 'club_id_required', message: err.message });
+        }
+        throw err;
+      }
+    },
+  );
 
   app.get('/api/me', { preHandler: app.authenticate }, async (request, reply) => {
     try {

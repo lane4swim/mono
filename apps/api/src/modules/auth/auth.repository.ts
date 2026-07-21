@@ -52,6 +52,9 @@ export interface UserRepository {
   findById(id: string): Promise<UserRecord | null>;
   create(input: CreateUserInput): Promise<UserRecord>;
   update(id: string, input: UpdateUserInput): Promise<UserRecord>;
+  // Für die Nutzerverwaltung ("GET /api/users"): alle aktiven (nicht
+  // gelöschten) Mitglieder eines Vereins.
+  listByClub(clubId: string): Promise<UserRecord[]>;
 }
 
 export interface RefreshTokenRecord {
@@ -86,6 +89,9 @@ export class PrismaUserRepository implements UserRepository {
   }
   async update(id: string, input: UpdateUserInput): Promise<UserRecord> {
     return this.prisma.user.update({ where: { id }, data: input });
+  }
+  async listByClub(clubId: string): Promise<UserRecord[]> {
+    return this.prisma.user.findMany({ where: { clubId, deletedAt: null } });
   }
 }
 

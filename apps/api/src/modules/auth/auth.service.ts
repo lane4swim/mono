@@ -47,6 +47,12 @@ export class InvalidInvitationError extends Error {
   }
 }
 
+export class ClubIdRequiredError extends Error {
+  constructor() {
+    super('Als Superadministrator:in muss der Verein (clubId) explizit angegeben werden.');
+  }
+}
+
 export interface AuthTokens {
   accessToken: string;
   refreshToken: string;
@@ -206,6 +212,24 @@ export function createAuthService(deps: AuthServiceDeps) {
       const request = await deps.profileGateway.requestErasure(userId, deps.dataErasureRetentionDays);
       await deps.refreshTokens.revokeAllForUser(userId);
       return { purgeAfter: request.purgeAfter };
+    },
+
+    // GET /api/users — Nutzerverwaltung: bestehende Vereinsmitglieder
+    // anzeigen. admin sieht immer den eigenen Verein (eine mitgeschickte
+    // abweichende clubId wird ignoriert, analog zu createInvitation());
+    // superadmin gehört zu keinem Verein und muss die clubId daher
+    // explizit angeben.
+    async listClubMembers(requester: { role: string; clubId: string | null }, requestedClubId?: string) {
+      const clubId = requester.role === 'superadmin' ? requestedClubId : requester.clubId;
+      if (!clubId) throw new ClubIdRequiredError();
+
+      const users = await deps.users.listByClub(clubId);
+      const rolePriority: Record<string, number> = { admin: 0, trainer: 1, athlete: 2, superadmin: 3 };
+      const sorted = [...users].sort((a, b) => {
+        const roleDiff = (rolePriority[a.role] ?? 9) - (rolePriority[b.role] ?? 9);
+        return roleDiff !== 0 ? roleDiff : a.name.localeCompare(b.name);
+      });
+      return sorted.map(toPublicUser);
     },
   };
 }

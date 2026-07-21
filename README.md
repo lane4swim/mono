@@ -25,9 +25,6 @@ synchronisiert wirklich mit dem Backend, und die Nutzerverwaltung
 
 ## Bekannte offene Punkte
 
-- **Kein `GET /api/users`-Endpunkt:** Die Nutzerverwaltung im Frontend kann
-  daher keine Liste bestehender Vereinsmitglieder anzeigen (nur Vereine und
-  Einladungen).
 - **`purgeExpiredDeletions` läuft nicht automatisch** — das CLI-Skript
   (`npm run purge-deleted-data`) muss per Cron eingerichtet werden (siehe
   Abschnitt „DSGVO: Auskunft & Löschung" unten); ohne eingerichteten Cron
@@ -320,6 +317,21 @@ Alle drei Verifikationsschritte (Login-Fluss, Einladungsannahme-Fluss,
 Push/Pull-Rundlauf) wurden mit einer echten DOM-Simulation
 (jsdom + fake-indexeddb + gemocktem `fetch`) end-to-end getestet.
 
+## Bestehende Vereinsmitglieder anzeigen (`GET /api/users`)
+
+`GET /api/users?clubId=<uuid>` — nur `admin`/`superadmin`. Liefert alle
+aktiven (nicht gelöschten) Mitglieder eines Vereins, serverseitig sortiert
+nach Rollen-Hierarchie (admin → trainer → athlete) und danach nach Namen.
+Ein `admin`-Konto sieht immer den eigenen Verein (eine mitgeschickte
+abweichende `clubId` wird ignoriert, analog zu `POST /api/invitations`);
+ein `superadmin`-Konto gehört zu keinem Verein und muss `clubId` daher
+explizit angeben (sonst `400`).
+
+**Frontend:** Im Modul „Nutzerverwaltung" zeigt ein `admin`-Konto seinen
+Verein automatisch inline an (Abschnitt „Bestehende Nutzer:innen",
+gruppiert nach Rolle); ein `superadmin`-Konto sieht diese Ansicht je
+Verein über einen Button „Mitglieder anzeigen" in der Vereinsliste.
+
 ## Superadmin-Oberfläche unter „/admin"
 
 Eigenständige, **nur online verfügbare** Oberfläche unter `apps/web/admin/`
@@ -365,10 +377,10 @@ npm run build      # baut alle Workspaces (packages zuerst, dann apps/api)
 ## Nächste Schritte
 
 Phasen 0–4 des Plans (`docs/backend-plan.md`, Abschnitt 11) sind
-umgesetzt, ebenso die DSGVO-Auskunfts-/Löschfunktion (Art. 15 + 17). Es
-verbleiben: Phase 5 (weitere Sicherheitshärtung & Tests, siehe „Bekannte
-offene Punkte" oben) und Phase 6 (optionale Erweiterungen, z. B.
-Echtzeit-Sync, `GET /api/users`).
+umgesetzt, ebenso die DSGVO-Auskunfts-/Löschfunktion (Art. 15 + 17) und
+`GET /api/users`. Es verbleiben: Phase 5 (weitere Sicherheitshärtung &
+Tests, siehe „Bekannte offene Punkte" oben) und Phase 6 (optionale
+Erweiterungen, z. B. Echtzeit-Sync).
 
 Für die Veröffentlichung auf einem Hetzner-Server siehe die separat
 erstellte `hetzner-deployment-anleitung.md`.

@@ -9,6 +9,7 @@ import { createInvitationsService } from '../../src/modules/invitations/invitati
 import { InMemoryClubRepository, InMemoryInvitationRepository } from '../../src/modules/invitations/invitations.repository.memory.js';
 import { generateFreshKeyPair } from '../../src/auth/keys.js';
 import { generateInvitationToken } from '../../src/auth/tokens.js';
+import { signAccessToken } from '../../src/auth/tokens.js';
 import { createSyncService } from '../../src/modules/sync/sync.service.js';
 import { InMemorySyncGateway } from '../../src/modules/sync/sync.gateway.memory.js';
 import { InMemoryMailSender } from '../../src/mail/mailer.memory.js';
@@ -59,7 +60,7 @@ async function buildTestApp() {
   // nutzen, während authService oben mit einem separaten Schlüsselpaar
   // signiert (führt sonst zu 401 auf jeder geschützten Route).
   const app = await buildApp(testEnv, { authService, invitationsService, syncService, keyPair });
-  return { app, invitations, profileDb };
+  return { app, invitations, profileDb, keyPair };
 }
 
 async function seedInvitationToken(
@@ -289,6 +290,67 @@ describe('DELETE /api/me (Art. 17 DSGVO)', () => {
     await app.inject({ method: 'DELETE', url: '/api/me', headers: { authorization: `Bearer ${accessToken}` } });
     const second = await app.inject({ method: 'DELETE', url: '/api/me', headers: { authorization: `Bearer ${accessToken}` } });
     expect(second.statusCode).toBe(409);
+    await app.close();
+  });
+});
+
+describe('GET /api/users (Nutzerverwaltung: bestehende Vereinsmitglieder)', () => {
+  it('liefert 401 ohne Authentifizierung', async () => {
+    const { app } = await buildTestApp();
+    const response = await app.inject({ method: 'GET', url: '/api/users' });
+    expect(response.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it('lehnt eine athlete-Rolle ab (403)', async () => {
+    const { app, invitations } = await buildTestApp();
+    const token = await seedInvitationToken(invitations, { email: 'athlet@example.org', role: 'athlete' });
+    const registerResponse = await app.inject({ method: 'POST', url: '/auth/register', payload: { token, name: 'X', password: 'ein-sicheres-passwort', consent: true } });
+    const { accessToken } = registerResponse.json();
+
+    const response = await app.inject({ method: 'GET', url: '/api/users', headers: { authorization: `Bearer ${accessToken}` } });
+    expect(response.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it('admin erhält die Mitglieder des eigenen Vereins, sortiert nach Rolle und Namen', async () => {
+    const { app, invitations } = await buildTestApp();
+
+    const adminToken = await seedInvitationToken(invitations, { email: 'admin@example.org', role: 'admin' });
+    const adminReg = await app.inject({ method: 'POST', url: '/auth/register', payload: { token: adminToken, name: 'Die Admin', password: 'ein-sicheres-passwort', consent: true } });
+    const { accessToken: adminAccessToken } = adminReg.json();
+
+    const trainerToken = await seedInvitationToken(invitations, { email: 'zora@example.org', role: 'trainer' });
+    await app.inject({ method: 'POST', url: '/auth/register', payload: { token: trainerToken, name: 'Zora Trainer', password: 'ein-sicheres-passwort', consent: true } });
+
+    const athleteToken = await seedInvitationToken(invitations, { email: 'ben@example.org', role: 'athlete' });
+    await app.inject({ method: 'POST', url: '/auth/register', payload: { token: athleteToken, name: 'Ben Athlet', password: 'ein-sicheres-passwort', consent: true } });
+
+    const response = await app.inject({ method: 'GET', url: '/api/users', headers: { authorization: `Bearer ${adminAccessToken}` } });
+    expect(response.statusCode).toBe(200);
+    const { users } = response.json();
+    expect(users.map((u: { role: string }) => u.role)).toEqual(['admin', 'trainer', 'athlete']);
+    expect(users.every((u: Record<string, unknown>) => !('passwordHash' in u))).toBe(true);
+    await app.close();
+  });
+
+  it('superadmin ohne ?clubId erhält 400', async () => {
+    const { app, keyPair } = await buildTestApp();
+    const token = await signAccessToken({ sub: '00000000-0000-0000-0000-000000000099', role: 'superadmin', clubId: null, athleteId: null }, keyPair, 900);
+    const response = await app.inject({ method: 'GET', url: '/api/users', headers: { authorization: `Bearer ${token}` } });
+    expect(response.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it('superadmin mit ?clubId erhält die Mitglieder des angegebenen Vereins', async () => {
+    const { app, invitations, keyPair } = await buildTestApp();
+    const trainerToken = await seedInvitationToken(invitations, { email: 'trainer-for-superadmin@example.org', role: 'trainer' });
+    await app.inject({ method: 'POST', url: '/auth/register', payload: { token: trainerToken, name: 'X', password: 'ein-sicheres-passwort', consent: true } });
+
+    const superadminToken = await signAccessToken({ sub: '00000000-0000-0000-0000-000000000099', role: 'superadmin', clubId: null, athleteId: null }, keyPair, 900);
+    const response = await app.inject({ method: 'GET', url: `/api/users?clubId=${CLUB_ID}`, headers: { authorization: `Bearer ${superadminToken}` } });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().users).toHaveLength(1);
     await app.close();
   });
 });

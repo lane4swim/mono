@@ -59,6 +59,10 @@ export class InMemoryUserRepository implements UserRepository {
     this.usersById.set(id, updated);
     return { ...updated };
   }
+
+  async listByClub(clubId: string): Promise<UserRecord[]> {
+    return [...this.usersById.values()].filter((u) => u.clubId === clubId && !u.deletedAt).map((u) => ({ ...u }));
+  }
 }
 
 export class InMemoryRefreshTokenRepository implements RefreshTokenRepository {
