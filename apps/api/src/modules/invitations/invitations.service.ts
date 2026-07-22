@@ -84,6 +84,16 @@ function buildInviteUrl(frontendBaseUrl: string, token: string): string {
   return `${frontendBaseUrl.replace(/\/+$/, '')}/#/accept-invite/${token}`;
 }
 
+// Entfernt tokenHash aus der Antwort von list() — der Hash des
+// Einladungs-Tokens ist zwar nicht direkt umkehrbar (kein Klartext-Leak),
+// aber es gibt keinen legitimen Grund, ihn über die API überhaupt
+// auszuliefern (Datenminimierung; siehe Sicherheitsreview). Analog zu
+// toPublicUser() in auth.service.ts.
+function toPublicInvitation(invitation: InvitationRecord): Omit<InvitationRecord, 'tokenHash'> {
+  const { tokenHash: _tokenHash, ...publicInvitation } = invitation;
+  return publicInvitation;
+}
+
 function assertCanIssueRole(requester: RequesterContext, role: InvitationRole, targetClubId: string | null) {
   if (role === 'admin') {
     if (requester.role !== 'superadmin') {
@@ -240,9 +250,9 @@ export function createInvitationsService(deps: InvitationsServiceDeps) {
       await deps.invitations.markUsed(id);
     },
 
-    async list(requester: RequesterContext): Promise<InvitationRecord[]> {
-      if (requester.role === 'superadmin') return deps.invitations.listAll();
-      if (requester.role === 'admin' && requester.clubId) return deps.invitations.listByClub(requester.clubId);
+    async list(requester: RequesterContext): Promise<Array<Omit<InvitationRecord, 'tokenHash'>>> {
+      if (requester.role === 'superadmin') return (await deps.invitations.listAll()).map(toPublicInvitation);
+      if (requester.role === 'admin' && requester.clubId) return (await deps.invitations.listByClub(requester.clubId)).map(toPublicInvitation);
       throw new ForbiddenError('Nur Admins/Superadministrator:innen dürfen Einladungen einsehen.');
     },
 

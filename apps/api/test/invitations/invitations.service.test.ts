@@ -244,6 +244,19 @@ describe('invitationsService.list / revoke', () => {
     expect(listA[0]!.email).toBe('a@a.de');
   });
 
+  it('liefert kein tokenHash-Feld in der Antwort (Sicherheitsregression, Datenminimierung)', async () => {
+    const { service, clubs } = makeService();
+    const club = await clubs.create({ name: 'Club A' });
+    const requester = { ...ADMIN_OF_CLUB_A, clubId: club.id };
+    await service.createInvitation({ email: 'a@a.de', role: 'trainer' }, requester);
+
+    const list = await service.list(requester);
+    expect(list).toHaveLength(1);
+    expect(list[0]).not.toHaveProperty('tokenHash');
+    // Zur Kontrolle: die übrigen, unbedenklichen Felder bleiben erhalten.
+    expect(list[0]).toMatchObject({ email: 'a@a.de', role: 'trainer', clubId: club.id });
+  });
+
   it('superadmin sieht alle Einladungen aller Vereine', async () => {
     const { service, clubs } = makeService();
     const clubA = await clubs.create({ name: 'Club A' });

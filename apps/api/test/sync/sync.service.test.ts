@@ -107,6 +107,25 @@ function makeExercisePayload(overrides: Partial<Record<string, unknown>> = {}) {
   };
 }
 
+function makeAthletePayload(overrides: Partial<Record<string, unknown>> = {}) {
+  const now = new Date().toISOString();
+  return {
+    id: '55555555-5555-5555-5555-555555555555',
+    clubId: CLUB_A,
+    firstName: 'Mara',
+    lastName: 'Vogel',
+    birthdate: '2009-03-14T00:00:00.000Z',
+    gender: 'w',
+    groupId: null,
+    joinDate: '2019-08-01T00:00:00.000Z',
+    active: true,
+    notes: '',
+    createdAt: now,
+    updatedAt: now,
+    ...overrides,
+  };
+}
+
 function makeService() {
   const gateway = new InMemorySyncGateway();
   const service = createSyncService({ gateway });
@@ -618,6 +637,87 @@ describe('syncService — Rollen-Scopierung für "athlete" (Sicherheitsregressio
     const result = await service.pull({}, asTrainer(CLUB_A));
     expect(result.changes).toHaveLength(1);
     expect(result.changes[0]!.entityId).toBe('ai-foreign-2');
+  });
+});
+
+describe('syncService — "Athlete.notes"-Redaktion für Rolle "athlete" (Sicherheitsregression, Patch #7)', () => {
+  it('PULL: "notes" wird für Rolle "athlete" redigiert — auch am eigenen Datensatz', async () => {
+    const { service, gateway } = makeService();
+    const own = makeAthletePayload({ id: '55555555-5555-5555-5555-555555555555', notes: 'Sehr sensible Coaching-Notiz zu mir selbst' });
+    const foreign = makeAthletePayload({ id: '66666666-6666-6666-6666-666666666661', notes: 'Sensible Notiz über eine andere Person' });
+    gateway.seed('athletes', { ...own, birthdate: new Date(own.birthdate), joinDate: new Date(own.joinDate), updatedAt: new Date(own.updatedAt), createdAt: new Date(own.createdAt), deletedAt: null });
+    gateway.seed('athletes', { ...foreign, birthdate: new Date(foreign.birthdate), joinDate: new Date(foreign.joinDate), updatedAt: new Date(foreign.updatedAt), createdAt: new Date(foreign.createdAt), deletedAt: null });
+
+    const result = await service.pull({}, asAthlete(CLUB_A, '55555555-5555-5555-5555-555555555555'));
+    expect(result.changes).toHaveLength(2);
+    result.changes.forEach((change) => {
+      expect((change.payload as Record<string, unknown>).notes).toBe('');
+    });
+    // Der Rest des Datensatzes (Name, Gruppe, …) bleibt sichtbar — nur
+    // "notes" wird entfernt, nicht der ganze Datensatz.
+    const ownChange = result.changes.find((c) => c.entityId === own.id);
+    expect((ownChange!.payload as Record<string, unknown>).firstName).toBe('Mara');
+    expect(JSON.stringify(result.changes)).not.toContain('Sensible');
+  });
+
+  it('trainer/admin sehen "notes" weiterhin unredigiert', async () => {
+    const { service, gateway } = makeService();
+    const athlete = makeAthletePayload({ notes: 'Coaching-Notiz' });
+    gateway.seed('athletes', { ...athlete, birthdate: new Date(athlete.birthdate), joinDate: new Date(athlete.joinDate), updatedAt: new Date(athlete.updatedAt), createdAt: new Date(athlete.createdAt), deletedAt: null });
+
+    const result = await service.pull({}, asTrainer(CLUB_A));
+    expect((result.changes[0]!.payload as Record<string, unknown>).notes).toBe('Coaching-Notiz');
+  });
+
+  it('PUSH: ein Versuch der Rolle "athlete", "notes" zu ändern, wird stillschweigend verworfen (Rest des Updates gelingt weiterhin)', async () => {
+    const { service, gateway } = makeService();
+    const original = makeAthletePayload({ notes: 'Original-Notiz von Trainer:in' });
+    gateway.seed('athletes', { ...original, birthdate: new Date(original.birthdate), joinDate: new Date(original.joinDate), updatedAt: new Date(original.updatedAt), createdAt: new Date(original.createdAt), deletedAt: null });
+
+    const maliciousUpdate = makeAthletePayload({
+      notes: 'Von Athlet:in eingeschleuste Notiz',
+      groupId: null,
+      updatedAt: new Date(Date.now() + 60_000).toISOString(),
+    });
+    const results = await service.push(
+      [{ id: 'evt-athlete-notes', store: 'athletes', entityId: original.id, action: 'update', payload: maliciousUpdate, clientUpdatedAt: maliciousUpdate.updatedAt }],
+      asAthlete(CLUB_A, original.id),
+    );
+    expect(results[0]!.status).toBe('applied');
+
+    const stored = await gateway.findById('athletes', original.id);
+    expect((stored as Record<string, unknown>).notes).toBe('Original-Notiz von Trainer:in');
+  });
+
+  it('PUSH-Konflikt: "serverVersion" enthält für Rolle "athlete" ebenfalls kein unredigiertes "notes"-Feld', async () => {
+    const { service, gateway } = makeService();
+    const original = makeAthletePayload({ notes: 'Geheime Coaching-Notiz', updatedAt: '2026-06-10T00:00:00.000Z' });
+    gateway.seed('athletes', { ...original, birthdate: new Date(original.birthdate), joinDate: new Date(original.joinDate), updatedAt: new Date(original.updatedAt), createdAt: new Date(original.createdAt), deletedAt: null });
+
+    // Absichtlich veralteter Client-Stand -> löst "conflict-server-wins" aus.
+    const staleClientUpdate = makeAthletePayload({ updatedAt: '2026-01-01T00:00:00.000Z' });
+    const results = await service.push(
+      [{ id: 'evt-athlete-conflict', store: 'athletes', entityId: original.id, action: 'update', payload: staleClientUpdate, clientUpdatedAt: staleClientUpdate.updatedAt }],
+      asAthlete(CLUB_A, original.id),
+    );
+    expect(results[0]!.status).toBe('conflict');
+    expect((results[0] as { serverVersion?: Record<string, unknown> }).serverVersion?.notes).toBe('');
+    expect(JSON.stringify(results[0])).not.toContain('Geheime');
+  });
+
+  it('trainer/admin: "notes" lässt sich weiterhin normal ändern', async () => {
+    const { service, gateway } = makeService();
+    const original = makeAthletePayload({ notes: 'Alte Notiz' });
+    gateway.seed('athletes', { ...original, birthdate: new Date(original.birthdate), joinDate: new Date(original.joinDate), updatedAt: new Date(original.updatedAt), createdAt: new Date(original.createdAt), deletedAt: null });
+
+    const update = makeAthletePayload({ notes: 'Neue Notiz von Trainer:in', updatedAt: new Date(Date.now() + 60_000).toISOString() });
+    const results = await service.push(
+      [{ id: 'evt-trainer-notes', store: 'athletes', entityId: original.id, action: 'update', payload: update, clientUpdatedAt: update.updatedAt }],
+      asTrainer(CLUB_A),
+    );
+    expect(results[0]!.status).toBe('applied');
+    const stored = await gateway.findById('athletes', original.id);
+    expect((stored as Record<string, unknown>).notes).toBe('Neue Notiz von Trainer:in');
   });
 });
 

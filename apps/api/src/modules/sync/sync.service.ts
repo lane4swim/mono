@@ -107,6 +107,21 @@ function scopeChangeForAthlete(change: SyncChange, athleteId: string | null): Sy
     return { ...change, payload: { ...(payload as object), attendance: [ownRecord] } };
   }
 
+  if (change.store === 'athletes') {
+    // "notes" ist ein freies Trainer:innen-Notizfeld (siehe
+    // apps/web/js/modules/athletes.js — das einzige Modul, das dieses
+    // Feld überhaupt anzeigt, ist auf roles: ['trainer','admin']
+    // beschränkt). Für Rolle "athlete" bleibt der restliche Athletendatensatz
+    // (Name, Gruppe, …) sichtbar — der wird für Team-weite Ansichten wie
+    // Zeiten/Trainingspläne gebraucht (siehe times.js/plans.js) — nur
+    // "notes" wird redigiert, und zwar sowohl bei fremden als auch beim
+    // eigenen Datensatz (die Notiz ist grundsätzlich coach-intern, nicht
+    // athletenspezifisch geheim vs. offen).
+    const payload = change.payload as Record<string, unknown> | null;
+    if (!payload) return change;
+    return { ...change, payload: { ...payload, notes: '' } };
+  }
+
   return change;
 }
 
@@ -189,6 +204,20 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
         // dass unten fälschlich der update()-Zweig statt insert-as-new/
         // create() gewählt wird.
         const existing = await deps.gateway.findById(store, event.entityId, requester.clubId);
+
+        // Schreibschutz für "notes" (siehe scopeChangeForAthlete oben für
+        // die Begründung): eine Rolle "athlete" kann über den generischen
+        // Push-Endpunkt grundsätzlich Athletendatensätze schreiben (z. B.
+        // um z. B. Gruppendaten zu spiegeln) — das freie Notizfeld darf
+        // dabei aber nie verändert werden. Statt den gesamten Store für
+        // "athlete" zu sperren (dafür gibt es aktuell keinen belegten
+        // Bedarf), wird "notes" hier stillschweigend auf den bisherigen
+        // Serverstand zurückgesetzt — ein Versuch, "notes" zu ändern,
+        // schlägt fehl, ohne den Rest des Updates zu blockieren.
+        if (requester.role === 'athlete' && store === 'athletes' && validatedPayload) {
+          validatedPayload.notes = (existing as { notes?: string } | null)?.notes ?? '';
+        }
+
         const decision = resolveConflict(
           store,
           { clientUpdatedAt: event.clientUpdatedAt },
@@ -196,7 +225,17 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
         );
 
         if (decision.outcome === 'conflict-server-wins') {
-          results.push({ eventId: event.id, status: 'conflict', serverVersion: existing as Record<string, unknown> | null });
+          // Gleiche Redaktion wie beim Pull (siehe scopeChangeForAthlete):
+          // "serverVersion" hier ist im Grunde ein Mini-Pull dieses einen
+          // Datensatzes — ohne diese Zeile könnte eine Rolle "athlete"
+          // durch gezieltes Auslösen eines Konflikts (z. B. mit einer
+          // künstlich alten clientUpdatedAt) trotzdem an das
+          // unredigierte "notes"-Feld eines Athletendatensatzes kommen.
+          const serverVersion =
+            requester.role === 'athlete' && store === 'athletes' && existing
+              ? { ...(existing as Record<string, unknown>), notes: '' }
+              : (existing as Record<string, unknown> | null);
+          results.push({ eventId: event.id, status: 'conflict', serverVersion });
           continue;
         }
 
