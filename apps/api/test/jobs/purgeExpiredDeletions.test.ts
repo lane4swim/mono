@@ -109,3 +109,68 @@ describe('purgeExpiredDeletions', () => {
     expect(db.users.map((u) => u.id)).toEqual(['u2']);
   });
 });
+
+describe('purgeExpiredDeletions — Tombstones (Verbesserung: Löschungen bleiben meldbar)', () => {
+  it('schreibt für Athletenprofil, Ergebnisse, Einträge und Handlungsfelder je eine Löschmarkierung', async () => {
+    const tombstones: import('../../src/modules/sync/sync.gateway.js').TombstoneRecord[] = [];
+    const db = makeDb({
+      users: [{ id: 'u1', clubId: 'club-1', athleteId: 'ath-1' }],
+      athletes: [{ id: 'ath-1' }],
+      results: [{ id: 'r1', athleteId: 'ath-1' }],
+      entries: [{ id: 'e1', athleteId: 'ath-1' }],
+      actionItems: [{ id: 'a1', athleteId: 'ath-1' }],
+      deletionRequests: [{ id: 'req1', userId: 'u1', purgeAfter: PAST, status: 'pending', purgedAt: null }],
+      tombstones,
+    });
+    const gateway = new InMemoryErasureJobGateway(db);
+    await purgeExpiredDeletions(gateway, NOW);
+
+    const entityIds = tombstones.map((t) => t.entityId).sort();
+    expect(entityIds).toEqual(['a1', 'ath-1', 'e1', 'r1'].sort());
+    expect(tombstones.every((t) => t.clubId === 'club-1')).toBe(true);
+    expect(tombstones.find((t) => t.entityId === 'ath-1')!.store).toBe('athletes');
+  });
+
+  it('schreibt keine Tombstones für ein Konto ohne verknüpftes Athletenprofil', async () => {
+    const tombstones: import('../../src/modules/sync/sync.gateway.js').TombstoneRecord[] = [];
+    const db = makeDb({
+      users: [{ id: 'u1', clubId: 'club-1', athleteId: null }],
+      deletionRequests: [{ id: 'req1', userId: 'u1', purgeAfter: PAST, status: 'pending', purgedAt: null }],
+      tombstones,
+    });
+    const gateway = new InMemoryErasureJobGateway(db);
+    await purgeExpiredDeletions(gateway, NOW);
+
+    expect(tombstones).toHaveLength(0);
+  });
+
+  it('Ende-zu-Ende: ein vom Purge-Job geschriebener Tombstone wird über die Sync-API (pull) sichtbar', async () => {
+    // Simuliert exakt den in der Analyse beschriebenen Grenzfall: ein
+    // Gerät war während der gesamten Aufbewahrungsfrist offline und
+    // bekommt daher nie ein reguläres "delete"-Signal über deletedAt —
+    // der Tombstone ist die einzige verbleibende Möglichkeit.
+    const { InMemorySyncGateway } = await import('../../src/modules/sync/sync.gateway.memory.js');
+    const { createSyncService } = await import('../../src/modules/sync/sync.service.js');
+
+    const sharedTombstones: import('../../src/modules/sync/sync.gateway.js').TombstoneRecord[] = [];
+    const erasureDb = makeDb({
+      users: [{ id: 'u1', clubId: 'club-1', athleteId: 'ath-1' }],
+      athletes: [{ id: 'ath-1' }],
+      deletionRequests: [{ id: 'req1', userId: 'u1', purgeAfter: PAST, status: 'pending', purgedAt: null }],
+      tombstones: sharedTombstones,
+    });
+    const erasureGateway = new InMemoryErasureJobGateway(erasureDb);
+
+    // Vor dem Purge: das (nie synchronisierte) Gerät hätte hier noch
+    // nichts von der Löschung erfahren.
+    const syncGateway = new InMemorySyncGateway(sharedTombstones);
+    const syncService = createSyncService({ gateway: syncGateway });
+
+    await purgeExpiredDeletions(erasureGateway, NOW);
+
+    const pullResult = await syncService.pull({}, { clubId: 'club-1', role: 'trainer', athleteId: null });
+    expect(pullResult.changes).toContainEqual(
+      expect.objectContaining({ store: 'athletes', entityId: 'ath-1', action: 'delete', payload: null }),
+    );
+  });
+});

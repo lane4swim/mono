@@ -49,9 +49,9 @@ async function buildTestApp() {
   return { app, gateway, keyPair };
 }
 
-async function tokenFor(keyPair: KeyPair, role: string, clubId: string | null) {
+async function tokenFor(keyPair: KeyPair, role: string, clubId: string | null, athleteId: string | null = null) {
   return signAccessToken(
-    { sub: '00000000-0000-0000-0000-000000000001', role: role as never, clubId, athleteId: null },
+    { sub: '00000000-0000-0000-0000-000000000001', role: role as never, clubId, athleteId },
     keyPair,
     900,
   );
@@ -124,6 +124,27 @@ describe('POST /api/sync/push', () => {
     expect(response.statusCode).toBe(200);
     await app.close();
   });
+
+  it('athlete-Rolle darf "actionItems" NICHT per Push verändern (Rollen-Scopierung, Patch #6, End-to-End über HTTP)', async () => {
+    const { app, keyPair } = await buildTestApp();
+    const athleteId = '55555555-5555-5555-5555-555555555555';
+    const token = await tokenFor(keyPair, 'athlete', CLUB_ID, athleteId);
+    const now = new Date().toISOString();
+    const payload = {
+      id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', clubId: CLUB_ID, athleteId,
+      title: 'X', description: '', category: 'technik', status: 'offen',
+      createdDate: now, dueDate: null, createdAt: now, updatedAt: now,
+    };
+    const event = { id: 'evt-actionitem', store: 'actionItems' as const, entityId: payload.id, action: 'create' as const, payload, clientUpdatedAt: now };
+    const response = await app.inject({
+      method: 'POST', url: '/api/sync/push',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { events: [event] },
+    });
+    expect(response.statusCode).toBe(200); // die HTTP-Antwort selbst ist 200; der Fehler steckt im Event-Ergebnis
+    expect(response.json().results[0].status).toBe('error');
+    await app.close();
+  });
 });
 
 describe('GET /api/sync/pull', () => {
@@ -158,6 +179,29 @@ describe('GET /api/sync/pull', () => {
     const token = await tokenFor(keyPair, 'superadmin', null);
     const response = await app.inject({ method: 'GET', url: '/api/sync/pull', headers: { authorization: `Bearer ${token}` } });
     expect(response.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it('athlete-Rolle sieht per Pull nur eigene "actionItems" (Rollen-Scopierung, Patch #6, End-to-End über HTTP)', async () => {
+    const { app, keyPair, gateway } = await buildTestApp();
+    const athleteId = '55555555-5555-5555-5555-555555555555';
+    const foreignAthleteId = '66666666-6666-6666-6666-666666666666';
+    const now = new Date();
+    gateway.seed('actionItems', {
+      id: 'own-item', clubId: CLUB_ID, athleteId, title: 'Eigenes Ziel', description: '', category: 'technik',
+      status: 'offen', createdDate: now, dueDate: null, createdAt: now, updatedAt: now, deletedAt: null,
+    });
+    gateway.seed('actionItems', {
+      id: 'foreign-item', clubId: CLUB_ID, athleteId: foreignAthleteId, title: 'Fremdes Ziel', description: '', category: 'technik',
+      status: 'offen', createdDate: now, dueDate: null, createdAt: now, updatedAt: now, deletedAt: null,
+    });
+
+    const token = await tokenFor(keyPair, 'athlete', CLUB_ID, athleteId);
+    const response = await app.inject({ method: 'GET', url: '/api/sync/pull', headers: { authorization: `Bearer ${token}` } });
+    expect(response.statusCode).toBe(200);
+    const entityIds = response.json().changes.map((c: { entityId: string }) => c.entityId);
+    expect(entityIds).toContain('own-item');
+    expect(entityIds).not.toContain('foreign-item');
     await app.close();
   });
 });

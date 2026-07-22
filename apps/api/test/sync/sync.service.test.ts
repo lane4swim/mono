@@ -6,6 +6,15 @@ import { InMemorySyncGateway } from '../../src/modules/sync/sync.gateway.memory.
 const CLUB_A = '11111111-1111-1111-1111-111111111111';
 const CLUB_B = '22222222-2222-2222-2222-222222222222';
 
+// Bestehende Tests (vor der Rollen-Scopierung geschrieben) prüfen
+// durchweg unrestringiertes Verhalten — dafür steht diese Requester-Form
+// mit role "trainer" (unbetroffen von den neuen athlete-Beschränkungen).
+// Die dedizierten athlete-Regressionstests weiter unten verwenden
+// stattdessen explizit { clubId, role: 'athlete', athleteId }.
+function asTrainer(clubId: string) {
+  return { clubId, role: 'trainer' as const, athleteId: null };
+}
+
 function makeGroupPayload(overrides: Partial<Record<string, unknown>> = {}) {
   const now = new Date().toISOString();
   return {
@@ -38,6 +47,47 @@ function makeResultPayload(overrides: Partial<Record<string, unknown>> = {}) {
   };
 }
 
+function asAthlete(clubId: string, athleteId: string | null) {
+  return { clubId, role: 'athlete' as const, athleteId };
+}
+
+function makeActionItemPayload(overrides: Partial<Record<string, unknown>> = {}) {
+  const now = new Date().toISOString();
+  return {
+    id: '77777777-7777-7777-7777-777777777771',
+    clubId: CLUB_A,
+    athleteId: '55555555-5555-5555-5555-555555555555',
+    title: 'Atemtechnik verbessern',
+    description: '',
+    category: 'technik',
+    status: 'offen',
+    createdDate: now,
+    dueDate: null,
+    createdAt: now,
+    updatedAt: now,
+    ...overrides,
+  };
+}
+
+function makeSessionPayload(overrides: Partial<Record<string, unknown>> = {}) {
+  const now = new Date().toISOString();
+  return {
+    id: '88888888-8888-8888-8888-888888888881',
+    clubId: CLUB_A,
+    date: now,
+    groupId: null,
+    planId: null,
+    trainerNote: '',
+    attendance: [
+      { athleteId: '55555555-5555-5555-5555-555555555555', present: true, rpe: 7, note: 'eigene Notiz' },
+      { athleteId: '66666666-6666-6666-6666-666666666661', present: true, rpe: 9, note: 'fremde Notiz' },
+    ],
+    createdAt: now,
+    updatedAt: now,
+    ...overrides,
+  };
+}
+
 function makeService() {
   const gateway = new InMemorySyncGateway();
   const service = createSyncService({ gateway });
@@ -50,7 +100,7 @@ describe('syncService.push — Neuanlage & Aktualisierung', () => {
     const payload = makeGroupPayload();
     const results = await service.push(
       [{ id: 'evt1', store: 'groups', entityId: payload.id, action: 'create', payload, clientUpdatedAt: payload.updatedAt }],
-      { clubId: CLUB_A },
+      asTrainer(CLUB_A),
     );
     expect(results).toEqual([{ eventId: 'evt1', status: 'applied' }]);
     const stored = await gateway.findById('groups', payload.id);
@@ -65,7 +115,7 @@ describe('syncService.push — Neuanlage & Aktualisierung', () => {
     const newer = makeGroupPayload({ name: 'Neuer Name', updatedAt: '2026-06-01T00:00:00.000Z' });
     const results = await service.push(
       [{ id: 'evt2', store: 'groups', entityId: newer.id, action: 'update', payload: newer, clientUpdatedAt: newer.updatedAt }],
-      { clubId: CLUB_A },
+      asTrainer(CLUB_A),
     );
     expect(results).toEqual([{ eventId: 'evt2', status: 'applied' }]);
     const stored = await gateway.findById('groups', newer.id);
@@ -79,12 +129,12 @@ describe('syncService.push — Idempotenz', () => {
     const payload = makeGroupPayload();
     const event = { id: 'evt-repeat', store: 'groups' as const, entityId: payload.id, action: 'create' as const, payload, clientUpdatedAt: payload.updatedAt };
 
-    const first = await service.push([event], { clubId: CLUB_A });
+    const first = await service.push([event], asTrainer(CLUB_A));
     expect(first[0]!.status).toBe('applied');
 
     // Zweites Senden desselben Events (z. B. nach Verbindungsabbruch) —
     // darf keinen Fehler werfen und keinen zweiten Datensatz anlegen.
-    const second = await service.push([event], { clubId: CLUB_A });
+    const second = await service.push([event], asTrainer(CLUB_A));
     expect(second[0]!.status).toBe('applied');
 
     const stored = await gateway.findById('groups', payload.id);
@@ -101,7 +151,7 @@ describe('syncService.push — Konfliktlogik (last-write-wins, z. B. "groups")',
     const staleClientVersion = makeGroupPayload({ name: 'Veralteter Clientstand', updatedAt: '2026-06-01T00:00:00.000Z' });
     const results = await service.push(
       [{ id: 'evt3', store: 'groups', entityId: staleClientVersion.id, action: 'update', payload: staleClientVersion, clientUpdatedAt: staleClientVersion.updatedAt }],
-      { clubId: CLUB_A },
+      asTrainer(CLUB_A),
     );
     expect(results[0]!.status).toBe('conflict');
     expect((results[0]!.serverVersion as { name: string }).name).toBe('Serverstand');
@@ -121,7 +171,7 @@ describe('syncService.push — Konfliktlogik ("results": never-overwrite)', () =
     const staleClientResult = makeResultPayload({ time: 61.5, updatedAt: '2026-06-01T00:00:00.000Z' });
     const results = await service.push(
       [{ id: 'evt4', store: 'results', entityId: staleClientResult.id, action: 'update', payload: staleClientResult, clientUpdatedAt: staleClientResult.updatedAt }],
-      { clubId: CLUB_A },
+      asTrainer(CLUB_A),
     );
     // "insert-as-new" wird als "applied" gemeldet, mit einer neuen
     // Server-id in serverVersion, damit der Client seinen lokalen
@@ -148,7 +198,7 @@ describe('syncService.push — Validierung', () => {
     const invalidPayload = { id: 'x', clubId: CLUB_A }; // fehlt: name, description, createdAt, updatedAt
     const results = await service.push(
       [{ id: 'evt5', store: 'groups', entityId: 'x', action: 'create', payload: invalidPayload, clientUpdatedAt: new Date().toISOString() }],
-      { clubId: CLUB_A },
+      asTrainer(CLUB_A),
     );
     expect(results[0]!.status).toBe('error');
   });
@@ -158,7 +208,7 @@ describe('syncService.push — Validierung', () => {
     const payload = makeGroupPayload({ clubId: CLUB_B }); // Requester ist aber CLUB_A
     const results = await service.push(
       [{ id: 'evt6', store: 'groups', entityId: payload.id, action: 'create', payload, clientUpdatedAt: payload.updatedAt }],
-      { clubId: CLUB_A },
+      asTrainer(CLUB_A),
     );
     expect(results[0]!.status).toBe('error');
   });
@@ -170,7 +220,7 @@ describe('syncService.push — Mass-Assignment-Schutz (Sicherheitsregression, Pa
     const payload = { ...makeGroupPayload(), deletedAt: null };
     const results = await service.push(
       [{ id: 'evt-mass-1', store: 'groups', entityId: payload.id, action: 'create', payload, clientUpdatedAt: payload.updatedAt }],
-      { clubId: CLUB_A },
+      asTrainer(CLUB_A),
     );
     // Vorher (Sicherheitslücke): der rohe Payload inkl. "deletedAt" wurde
     // unvalidiert an Prisma weitergereicht. Jetzt: .strict() lässt das
@@ -193,7 +243,7 @@ describe('syncService.push — Mass-Assignment-Schutz (Sicherheitsregression, Pa
     };
     const results = await service.push(
       [{ id: 'evt-mass-2', store: 'groups', entityId: seedPayload.id, action: 'update', payload: maliciousPayload, clientUpdatedAt: maliciousPayload.updatedAt }],
-      { clubId: CLUB_A },
+      asTrainer(CLUB_A),
     );
 
     // .strict() lehnt das unbekannte Feld ab -> das Update wird insgesamt
@@ -213,7 +263,7 @@ describe('syncService.push — Löschung', () => {
 
     const results = await service.push(
       [{ id: 'evt7', store: 'groups', entityId: payload.id, action: 'delete', payload: null, clientUpdatedAt: new Date().toISOString() }],
-      { clubId: CLUB_A },
+      asTrainer(CLUB_A),
     );
     expect(results[0]!.status).toBe('applied');
     const stored = await gateway.findById('groups', payload.id);
@@ -228,7 +278,7 @@ describe('syncService.pull', () => {
     gateway.seed('groups', { id: 'g1', clubId: CLUB_A, name: 'A', updatedAt: now, deletedAt: null });
     gateway.seed('groups', { id: 'g2', clubId: CLUB_B, name: 'B', updatedAt: now, deletedAt: null });
 
-    const result = await service.pull({}, { clubId: CLUB_A });
+    const result = await service.pull({}, asTrainer(CLUB_A));
     expect(result.changes).toHaveLength(1);
     expect(result.changes[0]!.entityId).toBe('g1');
   });
@@ -238,7 +288,7 @@ describe('syncService.pull', () => {
     gateway.seed('groups', { id: 'old', clubId: CLUB_A, name: 'Alt', updatedAt: new Date('2026-01-01T00:00:00.000Z'), deletedAt: null });
     gateway.seed('groups', { id: 'new', clubId: CLUB_A, name: 'Neu', updatedAt: new Date('2026-06-01T00:00:00.000Z'), deletedAt: null });
 
-    const result = await service.pull({ since: '2026-03-01T00:00:00.000Z' }, { clubId: CLUB_A });
+    const result = await service.pull({ since: '2026-03-01T00:00:00.000Z' }, asTrainer(CLUB_A));
     expect(result.changes).toHaveLength(1);
     expect(result.changes[0]!.entityId).toBe('new');
   });
@@ -247,7 +297,7 @@ describe('syncService.pull', () => {
     const { service, gateway } = makeService();
     gateway.seed('groups', { id: 'deleted', clubId: CLUB_A, name: 'X', updatedAt: new Date(), deletedAt: new Date() });
 
-    const result = await service.pull({}, { clubId: CLUB_A });
+    const result = await service.pull({}, asTrainer(CLUB_A));
     expect(result.changes[0]!.action).toBe('delete');
     expect(result.changes[0]!.payload).toBeNull();
   });
@@ -264,7 +314,7 @@ describe('syncService.pull', () => {
         updatedAt: new Date(2026, 0, i + 1), deletedAt: null,
       });
     }
-    const result = await service.pull({}, { clubId: CLUB_A });
+    const result = await service.pull({}, asTrainer(CLUB_A));
     expect(result.changes).toHaveLength(5);
     expect(result.hasMore).toBe(false);
     expect(result.nextCursor).toBeNull();
@@ -272,7 +322,7 @@ describe('syncService.pull', () => {
 
   it('liefert eine leere, abgeschlossene Änderungsliste, wenn nichts vorhanden ist', async () => {
     const { service } = makeService();
-    const result = await service.pull({}, { clubId: CLUB_A });
+    const result = await service.pull({}, asTrainer(CLUB_A));
     expect(result).toEqual({ changes: [], nextCursor: null, hasMore: false });
   });
 });
@@ -286,7 +336,7 @@ describe('syncService.pull — Tombstones (Löschmarkierungen für endgültig en
     const gateway = new InMemorySyncGateway(tombstones);
     const service = createSyncService({ gateway });
 
-    const result = await service.pull({}, { clubId: CLUB_A });
+    const result = await service.pull({}, asTrainer(CLUB_A));
     expect(result.changes).toEqual([
       { store: 'athletes', entityId: 'ath-1', action: 'delete', payload: null, updatedAt: '2026-07-01T00:00:00.000Z' },
     ]);
@@ -300,7 +350,7 @@ describe('syncService.pull — Tombstones (Löschmarkierungen für endgültig en
     const gateway = new InMemorySyncGateway(tombstones);
     const service = createSyncService({ gateway });
 
-    const result = await service.pull({ since: '2026-03-01T00:00:00.000Z' }, { clubId: CLUB_A });
+    const result = await service.pull({ since: '2026-03-01T00:00:00.000Z' }, asTrainer(CLUB_A));
     expect(result.changes).toHaveLength(1);
     expect(result.changes[0]!.entityId).toBe('neu');
   });
@@ -313,7 +363,7 @@ describe('syncService.pull — Tombstones (Löschmarkierungen für endgültig en
     const gateway = new InMemorySyncGateway(tombstones);
     const service = createSyncService({ gateway });
 
-    const result = await service.pull({}, { clubId: CLUB_A });
+    const result = await service.pull({}, asTrainer(CLUB_A));
     expect(result.changes).toHaveLength(1);
     expect(result.changes[0]!.entityId).toBe('a1');
   });
@@ -334,7 +384,7 @@ describe('syncService.push — verständliche Fehlermeldung bei endgültig gelö
     };
     const results = await service.push(
       [{ id: 'evt-x', store: 'results', entityId: payload.id, action: 'create', payload, clientUpdatedAt: payload.updatedAt }],
-      { clubId: CLUB_A },
+      asTrainer(CLUB_A),
     );
 
     expect(results[0]!.status).toBe('error');
@@ -367,7 +417,7 @@ describe('syncService.push — Vereins-Scoping bei UPDATE eines bestehenden frem
 
     const results = await service.push(
       [{ id: 'evt-cross-update', store: 'groups', entityId: foreignId, action: 'update', payload: maliciousPayload, clientUpdatedAt: maliciousPayload.updatedAt as string }],
-      { clubId: CLUB_A },
+      asTrainer(CLUB_A),
     );
 
     // Der Versuch muss fehlschlagen (id-Kollision mit fremdem Datensatz),
@@ -400,7 +450,7 @@ describe('syncService.push — Vereins-Scoping bei UPDATE eines bestehenden frem
     const payload = makeGroupPayload({ id: foreignId, clubId: CLUB_A, updatedAt: new Date('2026-01-01T00:00:00.000Z').toISOString() });
     const results = await service.push(
       [{ id: 'evt-leak-attempt', store: 'groups', entityId: foreignId, action: 'update', payload, clientUpdatedAt: payload.updatedAt as string }],
-      { clubId: CLUB_A },
+      asTrainer(CLUB_A),
     );
 
     // Vorher (Sicherheitslücke): status "conflict" mit serverVersion, die
@@ -408,6 +458,121 @@ describe('syncService.push — Vereins-Scoping bei UPDATE eines bestehenden frem
     // diesen Pfad — der fremde Datensatz gilt als nicht existent.
     expect(results[0]!.status).not.toBe('conflict');
     expect(JSON.stringify(results[0])).not.toContain('Geheim (Verein B)');
+  });
+});
+
+describe('syncService — Rollen-Scopierung für "athlete" (Sicherheitsregression, Patch #6)', () => {
+  it('lehnt einen PUSH auf "actionItems" durch die Rolle "athlete" ab (create)', async () => {
+    const { service } = makeService();
+    const payload = makeActionItemPayload();
+    const results = await service.push(
+      [{ id: 'evt-athlete-write-1', store: 'actionItems', entityId: payload.id, action: 'create', payload, clientUpdatedAt: payload.updatedAt }],
+      asAthlete(CLUB_A, payload.athleteId as string),
+    );
+    expect(results[0]!.status).toBe('error');
+  });
+
+  it('lehnt einen PUSH auf "sessions" durch die Rolle "athlete" ab (update), selbst wenn nur die eigene Zeile geändert würde', async () => {
+    const { service, gateway } = makeService();
+    const payload = makeSessionPayload();
+    gateway.seed('sessions', { ...payload, updatedAt: new Date(payload.updatedAt), createdAt: new Date(payload.createdAt), deletedAt: null });
+    const updated = { ...payload, updatedAt: new Date(Date.now() + 60_000).toISOString() };
+    const results = await service.push(
+      [{ id: 'evt-athlete-write-2', store: 'sessions', entityId: payload.id, action: 'update', payload: updated, clientUpdatedAt: updated.updatedAt }],
+      asAthlete(CLUB_A, '55555555-5555-5555-5555-555555555555'),
+    );
+    expect(results[0]!.status).toBe('error');
+  });
+
+  it('lehnt auch einen DELETE auf "sessions"/"actionItems" durch die Rolle "athlete" ab', async () => {
+    const { service, gateway } = makeService();
+    const payload = makeActionItemPayload();
+    gateway.seed('actionItems', { ...payload, updatedAt: new Date(payload.updatedAt), createdAt: new Date(payload.createdAt), createdDate: new Date(payload.createdDate), deletedAt: null });
+    const results = await service.push(
+      [{ id: 'evt-athlete-write-3', store: 'actionItems', entityId: payload.id, action: 'delete', payload: null, clientUpdatedAt: new Date().toISOString() }],
+      asAthlete(CLUB_A, payload.athleteId as string),
+    );
+    expect(results[0]!.status).toBe('error');
+  });
+
+  it('trainer/admin sind von der Schreibsperre NICHT betroffen — dürfen "actionItems"/"sessions" weiterhin verändern', async () => {
+    const { service } = makeService();
+    const payload = makeActionItemPayload();
+    const results = await service.push(
+      [{ id: 'evt-trainer-write', store: 'actionItems', entityId: payload.id, action: 'create', payload, clientUpdatedAt: payload.updatedAt }],
+      asTrainer(CLUB_A),
+    );
+    expect(results[0]!.status).toBe('applied');
+  });
+
+  it('PULL für Rolle "athlete": "actionItems" werden auf die eigenen Einträge gefiltert', async () => {
+    const { service, gateway } = makeService();
+    const mine = makeActionItemPayload({ id: 'ai-mine', athleteId: '55555555-5555-5555-5555-555555555555' });
+    const foreign = makeActionItemPayload({ id: 'ai-foreign', athleteId: '66666666-6666-6666-6666-666666666661' });
+    gateway.seed('actionItems', { ...mine, updatedAt: new Date(mine.updatedAt), createdAt: new Date(mine.createdAt), createdDate: new Date(mine.createdDate), deletedAt: null });
+    gateway.seed('actionItems', { ...foreign, updatedAt: new Date(foreign.updatedAt), createdAt: new Date(foreign.createdAt), createdDate: new Date(foreign.createdDate), deletedAt: null });
+
+    const result = await service.pull({}, asAthlete(CLUB_A, '55555555-5555-5555-5555-555555555555'));
+    expect(result.changes).toHaveLength(1);
+    expect(result.changes[0]!.entityId).toBe('ai-mine');
+  });
+
+  it('PULL für Rolle "athlete": "sessions" werden auf die eigene attendance-Zeile reduziert; fremde Notiz/RPE werden entfernt', async () => {
+    const { service, gateway } = makeService();
+    const payload = makeSessionPayload();
+    gateway.seed('sessions', { ...payload, updatedAt: new Date(payload.updatedAt), createdAt: new Date(payload.createdAt), deletedAt: null });
+
+    const result = await service.pull({}, asAthlete(CLUB_A, '55555555-5555-5555-5555-555555555555'));
+    expect(result.changes).toHaveLength(1);
+    const attendance = (result.changes[0]!.payload as { attendance: Array<Record<string, unknown>> }).attendance;
+    expect(attendance).toHaveLength(1);
+    expect(attendance[0]!.athleteId).toBe('55555555-5555-5555-5555-555555555555');
+    expect(JSON.stringify(result.changes[0])).not.toContain('fremde Notiz');
+  });
+
+  it('PULL für Rolle "athlete": eine "sessions"-Einheit, an der die Person gar nicht teilnahm, wird komplett ausgeblendet', async () => {
+    const { service, gateway } = makeService();
+    const payload = makeSessionPayload({
+      id: 'session-ohne-mich',
+      attendance: [{ athleteId: '66666666-6666-6666-6666-666666666661', present: true, rpe: 5, note: 'nur fremd' }],
+    });
+    gateway.seed('sessions', { ...payload, updatedAt: new Date(payload.updatedAt), createdAt: new Date(payload.createdAt), deletedAt: null });
+
+    const result = await service.pull({}, asAthlete(CLUB_A, '55555555-5555-5555-5555-555555555555'));
+    expect(result.changes).toHaveLength(0);
+  });
+
+  it('PULL für Rolle "athlete": Tombstones (Löschungen) werden unverändert durchgereicht', async () => {
+    const tombstones = [{ clubId: CLUB_A, store: 'actionItems' as const, entityId: 'ai-deleted', deletedAt: new Date() }];
+    const gateway = new InMemorySyncGateway(tombstones);
+    const service = createSyncService({ gateway });
+
+    const result = await service.pull({}, asAthlete(CLUB_A, '55555555-5555-5555-5555-555555555555'));
+    expect(result.changes).toEqual([
+      { store: 'actionItems', entityId: 'ai-deleted', action: 'delete', payload: null, updatedAt: tombstones[0]!.deletedAt.toISOString() },
+    ]);
+  });
+
+  it('PULL für Rolle "athlete": andere Stores ("groups", "results", "plans") bleiben unrestringiert (entspricht der bewusst geteilten Team-Ansicht)', async () => {
+    const { service, gateway } = makeService();
+    const group = makeGroupPayload();
+    gateway.seed('groups', { ...group, updatedAt: new Date(group.updatedAt), createdAt: new Date(group.createdAt), deletedAt: null });
+    const foreignResult = makeResultPayload({ athleteId: '66666666-6666-6666-6666-666666666661' });
+    gateway.seed('results', { ...foreignResult, updatedAt: new Date(foreignResult.updatedAt), date: new Date(foreignResult.date), createdAt: new Date(foreignResult.createdAt), deletedAt: null });
+
+    const result = await service.pull({}, asAthlete(CLUB_A, '55555555-5555-5555-5555-555555555555'));
+    const stores = result.changes.map((c) => c.store).sort();
+    expect(stores).toEqual(['groups', 'results']);
+  });
+
+  it('trainer/admin sind vom PULL-Filter NICHT betroffen — sehen weiterhin alle "actionItems"/"sessions" des Vereins', async () => {
+    const { service, gateway } = makeService();
+    const foreign = makeActionItemPayload({ id: 'ai-foreign-2', athleteId: '66666666-6666-6666-6666-666666666661' });
+    gateway.seed('actionItems', { ...foreign, updatedAt: new Date(foreign.updatedAt), createdAt: new Date(foreign.createdAt), createdDate: new Date(foreign.createdDate), deletedAt: null });
+
+    const result = await service.pull({}, asTrainer(CLUB_A));
+    expect(result.changes).toHaveLength(1);
+    expect(result.changes[0]!.entityId).toBe('ai-foreign-2');
   });
 });
 

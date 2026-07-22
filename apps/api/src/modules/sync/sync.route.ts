@@ -25,9 +25,11 @@ export async function syncRoutes(app: FastifyInstance, opts: SyncRoutesOptions) 
     }
     // requireRole hat bereits sichergestellt, dass die Rolle stimmt; eine
     // Rolle ohne Verein (theoretisch nur superadmin) kommt hier also nicht
-    // an — clubId ist an dieser Stelle immer gesetzt.
+    // an — clubId ist an dieser Stelle immer gesetzt. role/athleteId werden
+    // zusätzlich mitgegeben, damit der Service die Rollen-Scopierung für
+    // "athlete" anwenden kann (siehe sync.service.ts).
     const clubId = request.user!.clubId!;
-    const results = await syncService.push(parsed.data.events, { clubId });
+    const results = await syncService.push(parsed.data.events, { clubId, role: request.user!.role, athleteId: request.user!.athleteId });
     return reply.code(200).send({ results });
   });
 
@@ -36,7 +38,7 @@ export async function syncRoutes(app: FastifyInstance, opts: SyncRoutesOptions) 
     { preHandler: syncGuard },
     async (request, reply) => {
       const clubId = request.user!.clubId!;
-      const result = await syncService.pull(request.query, { clubId });
+      const result = await syncService.pull(request.query, { clubId, role: request.user!.role, athleteId: request.user!.athleteId });
       return reply.code(200).send(result);
     },
   );
