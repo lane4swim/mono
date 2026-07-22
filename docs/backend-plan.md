@@ -1,6 +1,6 @@
 # Backend-Entwicklungs- und Integrationsplan — Lane 1
 
-**Stand:** Juli 2026 · **Status:** Phasen 0–4 vollständig umgesetzt, inkl. DSGVO-Auskunft/-Löschung (Art. 15 + 17) und Superadmin-Oberfläche — siehe Abschnitt 0 · **Ausgangslage:** Offline-first PWA (IndexedDB, Outbox-Pattern) · **Ziel:** echtes Node.js-Backend zur Mehrgeräte-/Mehrbenutzer-Synchronisation, mit JWT-Authentifizierung, Deployment als Monorepo
+**Stand:** Juli 2026 · **Status:** Phasen 0–4 vollständig umgesetzt, inkl. DSGVO-Auskunft/-Löschung (Art. 15 + 17), Superadmin-Oberfläche und einer nachträglichen, mehrstufigen Sicherheitshärtungs-Runde — siehe Abschnitt 0 · **Ausgangslage:** Offline-first PWA (IndexedDB, Outbox-Pattern) · **Ziel:** echtes Node.js-Backend zur Mehrgeräte-/Mehrbenutzer-Synchronisation, mit JWT-Authentifizierung, Deployment als Monorepo
 
 ---
 
@@ -11,7 +11,8 @@ Implementierung. Es wurde jetzt durchgängig aktualisiert, um den
 **tatsächlichen** Stand widerzuspiegeln — inkl. der Stellen, an denen die
 Umsetzung bewusst von der ursprünglichen Planung abgewichen ist, und der
 Themen, die erst während der Umsetzung entstanden sind (DSGVO-Auskunft/
--Löschung, Superadmin-Oberfläche, echter E-Mail-Versand, Tombstones).
+-Löschung, Superadmin-Oberfläche, echter E-Mail-Versand, Tombstones,
+Kommentarfunktion, eine mehrstufige nachträgliche Sicherheitsreview).
 
 | Phase | Status |
 |---|---|
@@ -22,11 +23,15 @@ Themen, die erst während der Umsetzung entstanden sind (DSGVO-Auskunft/
 | 4 — Frontend-Integration | ✅ Abgeschlossen |
 | DSGVO: Auskunft & Löschung (nicht Teil der ursprünglichen Phasen 0–4) | ✅ Abgeschlossen |
 | Superadmin-Oberfläche „/admin" (nicht Teil der ursprünglichen Phasen 0–4) | ✅ Abgeschlossen |
-| 5 — Sicherheitshärtung & weitere Tests | ◐ Teilweise (siehe Abschnitt 12) |
+| Kommentarfunktion (Trainingspläne, Übungen, Übungskatalog; nicht Teil der ursprünglichen Phasen 0–4) | ✅ Abgeschlossen (siehe Abschnitt 16) |
+| Info-/Rechtliches-Seite im Frontend (nicht Teil der ursprünglichen Phasen 0–4) | ✅ Abgeschlossen (siehe Abschnitt 17) |
+| 5 — Sicherheitshärtung & weitere Tests | ◐ Weitgehend abgeschlossen — mehrere gezielte Review-Runden mit konkreten Funden und Patches (siehe Abschnitt 15); nur Lasttests stehen noch aus (siehe Abschnitt 12) |
 | 6 — Erweiterungen (optional) | ○ Nicht begonnen |
 
 Details je Abschnitt unten; Abschnitt 11 (Phasenplan) und Abschnitt 12
-(Offene Punkte) wurden komplett neu gefasst.
+(Offene Punkte) wurden komplett neu gefasst. Abschnitte 15–17 sind
+komplett neu und dokumentieren Arbeiten, die erst nach dem ursprünglich
+hier festgehaltenen Stand hinzukamen.
 
 ---
 
@@ -41,7 +46,7 @@ Ziel dieses Plans war es, ein echtes Backend zu entwickeln, das:
 3. die im Frontend vorbereitete **Sync-Warteschlange** mit einer passenden **Push/Pull-API** bedient,
 4. als **Monorepo** zusammen mit dem Frontend entwickelt, versioniert und deployed werden kann.
 
-**Alle vier Ziele sind erreicht.** Zusätzlich kamen während der Umsetzung zwei Themenfelder hinzu, die im ursprünglichen Plan nicht vorgesehen waren, sich aber als notwendig erwiesen: eine **Superadmin-Oberfläche** zum Anlegen neuer Vereine (Abschnitt 13) und eine **vollständige DSGVO-Auskunfts-/Löschfunktion** (Abschnitt 14).
+**Alle vier Ziele sind erreicht.** Zusätzlich kamen während der Umsetzung mehrere Themenfelder hinzu, die im ursprünglichen Plan nicht vorgesehen waren, sich aber als notwendig bzw. sinnvoll erwiesen: eine **Superadmin-Oberfläche** zum Anlegen neuer Vereine (Abschnitt 13), eine **vollständige DSGVO-Auskunfts-/Löschfunktion** (Abschnitt 14), mehrere Runden **nachträglicher Sicherheitshärtung** (Abschnitt 15), eine **Kommentarfunktion** für Trainingspläne/Übungskatalog (Abschnitt 16) sowie eine **Rechtliches-Seite** im Frontend (Abschnitt 17).
 
 ---
 
@@ -162,6 +167,8 @@ Die bestehenden IndexedDB-Stores wurden wie geplant direkt in Server-Tabellen ü
 
 **Primärschlüssel:** wie geplant — Client-generierte UUIDs bleiben durchgängig als Primärschlüssel erhalten, keine ID-Übersetzung beim ersten Sync nötig.
 
+**Nachträgliche Ergänzung, nicht im ursprünglichen Plan (siehe Abschnitt 16):** `Exercise` und `Plan` haben je eine neue Spalte `comments` (`jsonb`, `@default("[]")`) für die Kommentarfunktion. Kommentare an einzelnen Sätzen/Übungen *innerhalb* eines Plans oder einer Vorlage brauchten dagegen **keine** Schemaänderung — sie leben eingebettet in den bereits bestehenden `jsonb`-Spalten `Plan.days`/`Template.sets`.
+
 **Wichtige Ergänzung zu Fremdschlüssel-Beziehungen (nicht im ursprünglichen Plan bedacht):** Modelle, die auf `User` verweisen (`RefreshToken`, `DataDeletionRequest`, `Invitation.invitedById`), benötigen explizites `onDelete`-Verhalten (`Cascade` bzw. `SetNull`) — sonst schlägt das tatsächliche Löschen eines Kontos (Abschnitt 14) an der referenziellen Integrität fehl. Das wurde erst beim Implementieren der DSGVO-Löschung bemerkt und nachträglich korrigiert.
 
 ---
@@ -196,7 +203,7 @@ Logout             → POST /auth/logout     (refreshToken wird serverseitig inv
 - **Rotation & Revocation:** ✅ wie geplant, `RefreshToken`-Tabelle mit `tokenHash`/`expiresAt`/`revokedAt`; zusätzlich `revokeAllForUser()` für die DSGVO-Löschung (Abschnitt 14).
 - **Passwort-Hashing:** ✅ argon2id via `hash-wasm` (siehe Abschnitt 3 zur Begründung).
 - **Rollenprüfung:** ✅ `requireRole(...)`-PreHandler in `plugins/authorize.ts`, exakt wie geplant.
-- **Rate Limiting:** ✅ auf `/auth/login`, 5 Versuche/Minute je IP+E-Mail.
+- **Rate Limiting:** ✅ auf `/auth/login` (5 Versuche/Minute je IP+E-Mail); **nachträglich ergänzt** (siehe Abschnitt 15): zusätzlich je 10 Versuche/Minute auf `/auth/refresh` und `/auth/logout`, die ursprünglich nur unter dem globalen Limit (100/Minute) liefen.
 
 ### 5.3 Beispiel Access-Token-Payload
 
@@ -213,7 +220,7 @@ Logout             → POST /auth/logout     (refreshToken wird serverseitig inv
 
 ---
 
-## 6. API-Design für die Synchronisierung — vollständig umgesetzt wie geplant
+## 6. API-Design für die Synchronisierung — vollständig umgesetzt wie geplant, plus nachträgliche Rollen-Scopierung (6.5)
 
 Die Sync-API wurde exakt nach dem ursprünglichen Entwurf umgesetzt: Push (Abschnitt 6.1), Pull (Abschnitt 6.2), Idempotenz über die Event-`id`, Konfliktantwort inkl. `serverVersion`.
 
@@ -298,6 +305,17 @@ Response 200:
 
 Der Grundsatz „keine granularen REST-Endpunkte pro fachlicher Ressource, Sync-API ist der einzige Schreibpfad" wurde konsequent eingehalten.
 
+### 6.5 Autorisierung innerhalb der Sync-API — nachträglich ergänzte Rollen-Scopierung (siehe Abschnitt 15)
+
+Der ursprüngliche Plan sah für die Sync-API ausschließlich **Vereins-Scoping** vor (ein Event/eine Abfrage darf nur Daten des eigenen Vereins betreffen, siehe 6.1/6.2). Eine spätere Sicherheitsreview deckte auf, dass das für zwei Stores nicht ausreicht — das Frontend hatte für die Rolle `athlete` längst eigene, rein lesende „nur meine Daten"-Ansichten vorgesehen, ohne dass die API das durchsetzte:
+
+- **`actionItems`** (Handlungsfelder) und **`sessions`** (Trainingseinheiten inkl. Anwesenheit/RPE/Notiz je Athlet:in): Rolle `athlete` darf diese Stores über `POST /api/sync/push` **nicht mehr schreiben** (jede Aktion — create/update/delete — wird abgelehnt); beim Lesen über `GET /api/sync/pull` werden `actionItems` auf die eigenen Einträge gefiltert und `sessions` auf die eigene Zeile im `attendance`-Array reduziert.
+- **`Athlete.notes`** (freies Coaching-Notizfeld): wird für Rolle `athlete` grundsätzlich redigiert (leerer String) — sowohl beim Pull als auch in der `serverVersion` einer Konfliktantwort — unabhängig davon, ob es der eigene oder ein fremder Athletendatensatz ist. Push-Versuche, die `notes` ändern wollen, werden auf den bisherigen Serverstand zurückgesetzt, ohne den Rest des Updates zu blockieren.
+- **Bewusst unverändert:** `results`, `entries`, `groups`, `athletes` (bis auf `notes`), `exercises`, `templates`, `plans` bleiben für Rolle `athlete` weiterhin voll lesbar/teils schreibbar — das entspricht der vom Frontend selbst gezeigten, gewollten Team-weiten Sichtbarkeit (z. B. zeigt/erlaubt `times.js` allen Rollen identisch den vollen Zugriff auf Wettkampfzeiten).
+- Trainer:innen und Admins sind von alldem unberührt — beide bleiben bewusst gleichberechtigte „Staff"-Rollen mit vollem Datenzugriff auf den eigenen Verein.
+
+Details, Begründung je Store und die zugehörigen Regressionstests: Abschnitt 15.
+
 ---
 
 ## 7. Konfliktbehandlung — wie geplant umgesetzt
@@ -330,13 +348,20 @@ Die App bleibt wie geplant auch ohne Backend-Verbindung voll nutzbar.
 
 ## 9. Sicherheit
 
-- ✅ CORS: nur die konfigurierte Frontend-Origin, via `@fastify/cors`.
-- ✅ Validierung: jede Route validiert mit Zod-Schemas aus `packages/shared-types`.
-- ✅ Rate Limiting: `@fastify/rate-limit`, global sowie verschärft auf `/auth/login`.
-- ✅ Security-Header: `@fastify/helmet`.
+- ✅ CORS: nur die konfigurierte Frontend-Origin, via `@fastify/cors`. **Nachträglich ergänzt** (siehe Abschnitt 15): `env.ts` lehnt `CORS_ORIGIN=*` in Produktion jetzt explizit beim Start ab (statt sich allein auf das Browser-Verhalten bei `credentials: true` zu verlassen).
+- ✅ Validierung: jede Route validiert mit Zod-Schemas aus `packages/shared-types`. **Nachträglich verschärft:** alle Entity-Schemas sind jetzt `.strict()` (lehnen unbekannte Felder ab), und `sync.service.ts` verwendet durchgängig das *geparste* Payload statt des rohen Client-Inputs weiter — schließt eine Mass-Assignment-Lücke (Details: Abschnitt 15).
+- ✅ Rate Limiting: `@fastify/rate-limit`, global sowie verschärft auf `/auth/login`, `/auth/refresh` und `/auth/logout` (Details: Abschnitt 5.2/15).
+- ✅ Security-Header: `@fastify/helmet`. **Nachträglich verschärft:** statt Helmets Default-CSP wird eine explizite, restriktive Content-Security-Policy gesetzt (`useDefaults: false`, `default-src 'none'` u. a.), inkl. `upgradeInsecureRequests` nur in Produktion und `X-Frame-Options: DENY` (Details: Abschnitt 15).
 - ✅ Secrets ausschließlich über Umgebungsvariablen (`.env`, `.env.example` als Vorlage, nie eingecheckt).
+- ✅ **Rollenbasierte Datentrennung innerhalb eines Vereins** (nicht im ursprünglichen Plan bedacht — der sah nur Vereins-Scoping vor): siehe Abschnitt 6.5/15. Betrifft `actionItems`, `sessions` und `Athlete.notes`.
+- ✅ **Abhängigkeits-Audit** (nicht im ursprünglichen Plan vorgesehen, einmalig manuell durchgeführt — siehe Abschnitt 12 zum Automatisierungs-Stand): `nodemailer` wies mehrere bekannte High-Severity-CVEs auf (SMTP-/CRLF-Injection u. a.) und wurde von `6.x` auf `9.0.3` angehoben (Changelog auf Kompatibilität mit dem hier genutzten Codepfad geprüft); die transitive Abhängigkeit `fast-uri` wurde per `npm audit fix` gepatcht.
+- ✅ **Datenminimierung in Admin-/Superadmin-Endpunkten:** `GET /api/invitations` gab bisher zusätzlich `tokenHash` (Hash des Einladungs-Tokens) zurück — kein direkt ausnutzbarer Klartext-Leak, aber unnötige Exposition; wurde entfernt.
 - **HTTPS:** nicht Teil dieses Repositories — liegt in der Verantwortung des Deployments (siehe Hetzner-Anleitung, Nginx-Reverse-Proxy mit Let's-Encrypt-Zertifikat).
 - ✅ **DSGVO-Hinweis vollständig umgesetzt** (ursprünglich nur als Hinweis vermerkt): Auskunfts- und Löschfunktion existieren jetzt serverseitig vollständig, siehe Abschnitt 14. Ein Auftragsverarbeitungsvertrag mit dem Hosting-Anbieter bleibt weiterhin eine organisatorische (nicht technische) Aufgabe außerhalb dieses Repositories.
+
+**Was speziell superadmin sehen/tun kann — als Referenzpunkt für künftige Reviews festgehalten:** Superadmin ist von der gesamten Sync-API ausgeschlossen (`requireRole` lässt nur `trainer`/`admin`/`athlete` zu) und sieht daher **keine** Athlet:innen-/Trainings-/Leistungsdaten irgendeines Vereins. Sichtbar sind ausschließlich Konto-Metadaten (`GET /api/users`: Name, E-Mail, Rolle, Verein, verknüpfte Athlet:innen-ID, Spracheinstellung, Zustimmungs-Zeitpunkt, Zeitstempel — keine Trainingsdaten), aggregierte Mitgliederzahlen je Verein (`GET /api/clubs`) sowie Einladungs-Metadaten aller Vereine (`GET /api/invitations`).
+
+Details zu allen Funden dieser nachträglichen Review-Runden — einschließlich der jeweils zugrunde liegenden Überlegung, warum ein Store bewusst *nicht* eingeschränkt wurde — in Abschnitt 15.
 
 ---
 
@@ -361,7 +386,7 @@ Die App bleibt wie geplant auch ohne Backend-Verbindung voll nutzbar.
 | **4 — Frontend-Integration** | `sync-client.js`, echter Login-Screen, `syncQueue.js` an echte API anbinden | 4–6 Tage | ✅ Abgeschlossen |
 | **— DSGVO: Auskunft & Löschung** *(nicht Teil der ursprünglichen Phasen)* | `GET /api/me/export`, `DELETE /api/me`, zeitversetzter Purge-Job, Tombstones | — | ✅ Abgeschlossen |
 | **— Superadmin-Oberfläche „/admin"** *(nicht Teil der ursprünglichen Phasen)* | Vereine + erste Admins anlegen, Mitgliederzahlen, echter E-Mail-Versand | — | ✅ Abgeschlossen |
-| **5 — Sicherheitshärtung & weitere Tests** | Rate-Limiting ✅, Security-Header ✅, Integrationstests ✅ (257 Tests), Lasttests ❌ | 3–5 Tage | ◐ Teilweise — siehe Abschnitt 12 |
+| **5 — Sicherheitshärtung & weitere Tests** | Rate-Limiting ✅ (inkl. nachträglicher Ergänzung auf `/auth/refresh`/`/auth/logout`), Security-Header ✅ (inkl. nachträglich verschärfter, expliziter CSP), Integrationstests ✅ (318 Tests, siehe Abschnitt 18), mehrere nachträgliche Review-Runden mit konkreten Funden/Patches ✅ (siehe Abschnitt 15), Lasttests ❌ | 3–5 Tage | ◐ Weitgehend abgeschlossen — siehe Abschnitt 12 |
 | **6 — Erweiterungen (optional)** | Realtime-Push, mobile Push-Benachrichtigungen | nach Bedarf | ○ Nicht begonnen |
 
 ---
@@ -372,11 +397,13 @@ Die ursprüngliche Liste (gleichzeitige Bearbeitung, Migration bestehender Nutze
 
 - **`purgeExpiredDeletions` läuft nicht automatisch:** Das CLI-Skript (`npm run purge-deleted-data`) muss per Cron auf dem Zielserver eingerichtet werden — der Code ist fertig und getestet, die Einrichtung liegt beim Deployment.
 - **Lasttests fehlen** (Teil von Phase 5, nicht begonnen): Die Sync-API wurde funktional umfassend getestet (Idempotenz, Konflikte, Pagination), aber nicht unter Last (viele gleichzeitige Geräte/große Batches).
+- **`npm audit` ist nicht Teil der CI-Pipeline** (nachträglich beim Review festgestellt, nicht im ursprünglichen Plan bedacht): Der Fund der `nodemailer`-CVEs (Abschnitt 15) erfolgte durch einen manuell angestoßenen Audit-Lauf, nicht durch eine automatisierte Prüfung. Ein `npm audit --omit=dev`-Schritt (ggf. mit Schwellenwert, z. B. „high"/„critical" blockiert den Merge) sollte in `.github/workflows/ci.yml` ergänzt werden, damit künftige CVEs in Abhängigkeiten nicht auf den nächsten manuellen Review warten müssen.
 - **Gerät bleibt länger offline als die DSGVO-Aufbewahrungsfrist** (Standard 30 Tage): Wird durch Tombstones (Abschnitt 14) für **Löschungen** abgedeckt; ein analoger Mechanismus für andere Edge Cases (z. B. sehr lange Offline-Zeiten allgemein, unabhängig von Löschungen) wurde nicht gesondert untersucht.
 - **Gleichzeitige Bearbeitung desselben Datensatzes** durch mehrere Trainer:innen bleibt mit Last-Write-Wins nur grob gelöst (unverändert gegenüber der ursprünglichen Einschätzung) — ein feingranulareres Merging wäre eine spätere Ausbaustufe.
 - **Wichtiger Prozess-Fund während der Umsetzung (nicht im ursprünglichen Plan antizipiert):** Der Produktions-Build (`tsc -p tsconfig.json`) erfasst bewusst nur `src/` — dadurch blieben Typfehler in `test/`, `scripts/` und `prisma/` lange unentdeckt, obwohl die Tests selbst (Vitest/esbuild, ohne Typprüfung) grün liefen. Behoben durch eine zusätzliche `tsconfig.typecheck.json` samt `npm run typecheck`-Schritt in der CI — sollte bei künftigen Backend-Projekten von Anfang an mit eingeplant werden.
 - **Kosten/Hosting:** durch die Entscheidung für einen eigenen vServer (Abschnitt 10) mit überschaubaren, planbaren Kosten gegenüber der ursprünglichen Unsicherheit weitgehend geklärt.
 - **DSGVO/Datenschutz:** technische Seite (Auskunft, Löschung, Einwilligung) vollständig umgesetzt (Abschnitt 14). Die **rechtliche** Prüfung (Auftragsverarbeitungsvertrag mit dem Hosting-Anbieter, ggf. Einwilligung der Erziehungsberechtigten bei minderjährigen Athlet:innen) bleibt weiterhin eine organisatorische Aufgabe außerhalb dieses Repositories.
+- **Impressum-Platzhalter** (siehe Abschnitt 17): Die neue Rechtliches-Seite enthält für das Impressum bewusst Platzhalter (`[Name des Vereins]` u. Ä.) statt echter Daten — müssen vor Produktivbetrieb durch die tatsächlichen Vereinsangaben ersetzt werden.
 
 ---
 
@@ -462,13 +489,81 @@ Fassung so festgelegt).
 
 ---
 
-## 15. Testabdeckung — Stand
+## 15. Sicherheitshärtung — nachträgliche Review-Runden (nicht Teil der ursprünglichen Phasen 0–4)
+
+Nach Abschluss der Phasen 0–4 wurde das Repository in mehreren gezielten
+Runden auf Sicherheitslücken überprüft (Anlass: eine Anfrage zur erneuten
+Prüfung, keine geplante Phase). Jeder Fund wurde einzeln gepatcht und mit
+gezielten Regressionstests abgesichert. Übersicht:
+
+| # | Fund | Betroffene Datei(en) | Fix |
+|---|---|---|---|
+| 1 | Cross-Tenant-Schreibzugriff im Sync-`update`-Pfad: `where`-Klausel prüfte nicht die `clubId` des *bestehenden* Datensatzes, nur die des Payloads | `sync.gateway.ts` | `clubId` als Pflichtparameter in `update()`, Teil der `where`-Klausel (analog `softDelete()`) |
+| 2 | `findById()` war nicht vereins-gescoped → Konfliktantwort (`serverVersion`) konnte volle Datensätze fremder Vereine offenlegen | `sync.gateway.ts`, `sync.service.ts` | `findById()` bekommt optionalen `clubId`-Parameter; ein Treffer aus fremdem Verein gilt als „nicht gefunden" |
+| 3 | `athleteId` einer Einladung wurde nicht gegen den Zielverein validiert — Admin konnte ein Konto an ein Athletenprofil eines fremden Vereins koppeln | `invitations.service.ts`, `invitations.repository.ts` | Neues `AthleteRepository`, Prüfung `athlete.clubId === targetClubId`, neue Fehlerklassen `AthleteNotFoundError`/`AthleteClubMismatchError` |
+| 4 | Mass-Assignment: Entity-Schemas waren nicht `.strict()`, **und** `sync.service.ts` reichte ohnehin das rohe (nicht das geparste) Payload ans Gateway durch | `packages/shared-types/src/entities.ts`, `sync.service.ts` | Alle Entity-Schemas `.strict()`; `sync.service.ts` verwendet durchgängig `validatedPayload` statt `event.payload` |
+| 5 | `helmet()` lief mit Defaults (keine explizite CSP); `CORS_ORIGIN=*` in Produktion war nicht verboten | `plugins/security.ts`, `config/env.ts` | Explizite, restriktive CSP (`useDefaults: false`), `frameguard: deny`; `loadEnv()` lehnt `CORS_ORIGIN=*` in Produktion ab |
+| 6 | Fehlende Rollen-Scopierung in der Sync-API: `athlete` konnte `actionItems`/`sessions` aller Athlet:innen lesen **und** schreiben, obwohl das Frontend dafür nur eine eigene, rein lesende Ansicht vorsah | `sync.service.ts`, `sync.route.ts` | Push auf beide Stores für `athlete` verboten; Pull filtert/redigiert (siehe Abschnitt 6.5) |
+| 7 | `Athlete.notes` (Coaching-Notizfeld) wurde nicht gefiltert — jede `athlete`-Rolle bekam die Notizen aller Athlet:innen des Vereins per Pull | `sync.service.ts` | `notes` wird für Rolle `athlete` beim Pull redigiert (auch am eigenen Datensatz), Push-Versuche darauf werden auf den Serverstand zurückgesetzt, Konfliktantwort ebenfalls redigiert |
+| — | `GET /api/invitations` gab zusätzlich `tokenHash` zurück (Datenminimierung, kein direkter Exploit) | `invitations.service.ts` | `toPublicInvitation()` entfernt `tokenHash` aus der Antwort |
+| — | Kein spezifisches Rate-Limit auf `/auth/refresh`/`/auth/logout` (nur globales 100/Minute) | `auth.route.ts` | Je 10 Versuche/Minute ergänzt |
+| — | Bekannte CVEs in Abhängigkeiten (`nodemailer` 6.x, transitiv `fast-uri`) | `package.json`, Lockfile | `nodemailer` auf `9.0.3` angehoben (Changelog auf Codepfad-Kompatibilität geprüft), `fast-uri` per `npm audit fix` gepatcht |
+
+**Bewusst nicht verändert** (mit Begründung, damit künftige Reviews das nicht erneut aufrollen): `results`, `entries`, `groups`, `athletes` (bis auf `notes`), `exercises`, `templates`, `plans` bleiben für Rolle `athlete` weiterhin voll zugänglich, weil das Frontend selbst genau das vorsieht (`times.js`/`plans.js` zeigen der ganzen Mannschaft identisch alles an, unabhängig von der Rolle) — eine Einschränkung dort wäre keine Sicherheitslücke, sondern ein Bruch echter Funktionalität gewesen. `competitions`/`entries` werden von keinem `athlete`-zugänglichen Frontend-Modul genutzt und wären ein sinnvoller zusätzlicher Minimierungsschritt, wurden aber (noch) nicht eingeschränkt, um den Patch eng am nachgewiesenen Bedarf zu halten.
+
+**Methodik:** Jeder Fund wurde vor dem Patch anhand des tatsächlichen Frontend-Verhaltens verifiziert (nicht nur anhand der API-Signatur) — z. B. wurde vor Fund 6/7 geprüft, welche Rollen welche Frontend-Module tatsächlich sehen (`roles: [...]` je Modul in `apps/web/js/modules/*.js`), um keine Einschränkung einzuführen, die echte Funktionalität bricht.
+
+---
+
+## 16. Kommentarfunktion für Trainingspläne, Übungen und Übungskatalog (nicht Teil der ursprünglichen Phasen 0–4)
+
+Nachträglich ergänzt: Kommentar-Threads (Autor:in, Zeitstempel, Text) an
+drei Stellen, jeweils als eingebettetes Array, **keine** eigene
+Sync-Store-Kategorie:
+
+- **`Plan.comments`** — Kommentare zum gesamten Trainingsplan (neue `jsonb`-Spalte, siehe Abschnitt 4).
+- **`Exercise.comments`** — Kommentare im Übungskatalog (neue `jsonb`-Spalte).
+- **`PlainSet.comments`** — Kommentare zu einem einzelnen Satz/einer Übung *innerhalb* eines Plans oder einer Vorlage (Template). Braucht keine neue Spalte, da bereits Teil der bestehenden `Plan.days`/`Template.sets`-JSON-Struktur.
+
+**Validierung:** neues `CommentSchema` (`id`, `authorName`, `text`, `createdAt`), `.strict()` wie alle übrigen Entity-Schemas (Abschnitt 15, Fund 4) — ein Kommentar mit unbekanntem Zusatzfeld wird beim Push abgelehnt, nicht stillschweigend gekürzt.
+
+**Frontend:** neues gemeinsames Widget `js/modules/comments.js` (Liste + Formular, sowie ein kompakter „💬 N"-Button mit Modal für die pro-Satz-Kommentare); eingebunden in `plans.js` (Plan- und Satz-Ebene) und `catalog.js` (Übungs-Ebene, nur im Bearbeiten-Modal einer bereits existierenden Übung). Jeder Kommentar speichert sofort, unabhängig vom „Speichern"-Klick des umgebenden Formulars — analog zum bereits bestehenden Muster der Inline-Ausrüstungsbearbeitung in `setEditor.js`.
+
+**Migration:** `schema.prisma` wurde aktualisiert (`comments`-Spalten auf `Exercise`/`Plan`), es existiert aber weiterhin **keine committete Migrationshistorie** in diesem Repository (siehe Abschnitt 2.3/Hinweis unten) — der erste `prisma migrate dev --name init` legt beide Spalten korrekt an, da er stets vom *aktuellen* `schema.prisma`-Stand ausgeht. Bereits migrierte Bestands-Datenbanken (falls vorhanden) brauchen zusätzlich einen eigenen Migrationsschritt für nur diese beiden Spalten.
+
+---
+
+## 17. Rechtliches/Info-Seite im Frontend (nicht Teil der ursprünglichen Phasen 0–4)
+
+Ergänzt eine von jeder Ansicht aus erreichbare Seite (`js/modules/info.js`,
+ohne Rolleneinschränkung, erscheint daher für jede Rolle in Seitennav und
+mobiler Bottom-Nav) mit:
+
+- **Impressum** — immer sichtbar, mit klar markierten Platzhaltern (§5 TMG), die vor Produktivbetrieb durch die echten Vereinsdaten ersetzt werden müssen.
+- **DSGVO-Hinweise, Cookie-Hinweise, Nutzungsbedingungen** — je ein ausklappbarer Abschnitt (natives `<details>`).
+
+Die DSGVO-Hinweise beziehen sich konkret auf das tatsächliche Verhalten
+der App (Offline-First/IndexedDB, Selbstbedienung für Auskunft/Löschung
+über „Mein Profil", siehe Abschnitt 14) statt auf generischen
+Platzhaltertext. Die Cookie-Hinweise stellen korrekt klar, dass Lane 1
+**keine Cookies**, sondern `localStorage`/IndexedDB verwendet.
+
+**Vor dem Login erreichbar:** Da die Impressumspflicht (§5 TMG)
+unabhängig vom Login-Status gilt, öffnet ein Footer-Link auf dem
+Login-/Einladungs-Bildschirm (`authScreens.js`) denselben Inhalt in einem
+Modal — ohne den Text ein zweites Mal zu pflegen.
+
+Rein frontend-seitige Ergänzung ohne neuen Backend-Endpunkt.
+
+---
+
+## 18. Testabdeckung — Stand
 
 | Workspace | Tests |
 |---|---|
-| `apps/api` | 186 |
-| `packages/shared-types` | 75 |
+| `apps/api` | 225 |
+| `packages/shared-types` | 84 |
 | `packages/sync-protocol` | 9 |
-| **Gesamt** | **270** |
+| **Gesamt** | **318** |
 
-CI-Pipeline (`.github/workflows/ci.yml`): Typecheck (`tsconfig.typecheck.json`, inkl. `test/`/`scripts/`/`prisma/`) → Lint → Test → Build, für alle Workspaces.
+CI-Pipeline (`.github/workflows/ci.yml`): Typecheck (`tsconfig.typecheck.json`, inkl. `test/`/`scripts/`/`prisma/`) → Lint → Test → Build, für alle Workspaces. **Offener Punkt:** `npm audit` ist bisher nicht Teil dieser Pipeline (siehe Abschnitt 12).
