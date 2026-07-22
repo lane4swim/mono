@@ -168,7 +168,7 @@ describe('purgeExpiredDeletions — Tombstones (Verbesserung: Löschungen bleibe
 
     await purgeExpiredDeletions(erasureGateway, NOW);
 
-    const pullResult = await syncService.pull({}, { clubId: 'club-1' });
+    const pullResult = await syncService.pull({}, { clubId: 'club-1', role: 'trainer', athleteId: null });
     expect(pullResult.changes).toContainEqual(
       expect.objectContaining({ store: 'athletes', entityId: 'ath-1', action: 'delete', payload: null }),
     );
