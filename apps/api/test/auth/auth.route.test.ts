@@ -167,6 +167,40 @@ describe('Rate-Limiting auf /auth/login', () => {
   });
 });
 
+describe('Rate-Limiting auf /auth/refresh (10/min)', () => {
+  it('blockiert nach 10 Versuchen innerhalb einer Minute (429)', async () => {
+    const { app } = await buildTestApp();
+    // Bewusst mit ungültigen (aber strukturell korrekten) Refresh-Tokens —
+    // das Rate-Limit muss VOR bzw. unabhängig von der eigentlichen
+    // Gültigkeitsprüfung greifen, jeder einzelne Versuch zählt.
+    const attempt = () => app.inject({ method: 'POST', url: '/auth/refresh', payload: { refreshToken: 'ungueltiges-token-fuer-rate-limit-test' } });
+    const results = [];
+    for (let i = 0; i < 11; i++) results.push(await attempt());
+    const statusCodes = results.map((r) => r.statusCode);
+    expect(statusCodes.slice(0, 10).every((code) => code === 401)).toBe(true);
+    expect(statusCodes[10]).toBe(429);
+
+    await app.close();
+  });
+});
+
+describe('Rate-Limiting auf /auth/logout (10/min)', () => {
+  it('blockiert nach 10 Versuchen innerhalb einer Minute (429)', async () => {
+    const { app } = await buildTestApp();
+    const attempt = () => app.inject({ method: 'POST', url: '/auth/logout', payload: { refreshToken: 'irgendein-token' } });
+    const results = [];
+    for (let i = 0; i < 11; i++) results.push(await attempt());
+    const statusCodes = results.map((r) => r.statusCode);
+    // Logout ist bewusst idempotent/permissiv (immer 204, siehe auth.service.ts)
+    // — hier zählt allein, dass der 11. Versuch vom Rate-Limit (429) statt
+    // vom Handler beantwortet wird.
+    expect(statusCodes.slice(0, 10).every((code) => code === 204)).toBe(true);
+    expect(statusCodes[10]).toBe(429);
+
+    await app.close();
+  });
+});
+
 describe('GET/PATCH /api/me (geschützt)', () => {
   let app: FastifyInstance;
   let accessToken: string;

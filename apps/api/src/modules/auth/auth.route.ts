@@ -86,28 +86,50 @@ export async function authRoutes(app: FastifyInstance, opts: { authService: Auth
     },
   );
 
-  app.post('/auth/refresh', async (request, reply) => {
-    const parsed = RefreshRequestSchema.safeParse(request.body);
-    if (!parsed.success) return reply.code(400).send({ error: 'validation_failed', issues: parsed.error.issues });
+  app.post(
+    '/auth/refresh',
+    {
+      // Spezifisches Rate-Limit (statt nur des globalen 100/min aus
+      // plugins/security.ts) — verhindert automatisiertes Durchprobieren
+      // gestohlener/erratener Refresh-Tokens sowie übermäßiges Ausnutzen
+      // der Token-Rotation. Schlüssel bewusst nur nach IP (nicht nach
+      // Refresh-Token, der ja gerade erst validiert werden soll und für
+      // nicht authentifizierte Anfragen kein sinnvoller Schlüssel wäre).
+      config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
+    },
+    async (request, reply) => {
+      const parsed = RefreshRequestSchema.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'validation_failed', issues: parsed.error.issues });
 
-    try {
-      const result = await authService.refresh(parsed.data.refreshToken);
-      return reply.code(200).send(result);
-    } catch (err) {
-      if (err instanceof InvalidRefreshTokenError) {
-        return reply.code(401).send({ error: 'invalid_refresh_token', message: err.message });
+      try {
+        const result = await authService.refresh(parsed.data.refreshToken);
+        return reply.code(200).send(result);
+      } catch (err) {
+        if (err instanceof InvalidRefreshTokenError) {
+          return reply.code(401).send({ error: 'invalid_refresh_token', message: err.message });
+        }
+        throw err;
       }
-      throw err;
-    }
-  });
+    },
+  );
 
-  app.post('/auth/logout', async (request, reply) => {
-    const parsed = LogoutRequestSchema.safeParse(request.body);
-    if (!parsed.success) return reply.code(400).send({ error: 'validation_failed', issues: parsed.error.issues });
+  app.post(
+    '/auth/logout',
+    {
+      // Ebenfalls spezifisch begrenzt (siehe /auth/refresh oben) — auch
+      // wenn Logout selbst harmlos ist, verhindert das Limit, dass diese
+      // Route zum Durchprobieren/Invalidieren fremder Refresh-Tokens
+      // missbraucht wird.
+      config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
+    },
+    async (request, reply) => {
+      const parsed = LogoutRequestSchema.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'validation_failed', issues: parsed.error.issues });
 
-    await authService.logout(parsed.data.refreshToken);
-    return reply.code(204).send();
-  });
+      await authService.logout(parsed.data.refreshToken);
+      return reply.code(204).send();
+    },
+  );
 
   // Nutzerverwaltung: bestehende Vereinsmitglieder anzeigen, sortiert
   // nach Rolle (admin -> trainer -> athlete) und danach nach Namen (siehe
