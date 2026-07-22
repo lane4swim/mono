@@ -6,10 +6,23 @@
 // Ansichten müssen funktionieren, BEVOR eine Sitzung besteht, und werden
 // daher direkt von app.js gerendert, je nach Sitzungs-/URL-Zustand.
 // ============================================================
-import { el, field, textInput, toast } from '../utils.js';
+import { el, field, textInput, toast, openModal } from '../utils.js';
 import { login as loginRequest, acceptInvitation as acceptInvitationRequest, CURRENT_CONSENT_VERSION } from '../state.js';
 import * as api from '../apiClient.js';
 import { t } from '../i18n.js';
+import { buildLegalContent } from './info.js';
+
+// Impressum-Pflicht (§5 TMG) gilt unabhängig vom Login-Status — dieser
+// Link macht dieselbe Rechtliches-Seite (siehe modules/info.js) auch vor
+// einer Anmeldung erreichbar, ohne den Text ein zweites Mal zu pflegen.
+function appendLegalFooterLink(container) {
+  container.appendChild(el('div', { class: 'auth-footer' }, [
+    el('button', {
+      type: 'button',
+      onclick: () => openModal({ title: t('legal.pageTitle'), bodyNode: buildLegalContent(), wide: true }),
+    }, t('legal.authFooterLink')),
+  ]));
+}
 
 // ---- Login ----------------------------------------------------------
 export function renderLoginScreen(container, onSuccess) {
@@ -62,6 +75,7 @@ export function renderLoginScreen(container, onSuccess) {
   box.appendChild(form);
   box.appendChild(el('p', { class: 'hint', style: 'margin-top:20px' }, t('auth.noAccountHint')));
   container.appendChild(box);
+  appendLegalFooterLink(container);
 }
 
 // ---- Einladung annehmen ----------------------------------------------
@@ -77,6 +91,7 @@ export async function renderAcceptInvitationScreen(container, token, onSuccess) 
     box.appendChild(el('p', { class: 'form-error' }, t('auth.invitationInvalid')));
     box.appendChild(el('a', { href: '#/', class: 'btn btn-ghost', style: 'margin-top:16px' }, t('auth.backToLogin')));
     container.appendChild(box);
+    appendLegalFooterLink(container);
     return;
   }
 
@@ -128,6 +143,7 @@ export async function renderAcceptInvitationScreen(container, token, onSuccess) 
 
   box.appendChild(form);
   container.appendChild(box);
+  appendLegalFooterLink(container);
 }
 
 function describeAuthError(err) {

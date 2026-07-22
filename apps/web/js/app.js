@@ -30,9 +30,10 @@ import { statsModule } from './modules/stats.js';
 import { syncQueueModule } from './modules/syncQueue.js';
 import { profileModule } from './modules/profile.js';
 import { userManagementModule } from './modules/userManagement.js';
+import { infoModule } from './modules/info.js';
 
 [dashboardModule, athletesModule, competitionsModule, timesModule, plansModule,
-  templatesModule, catalogModule, sessionsModule, actionItemsModule, statsModule, syncQueueModule, profileModule, userManagementModule]
+  templatesModule, catalogModule, sessionsModule, actionItemsModule, statsModule, syncQueueModule, profileModule, userManagementModule, infoModule]
   .forEach(registerModule);
 
 const appShellEl = document.getElementById('app-shell');

@@ -303,3 +303,37 @@ tr:hover td{ background: var(--c-foam-2); }
 }
 .current-user-label{ font-size: var(--fs-sm); color: var(--c-slate); margin-right: 8px; white-space: nowrap; }
 .topbar-user{ display: flex; align-items: center; gap: 8px; }
+
+/* ---- Info-Seite (Impressum/DSGVO/Cookies/AGB) ---- */
+.legal-section{
+  background: var(--c-white); border: 1px solid var(--c-line); border-radius: var(--radius-md);
+  padding: 4px 20px; margin-bottom: 14px;
+}
+.legal-section summary{
+  cursor: pointer; padding: 14px 0; font-family: var(--f-display); font-size: 1.05rem;
+  list-style: none; display: flex; align-items: center; justify-content: space-between;
+}
+.legal-section summary::-webkit-details-marker{ display: none; }
+.legal-section summary::after{ content: '+'; font-size: 1.3rem; color: var(--c-slate-2); }
+.legal-section[open] summary::after{ content: '−'; }
+.legal-section summary:focus-visible{ outline: 2px solid var(--c-chlorine); outline-offset: 2px; }
+.legal-body{ padding-bottom: 18px; color: var(--c-slate); font-size: var(--fs-sm); line-height: 1.6; }
+.legal-body h4{ margin: 14px 0 4px; color: var(--c-ink); }
+.legal-body p{ margin: 0 0 10px; }
+.legal-body ul{ margin: 0 0 10px 20px; padding: 0; }
+
+/* Impressum bleibt immer sichtbar (kein <details>), bekommt aber dieselbe
+   Kartenoptik, damit es sich visuell nicht wie eine Ausnahme anfühlt. */
+.legal-static{
+  background: var(--c-white); border: 1px solid var(--c-line); border-radius: var(--radius-md);
+  padding: 18px 20px; margin-bottom: 20px;
+}
+
+/* Vor dem Login erreichbarer Impressum-Link am Fuß des Auth-Bildschirms —
+   ohne diesen wäre das Impressum vor einer Anmeldung nicht erreichbar,
+   was in Deutschland (§5 TMG) unabhängig vom Login-Status gefordert ist. */
+.auth-footer{ margin-top: 16px; text-align: center; }
+.auth-footer button{
+  background: none; border: none; color: var(--c-slate); font-size: var(--fs-sm);
+  text-decoration: underline; cursor: pointer; padding: 4px;
+}
