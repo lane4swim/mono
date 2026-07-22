@@ -11,6 +11,24 @@ import { SyncStoreSchema } from './syncEvent.js';
 const isoDate = z.string().datetime();
 const nullableIsoDate = z.string().datetime().nullable();
 
+// Ein einzelner Kommentar — wird an drei Stellen eingebettet (siehe unten):
+// am Trainingsplan selbst (PlanSchema.comments), an einer einzelnen
+// Übung/einem Satz innerhalb eines Plans (PlainSetSchema.comments) sowie
+// im Übungskatalog (ExerciseSchema.comments). `id` ist bewusst kein UUID
+// (wie z. B. bei PlainSetSchema.id) — Kommentare sind Einträge in einer
+// eingebetteten Liste, keine eigenständig referenzierten Entitäten.
+// `authorName` wird vom Frontend beim Anlegen aus dem eingeloggten Konto
+// übernommen (Anzeige-Zweck) — es gibt bewusst keine serverseitige
+// Autor:innen-Verifikation, genau wie bei den übrigen freien Textfeldern
+// dieses Datenmodells (z. B. Athlete.notes, TrainingSession.trainerNote).
+export const CommentSchema = z.object({
+  id: z.string().min(1),
+  authorName: z.string().min(1),
+  text: z.string().min(1),
+  createdAt: isoDate,
+}).strict();
+export type Comment = z.infer<typeof CommentSchema>;
+
 export const GroupSchema = z.object({
   id: z.string().uuid(),
   clubId: z.string().uuid(),
@@ -97,6 +115,9 @@ export const ExerciseSchema = z.object({
   defaultDistance: z.number().int().positive().nullable(),
   tags: z.array(z.string()).default([]),
   equipment: z.array(z.string()).default([]),
+  // Diskussions-/Hinweiskommentare im Übungskatalog (z. B. Technikhinweise
+  // mehrerer Trainer:innen zu derselben Übung).
+  comments: z.array(CommentSchema).default([]),
   createdAt: isoDate,
   updatedAt: isoDate,
 }).strict();
@@ -115,6 +136,10 @@ export const PlainSetSchema = z.object({
   intensity: z.string(),
   restSec: z.number().int().nonnegative(),
   exerciseId: z.string().uuid().nullable().optional(),
+  // Kommentare zu genau diesem Satz/dieser Übung innerhalb eines
+  // Trainingsplans (bzw. einer Vorlage, da Templates dieselbe Struktur
+  // verwenden) — z. B. Rückfragen oder Feedback zu einer konkreten Serie.
+  comments: z.array(CommentSchema).default([]),
 }).strict();
 export type PlainSet = z.infer<typeof PlainSetSchema>;
 
@@ -158,6 +183,9 @@ export const PlanSchema = z.object({
   groupId: z.string().uuid().nullable(),
   status: PlanStatusSchema,
   days: z.array(PlanDaySchema),
+  // Kommentare zum gesamten Trainingsplan (nicht zu einem einzelnen Satz
+  // — siehe dafür PlainSetSchema.comments oben).
+  comments: z.array(CommentSchema).default([]),
   createdAt: isoDate,
   updatedAt: isoDate,
 }).strict();

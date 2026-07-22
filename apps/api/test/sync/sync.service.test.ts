@@ -88,6 +88,25 @@ function makeSessionPayload(overrides: Partial<Record<string, unknown>> = {}) {
   };
 }
 
+function makeExercisePayload(overrides: Partial<Record<string, unknown>> = {}) {
+  const now = new Date().toISOString();
+  return {
+    id: '99999999-9999-9999-9999-999999999998',
+    clubId: CLUB_A,
+    name: 'Kraulbeine mit Brett',
+    category: 'kick',
+    stroke: 'Freistil',
+    description: '',
+    defaultDistance: 200,
+    tags: [],
+    equipment: [],
+    comments: [],
+    createdAt: now,
+    updatedAt: now,
+    ...overrides,
+  };
+}
+
 function makeService() {
   const gateway = new InMemorySyncGateway();
   const service = createSyncService({ gateway });
@@ -252,6 +271,32 @@ describe('syncService.push — Mass-Assignment-Schutz (Sicherheitsregression, Pa
     const stored = await gateway.findById('groups', seedPayload.id);
     expect(stored?.name).toBe(seedPayload.name); // unverändert
     expect((stored as Record<string, unknown>).extraField).toBeUndefined();
+  });
+
+  it('akzeptiert und speichert Kommentare an einer Übung im Übungskatalog (neues Feature)', async () => {
+    const { service, gateway } = makeService();
+    const payload = makeExercisePayload({
+      comments: [{ id: 'c1', authorName: 'Jonas Beck', text: 'Auf Handstellung achten.', createdAt: new Date().toISOString() }],
+    });
+    const results = await service.push(
+      [{ id: 'evt-exercise-comment', store: 'exercises', entityId: payload.id, action: 'create', payload, clientUpdatedAt: payload.updatedAt }],
+      asTrainer(CLUB_A),
+    );
+    expect(results[0]!.status).toBe('applied');
+    const stored = await gateway.findById('exercises', payload.id);
+    expect((stored as Record<string, unknown>).comments).toEqual(payload.comments);
+  });
+
+  it('lehnt einen Kommentar mit einem im Schema unbekannten Feld ab (z. B. eine mitgeschickte "authorUserId")', async () => {
+    const { service } = makeService();
+    const payload = makeExercisePayload({
+      comments: [{ id: 'c1', authorName: 'Jonas Beck', text: 'X', createdAt: new Date().toISOString(), authorUserId: 'sollte-nicht-erlaubt-sein' }],
+    });
+    const results = await service.push(
+      [{ id: 'evt-exercise-bad-comment', store: 'exercises', entityId: payload.id, action: 'create', payload, clientUpdatedAt: payload.updatedAt }],
+      asTrainer(CLUB_A),
+    );
+    expect(results[0]!.status).toBe('error');
   });
 });
 

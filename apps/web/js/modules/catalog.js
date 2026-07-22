@@ -6,6 +6,7 @@ import { el, clear, field, textInput, selectInput, openModal, confirmAction, toa
 import { EXERCISE_CATEGORIES, STROKES, EQUIPMENT_ITEMS } from '../refdata.js';
 import { getRole } from '../state.js';
 import { t, trLabel, trCode, trOptions } from '../i18n.js';
+import { renderCommentThread } from './comments.js';
 
 export const catalogModule = {
   id: 'catalog',
@@ -71,7 +72,7 @@ function renderList(container, exercises) {
 
 function openExerciseModal(exercise, onSaved) {
   const isEdit = !!exercise;
-  const data = exercise ? { ...exercise } : { name: '', category: 'technik', stroke: '', description: '', defaultDistance: '', tags: [], equipment: [] };
+  const data = exercise ? { ...exercise } : { name: '', category: 'technik', stroke: '', description: '', defaultDistance: '', tags: [], equipment: [], comments: [] };
   const form = el('form', { class: 'form-grid' });
   const fName = textInput(data.name, { required: true });
   const fCat = selectInput(trOptions(EXERCISE_CATEGORIES, 'exerciseCategories'), data.category);
@@ -99,6 +100,25 @@ function openExerciseModal(exercise, onSaved) {
   form.appendChild(field(t('catalog.formEquipment'), equipmentPills, { span2: true, hint: t('catalog.formEquipmentHint') }));
   form.appendChild(field(t('catalog.formTags'), fTags, { hint: t('catalog.formTagsHint') }));
   form.appendChild(field(t('catalog.formDescription'), fDesc, { span2: true }));
+
+  if (isEdit) {
+    const commentsWrap = el('div', { class: 'field', style: 'grid-column:1/-1' });
+    commentsWrap.appendChild(el('label', {}, t('comments.exerciseCommentsTitle')));
+    const commentsHost = el('div');
+    commentsWrap.appendChild(commentsHost);
+    form.appendChild(commentsWrap);
+    // Kommentare speichern sofort (unabhängig vom "Speichern"-Klick des
+    // restlichen Formulars) — `data` hält bis zum eigentlichen Submit nur
+    // die unveränderten Ausgangswerte der anderen Felder (siehe unten:
+    // fName/fCat/... werden erst beim Submit zusammengeführt), ein
+    // Zwischenspeichern hier überschreibt also keine unbestätigten Edits.
+    renderCommentThread(commentsHost, data.comments, async (nextComments) => {
+      data.comments = nextComments;
+      await put('exercises', { ...data, comments: nextComments });
+      onSaved?.();
+    });
+  }
+
   form.appendChild(el('div', { class: 'form-actions', style: 'grid-column:1/-1' }, [
     el('button', { type: 'button', class: 'btn btn-ghost', onclick: () => close() }, t('common.cancel')),
     el('button', { type: 'submit', class: 'btn btn-primary' }, isEdit ? t('common.save') : t('common.create')),

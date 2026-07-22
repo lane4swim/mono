@@ -270,6 +270,11 @@ model Exercise {
   defaultDistance Int?
   tags            String[]  @default([])
   equipment       String[]  @default([])
+  // Diskussions-/Hinweiskommentare im Übungskatalog — Struktur siehe
+  // CommentSchema in packages/shared-types/src/entities.ts. Als Json
+  // gespeichert (analog zu Template.sets/Plan.days), da es sich um eine
+  // eingebettete Liste handelt, keine eigenständig referenzierte Entität.
+  comments        Json      @default("[]")
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   deletedAt       DateTime?
@@ -308,8 +313,12 @@ model Plan {
   group     Group?    @relation(fields: [groupId], references: [id])
   status    String    @default("aktiv") // "aktiv" | "archiv"
   // Array von { date, sets } — je Tag dieselbe Sets/Blöcke-Struktur wie
-  // Template.sets.
+  // Template.sets. Einzelne Sätze können jeweils ein eigenes
+  // "comments"-Array tragen (siehe CommentSchema) — das lebt mit im
+  // selben Json-Blob, es gibt dafür keine eigene Spalte.
   days      Json
+  // Kommentare zum gesamten Plan (nicht zu einem einzelnen Satz).
+  comments  Json      @default("[]")
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?

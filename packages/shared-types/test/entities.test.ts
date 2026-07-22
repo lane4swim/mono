@@ -12,6 +12,7 @@ import {
   PlanSchema,
   TrainingSessionSchema,
   ActionItemSchema,
+  CommentSchema,
   ENTITY_SCHEMAS,
 } from '../src/entities.js';
 import { SyncStoreSchema } from '../src/syncEvent.js';
@@ -94,13 +95,43 @@ describe('ResultSchema', () => {
   });
 });
 
+describe('CommentSchema', () => {
+  const valid = { id: 'c1', authorName: 'Sabine Reuter', text: 'Bitte auf die Wende achten.', createdAt: now };
+  it('akzeptiert einen gültigen Kommentar', () => {
+    expect(CommentSchema.safeParse(valid).success).toBe(true);
+  });
+  it('lehnt einen leeren Text ab', () => {
+    expect(CommentSchema.safeParse({ ...valid, text: '' }).success).toBe(false);
+  });
+  it('lehnt einen leeren Autorennamen ab', () => {
+    expect(CommentSchema.safeParse({ ...valid, authorName: '' }).success).toBe(false);
+  });
+  it('lehnt unbekannte Zusatzfelder ab (.strict())', () => {
+    expect(CommentSchema.safeParse({ ...valid, authorUserId: '123' }).success).toBe(false);
+  });
+});
+
 describe('ExerciseSchema', () => {
-  const valid = { id: ATHLETE_ID, clubId: CLUB_ID, name: 'Kraulbeine mit Brett', category: 'kick', stroke: 'Freistil', description: '', defaultDistance: 200, tags: ['aufwärmen'], equipment: ['brett'], createdAt: now, updatedAt: now };
+  const valid = { id: ATHLETE_ID, clubId: CLUB_ID, name: 'Kraulbeine mit Brett', category: 'kick', stroke: 'Freistil', description: '', defaultDistance: 200, tags: ['aufwärmen'], equipment: ['brett'], comments: [], createdAt: now, updatedAt: now };
   it('akzeptiert eine vollständige Übung', () => {
     expect(ExerciseSchema.safeParse(valid).success).toBe(true);
   });
   it('akzeptiert stroke: null (schwimmlagen-unabhängig, z. B. Trockentraining)', () => {
     expect(ExerciseSchema.safeParse({ ...valid, stroke: null }).success).toBe(true);
+  });
+  it('fehlt "comments" ganz, wird ein leeres Array angenommen (Rückwärtskompatibilität mit älteren Datensätzen)', () => {
+    const { comments, ...withoutComments } = valid;
+    const parsed = ExerciseSchema.safeParse(withoutComments);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data.comments).toEqual([]);
+  });
+  it('akzeptiert Kommentare im Übungskatalog', () => {
+    const withComment = { ...valid, comments: [{ id: 'c1', authorName: 'Jonas Beck', text: 'Auf Handstellung achten.', createdAt: now }] };
+    expect(ExerciseSchema.safeParse(withComment).success).toBe(true);
+  });
+  it('lehnt einen fehlerhaften Kommentar ab (leerer Text)', () => {
+    const withBadComment = { ...valid, comments: [{ id: 'c1', authorName: 'Jonas Beck', text: '', createdAt: now }] };
+    expect(ExerciseSchema.safeParse(withBadComment).success).toBe(false);
   });
 });
 
@@ -126,6 +157,15 @@ describe('SetEntrySchema (Sätze & Wiederholungsblöcke)', () => {
   it('lehnt einen unbekannten "kind"-Wert ab', () => {
     expect(SetEntrySchema.safeParse({ kind: 'unknown' }).success).toBe(false);
   });
+  it('akzeptiert Kommentare an einem einzelnen Satz (auch innerhalb eines Blocks)', () => {
+    const set = { kind: 'set', id: 's1', description: '8x100 Freistil', distance: 100, reps: 8, intensity: 'ga1', restSec: 20, comments: [{ id: 'c1', authorName: 'Mara Vogel', text: 'War heute sehr anstrengend.', createdAt: now }] };
+    expect(SetEntrySchema.safeParse(set).success).toBe(true);
+    const block = {
+      kind: 'block', id: 'b1', label: 'Hauptserie', repeatCount: 3,
+      sets: [{ kind: 'set', id: 's1', description: 'Sprint', distance: 25, reps: 2, intensity: 'sprint', restSec: 30, comments: [{ id: 'c2', authorName: 'Trainer X', text: 'Guter Antritt.', createdAt: now }] }],
+    };
+    expect(SetEntrySchema.safeParse(block).success).toBe(true);
+  });
 });
 
 describe('TemplateSchema', () => {
@@ -146,14 +186,22 @@ describe('PlanSchema', () => {
   it('akzeptiert einen Trainingsplan mit mehreren Tagen', () => {
     const plan = {
       id: ATHLETE_ID, clubId: CLUB_ID, name: 'Trainingswoche', weekStart: now, groupId: null, status: 'aktiv',
-      days: [{ date: now, sets: [] }],
+      days: [{ date: now, sets: [] }], comments: [],
       createdAt: now, updatedAt: now,
     };
     expect(PlanSchema.safeParse(plan).success).toBe(true);
   });
   it('lehnt einen ungültigen Status ab', () => {
-    const plan = { id: ATHLETE_ID, clubId: CLUB_ID, name: 'X', weekStart: now, groupId: null, status: 'gelöscht', days: [], createdAt: now, updatedAt: now };
+    const plan = { id: ATHLETE_ID, clubId: CLUB_ID, name: 'X', weekStart: now, groupId: null, status: 'gelöscht', days: [], comments: [], createdAt: now, updatedAt: now };
     expect(PlanSchema.safeParse(plan).success).toBe(false);
+  });
+  it('akzeptiert Kommentare auf Planebene', () => {
+    const plan = {
+      id: ATHLETE_ID, clubId: CLUB_ID, name: 'Trainingswoche', weekStart: now, groupId: null, status: 'aktiv',
+      days: [], comments: [{ id: 'c1', authorName: 'Trainer X', text: 'Guter Wochenaufbau.', createdAt: now }],
+      createdAt: now, updatedAt: now,
+    };
+    expect(PlanSchema.safeParse(plan).success).toBe(true);
   });
 });
 

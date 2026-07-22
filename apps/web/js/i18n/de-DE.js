@@ -201,6 +201,16 @@ export default {
     noEquipment: 'Keine Ausrüstung nötig',
     validationName: 'Bitte einen Namen angeben.', savedEdit: 'Änderungen gespeichert', savedCreate: 'Übung angelegt',
   },
+  comments: {
+    title: 'Kommentare', empty: 'Noch keine Kommentare.',
+    placeholder: 'Kommentar schreiben…', add: 'Kommentieren',
+    deleteConfirm: 'Diesen Kommentar löschen?', deleted: 'Kommentar gelöscht', added: 'Kommentar hinzugefügt',
+    countButton: '💬 {count}', countButtonEmpty: '💬 Kommentieren',
+    validationText: 'Bitte einen Text eingeben.',
+    planCommentsTitle: 'Kommentare zum Plan',
+    exerciseCommentsTitle: 'Kommentare zur Übung',
+    setCommentsTitle: 'Kommentare zu diesem Satz',
+  },
   sessions: {
     eyebrow: '{count} Einheiten', title: 'Trainingseinheiten & Feedback', addSession: '+ Einheit erfassen',
     noSessionsTitle: 'Noch keine Einheiten', noSessionsMsg: 'Erfasse Anwesenheit und RPE-Feedback nach jedem Training.',

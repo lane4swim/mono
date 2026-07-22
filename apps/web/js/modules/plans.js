@@ -8,6 +8,7 @@ import {
 } from '../utils.js';
 import { WEEKDAYS, EQUIPMENT_ITEMS } from '../refdata.js';
 import { renderSetEditor, totalDistance, cloneItems, collectEquipment } from './setEditor.js';
+import { renderCommentThread, commentsButton } from './comments.js';
 import { navigate } from '../router.js';
 import { t, trLabel } from '../i18n.js';
 
@@ -70,6 +71,14 @@ async function renderDetail(container, planId) {
   wrap.appendChild(laneWave());
   wrap.appendChild(el('p', {}, t('plans.statusLine', { date: fmtDateLong(plan.weekStart), status: plan.status === 'aktiv' ? t('plans.statusActive') : t('plans.statusArchived') })));
 
+  const planCommentsCard = el('div', { class: 'card' }, [el('h3', { class: 'mt-0' }, t('comments.planCommentsTitle'))]);
+  const planCommentsHost = el('div');
+  planCommentsCard.appendChild(planCommentsHost);
+  wrap.appendChild(planCommentsCard);
+  renderCommentThread(planCommentsHost, plan.comments, async (nextComments) => {
+    await put('plans', { ...plan, comments: nextComments });
+  });
+
   (plan.days || []).slice().sort((a, b) => a.date.localeCompare(b.date)).forEach(day => {
     const dayEquipment = collectEquipment(day.sets || [], exercises);
     const dayCard = el('div', { class: 'card' }, [
@@ -84,7 +93,7 @@ async function renderDetail(container, planId) {
       dayEquipment.length > 0
         ? `${t('setEditor.equipmentSummary')} ${dayEquipment.map(eq => trLabel(EQUIPMENT_ITEMS, eq, 'equipment')).join(', ')}`
         : t('setEditor.equipmentNone')));
-    dayCard.appendChild(renderDayItems(day.sets || [], exercises));
+    dayCard.appendChild(renderDayItems(day.sets || [], exercises, plan));
     wrap.appendChild(dayCard);
   });
 
@@ -96,7 +105,7 @@ async function renderDetail(container, planId) {
 // the table and is shown as its own distinct box — same visual language
 // (dashed border, "repeat block" badge) as the editor uses, so the
 // reading view and the editing view stay recognizably consistent.
-function renderDayItems(items, exercises) {
+function renderDayItems(items, exercises, plan) {
   const host = el('div');
   if (items.length === 0) { host.appendChild(el('p', {}, t('plans.noSetsPlanned'))); return host; }
 
@@ -104,7 +113,7 @@ function renderDayItems(items, exercises) {
   function flushTable() {
     if (pendingRows.length === 0) return;
     const table = el('table');
-    table.appendChild(el('thead', {}, el('tr', {}, [el('th', {}, t('plans.colDescription')), el('th', {}, t('plans.colDistance')), el('th', {}, t('plans.colReps')), el('th', {}, t('plans.colRest'))])));
+    table.appendChild(el('thead', {}, el('tr', {}, [el('th', {}, t('plans.colDescription')), el('th', {}, t('plans.colDistance')), el('th', {}, t('plans.colReps')), el('th', {}, t('plans.colRest')), el('th', {}, '')])));
     const tbody = el('tbody');
     pendingRows.forEach(row => tbody.appendChild(row));
     table.appendChild(tbody);
@@ -115,15 +124,32 @@ function renderDayItems(items, exercises) {
   items.forEach(entry => {
     if (entry.kind === 'block') {
       flushTable();
-      host.appendChild(renderBlockBox(entry, exercises));
+      host.appendChild(renderBlockBox(entry, exercises, plan));
     } else {
       pendingRows.push(el('tr', {}, [
         el('td', {}, equipmentDescCell(entry, exercises)), el('td', {}, `${entry.distance ?? '—'} m`), el('td', {}, entry.reps), el('td', {}, `${entry.restSec || 0}s`),
+        el('td', {}, setCommentsButton(entry, plan)),
       ]));
     }
   });
   flushTable();
   return host;
+}
+
+// Opens a modal with the comment thread for a single set/exercise entry
+// within a plan (works the same whether `entry` sits directly in a day's
+// `sets` array or inside a repeat block's `sets` array, since both are
+// the same object reference living somewhere inside `plan.days`).
+// Persisting just re-saves the whole plan — mutating `entry.comments`
+// in place already updated the right spot inside `plan.days`.
+function setCommentsButton(entry, plan) {
+  return commentsButton(entry.comments, {
+    title: t('comments.setCommentsTitle'),
+    persist: async (nextComments) => {
+      entry.comments = nextComments;
+      await put('plans', { ...plan });
+    },
+  });
 }
 
 // Builds the "Beschreibung" cell content: the set's text, plus a small
@@ -143,7 +169,7 @@ function equipmentDescCell(entry, exercises) {
   return wrap;
 }
 
-function renderBlockBox(block, exercises) {
+function renderBlockBox(block, exercises, plan) {
   const innerDist = totalDistance(block.sets || []);
   const blockEquipment = collectEquipment(block.sets || [], exercises);
   const box = el('div', { class: 'day-block', style: 'margin:4px 0 12px;border-style:dashed;border-color:var(--c-chlorine-d);background:var(--c-foam-2)' });
@@ -159,9 +185,9 @@ function renderBlockBox(block, exercises) {
     box.appendChild(el('p', { class: 'hint mt-0' }, t('plans.blockNoSets')));
   } else {
     const table = el('table');
-    table.appendChild(el('thead', {}, el('tr', {}, [el('th', {}, t('plans.colDescription')), el('th', {}, t('plans.colDistance')), el('th', {}, t('plans.colReps')), el('th', {}, t('plans.colRest'))])));
+    table.appendChild(el('thead', {}, el('tr', {}, [el('th', {}, t('plans.colDescription')), el('th', {}, t('plans.colDistance')), el('th', {}, t('plans.colReps')), el('th', {}, t('plans.colRest')), el('th', {}, '')])));
     const tbody = el('tbody');
-    block.sets.forEach(s => tbody.appendChild(el('tr', {}, [el('td', {}, equipmentDescCell(s, exercises)), el('td', {}, `${s.distance ?? '—'} m`), el('td', {}, s.reps), el('td', {}, `${s.restSec || 0}s`)])));
+    block.sets.forEach(s => tbody.appendChild(el('tr', {}, [el('td', {}, equipmentDescCell(s, exercises)), el('td', {}, `${s.distance ?? '—'} m`), el('td', {}, s.reps), el('td', {}, `${s.restSec || 0}s`), el('td', {}, setCommentsButton(s, plan))])));
     table.appendChild(tbody);
     box.appendChild(el('div', { class: 'table-wrap' }, table));
   }

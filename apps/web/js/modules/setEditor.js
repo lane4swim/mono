@@ -30,7 +30,7 @@ const CATEGORY_DEFAULTS = {
 };
 
 function newBlankSet() {
-  return { kind: 'set', id: uid('set'), description: '', distance: 100, reps: 1, intensity: 'ga1', restSec: 20 };
+  return { kind: 'set', id: uid('set'), description: '', distance: 100, reps: 1, intensity: 'ga1', restSec: 20, comments: [] };
 }
 
 function newBlock() {
@@ -48,6 +48,7 @@ function setFromExercise(exercise) {
     intensity: defaults.intensity,
     restSec: defaults.restSec,
     exerciseId: exercise.id,
+    comments: [],
   };
 }
 

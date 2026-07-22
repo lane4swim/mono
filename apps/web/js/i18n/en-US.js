@@ -201,6 +201,16 @@ export default {
     noEquipment: 'No equipment needed',
     validationName: 'Please enter a name.', savedEdit: 'Changes saved', savedCreate: 'Exercise added',
   },
+  comments: {
+    title: 'Comments', empty: 'No comments yet.',
+    placeholder: 'Write a comment…', add: 'Comment',
+    deleteConfirm: 'Delete this comment?', deleted: 'Comment deleted', added: 'Comment added',
+    countButton: '💬 {count}', countButtonEmpty: '💬 Comment',
+    validationText: 'Please enter some text.',
+    planCommentsTitle: 'Comments on this plan',
+    exerciseCommentsTitle: 'Comments on this exercise',
+    setCommentsTitle: 'Comments on this set',
+  },
   sessions: {
     eyebrow: '{count} sessions', title: 'Training Sessions & Feedback', addSession: '+ Record session',
     noSessionsTitle: 'No sessions yet', noSessionsMsg: 'Record attendance and RPE feedback after every training.',

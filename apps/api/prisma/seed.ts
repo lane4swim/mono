@@ -81,26 +81,26 @@ export function buildDemoData() {
     id: id(), clubId: club.id, name: 'Grundlagenausdauer – Standardwoche', description: 'Klassische GA1/GA2-Einheit für die Basisperiode.',
     tags: ['ausdauer', 'basis'],
     sets: [
-      { kind: 'set' as const, id: id(), description: 'Einschwimmen gemischt', distance: 400, reps: 1, intensity: 'locker', restSec: 0 },
-      { kind: 'set' as const, id: id(), description: '8x100 Freistil', distance: 100, reps: 8, intensity: 'ga1', restSec: 20 },
-      { kind: 'set' as const, id: id(), description: '4x50 Beine', distance: 50, reps: 4, intensity: 'locker', restSec: 15, exerciseId: kickboardEx.id },
-      { kind: 'set' as const, id: id(), description: 'Ausschwimmen', distance: 200, reps: 1, intensity: 'locker', restSec: 0 },
+      { kind: 'set' as const, id: id(), description: 'Einschwimmen gemischt', distance: 400, reps: 1, intensity: 'locker', restSec: 0, comments: [] },
+      { kind: 'set' as const, id: id(), description: '8x100 Freistil', distance: 100, reps: 8, intensity: 'ga1', restSec: 20, comments: [] },
+      { kind: 'set' as const, id: id(), description: '4x50 Beine', distance: 50, reps: 4, intensity: 'locker', restSec: 15, exerciseId: kickboardEx.id, comments: [] },
+      { kind: 'set' as const, id: id(), description: 'Ausschwimmen', distance: 200, reps: 1, intensity: 'locker', restSec: 0, comments: [] },
     ],
   };
   const template2 = {
     id: id(), clubId: club.id, name: 'Sprint & Wenden', description: 'Kurze, intensive Serien mit Fokus auf Renntempo.',
     tags: ['sprint', 'wettkampf'],
     sets: [
-      { kind: 'set' as const, id: id(), description: 'Einschwimmen', distance: 300, reps: 1, intensity: 'locker', restSec: 0 },
+      { kind: 'set' as const, id: id(), description: 'Einschwimmen', distance: 300, reps: 1, intensity: 'locker', restSec: 0, comments: [] },
       {
         kind: 'block' as const, id: id(), label: 'Hauptserie Sprint', repeatCount: 3,
         sets: [
-          { kind: 'set' as const, id: id(), description: '2x25 Sprint ab Wende', distance: 25, reps: 2, intensity: 'sprint', restSec: 30, exerciseId: sprintEx.id },
-          { kind: 'set' as const, id: id(), description: '50 locker ausschwimmen', distance: 50, reps: 1, intensity: 'locker', restSec: 20 },
+          { kind: 'set' as const, id: id(), description: '2x25 Sprint ab Wende', distance: 25, reps: 2, intensity: 'sprint', restSec: 30, exerciseId: sprintEx.id, comments: [] },
+          { kind: 'set' as const, id: id(), description: '50 locker ausschwimmen', distance: 50, reps: 1, intensity: 'locker', restSec: 20, comments: [] },
         ],
       },
-      { kind: 'set' as const, id: id(), description: '4x50 Renntempo', distance: 50, reps: 4, intensity: 'renotempo', restSec: 40 },
-      { kind: 'set' as const, id: id(), description: 'Ausschwimmen locker', distance: 150, reps: 1, intensity: 'locker', restSec: 0 },
+      { kind: 'set' as const, id: id(), description: '4x50 Renntempo', distance: 50, reps: 4, intensity: 'renotempo', restSec: 40, comments: [] },
+      { kind: 'set' as const, id: id(), description: 'Ausschwimmen locker', distance: 150, reps: 1, intensity: 'locker', restSec: 0, comments: [] },
     ],
   };
   const templates = [template1, template2];

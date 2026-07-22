@@ -62,6 +62,15 @@ export function fmtDateShort(iso) {
   const d = new Date(iso + 'T00:00:00');
   return d.toLocaleDateString(getLocale(), { day: '2-digit', month: '2-digit', year: '2-digit' });
 }
+// Datum + Uhrzeit — für Zeitstempel, bei denen (anders als bei den obigen
+// reinen Datumsfeldern) die Uhrzeit selbst Teil der Information ist, z. B.
+// Kommentar-Zeitstempel (`createdAt` ist ein vollständiger ISO-Zeitstempel,
+// keine reine Datumsangabe wie `weekStart`/`date`).
+export function fmtDateTime(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleString(getLocale(), { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
 export function isoAddDays(iso, n) {
   const d = new Date(iso + 'T00:00:00');
   d.setDate(d.getDate() + n);
