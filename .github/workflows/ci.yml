@@ -39,6 +39,42 @@ jobs:
       - name: Install dependencies (alle Workspaces)
         run: npm ci
 
+      - name: Abhängigkeits-Audit (npm audit)
+        # Ergänzt nach dem Sicherheitsreview in Abschnitt 15/12 des
+        # Backend-Entwicklungsplans — der Fund der nodemailer-CVEs (mehrere
+        # High-Severity-Advisories) erfolgte dort durch einen manuell
+        # angestoßenen Lauf, nicht durch eine automatisierte Prüfung.
+        # Dieser Schritt schließt genau diese Lücke: künftige CVEs in
+        # Produktionsabhängigkeiten lassen den PR-Check fehlschlagen, statt
+        # unbemerkt bis zum nächsten manuellen Review liegen zu bleiben.
+        #
+        # --omit=dev: nur Produktionsabhängigkeiten zählen für das
+        # Blockieren des Merges — eine Schwachstelle in einem reinen
+        # Build-/Test-Tool (z. B. vitest/esbuild, siehe Abschnitt 12) hat
+        # keine Auswirkung auf die ausgelieferte Anwendung und soll den
+        # Merge nicht verhindern; sie bleibt trotzdem sichtbar (zweiter
+        # Schritt unten, informativ statt blockierend).
+        #
+        # --audit-level=high (bewusst NICHT "critical"): Der real
+        # gefundene nodemailer-Fund war als "high" eingestuft, nicht
+        # "critical" — ein Schwellenwert von "critical" hätte genau diesen
+        # Fund nicht automatisch erkannt und den ursprünglichen Zweck
+        # dieses Schritts unterlaufen. "high" ist der niedrigste
+        # Schwellenwert, der diesen konkreten Fall abgedeckt hätte, ohne
+        # bei jeder harmlosen "moderate"/"low"-Meldung den Merge zu
+        # blockieren. Bei Bedarf hier anpassbar (z. B. auf "critical"
+        # lockern oder auf "moderate" verschärfen).
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Abhängigkeits-Audit — Dev-Abhängigkeiten (informativ, blockiert NICHT)
+        # Deckt z. B. die bekannte esbuild/vite-Dev-Server-Schwachstelle ab
+        # (siehe Abschnitt 12) — betrifft nur `npm run dev`/lokale
+        # Testläufe, nicht die Produktionslaufzeit. `continue-on-error`,
+        # damit sie im Job-Log sichtbar bleibt, aber den Merge nicht
+        # blockiert; sollte dennoch zeitnah manuell geprüft werden.
+        run: npm audit --audit-level=high
+        continue-on-error: true
+
       - name: Build gemeinsame Pakete (shared-types, sync-protocol)
         run: |
           npm run build --workspace=packages/shared-types
