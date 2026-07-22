@@ -5,6 +5,6 @@
   - [x] Löschfunktion implementieren
  
 # Sekundär
-- [ ] Kommentare bei Trainingsplänen
+- [x] Kommentare bei Trainingsplänen
 - [ ] Import/Export von Übungen via JSON
 - [x] Einladungen als kopierfähigen Link
