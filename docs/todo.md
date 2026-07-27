@@ -1,6 +1,6 @@
 # Wichtig
 ## Impressum
-- Impressum auf Login und Nutzerseiten
+- [x] Impressum auf Login und Nutzerseiten
 - [x] DSGVO Hinweise
   - [x] Löschfunktion implementieren
  
