@@ -8,6 +8,24 @@
 //      (state.restoreSession(), nutzt das gespeicherte Refresh Token).
 //   3. Erfolgreich -> normale App-Shell (Nav/Ansicht) starten.
 //   4. Keine Sitzung -> Login-Bildschirm zeigen.
+//
+// Automatische Hintergrund-Synchronisation (neu):
+//   Bisher wurde nur manuell über den Button in der Sync-Warteschlange
+//   synchronisiert (siehe modules/syncQueue.js). Jetzt läuft zusätzlich
+//   im Hintergrund automatisch ein Sync-Zyklus (push dann pull, siehe
+//   syncClient.js: runSync()), sobald eine Internetverbindung besteht:
+//     - unmittelbar nach dem Start der authentifizierten App (falls
+//       online),
+//     - sobald der Browser ein "online"-Event meldet (z. B. nach
+//       Wiederherstellung der Verbindung),
+//     - zusätzlich in einem festen Intervall, damit auch von anderen
+//       Geräten/Nutzer:innen eingegangene Änderungen ohne Nutzeraktion
+//       ankommen (nicht nur die eigenen ausstehenden Events).
+//   Läuft bewusst leise (keine Toasts) — Fehler werden nur geloggt, damit
+//   ein vorübergehend nicht erreichbarer Server nicht bei jedem Intervall
+//   störende Meldungen erzeugt. Der Sync-Badge (Anzahl ausstehender
+//   Events) und ggf. eine offene Sync-Warteschlangen-Ansicht werden
+//   trotzdem aktualisiert.
 // ============================================================
 import { pendingSyncCount } from './db.js';
 import { seedIfEmpty, resetDemoData } from './seed.js';
@@ -16,6 +34,7 @@ import { registerModule, visibleModules, currentRoute, navigate, onRouteChange, 
 import { el, clear, toast, confirmAction, openModal, beginRender } from './utils.js';
 import { t, getLocale, getAvailableLocales, onLocaleChange } from './i18n.js';
 import { renderLoginScreen, renderAcceptInvitationScreen } from './modules/authScreens.js';
+import { runSync } from './syncClient.js';
 
 import { dashboardModule } from './modules/dashboard.js';
 import { athletesModule } from './modules/athletes.js';
@@ -45,6 +64,19 @@ const currentUserLabel = document.getElementById('current-user-label');
 const btnLogout = document.getElementById('btn-logout');
 const netIndicator = document.getElementById('net-indicator');
 const languageSelect = document.getElementById('language-select');
+
+// Alle wie viele Millisekunden im Hintergrund automatisch synchronisiert
+// werden soll (zusätzlich zu den ereignisgesteuerten Auslösern unten) —
+// deckt vor allem den Fall ab, dass Änderungen anderer Geräte/Nutzer:innen
+// eintreffen sollen, ohne dass am eigenen Gerät gerade etwas geändert wird
+// (rein "eigene ausstehende Events" würden sonst nie automatisch abgeholt).
+const BACKGROUND_SYNC_INTERVAL_MS = 60_000;
+
+// Verhindert überlappende Sync-Läufe (z. B. wenn das Intervall feuert,
+// während gerade schon ein durch das "online"-Event ausgelöster Lauf
+// unterwegs ist).
+let backgroundSyncInProgress = false;
+let backgroundSyncIntervalId = null;
 
 async function boot() {
   registerServiceWorker();
@@ -82,10 +114,62 @@ async function startAuthenticatedApp() {
   updateNetStatus();
   window.addEventListener('online', updateNetStatus);
   window.addEventListener('offline', updateNetStatus);
+  // Automatische Hintergrund-Synchronisation: sobald der Browser eine
+  // (wieder-)hergestellte Verbindung meldet, sofort einen Sync-Zyklus
+  // anstoßen (zusätzlich zum reinen Status-Update oben in updateNetStatus).
+  window.addEventListener('online', () => backgroundSync());
   onRouteChange(render);
   onUserChange(() => { populateCurrentUserLabel(); populateLanguageSelect(); buildNav(); render(currentRoute()); });
   onLocaleChange(() => { populateCurrentUserLabel(); populateLanguageSelect(); buildNav(); updateNetStatus(); render(currentRoute()); });
   render(currentRoute());
+
+  startBackgroundSync();
+}
+
+// Startet die automatische Hintergrund-Synchronisation für die laufende
+// Sitzung: ein sofortiger Versuch (falls online) sowie ein wiederkehrendes
+// Intervall. Wird aus startAuthenticatedApp() aufgerufen, also einmal pro
+// Login/Sitzungswiederherstellung — ein erneuter Login nach Logout+Reload
+// legt wegen location.reload() (siehe logout-Button unten) ohnehin einen
+// frischen Modul-Zustand an, sodass hier kein Aufräumen alter Intervalle
+// nötig ist.
+function startBackgroundSync() {
+  if (navigator.onLine) backgroundSync();
+  if (backgroundSyncIntervalId !== null) clearInterval(backgroundSyncIntervalId);
+  backgroundSyncIntervalId = setInterval(() => backgroundSync(), BACKGROUND_SYNC_INTERVAL_MS);
+}
+
+// Führt — falls gerade sinnvoll möglich — einen automatischen Sync-Zyklus
+// aus (push dann pull, siehe syncClient.js: runSync()). Bewusst ohne
+// Toasts: das soll im Hintergrund unauffällig passieren, nicht wie die
+// manuelle Aktion über den Button in der Sync-Warteschlange wirken.
+// Voraussetzungen:
+//   - eine Sitzung besteht (sonst gäbe es keinen gültigen Access Token),
+//   - der Browser meldet eine Internetverbindung (navigator.onLine) —
+//     verhindert unnötige, sicher fehlschlagende Anfragen im Offline-Fall,
+//   - kein anderer Hintergrund-Sync läuft bereits.
+async function backgroundSync() {
+  if (!isLoggedIn()) return;
+  if (!navigator.onLine) return;
+  if (backgroundSyncInProgress) return;
+
+  backgroundSyncInProgress = true;
+  try {
+    await runSync();
+  } catch (err) {
+    // Ein einzelner fehlgeschlagener Hintergrund-Sync (z. B. Server kurz
+    // nicht erreichbar, abgelaufene Sitzung) soll die App nicht stören —
+    // der nächste Intervall-/online-Auslöser versucht es erneut. Lediglich
+    // zur Fehlersuche geloggt.
+    console.warn('[background-sync] Automatische Synchronisierung fehlgeschlagen:', err);
+  } finally {
+    backgroundSyncInProgress = false;
+    updateSyncBadge();
+    // Falls die Sync-Warteschlange gerade sichtbar ist, deren Ansicht
+    // aktualisieren, damit neu eingetroffene/synchronisierte Einträge
+    // ohne manuelles Neuladen erscheinen.
+    if (currentRoute().routeId === 'syncqueue') render(currentRoute());
+  }
 }
 
 function updateNetStatus() {
@@ -104,6 +188,7 @@ function populateCurrentUserLabel() {
   currentUserLabel.textContent = `${user.name} (${roleLabel})`;
   btnLogout.textContent = t('topbar.logout');
   btnLogout.onclick = async () => {
+    if (backgroundSyncIntervalId !== null) { clearInterval(backgroundSyncIntervalId); backgroundSyncIntervalId = null; }
     await logout();
     location.reload();
   };
