@@ -88,6 +88,30 @@ im Haupt-Service-Worker explizit von Cache/Precache ausgeschlossen — ein
 Aufruf ohne Internetverbindung schlägt bewusst fehl, statt (fälschlich)
 die normale App anzuzeigen.
 
+## Hilfeseiten
+
+Unter `apps/web/help/` liegt ein rein statischer, von der Single-Page-App
+unabhängiger Hilfebereich (kein Router-Modul, kein `t()`/i18n-System) —
+analog zu `apps/web/admin/` ein eigenständiger Ordner mit eigenem
+`index.html` je Seite, der über einen Link unten in der Seitenleiste
+(„Hilfe") in einem neuen Tab geöffnet wird:
+
+- **`help/index.html`** — Kurzanleitung (Zugang, Installation als App,
+  Offline-Nutzung & Synchronisierung, Überblick über die Module).
+- **`help/faq.html`** — häufige Fragen & Fehlerbehebung.
+- **`help/admin.html`** — Admin-Handbuch (Vereine anlegen, Trainer:innen/
+  Athlet:innen einladen, Rollen).
+- **`help/help.css`** — eigenes, schlankes Stylesheet für Lesetypografie;
+  nutzt dieselben Design-Tokens wie `css/styles.css` (dort weiterhin
+  eingebunden), duckt aber nicht darauf ab, dass die App-Shell geladen ist.
+
+Anders als `/admin` sind die Hilfeseiten bewusst **auch offline nutzbar**
+(z. B. um die FAQ zur Synchronisierung offline nachzulesen) und daher Teil
+von `PRECACHE_URLS` in `sw.js`. Inhalte sind aktuell nur auf Deutsch
+gepflegt (kein Duplikat pro Sprache) — bei Bedarf lassen sich weitere
+Sprachvarianten als zusätzliche Dateien (z. B. `help/en/index.html`) mit
+eigener Verlinkung ergänzen, ohne das bestehende Muster zu ändern.
+
 ## Architektur & Erweiterbarkeit
 
 - **Kein Build-Schritt.** Reines HTML/CSS/JS mit ES-Modulen — einfach

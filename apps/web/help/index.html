@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hilfe · Lane 1</title>
+<meta name="description" content="Kurzanleitung für Lane 1 — Trainingsmanagement für Schwimmteams">
+<link rel="icon" href="../icons/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../css/styles.css">
+<link rel="stylesheet" href="./help.css">
+</head>
+<body>
+
+<header class="help-topbar">
+  <div class="help-topbar-brand">
+    <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+      <path d="M2 22c3 0 3-3 6-3s3 3 6 3 3-3 6-3 3 3 6 3" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+    </svg>
+    <span class="brand-name">Lane 1 · Hilfe</span>
+  </div>
+  <a class="btn btn-ghost btn-sm" href="../index.html">Zur App</a>
+</header>
+
+<div class="help-shell">
+  <nav class="help-nav" aria-label="Hilfe-Bereiche">
+    <a href="./index.html" aria-current="page">Kurzanleitung</a>
+    <a href="./faq.html">FAQ &amp; Fehlerbehebung</a>
+    <a href="./admin.html">Admin-Handbuch</a>
+  </nav>
+
+  <article class="help-article">
+    <h1>Kurzanleitung</h1>
+    <p class="help-lead">So funktioniert Lane 1 im Alltag — für Trainer:innen und Athlet:innen. Für die Vereins- und Nutzerverwaltung siehe das <a href="./admin.html">Admin-Handbuch</a>.</p>
+
+    <h2>Zugang &amp; erste Anmeldung</h2>
+    <p>Zugang zu Lane 1 erhält man ausschließlich per Einladungslink von der Vereinsverwaltung (Adresse endet auf <code>#/accept-invite/…</code>). Beim ersten Öffnen dieses Links wird ein Passwort festgelegt — danach ist die Anmeldung über die normale Login-Seite möglich. Es gibt keine offene Registrierung.</p>
+    <div class="help-callout">
+      <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><circle cx="12" cy="16" r="0.5" fill="currentColor"/></svg>
+      <p>Einladungslinks sind zeitlich begrenzt gültig. Ist der Link abgelaufen, muss die Vereinsverwaltung einen neuen erzeugen (siehe Admin-Handbuch).</p>
+    </div>
+
+    <h2>Als App installieren</h2>
+    <p>Lane 1 ist eine <strong>Progressive Web App (PWA)</strong> — sie lässt sich wie eine normale App auf dem Startbildschirm installieren, ganz ohne App Store:</p>
+    <ul>
+      <li><strong>Android/Desktop (Chrome, Edge):</strong> Menü (⋮) → „App installieren“ bzw. Symbol in der Adressleiste.</li>
+      <li><strong>iPhone/iPad (Safari):</strong> Teilen-Symbol → „Zum Home-Bildschirm“.</li>
+    </ul>
+    <p>Nach der Installation startet Lane 1 wie jede andere App — im Vollbild, ohne Browser-Adressleiste.</p>
+
+    <h2>Offline arbeiten &amp; synchronisieren</h2>
+    <p>Lane 1 ist <strong>offline-first</strong>: Alle Eingaben (Zeiten erfassen, Trainingspläne bearbeiten, Feedback geben …) funktionieren auch ohne Internetverbindung — z. B. direkt am Beckenrand. Der Verbindungsstatus wird oben in der App angezeigt (grüner Punkt „Offline bereit“ bzw. gelber Punkt „Offline-Modus“).</p>
+    <p>Jede Änderung landet zunächst in der lokalen <strong>Sync-Warteschlange</strong> auf dem Gerät. Sobald wieder eine Verbindung besteht:</p>
+    <ol>
+      <li>Menüpunkt <strong>„Sync-Warteschlange“</strong> öffnen,</li>
+      <li>Anzahl offener Änderungen prüfen,</li>
+      <li>auf <strong>„Jetzt synchronisieren“</strong> tippen.</li>
+    </ol>
+    <p>Erledigte Einträge lassen sich über „Aufräumen“ aus der Liste entfernen. Bei einem Fehler (z. B. Konflikt mit einer Änderung von anderer Stelle) bleibt der Eintrag mit Fehlerstatus sichtbar und kann erneut angestoßen werden.</p>
+
+    <h2>Die Bereiche der App</h2>
+    <p>Je nach Rolle (Trainer:in, Athlet:in) sind unterschiedliche Menüpunkte in der Seitenleiste sichtbar:</p>
+    <ul>
+      <li><strong>Dashboard</strong> — Überblick über anstehende Einheiten, Wettkämpfe und offene Punkte.</li>
+      <li><strong>Athleten &amp; Team</strong> <em>(Trainer:innen)</em> — Stammdaten und Gruppen verwalten.</li>
+      <li><strong>Wettkämpfe</strong> <em>(Trainer:innen)</em> — Wettkämpfe, Meldungen und Ergebnisse.</li>
+      <li><strong>Zeiten &amp; Leistung</strong> — erfasste Zeiten und persönliche Bestleistungen.</li>
+      <li><strong>Trainingspläne</strong> — geplante Einheiten für Team oder Einzelperson.</li>
+      <li><strong>Vorlagen</strong> <em>(Trainer:innen)</em> — wiederverwendbare Trainingsbausteine.</li>
+      <li><strong>Übungskatalog</strong> <em>(Trainer:innen)</em> — Sammlung von Übungen für die Planerstellung.</li>
+      <li><strong>Einheiten &amp; Feedback</strong> — absolvierte Einheiten dokumentieren und kommentieren.</li>
+      <li><strong>Handlungsfelder</strong> — Beobachtungen und To-dos zu einzelnen Athlet:innen.</li>
+      <li><strong>Statistiken</strong> <em>(Trainer:innen)</em> — Auswertungen über Team und Zeitraum.</li>
+      <li><strong>Sync-Warteschlange</strong> <em>(Trainer:innen)</em> — siehe oben.</li>
+      <li><strong>Mein Profil</strong> — eigene Daten, Passwort, Spracheinstellung.</li>
+    </ul>
+
+    <h2>Sprache wechseln</h2>
+    <p>Oben rechts in der App lässt sich die Sprache umstellen. Die Einstellung wird auf dem Gerät gespeichert.</p>
+
+    <p>Weitere Fragen? Siehe <a href="./faq.html">FAQ &amp; Fehlerbehebung</a>.</p>
+  </article>
+</div>
+
+</body>
+</html>

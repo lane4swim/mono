@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FAQ &amp; Fehlerbehebung · Lane 1</title>
+<meta name="description" content="Häufige Fragen und Fehlerbehebung für Lane 1 — Trainingsmanagement für Schwimmteams">
+<link rel="icon" href="../icons/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../css/styles.css">
+<link rel="stylesheet" href="./help.css">
+</head>
+<body>
+
+<header class="help-topbar">
+  <div class="help-topbar-brand">
+    <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+      <path d="M2 22c3 0 3-3 6-3s3 3 6 3 3-3 6-3 3 3 6 3" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+    </svg>
+    <span class="brand-name">Lane 1 · Hilfe</span>
+  </div>
+  <a class="btn btn-ghost btn-sm" href="../index.html">Zur App</a>
+</header>
+
+<div class="help-shell">
+  <nav class="help-nav" aria-label="Hilfe-Bereiche">
+    <a href="./index.html">Kurzanleitung</a>
+    <a href="./faq.html" aria-current="page">FAQ &amp; Fehlerbehebung</a>
+    <a href="./admin.html">Admin-Handbuch</a>
+  </nav>
+
+  <article class="help-article">
+    <h1>FAQ &amp; Fehlerbehebung</h1>
+    <p class="help-lead">Antworten auf häufige Fragen. Für die grundsätzliche Bedienung siehe die <a href="./index.html">Kurzanleitung</a>.</p>
+
+    <h2>Anmeldung &amp; Einladung</h2>
+
+    <details class="help-faq-item">
+      <summary>Mein Einladungslink funktioniert nicht mehr.</summary>
+      <div class="help-faq-body">
+        <p>Einladungslinks laufen nach einer bestimmten Zeit ab. Bitte an die Trainer:innen oder die Vereinsverwaltung wenden — dort kann im Bereich „Nutzerverwaltung“ ein neuer Link erzeugt bzw. der bestehende erneuert werden.</p>
+      </div>
+    </details>
+
+    <details class="help-faq-item">
+      <summary>Ich habe mein Passwort vergessen.</summary>
+      <div class="help-faq-body">
+        <p>Bitte die Vereinsverwaltung kontaktieren, damit ein neuer Einladungs-/Zugangslink erzeugt wird.</p>
+      </div>
+    </details>
+
+    <h2>Synchronisierung</h2>
+
+    <details class="help-faq-item">
+      <summary>Meine Änderungen werden nicht synchronisiert.</summary>
+      <div class="help-faq-body">
+        <p>Zuerst den Verbindungsstatus oben in der App prüfen (grüner Punkt = online, gelber Punkt = Offline-Modus). Ohne Internetverbindung bleiben Änderungen in der lokalen Sync-Warteschlange gespeichert, bis wieder eine Verbindung besteht — das ist normales, gewolltes Verhalten des Offline-first-Ansatzes.</p>
+        <p>Ist eine Verbindung vorhanden, im Menü <strong>„Sync-Warteschlange“</strong> öffnen und auf <strong>„Jetzt synchronisieren“</strong> tippen. Bleiben Einträge mit Fehlerstatus stehen, kann das an einem Konflikt mit einer zwischenzeitlich anderswo vorgenommenen Änderung liegen — hilft ein erneuter Versuch nicht, bitte die Trainer:innen/Administration informieren.</p>
+      </div>
+    </details>
+
+    <details class="help-faq-item">
+      <summary>Was bedeutet der gelbe Punkt „Offline-Modus“?</summary>
+      <div class="help-faq-body">
+        <p>Das Gerät hat aktuell keine Internetverbindung. Die App bleibt vollständig nutzbar — alle Eingaben werden lokal gespeichert und automatisch übertragen, sobald wieder eine Verbindung besteht.</p>
+      </div>
+    </details>
+
+    <h2>Installation &amp; Darstellung</h2>
+
+    <details class="help-faq-item">
+      <summary>Ich finde die Option „App installieren“ nicht.</summary>
+      <div class="help-faq-body">
+        <p>Am zuverlässigsten funktioniert die Installation in Chrome/Edge (Android, Desktop) und Safari (iPhone/iPad). Details siehe Abschnitt „Als App installieren“ in der <a href="./index.html">Kurzanleitung</a>. In manchen Browsern (z. B. Firefox auf dem Desktop) ist die Installation als App nicht verfügbar — die Website funktioniert dort trotzdem regulär im Browser.</p>
+      </div>
+    </details>
+
+    <details class="help-faq-item">
+      <summary>Nach einem Update sehe ich noch die alte Version.</summary>
+      <div class="help-faq-body">
+        <p>Lane 1 speichert die App-Dateien für die Offline-Nutzung zwischen. Meist reicht es, die App einmal zu schließen und erneut zu öffnen — die neue Version wird im Hintergrund geladen und beim nächsten Start aktiv. Hilft das nicht, einen harten Neuladen im Browser erzwingen (<kbd>Strg</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd> bzw. <kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd>).</p>
+      </div>
+    </details>
+
+    <h2>Rollen &amp; Rechte</h2>
+
+    <details class="help-faq-item">
+      <summary>Mir fehlt ein Menüpunkt, den Kolleg:innen sehen.</summary>
+      <div class="help-faq-body">
+        <p>Die sichtbaren Bereiche hängen von der zugewiesenen Rolle ab (Trainer:in oder Athlet:in). Wer der Meinung ist, die falsche Rolle zu haben, wendet sich an die Vereinsverwaltung — siehe <a href="./admin.html">Admin-Handbuch</a>.</p>
+      </div>
+    </details>
+
+    <p>Frage nicht dabei? Bitte an die Trainer:innen oder die Vereinsverwaltung wenden.</p>
+  </article>
+</div>
+
+</body>
+</html>

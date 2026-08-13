@@ -1,0 +1,60 @@
+/* ==========================================================================
+   Lane 1 — Hilfebereich
+   Eigenständiger, rein statischer Bereich (kein JS-Modul, keine App-Shell) —
+   nutzt dieselben Design-Tokens wie css/styles.css, damit er sich sichtbar
+   als Teil von Lane 1 anfühlt, aber unabhängig von der Single-Page-App
+   funktioniert (auch wenn IndexedDB/App-Zustand kaputt sind).
+   ========================================================================== */
+
+.help-topbar{
+  display:flex; align-items:center; justify-content:space-between; gap:16px;
+  padding: 14px 24px; background: var(--c-deep); color: var(--c-white);
+}
+.help-topbar .brand-mark{ width:24px; height:24px; color: var(--c-chlorine); }
+.help-topbar-brand{ display:flex; align-items:center; gap:9px; }
+.help-topbar-brand .brand-name{ font-family: var(--f-display); font-size: 1.1rem; }
+.help-topbar a.btn{ color: var(--c-white); }
+
+.help-shell{ max-width: 760px; margin: 0 auto; padding: 32px 20px 72px; }
+
+.help-nav{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom: 26px; }
+.help-nav a{
+  display:inline-block; padding: 7px 14px; border-radius: 999px; font-size: var(--fs-sm);
+  color: var(--c-petrol); text-decoration:none; border: 1px solid var(--c-line); background: var(--c-white);
+}
+.help-nav a:hover{ background: var(--c-foam-2); }
+.help-nav a[aria-current="page"]{ background: var(--c-petrol); border-color: var(--c-petrol); color: var(--c-white); font-weight:600; }
+
+.help-article h1{ font-family: var(--f-display); font-size: var(--fs-xxl); margin: 0 0 6px; }
+.help-article .help-lead{ color: var(--c-slate); font-size: var(--fs-md); margin: 0 0 22px; }
+.help-article h2{ font-family: var(--f-display); font-size: var(--fs-lg); margin: 34px 0 10px; padding-top: 6px; border-top: 1px solid var(--c-line); }
+.help-article h2:first-of-type{ border-top: none; padding-top: 0; }
+.help-article h3{ font-size: var(--fs-md); margin: 20px 0 8px; }
+.help-article p{ line-height: 1.6; margin: 0 0 12px; }
+.help-article ul, .help-article ol{ line-height: 1.6; margin: 0 0 12px; padding-left: 22px; }
+.help-article li{ margin-bottom: 4px; }
+.help-article code{ background: var(--c-foam-2); border-radius: 4px; padding: 1px 5px; font-family: var(--f-mono); font-size: 0.88em; }
+.help-article kbd{ background: var(--c-white); border: 1px solid var(--c-line); border-bottom-width:2px; border-radius: 4px; padding: 1px 6px; font-family: var(--f-mono); font-size: 0.85em; }
+
+.help-callout{ display:flex; gap:12px; padding: 14px 16px; border-radius: var(--radius-md); border: 1px solid var(--c-line); background: var(--c-foam-2); margin: 16px 0; }
+.help-callout .ic{ flex-shrink:0; width:20px; height:20px; color: var(--c-petrol); margin-top:1px; }
+.help-callout p{ margin:0; }
+.help-callout.warn{ background: #FCF3E4; border-color: #F0D9AE; }
+.help-callout.warn .ic{ color: var(--c-amber); }
+
+.help-faq-item{ margin-bottom: 4px; }
+.help-faq-item summary{ cursor:pointer; font-weight:600; padding: 12px 0; list-style: none; display:flex; align-items:center; gap:10px; }
+.help-faq-item summary::-webkit-details-marker{ display:none; }
+.help-faq-item summary::before{ content:"+"; color: var(--c-chlorine-d); font-family: var(--f-mono); width: 16px; }
+.help-faq-item[open] summary::before{ content:"–"; }
+.help-faq-item + .help-faq-item{ border-top: 1px solid var(--c-line); }
+.help-faq-item .help-faq-body{ padding: 0 0 14px 26px; color: var(--c-ink); }
+.help-faq-body p{ margin: 0 0 10px; }
+.help-faq-body p:last-child{ margin-bottom:0; }
+
+.help-role-badges{ display:flex; gap:6px; flex-wrap:wrap; margin: 0 0 12px; }
+
+@media (max-width: 640px){
+  .help-shell{ padding: 22px 16px 56px; }
+  .help-article h1{ font-size: 1.6rem; }
+}

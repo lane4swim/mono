@@ -187,6 +187,7 @@ function populateCurrentUserLabel() {
   const roleLabel = t(`settings.role_${user.role}`);
   currentUserLabel.textContent = `${user.name} (${roleLabel})`;
   btnLogout.textContent = t('topbar.logout');
+  document.getElementById('link-help').textContent = t('topbar.help');
   btnLogout.onclick = async () => {
     if (backgroundSyncIntervalId !== null) { clearInterval(backgroundSyncIntervalId); backgroundSyncIntervalId = null; }
     await logout();

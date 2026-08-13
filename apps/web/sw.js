@@ -6,12 +6,16 @@
 // Bump CACHE_VERSION whenever any cached file changes so clients
 // pick up the new version instead of serving stale assets.
 // ============================================================
-const CACHE_VERSION = 'lane1-v17';
+const CACHE_VERSION = 'lane1-v18';
 const PRECACHE_URLS = [
   './',
   './index.html',
   './manifest.json',
   './css/styles.css',
+  './help/index.html',
+  './help/faq.html',
+  './help/admin.html',
+  './help/help.css',
   './js/app.js',
   './js/apiClient.js',
   './js/syncClient.js',

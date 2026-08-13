@@ -32,7 +32,7 @@ export default {
   },
   topbar: {
     offlineReady: 'Offline ready', offlineMode: 'Offline mode active',
-    settings: 'Settings', language: 'Language', logout: 'Log out',
+    settings: 'Settings', language: 'Language', logout: 'Log out', help: 'Help',
   },
   nav: {
     dashboard: 'Dashboard', athletes: 'Athletes & Team', competitions: 'Competitions',

@@ -32,7 +32,7 @@ export default {
   },
   topbar: {
     offlineReady: 'Offline bereit', offlineMode: 'Offline-Modus aktiv',
-    settings: 'Einstellungen', language: 'Sprache', logout: 'Abmelden',
+    settings: 'Einstellungen', language: 'Sprache', logout: 'Abmelden', help: 'Hilfe',
   },
   nav: {
     dashboard: 'Dashboard', athletes: 'Athleten & Team', competitions: 'Wettkämpfe',

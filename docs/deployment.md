@@ -11,6 +11,7 @@
 Am Ende dieser Anleitung ist unter einer eigenen Adresse (z. B. `https://training.mein-schwimmverein.de`) erreichbar:
 
 - die Lane-1-Weboberfläche (installierbar als App, funktioniert offline),
+- die dazugehörigen Hilfeseiten unter `/help/` (Kurzanleitung, FAQ, Admin-Handbuch — ebenfalls offline nutzbar),
 - optional das Node.js-Backend darunter, das die Geräte synchronisiert,
 - alles verschlüsselt (HTTPS, kostenloses Zertifikat),
 - mit automatischen Neustarts, falls der Server einmal neu startet.
@@ -262,12 +263,32 @@ JWT_REFRESH_TTL="30d"
 PORT=3000
 NODE_ENV=production
 CORS_ORIGIN="https://training.mein-verein.de"
+FRONTEND_BASE_URL="https://training.mein-verein.de"
+
+# SMTP — nötig, damit Einladungs-E-Mails (Vereins-/Nutzerverwaltung,
+# siehe apps/web/help/admin.html) tatsächlich zugestellt werden. Bleibt
+# SMTP_HOST leer, wird die Einladung nur ins Server-Log geschrieben statt
+# per E-Mail versendet — für einen Produktivbetrieb SMTP_HOST daher setzen.
+SMTP_HOST="smtp.beispiel-anbieter.de"
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER="postversand@mein-verein.de"
+SMTP_PASSWORD="EIN-SICHERES-SMTP-PASSWORT-HIER"
+SMTP_FROM_EMAIL="postversand@mein-verein.de"
+SMTP_FROM_NAME="Lane 1"
 ```
 Einen sicheren zufälligen Signierschlüssel erzeugen:
 ```bash
 openssl rand -base64 48
 ```
 Die Ausgabe als `JWT_SIGNING_KEY` einsetzen.
+
+> **Hinweis:** Für die SMTP-Zugangsdaten reicht in der Regel das
+> E-Mail-Postfach des Vereins bzw. ein von dessen Hoster bereitgestelltes
+> SMTP-Konto — Hetzner selbst bietet keinen eigenen Mailversand für
+> Cloud-Server an (u. a. zur Spam-Prävention ist Port 25 ausgehend
+> gesperrt); Port 587 (wie oben, `SMTP_SECURE=false` mit STARTTLS) ist davon
+> nicht betroffen und funktioniert mit jedem gängigen Anbieter.
 
 ### 7.3 Datenbank-Migrationen ausführen
 ```bash
@@ -348,6 +369,8 @@ sudo systemctl reload nginx
 
 Ab jetzt ist die Seite unter `http://training.mein-verein.de` erreichbar (noch ohne Schloss-Symbol/HTTPS).
 
+> **Hilfeseiten:** Die statischen Hilfedateien liegen unter `apps/web/help/` (`index.html`, `faq.html`, `admin.html`, `help.css`) — ein normaler Unterordner der bereits als `root` eingebundenen `apps/web`. Sie sind **ohne weitere Nginx-Konfiguration** automatisch unter `https://training.mein-verein.de/help/` erreichbar: `try_files $uri $uri/ /index.html;` liefert für existierende Dateien immer zuerst die Datei selbst aus, bevor es zum SPA-Fallback (`/index.html`) kommt. Nur bei einer künftigen Erweiterung um weitere Sprachvarianten oder eigene Unterordner ggf. prüfen, ob deren Dateinamen mit bestehenden App-Routen kollidieren.
+
 ---
 
 ## 10. HTTPS mit Let's Encrypt (kostenlos, automatisch verlängert)
@@ -371,6 +394,7 @@ Ab jetzt: `https://training.mein-verein.de` mit Schloss-Symbol im Browser.
 
 - Seite im Browser öffnen, Installierbarkeit prüfen (Browser bietet "App installieren" an).
 - Flugmodus/WLAN aus testen — die App sollte weiterhin funktionieren (Offline-first).
+- `https://training.mein-verein.de/help/` öffnen und prüfen, dass die Kurzanleitung (nicht die App) angezeigt wird; ebenso `/help/faq.html` und `/help/admin.html` sowie den „Hilfe"-Link unten in der Seitenleiste der App.
 - Bei Backend-Anbindung: Login testen, danach in der Sync-Warteschlange „Jetzt synchronisieren" auslösen.
 - Bei Problemen:
   ```bash
