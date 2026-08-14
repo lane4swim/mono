@@ -254,14 +254,18 @@ Führt npm dank der Workspace-Konfiguration für alle Pakete (`apps/web`, `apps/
 cp apps/api/.env.example apps/api/.env
 nano apps/api/.env
 ```
-Mindestens folgende Werte eintragen:
+`apps/api/.env.example` enthält bereits alle bekannten Variablen mit
+Erklärung (vollständiges, verbindliches Schema samt Validierung:
+`apps/api/src/config/env.ts` — ein fehlender/ungültiger Pflichtwert lässt
+den Server beim Start sofort mit einer klaren Fehlermeldung abbrechen).
+Für einen Produktivserver mindestens folgende Werte setzen bzw. anpassen:
 ```
+NODE_ENV=production
+PORT=3000
 DATABASE_URL="postgresql://lane1_app:EIN-SICHERES-PASSWORT-HIER@localhost:5432/lane1"
 JWT_SIGNING_KEY="<mit openssl erzeugen, siehe unten>"
-JWT_ACCESS_TTL="15m"
-JWT_REFRESH_TTL="30d"
-PORT=3000
-NODE_ENV=production
+JWT_PRIVATE_KEY="<mit openssl erzeugen, siehe unten>"
+JWT_PUBLIC_KEY="<mit openssl erzeugen, siehe unten>"
 CORS_ORIGIN="https://training.mein-verein.de"
 FRONTEND_BASE_URL="https://training.mein-verein.de"
 
@@ -271,24 +275,58 @@ FRONTEND_BASE_URL="https://training.mein-verein.de"
 # per E-Mail versendet — für einen Produktivbetrieb SMTP_HOST daher setzen.
 SMTP_HOST="smtp.beispiel-anbieter.de"
 SMTP_PORT=587
-SMTP_SECURE=false
 SMTP_USER="postversand@mein-verein.de"
 SMTP_PASSWORD="EIN-SICHERES-SMTP-PASSWORT-HIER"
 SMTP_FROM_EMAIL="postversand@mein-verein.de"
 SMTP_FROM_NAME="Lane 1"
 ```
-Einen sicheren zufälligen Signierschlüssel erzeugen:
+**`SMTP_SECURE` absichtlich nicht gesetzt lassen** — siehe Warnhinweis am
+Ende dieses Abschnitts.
+
+**1. Signierschlüssel erzeugen** (mind. 32 Zeichen, zufällig):
 ```bash
 openssl rand -base64 48
 ```
 Die Ausgabe als `JWT_SIGNING_KEY` einsetzen.
 
-> **Hinweis:** Für die SMTP-Zugangsdaten reicht in der Regel das
+**2. RS256-Schlüsselpaar erzeugen** (signiert die Zugriffs-Tokens; in
+Produktion PFLICHT — ohne diese beiden Werte bricht der Serverstart mit
+`NODE_ENV=production` sofort ab):
+```bash
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out /tmp/jwt_private.pem
+openssl pkey -in /tmp/jwt_private.pem -pubout -out /tmp/jwt_public.pem
+```
+Beide PEM-Dateien müssen als **eine Zeile** mit literalen `\n` statt
+echter Zeilenumbrüche in die `.env`:
+```bash
+awk 'BEGIN{ORS="\\n"} {print}' /tmp/jwt_private.pem
+awk 'BEGIN{ORS="\\n"} {print}' /tmp/jwt_public.pem
+```
+Jede Ausgabe komplett kopieren und als Wert von `JWT_PRIVATE_KEY` bzw.
+`JWT_PUBLIC_KEY` in Anführungszeichen einsetzen (z. B.
+`JWT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nMIIEvQ...\n-----END PRIVATE KEY-----\n"`).
+Anschließend die temporären PEM-Dateien löschen, damit der private
+Schlüssel nicht zusätzlich unverschlüsselt auf der Platte liegt:
+```bash
+rm /tmp/jwt_private.pem /tmp/jwt_public.pem
+```
+
+> **Warnhinweis SMTP_SECURE:** Die Variable in der `.env` **nicht**
+> explizit auf `false` setzen, obwohl das für Port 587 (STARTTLS) korrekt
+> wäre. Die Validierung (`z.coerce.boolean()` in `env.ts`) wandelt jeden
+> nicht-leeren Text unabhängig vom Inhalt in `true` um — auch den Text
+> `"false"` (eine bekannte Eigenheit von `Boolean("false") === true` in
+> JavaScript). Der korrekte Wert `false` gilt nur, wenn die Zeile
+> **komplett fehlt** (dann greift der Standardwert). `SMTP_SECURE=true`
+> explizit setzen ist dagegen unproblematisch — nur bei Port 465
+> (implizites TLS) nötig.
+>
+> **Hinweis SMTP-Anbieter:** Für die Zugangsdaten reicht in der Regel das
 > E-Mail-Postfach des Vereins bzw. ein von dessen Hoster bereitgestelltes
 > SMTP-Konto — Hetzner selbst bietet keinen eigenen Mailversand für
-> Cloud-Server an (u. a. zur Spam-Prävention ist Port 25 ausgehend
-> gesperrt); Port 587 (wie oben, `SMTP_SECURE=false` mit STARTTLS) ist davon
-> nicht betroffen und funktioniert mit jedem gängigen Anbieter.
+> Cloud-Server an (u. a. zur Spam-Prävention sind neue Cloud-Server
+> anfangs auf Port 25/465 ausgehend gesperrt); Port 587 (wie oben) ist
+> davon nicht betroffen und funktioniert mit jedem gängigen Anbieter.
 
 ### 7.3 Datenbank-Migrationen ausführen
 ```bash
@@ -467,6 +505,8 @@ sudo systemctl reload nginx
 |---|---|---|
 | Seite lädt gar nicht | DNS zeigt noch nicht auf den Server / Firewall blockiert | `ping domain`, Hetzner-Firewall-Regeln |
 | „502 Bad Gateway" | Backend läuft nicht | `pm2 status`, `pm2 logs lane1-api` |
+| Backend startet gar nicht (`pm2 status` zeigt „errored") | Pflicht-Umgebungsvariable fehlt/ungültig, z. B. `JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY` in Produktion nicht gesetzt | `pm2 logs lane1-api` — `env.ts` gibt die genaue fehlende/ungültige Variable aus |
+| Einladungs-E-Mails kommen nicht an | `SMTP_HOST` nicht gesetzt (nur Server-Log) oder `SMTP_SECURE=false` explizit gesetzt (siehe Warnhinweis Abschnitt 7.2) | `pm2 logs lane1-api` auf SMTP-Fehler prüfen, `.env` kontrollieren |
 | Kein Schloss-Symbol/HTTPS-Fehler | Zertifikat nicht erneuert oder DNS falsch bei Erstanfrage | `sudo certbot renew --dry-run` |
 | Änderungen erscheinen nicht | Browser-/Service-Worker-Cache | Hard-Reload (`Strg+Shift+R`), `CACHE_VERSION` in `sw.js` prüfen |
 | „Permission denied" bei SSH | falscher Benutzer/Key | Mit `deploy` statt `root` verbinden, richtigen Key prüfen |
