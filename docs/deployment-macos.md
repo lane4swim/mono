@@ -414,11 +414,9 @@ sudo nginx -s reload
 
 ---
 
-## 15. Testumgebung aufräumen/zurücksetzen
+## 15. Testdaten zurücksetzen
 
-Praktisch für eine Testumgebung, die es bei einer echten Server-Anleitung so nicht braucht — entweder nur die **Datenbank zurücksetzen** (App/Konfiguration bleiben) oder **alles restlos entfernen**.
-
-**Nur Testdaten zurücksetzen** (z. B. um wieder bei einem leeren Verein anzufangen):
+Praktisch für eine Testumgebung, die es bei einer echten Server-Anleitung so nicht braucht — die Datenbank zurücksetzen, ohne App/Konfiguration anzufassen (z. B. um wieder bei einem leeren Verein anzufangen):
 ```bash
 cd ~/lane1/apps/api
 npx prisma db push --force-reset
@@ -426,18 +424,7 @@ cd ../..
 ```
 Löscht den gesamten Datenbankinhalt und legt das leere Schema neu an — Schritt 8.1 (Superadmin anlegen) muss danach wiederholt werden.
 
-**Komplett entfernen:**
-```bash
-pm2 delete lane1-api
-pm2 unstartup   # entfernt den in Schritt 8 eingerichteten Autostart-Dienst — gibt ggf. wieder eine "sudo"-Zeile aus, dann ausführen
-sudo brew services stop nginx
-brew services stop postgresql@16
-rm "$(brew --prefix nginx)/etc/nginx/servers/lane1.conf"
-sudo nginx -s reload
-sudo sed -i '' '/lane1\.test/d' /etc/hosts
-rm -rf ~/lane1 ~/lane1-backups
-```
-Homebrew-Pakete (`node@22`, `postgresql@16`, `nginx`, `mkcert`) selbst lassen sich bei Bedarf zusätzlich mit `brew uninstall <paket>` entfernen (PM2 entsprechend mit `npm uninstall -g pm2`) — sofern sie nicht für andere Projekte weiterverwendet werden.
+Soll die Testumgebung nicht nur zurückgesetzt, sondern komplett entfernt werden, siehe Abschnitt 17.
 
 ---
 
@@ -455,3 +442,106 @@ Homebrew-Pakete (`node@22`, `postgresql@16`, `nginx`, `mkcert`) selbst lassen si
 | `command not found: node`/`psql`/`pg_dump` | `$(brew --prefix ...)/bin` nicht im `PATH` (Abschnitt 3) | `echo $PATH`, `~/.zprofile` erneut prüfen/`source`n |
 | Cronjob läuft von Hand, aber nicht automatisch | macOS-TCC blockiert `cron` (siehe Hinweis Abschnitt 12) | Systemeinstellungen → Datenschutz & Sicherheit → Vollständiger Festplattenzugriff |
 | Änderungen erscheinen nicht | Browser-/Service-Worker-Cache | Hard-Reload (`Cmd+Shift+R`), `CACHE_VERSION` in `sw.js` prüfen |
+
+---
+
+## 17. Deinstallation — den Mac wieder in den ursprünglichen Zustand versetzen
+
+Diese Anleitung hat mehrere Spuren auf dem System hinterlassen — vom Projektordner über Hintergrunddienste bis hin zu einer lokal als vertrauenswürdig installierten Zertifizierungsstelle. Dieser Abschnitt geht sie **in der richtigen Reihenfolge** rückwärts durch (immer zuerst laufende Dienste stoppen, danach erst Konfiguration/Daten löschen — sonst können einzelne Befehle fehlschlagen oder verwaiste Prozesse zurückbleiben). Er ist in Stufen aufgeteilt: **Stufe 1–3 sollte jede/r durchgehen**, der/die die Testumgebung wieder loswerden will. **Stufe 4** ist nur sinnvoll, wenn Homebrew/die Command Line Tools ausschließlich für dieses Projekt installiert wurden.
+
+### 17.1 Stufe 1 — Anwendung stoppen und Autostart entfernen
+
+```bash
+pm2 delete lane1-api
+pm2 unstartup
+```
+`pm2 unstartup` entfernt den in Schritt 8 eingerichteten Autostart-Dienst (das von `pm2 startup` unter `~/Library/LaunchAgents/` bzw. `/Library/LaunchDaemons/` angelegte `launchd`-Plist) — gibt der Befehl dabei erneut eine mit `sudo` beginnende Zeile aus, diese **kopieren und ausführen**, sonst bleibt der Autostart-Eintrag bestehen.
+
+```bash
+sudo brew services stop nginx
+brew services stop postgresql@16
+```
+Nginx wurde in Schritt 9 bewusst **als Root-Dienst** gestartet (`sudo brew services start nginx`) — deshalb hier auch `sudo` beim Stoppen, sonst bleibt der (dann verwaiste) Root-Prozess weiterlaufen und der nächste `brew`-Befehl meldet ihn fälschlich als „gestoppt", obwohl er es nicht ist.
+
+Kontrolle — es sollte nichts mehr laufen:
+```bash
+brew services list
+pm2 status
+```
+
+### 17.2 Stufe 2 — Projektbezogene Konfiguration und Daten entfernen
+
+```bash
+rm "$(brew --prefix nginx)/etc/nginx/servers/lane1.conf"
+sudo sed -i '' '/lane1\.test/d' /etc/hosts
+rm -rf ~/lane1 ~/lane1-backups ~/.pm2
+```
+- `~/.pm2` enthält PM2s eigene Konfiguration, Logs und den in Schritt 8 gespeicherten Prozess-Snapshot (`pm2 save`) — ohne diesen Schritt bliebe eine (dann bedeutungslose) Erinnerung an `lane1-api` zurück.
+- `~/lane1` enthält auch die mit `mkcert` erzeugten Zertifikatsdateien aus Schritt 10 — mit dem Ordner sind die gelöscht. Die zugrundeliegende **lokale Zertifizierungsstelle** selbst (die `mkcert -install` systemweit als vertrauenswürdig hinterlegt hat) ist davon **nicht** betroffen — dafür der nächste Schritt.
+
+**Lokale Zertifizierungsstelle wieder als nicht vertrauenswürdig markieren** (Gegenstück zu `mkcert -install` aus Schritt 10 — ohne diesen Schritt bliebe eine private Root-CA dauerhaft im Vertrauensspeicher von macOS/Browsern, die (nur auf diesem Mac) beliebige weitere Zertifikate ausstellen könnte; das ist der sicherheitsrelevanteste Aufräumschritt in dieser Anleitung):
+```bash
+mkcert -uninstall
+```
+
+PostgreSQL-Rolle und -Datenbank entfernen:
+```bash
+psql postgres -c "DROP DATABASE IF EXISTS lane1;"
+psql postgres -c "DROP USER IF EXISTS lane1_app;"
+```
+
+Prüfen, dass Nginx tatsächlich sauber ohne die entfernte Konfigurationsdatei startet, falls es später doch wieder gebraucht wird:
+```bash
+"$(brew --prefix nginx)/bin/nginx" -t
+```
+
+### 17.3 Stufe 3 — Homebrew-Pakete entfernen
+
+```bash
+brew uninstall node@22 postgresql@16 nginx mkcert nss
+npm uninstall -g pm2
+```
+> **Wichtig — `brew uninstall postgresql@16` löscht NICHT automatisch die
+> Datenbank-Dateien** (Paketmanager entfernen aus Sicherheitsgründen so
+> gut wie nie automatisch Nutzdaten, nur das Programm selbst). Der
+> eigentliche Datenordner liegt unter `$(brew --prefix)/var/postgresql@16`
+> — falls dieser Pfad nach dem Uninstall noch existiert und wirklich
+> nichts davon gebraucht wird (z. B. Daten anderer, hier nicht
+> beschriebener lokaler Projekte!), zusätzlich:
+> ```bash
+> rm -rf "$(brew --prefix)/var/postgresql@16"
+> ```
+
+`git` wurde in Schritt 3 zwar mitinstalliert, aber bewusst **nicht** oben mit entfernt — es wird auf praktisch jedem Entwickler-Mac ohnehin für andere Zwecke gebraucht (bzw. liegt über die Xcode-Kommandozeilentools sowieso schon vor, siehe unten); bei Bedarf trotzdem möglich mit `brew uninstall git`.
+
+In Schritt 3 wurden außerdem zwei Zeilen an `~/.zprofile` (bzw. `~/.bash_profile`) angehängt, um Node/PostgreSQL in den `PATH` aufzunehmen — diese von Hand entfernen:
+```bash
+nano ~/.zprofile
+```
+Die beiden Zeilen suchen und löschen:
+```
+export PATH="$(brew --prefix node@22)/bin:$PATH"
+export PATH="$(brew --prefix postgresql@16)/bin:$PATH"
+```
+(Hier stehen die tatsächlich aufgelösten Pfade, nicht der `$(...)`-Ausdruck selbst — z. B. `/opt/homebrew/opt/node@22/bin` auf Apple Silicon.)
+
+Aufräumen der von Homebrew zurückgelassenen heruntergeladenen Archive/alten Versionen (optional, betrifft nicht nur dieses Projekt):
+```bash
+brew cleanup
+```
+
+### 17.4 Stufe 4 (optional, nur falls ausschließlich für dieses Projekt installiert) — Homebrew und Xcode-Kommandozeilentools
+
+**Nur durchführen, wenn Homebrew und/oder die Xcode-Kommandozeilentools sonst für nichts anderes auf diesem Mac verwendet werden** — beides sind grundlegende, oft von vielen anderen Programmen/Projekten mitbenutzte Werkzeuge; sie zu entfernen kann andere, hier nicht beschriebene Software auf demselben Mac beeinträchtigen.
+
+Homebrew vollständig entfernen (offizielles Deinstallationsskript, Gegenstück zum Installationsbefehl aus Abschnitt 1):
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/uninstall.sh)"
+```
+
+Xcode-Kommandozeilentools entfernen:
+```bash
+sudo rm -rf /Library/Developer/CommandLineTools
+```
+
+Damit ist der Mac wieder in dem Zustand, in dem er vor Beginn dieser Anleitung war.
