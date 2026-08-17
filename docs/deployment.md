@@ -197,9 +197,18 @@ Innerhalb der PostgreSQL-Konsole (Prompt `postgres=#`):
 CREATE DATABASE lane1;
 CREATE USER lane1_app WITH ENCRYPTED PASSWORD 'EIN-SICHERES-PASSWORT-HIER';
 GRANT ALL PRIVILEGES ON DATABASE lane1 TO lane1_app;
+\c lane1
+GRANT ALL ON SCHEMA public TO lane1_app;
 \q
 ```
 **Das Passwort notieren** — es wird gleich in der `.env`-Datei gebraucht.
+
+> **Wichtig (PostgreSQL 15+, damit auch Ubuntu 24.04/PostgreSQL 16):** Seit
+> PostgreSQL 15 hat nur noch der Datenbank-Eigentümer automatisch das Recht,
+> im Schema `public` Tabellen anzulegen — `GRANT ALL PRIVILEGES ON DATABASE`
+> allein reicht dafür **nicht** mehr. Ohne das zusätzliche `\c lane1` +
+> `GRANT ALL ON SCHEMA public` oben bricht Schritt 7.3
+> (`prisma db push`) mit `permission denied for schema public` ab.
 
 ### 6.3 Nginx (liefert die Weboberfläche aus und leitet API-Anfragen weiter)
 ```bash
@@ -328,12 +337,26 @@ rm /tmp/jwt_private.pem /tmp/jwt_public.pem
 > anfangs auf Port 25/465 ausgehend gesperrt); Port 587 (wie oben) ist
 > davon nicht betroffen und funktioniert mit jedem gängigen Anbieter.
 
-### 7.3 Datenbank-Migrationen ausführen
+### 7.3 Datenbank-Schema anlegen
 ```bash
 cd apps/api
-npx prisma migrate deploy
+npx prisma db push
 cd ../..
 ```
+> **Warum `db push` statt `migrate deploy`?** `prisma migrate deploy`
+> wendet vorhandene Migrationsdateien aus `apps/api/prisma/migrations/`
+> an — dieser Ordner existiert im Repo (Stand dieser Anleitung) **noch
+> nicht** (bewusst per `.gitignore` ausgeschlossen, es wurde bislang keine
+> erste Migration erzeugt/committet). `migrate deploy` hätte hier also
+> nichts zu tun und die Datenbank bliebe leer, ohne dass ein Fehler
+> auftritt. `prisma db push` erzeugt das Schema stattdessen direkt aus
+> `prisma/schema.prisma`, ohne Migrationshistorie — für die erste
+> Inbetriebnahme ausreichend. Sobald das Projekt eine echte
+> Migrationshistorie führt (`npx prisma migrate dev --name init` in der
+> Entwicklung, Ergebnis eingecheckt), sollte künftig `migrate deploy`
+> verwendet werden (u. a. wegen Nachvollziehbarkeit und
+> Zero-Downtime-Migrationen bei späteren Schemaänderungen) — dann auch
+> Abschnitt 13 entsprechend anpassen.
 
 ### 7.4 Backend bauen
 ```bash
@@ -343,6 +366,31 @@ npm run build --workspace=apps/api
 ---
 
 ## 8. Backend mit PM2 starten (sobald vorhanden)
+
+> **⚠ Bekannter, verifizierter Bug — der Start unten schlägt beim
+> aktuellen Code-Stand IMMER fehl:** `pm2 start dist/index.js` (bzw.
+> `node dist/index.js`) bricht sofort beim Start ab, unabhängig von der
+> `.env`-Konfiguration. Ursache sind zwei unabhängige Fehler im
+> Anwendungscode (nicht in dieser Anleitung behebbar, siehe Details
+> unten den Code-Änderungen bedarf):
+> 1. `packages/shared-types`/`packages/sync-protocol` verweisen in ihrer
+>    `package.json` (`main`/`types`) auf den **TypeScript-Quellcode**
+>    (`./src/index.ts`) statt auf kompilierten JavaScript-Code — mit
+>    reinem `node` nicht ausführbar (`ERR_MODULE_NOT_FOUND`, da die
+>    darin verwendeten relativen `.js`-Importe keine passenden Dateien
+>    finden). `npm run dev` (nutzt `tsx`) ist davon nicht betroffen und
+>    funktioniert normal.
+> 2. `apps/api/src/db/prisma.ts` lädt `@prisma/client` per rohem
+>    `require(...)` — in einem ECMAScript-Modul (`"type": "module"`,
+>    wie ganz `apps/api`) ist `require` zur Laufzeit nicht definiert
+>    (`ReferenceError: require is not defined`), reproduzierbar bei
+>    jedem einzelnen Start.
+>
+> Beide Fehler wurden für diesen Check direkt gegen den kompilierten
+> Code verifiziert (nicht nur vermutet). Sie betreffen **jede**
+> Ausführung des kompilierten Backends — bare-metal wie im
+> `apps/api/Dockerfile`. Bis das im Quellcode behoben ist, lässt sich
+> Schritt 8 nicht wie unten beschrieben abschließen.
 
 ```bash
 cd apps/api
@@ -357,6 +405,23 @@ Kontrolle:
 pm2 status
 pm2 logs lane1-api
 ```
+
+### 8.1 Ersten Superadmin anlegen (einmalig)
+
+**Ohne diesen Schritt kann sich niemand jemals anmelden** — Lane 1 hat
+bewusst keine offene Registrierung, Konten entstehen ausschließlich per
+Einladungslink, und Einladungen kann nur verschicken, wer schon ein Konto
+hat. Für die allererste Person gibt es deshalb ein einmaliges CLI-Skript
+(siehe `apps/api/scripts/createSuperAdmin.ts`), das direkt in der
+Datenbank ein Superadmin-Konto anlegt:
+```bash
+cd apps/api
+npm run create-superadmin -- --email=admin@mein-verein.de --password='EIN-SICHERES-PASSWORT' --name="Vorname Nachname"
+cd ../..
+```
+Mit diesem Konto danach unter `https://training.mein-verein.de/admin`
+anmelden (siehe `apps/web/help/admin.html`) und dort den ersten Verein
+anlegen — das erzeugt automatisch die erste Admin-Einladung.
 
 ---
 
@@ -387,15 +452,63 @@ server {
 
     # API-Anfragen an das Node.js-Backend weiterleiten (sobald vorhanden)
     location /api/ {
-        proxy_pass http://127.0.0.1:3000/;
+        proxy_pass http://127.0.0.1:3000;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
+
+    # Login/Registrierung/Token-Refresh/Logout — bewusst EIGENER Block, da
+    # diese Routen im Backend ohne /api/-Präfix registriert sind
+    # (/auth/login, /auth/register, /auth/refresh, /auth/logout; siehe
+    # apps/api/src/modules/auth/auth.route.ts). Ohne diesen Block würde
+    # jeder Login-/Registrierungsversuch NICHT ans Backend gehen, sondern
+    # von "location /" als unbekannte Route auf die HTML-Startseite
+    # umgeleitet (try_files-Fallback) — die App bekäme HTML statt der
+    # erwarteten JSON-Antwort und die Anmeldung würde lautlos fehlschlagen.
+    location /auth/ {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Health-Check-Endpunkt für Monitoring (Hetzner-Load-Balancer/externe
+    # Uptime-Checks, siehe Schritt 11) — bewusst außerhalb von /api/, da der
+    # Backend-Endpunkt selbst unter /health (ohne Präfix) registriert ist.
+    location = /health {
+        proxy_pass http://127.0.0.1:3000/health;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+    }
 }
 ```
+> **Wichtig — `proxy_pass` bewusst OHNE abschließenden Schrägstrich (bei
+> `/api/` und `/auth/`):** `proxy_pass http://127.0.0.1:3000/;` (mit `/`)
+> würde nginx anweisen, das jeweilige Präfix beim Weiterleiten zu entfernen
+> — ein Aufruf von `/api/me` käme beim Backend nur noch als `/me` an. Das
+> Backend registriert seine Routen aber selbst schon **mit** Präfix (z. B.
+> `/api/me`, `/api/sync/push`, `/auth/login` — siehe
+> `apps/api/src/modules/*/**.route.ts`) und erwartet den Pfad unverändert.
+> Ohne den Schrägstrich (wie oben) leitet nginx den ursprünglichen Pfad
+> unverändert weiter — das ist der korrekte, hier nötige Fall.
+>
+> Nach dem Einrichten testen (alle drei, nicht nur eins):
+> ```bash
+> curl -i https://training.mein-verein.de/health              # 200 OK, {"status":"ok",...}
+> curl -i https://training.mein-verein.de/api/me               # 401 Unauthorized (kein Token) — NICHT 404, NICHT HTML
+> curl -i -X POST https://training.mein-verein.de/auth/login \
+>   -H 'Content-Type: application/json' -d '{"email":"x@x.de","password":"x"}'
+>                                                                # 401/400 mit JSON-Fehlermeldung — NICHT die HTML-Startseite
+> ```
+> Ein `401`/`400` mit JSON-Body beweist bei allen dreien: die Anfrage kam
+> beim Backend an und wurde dort verarbeitet. Eine HTML-Antwort (erkennbar
+> an `<!DOCTYPE html>` im Body) bedeutet: nginx hat die Anfrage nicht
+> weitergeleitet, sondern selbst (falsch) als SPA-Route behandelt.
 Aktivieren und testen:
 ```bash
 sudo ln -s /etc/nginx/sites-available/lane1 /etc/nginx/sites-enabled/
@@ -433,7 +546,8 @@ Ab jetzt: `https://training.mein-verein.de` mit Schloss-Symbol im Browser.
 - Seite im Browser öffnen, Installierbarkeit prüfen (Browser bietet "App installieren" an).
 - Flugmodus/WLAN aus testen — die App sollte weiterhin funktionieren (Offline-first).
 - `https://training.mein-verein.de/help/` öffnen und prüfen, dass die Kurzanleitung (nicht die App) angezeigt wird; ebenso `/help/faq.html` und `/help/admin.html` sowie den „Hilfe"-Link unten in der Seitenleiste der App.
-- Bei Backend-Anbindung: Login testen, danach in der Sync-Warteschlange „Jetzt synchronisieren" auslösen.
+- Bei Backend-Anbindung: `curl -i https://training.mein-verein.de/health` prüfen (`200 OK`, `{"status":"ok",...}`) — bestätigt, dass Backend UND nginx-Weiterleitung grundsätzlich funktionieren, bevor der eigentliche Login getestet wird.
+- Bei Backend-Anbindung: Login testen, danach in der Sync-Warteschlange „Jetzt synchronisieren" auslösen (zum Anlegen des ersten Kontos siehe Schritt 8.1).
 - Bei Problemen:
   ```bash
   pm2 logs lane1-api        # Backend-Logs
@@ -448,18 +562,71 @@ Ab jetzt: `https://training.mein-verein.de` mit Schloss-Symbol im Browser.
 ### 12.1 Datenbank-Backup (täglich, automatisiert)
 ```bash
 mkdir -p /home/deploy/backups
+nano ~/.pgpass
+```
+Folgende Zeile eintragen (Platzhalter durch das Passwort aus Schritt 6.2 ersetzen) und Datei danach mit `chmod 600 ~/.pgpass` schützen — `pg_dump` liest die Datei automatisch und braucht dadurch keine Passwortabfrage, die in einem nicht-interaktiven Cronjob ohnehin nie beantwortet werden könnte:
+```
+127.0.0.1:5432:lane1:lane1_app:EIN-SICHERES-PASSWORT-HIER
+```
+```bash
+chmod 600 ~/.pgpass
 crontab -e
 ```
 Folgende Zeile ergänzen (läuft täglich um 3:00 Uhr):
 ```
-0 3 * * * pg_dump -U lane1_app lane1 > /home/deploy/backups/lane1-$(date +\%F).sql
+0 3 * * * pg_dump -h 127.0.0.1 -U lane1_app lane1 > /home/deploy/backups/lane1-$(date +\%F).sql 2>> /home/deploy/backups/backup-errors.log
 ```
+> **Wichtig:** `pg_dump -U lane1_app lane1` **ohne** `-h 127.0.0.1` verbindet
+> sich über den lokalen Unix-Socket statt per TCP — dafür gilt auf Ubuntu
+> standardmäßig `peer`-Authentifizierung (Datei `pg_hba.conf`), die nur
+> funktioniert, wenn der Linux-Benutzer exakt so heißt wie die
+> Datenbankrolle. Als `deploy`-Cronjob schlägt das mit
+> „Peer authentication failed" fehl — **jede Nacht, unbemerkt**, weil sonst
+> auch keine Fehlerausgabe irgendwo landet (daher zusätzlich `2>> ...log`
+> oben). Mit `-h 127.0.0.1` greift stattdessen die passwortbasierte
+> `host`-Regel, und `~/.pgpass` liefert das Passwort automatisch.
+>
+> Von Zeit zu Zeit prüfen, ob tatsächlich Backups entstehen und die
+> Fehler-Log-Datei leer ist:
+> ```bash
+> ls -lh /home/deploy/backups/
+> cat /home/deploy/backups/backup-errors.log
+> ```
 
 ### 12.2 Hetzner-Snapshots (komplettes Server-Abbild)
 In der Cloud Console unter dem Server → **„Backups"** aktivieren (kleiner Aufpreis, ca. 20 % des Serverpreises) oder manuell **„Snapshot erstellen"** vor größeren Änderungen.
 
 ### 12.3 Offsite-Backup (empfohlen)
 Die tägliche `.sql`-Datei zusätzlich außerhalb des Servers sichern, z. B. mit einer **Hetzner Storage Box** oder einem einfachen Cronjob, der die Datei per `rsync`/`scp` an einen anderen Ort kopiert — ein Backup, das nur auf demselben Server liegt, hilft bei einem Totalausfall des Servers nicht.
+
+### 12.4 DSGVO-Löschfristen durchsetzen (Purge-Cronjob)
+
+Löscht ein Konto sein eigenes Nutzerkonto (Mein Profil → Konto löschen,
+DSGVO Art. 17), wird es zunächst nur als gelöscht **markiert**
+(Soft-Delete) — die endgültige, unwiderrufliche Löschung übernimmt ein
+separates Skript, das `DATA_ERASURE_RETENTION_DAYS` Tage (Standard: 30,
+siehe `.env`) nach der Löschanfrage läuft. Ohne diesen Cronjob bleiben als
+gelöscht markierte Daten dauerhaft in der Datenbank stehen — ein
+DSGVO-Verstoß. Einrichten:
+```bash
+crontab -e
+```
+Folgende Zeile ergänzen (läuft täglich um 4:00 Uhr, also nach dem
+Datenbank-Backup aus 12.1):
+```
+0 4 * * * cd /home/deploy/lane1/apps/api && /home/deploy/lane1/node_modules/.bin/tsx scripts/purgeDeletedData.ts >> /home/deploy/backups/purge.log 2>&1
+```
+> **Warum nicht `npm run purge-deleted-data`?** `cron` startet mit einer
+> minimalen `PATH`-Umgebung, in der `npm` typischerweise nicht zuverlässig
+> gefunden wird — der absolute Pfad zu `tsx` (Workspace-Hoisting legt es
+> unter dem Monorepo-**Root**-`node_modules/.bin/` ab, nicht unter
+> `apps/api/node_modules/.bin/`) umgeht das. `tsx` wird bewusst verwendet
+> statt Nodes eingebauter TypeScript-Unterstützung
+> (`node --experimental-strip-types`) — Letzteres löst die im Code üblichen
+> relativen Imports mit `.js`-Endung (TypeScript-Konvention, siehe
+> `tsconfig.json`) nicht automatisch zur passenden `.ts`-Datei auf und
+> bricht mit `ERR_MODULE_NOT_FOUND` ab; `tsx` übernimmt genau diese
+> Auflösung zusätzlich zum reinen Type-Stripping.
 
 ---
 
@@ -470,11 +637,15 @@ Sobald es Änderungen am Code gibt (neue Version aus Git oder neues ZIP):
 cd /home/deploy/lane1
 git pull                                    # oder: neues ZIP hochladen & entpacken
 npm install
-npx prisma migrate deploy --schema apps/api/prisma/schema.prisma
+cd apps/api && npx prisma db push && cd ../..   # siehe Hinweis zu `db push` vs. `migrate deploy` in Schritt 7.3
 npm run build --workspace=apps/api
 pm2 restart lane1-api
 sudo systemctl reload nginx
 ```
+> Sobald das Projekt auf eine committete Migrationshistorie umgestellt hat
+> (siehe Hinweis in Schritt 7.3), hier stattdessen
+> `npx prisma migrate deploy --schema apps/api/prisma/schema.prisma`
+> verwenden.
 
 ---
 
@@ -506,6 +677,8 @@ sudo systemctl reload nginx
 | Seite lädt gar nicht | DNS zeigt noch nicht auf den Server / Firewall blockiert | `ping domain`, Hetzner-Firewall-Regeln |
 | „502 Bad Gateway" | Backend läuft nicht | `pm2 status`, `pm2 logs lane1-api` |
 | Backend startet gar nicht (`pm2 status` zeigt „errored") | Pflicht-Umgebungsvariable fehlt/ungültig, z. B. `JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY` in Produktion nicht gesetzt | `pm2 logs lane1-api` — `env.ts` gibt die genaue fehlende/ungültige Variable aus |
+| Backend startet gar nicht, Fehler `ERR_MODULE_NOT_FOUND` oder `ReferenceError: require is not defined` | Bekannter Code-Bug, siehe Warnhinweis am Anfang von Abschnitt 8 — keine `.env`-Ursache, per `.env`-Anpassung nicht behebbar | `pm2 logs lane1-api` |
+| Login/Registrierung liefert die HTML-Startseite statt einer Fehlermeldung/eines Tokens | `/auth/`-Location-Block in nginx fehlt oder `proxy_pass` mit abschließendem `/` (siehe Warnhinweis Abschnitt 9) | `curl -i .../auth/login -X POST -d '{}'`, Antwort auf `<!DOCTYPE html>` prüfen |
 | Einladungs-E-Mails kommen nicht an | `SMTP_HOST` nicht gesetzt (nur Server-Log) oder `SMTP_SECURE=false` explizit gesetzt (siehe Warnhinweis Abschnitt 7.2) | `pm2 logs lane1-api` auf SMTP-Fehler prüfen, `.env` kontrollieren |
 | Kein Schloss-Symbol/HTTPS-Fehler | Zertifikat nicht erneuert oder DNS falsch bei Erstanfrage | `sudo certbot renew --dry-run` |
 | Änderungen erscheinen nicht | Browser-/Service-Worker-Cache | Hard-Reload (`Strg+Shift+R`), `CACHE_VERSION` in `sw.js` prüfen |
