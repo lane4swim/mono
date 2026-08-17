@@ -367,31 +367,6 @@ npm run build --workspace=apps/api
 
 ## 8. Backend mit PM2 starten (sobald vorhanden)
 
-> **⚠ Bekannter, verifizierter Bug — der Start unten schlägt beim
-> aktuellen Code-Stand IMMER fehl:** `pm2 start dist/index.js` (bzw.
-> `node dist/index.js`) bricht sofort beim Start ab, unabhängig von der
-> `.env`-Konfiguration. Ursache sind zwei unabhängige Fehler im
-> Anwendungscode (nicht in dieser Anleitung behebbar, siehe Details
-> unten den Code-Änderungen bedarf):
-> 1. `packages/shared-types`/`packages/sync-protocol` verweisen in ihrer
->    `package.json` (`main`/`types`) auf den **TypeScript-Quellcode**
->    (`./src/index.ts`) statt auf kompilierten JavaScript-Code — mit
->    reinem `node` nicht ausführbar (`ERR_MODULE_NOT_FOUND`, da die
->    darin verwendeten relativen `.js`-Importe keine passenden Dateien
->    finden). `npm run dev` (nutzt `tsx`) ist davon nicht betroffen und
->    funktioniert normal.
-> 2. `apps/api/src/db/prisma.ts` lädt `@prisma/client` per rohem
->    `require(...)` — in einem ECMAScript-Modul (`"type": "module"`,
->    wie ganz `apps/api`) ist `require` zur Laufzeit nicht definiert
->    (`ReferenceError: require is not defined`), reproduzierbar bei
->    jedem einzelnen Start.
->
-> Beide Fehler wurden für diesen Check direkt gegen den kompilierten
-> Code verifiziert (nicht nur vermutet). Sie betreffen **jede**
-> Ausführung des kompilierten Backends — bare-metal wie im
-> `apps/api/Dockerfile`. Bis das im Quellcode behoben ist, lässt sich
-> Schritt 8 nicht wie unten beschrieben abschließen.
-
 ```bash
 cd apps/api
 pm2 start dist/index.js --name lane1-api
@@ -677,7 +652,6 @@ sudo systemctl reload nginx
 | Seite lädt gar nicht | DNS zeigt noch nicht auf den Server / Firewall blockiert | `ping domain`, Hetzner-Firewall-Regeln |
 | „502 Bad Gateway" | Backend läuft nicht | `pm2 status`, `pm2 logs lane1-api` |
 | Backend startet gar nicht (`pm2 status` zeigt „errored") | Pflicht-Umgebungsvariable fehlt/ungültig, z. B. `JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY` in Produktion nicht gesetzt | `pm2 logs lane1-api` — `env.ts` gibt die genaue fehlende/ungültige Variable aus |
-| Backend startet gar nicht, Fehler `ERR_MODULE_NOT_FOUND` oder `ReferenceError: require is not defined` | Bekannter Code-Bug, siehe Warnhinweis am Anfang von Abschnitt 8 — keine `.env`-Ursache, per `.env`-Anpassung nicht behebbar | `pm2 logs lane1-api` |
 | Login/Registrierung liefert die HTML-Startseite statt einer Fehlermeldung/eines Tokens | `/auth/`-Location-Block in nginx fehlt oder `proxy_pass` mit abschließendem `/` (siehe Warnhinweis Abschnitt 9) | `curl -i .../auth/login -X POST -d '{}'`, Antwort auf `<!DOCTYPE html>` prüfen |
 | Einladungs-E-Mails kommen nicht an | `SMTP_HOST` nicht gesetzt (nur Server-Log) oder `SMTP_SECURE=false` explizit gesetzt (siehe Warnhinweis Abschnitt 7.2) | `pm2 logs lane1-api` auf SMTP-Fehler prüfen, `.env` kontrollieren |
 | Kein Schloss-Symbol/HTTPS-Fehler | Zertifikat nicht erneuert oder DNS falsch bei Erstanfrage | `sudo certbot renew --dry-run` |

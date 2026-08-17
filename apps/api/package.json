@@ -9,10 +9,13 @@
     "seed": "tsx prisma/seed.ts"
   },
   "scripts": {
+    "predev": "cd ../../packages/sync-protocol && npm run build",
     "dev": "tsx watch src/index.ts",
+    "prebuild": "cd ../../packages/sync-protocol && npm run build",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.typecheck.json",
     "start": "node dist/index.js",
+    "pretest": "cd ../../packages/sync-protocol && npm run build",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint . --ext .ts",
