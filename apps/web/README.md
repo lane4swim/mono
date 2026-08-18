@@ -8,7 +8,7 @@ Laden keine Internetverbindung mehr.
 ## Funktionsumfang
 
 - **Athleten- & Teammanagement** — Profile, Trainingsgruppen. Athletenprofile (Name/Identität) werden ausschließlich von Admins/Superadmins angelegt, geändert und gelöscht; Trainer:innen sehen den Bestand und arbeiten damit (Zeiten, Pläne, Einheiten, Handlungsfelder), können aber keine neuen Athlet:innen per Namenseingabe hinzufügen oder bestehende umbenennen/entfernen
-- **Wettkampfmanagement** — Wettkämpfe, Startlisten (Wettkampfnummer, Lauf, Startbahn) mit integrierter Stoppuhr (inkl. Rundenzeiten) zur direkten Zeitmessung, und Ergebniserfassung
+- **Wettkampfmanagement** — Wettkämpfe, Startlisten (Wettkampfnummer, Lauf, Startbahn) mit integrierter Stoppuhr (inkl. Rundenzeiten) zur direkten Zeitmessung, und Ergebniserfassung. Zusätzlich ein eigener **Wettkampfmodus** für den Beckenrand: startet direkt beim ersten gesetzten Wettkampf/Lauf, zeigt eine gemeinsame Stoppuhr oben sowie je Athlet:in eine Karte zum individuellen Erfassen von Runden- und Zielzeit (inkl. automatischer PB-Erkennung und Schnellzugriff auf ein neues Handlungsfeld), samt Schaltfläche zum nächsten Wettkampf/Lauf
 - **Zeiten- & Leistungserfassung** — Bestzeiten, Verlaufsdiagramme
 - **Trainingspläne** — Wochenkalender mit Sets/Serien **und Wiederholungsblöcken** (z. B. „3× [2×25 Sprint, 50 locker]“), aus Vorlagen erstellbar
 - **Wiederverwendbare Vorlagen** für Trainingspläne

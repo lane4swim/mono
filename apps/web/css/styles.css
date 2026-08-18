@@ -175,6 +175,8 @@ button{ font-family: inherit; }
 
 .card{ background: var(--c-white); border: 1px solid var(--c-line); border-radius: var(--radius-md); padding: 18px 20px; box-shadow: var(--shadow-sm); }
 .card + .card{ margin-top: 14px; }
+.live-athlete-card{ transition: border-color .15s var(--ease), background .15s var(--ease); }
+.live-athlete-card.live-card-done{ border-color: var(--c-chlorine); background: var(--c-foam-2); }
 .grid{ display:grid; gap:16px; }
 .grid-2{ grid-template-columns: repeat(2, 1fr); }
 .grid-3{ grid-template-columns: repeat(3, 1fr); }

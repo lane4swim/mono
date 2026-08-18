@@ -127,9 +127,9 @@ function renderAthleteList(container, items, athletes) {
   container.appendChild(wrap);
 }
 
-function openItemModal(item, athletes, onSaved) {
+export function openItemModal(item, athletes, onSaved, presetAthleteId) {
   const isEdit = !!item;
-  const data = item ? { ...item } : { athleteId: athletes[0]?.id || '', title: '', description: '', category: 'technik', status: 'offen', createdDate: todayISO(), dueDate: '' };
+  const data = item ? { ...item } : { athleteId: presetAthleteId || athletes[0]?.id || '', title: '', description: '', category: 'technik', status: 'offen', createdDate: todayISO(), dueDate: '' };
   const form = el('form', { class: 'form-grid' });
   const fAthlete = selectInput(athletes.map(a => ({ value: a.id, label: fullName(a) })), data.athleteId);
   const fTitle = textInput(data.title, { required: true });
