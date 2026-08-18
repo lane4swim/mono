@@ -70,6 +70,12 @@ pwd
 
 Der Codespace-Benutzer `vscode` hat bereits passwortlosen `sudo`-Zugriff — kein eigener Benutzer, keine Firewall-Härtung, kein SSH-Setup nötig (siehe Vergleichstabelle oben).
 
+Einmalig den lokalen `apt`-Paketindex aktualisieren, bevor die folgenden Pakete installiert werden:
+```bash
+sudo apt-get update
+```
+> **Warum nötig?** Frische Codespace-Container bringen zwar die Paketquellen-Liste mit, aber keinen aktuellen (oder teils gar keinen) lokalen Index dazu — `apt install` bricht dann mit „Unable to locate package …" ab, obwohl das Paket existiert. `apt-get update` lädt den Index einmalig nach; danach funktionieren die `apt install`-Befehle unten normal. (Der Node.js-Installationsbefehl in 4.1 bringt sein eigenes `apt-get update` über das NodeSource-Setup-Skript mit und ist davon nicht betroffen.)
+
 ### 4.1 Node.js
 
 Erst prüfen, was im Codespace-Basisimage bereits vorinstalliert ist:
@@ -385,6 +391,7 @@ Ein angehaltener (nicht gelöschter) Codespace verbraucht weiterhin Speicherkont
 
 | Symptom | Wahrscheinliche Ursache | Prüfen |
 |---|---|---|
+| `sudo apt install -y postgresql` (oder `nginx`) meldet „Unable to locate package …" | Lokaler `apt`-Paketindex im frischen Container noch nicht aktualisiert | `sudo apt-get update` einmalig ausführen (siehe Hinweis Anfang Abschnitt 4), danach `apt install` erneut versuchen |
 | Geöffnete Adresse zeigt eine GitHub-Anmeldeseite statt der App | Port-Sichtbarkeit steht auf „Private" | Ports-Tab → Port 8080 → „Port Visibility" → „Public" (siehe Schritt 11) |
 | „502 Bad Gateway" | Backend läuft nicht (z. B. nach Fortsetzen des Codespace vergessen neu zu starten) | `pm2 status`, `pm2 logs lane1-api --nostream`, siehe Abschnitt 13 |
 | Seite lädt gar nicht / Verbindung wird abgelehnt | Nginx läuft nicht oder Port nicht weitergeleitet | `sudo service nginx status`, Ports-Tab prüfen (Schritt 11) |
