@@ -70,13 +70,22 @@ pwd
 
 Der Codespace-Benutzer `vscode` hat bereits passwortlosen `sudo`-Zugriff — kein eigener Benutzer, keine Firewall-Härtung, kein SSH-Setup nötig (siehe Vergleichstabelle oben).
 
-### 4.1 Node.js (über NodeSource, liefert eine aktuelle LTS-Version)
+### 4.1 Node.js
+
+Erst prüfen, was im Codespace-Basisimage bereits vorinstalliert ist:
+```bash
+node -v
+```
+Das Projekt verlangt laut `package.json` (`engines.node`) nur **mindestens** Version 22 — jede neuere Version erfüllt das ebenfalls. Codespaces-Basisimages bringen über `nvm` meist bereits eine aktuelle Node-Version mit (z. B. `v24.x`), die diese Anforderung schon erfüllt — dann ist **kein weiterer Schritt nötig**, mit dieser Version direkt weitermachen.
+
+Zeigt `node -v` dagegen **gar keine** Version oder etwas **älter als v22**, Node explizit über NodeSource nachinstallieren:
 ```bash
 curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt install -y nodejs
+hash -r
 node -v
 ```
-Sollte `v22.x` anzeigen — unabhängig davon, welche Node-Version im Codespace-Basisimage bereits vorinstalliert war.
+> **Warum reicht ein einfaches `apt install` danach nicht immer?** Ist bereits eine über `nvm` verwaltete Node-Version aktiv, hängt deren Verzeichnis typischerweise weiter vorn im `PATH` als `/usr/bin` — `node -v` würde dann weiterhin die alte `nvm`-Version zeigen, obwohl die NodeSource-Installation erfolgreich war (`hash -r` erzwingt nur, dass die Shell ihren Befehls-Cache neu aufbaut, ändert aber nichts an der `PATH`-Reihenfolge selbst). In dem Fall entweder `nvm use 22` (falls `nvm` vorhanden) oder `/usr/bin/node`/`/usr/bin/npm` explizit statt `node`/`npm` verwenden.
 
 ### 4.2 PostgreSQL (Datenbank für das Backend)
 ```bash
@@ -378,6 +387,7 @@ Ein angehaltener (nicht gelöschter) Codespace verbraucht weiterhin Speicherkont
 | „502 Bad Gateway" | Backend läuft nicht (z. B. nach Fortsetzen des Codespace vergessen neu zu starten) | `pm2 status`, `pm2 logs lane1-api --nostream`, siehe Abschnitt 13 |
 | Seite lädt gar nicht / Verbindung wird abgelehnt | Nginx läuft nicht oder Port nicht weitergeleitet | `sudo service nginx status`, Ports-Tab prüfen (Schritt 11) |
 | `sudo systemctl start postgresql` meldet „Failed to connect to bus" | Kein `systemd` im Container (siehe Hinweis Schritt 4.2) | `sudo service postgresql start` statt `systemctl` verwenden |
+| `node -v` zeigt nach der NodeSource-Installation weiterhin die alte/vorinstallierte Version (z. B. `v24.x` statt `v22.x`) | Kein Fehler — `nvm` (im Basisimage vorinstalliert) hängt weiter vorn im `PATH` als `/usr/bin`; da `package.json` nur `>=22` verlangt, erfüllt die angezeigte Version die Anforderung trotzdem meist bereits | Version mit `engines.node` in `package.json` vergleichen (`>=22` reicht); bei echtem Bedarf `/usr/bin/node`/`/usr/bin/npm` explizit verwenden, siehe Hinweis Schritt 4.1 |
 | Backend startet gar nicht (`pm2 status` zeigt „errored") | Pflicht-Umgebungsvariable fehlt/ungültig, z. B. `JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY` nicht gesetzt | `pm2 logs lane1-api --nostream` — `env.ts` gibt die genaue fehlende/ungültige Variable aus |
 | Login schlägt fehl, Konsole zeigt einen CORS-Fehler | `CORS_ORIGIN`/`FRONTEND_BASE_URL` in `.env` stimmen nicht exakt mit der tatsächlichen Codespace-Adresse überein | Adresse im Ports-Tab mit `.env` vergleichen (siehe Warnhinweis Schritt 11), danach `pm2 restart lane1-api` |
 | Login/Registrierung liefert die HTML-Startseite statt einer Fehlermeldung/eines Tokens | `/auth/`-Location-Block in nginx fehlt oder `proxy_pass` mit abschließendem `/` (siehe Warnhinweis Schritt 10) | `curl -i .../auth/login -X POST -d '{}'`, Antwort auf `<!DOCTYPE html>` prüfen |
