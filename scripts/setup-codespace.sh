@@ -1,22 +1,29 @@
 #!/usr/bin/env bash
 # scripts/setup-codespace.sh
 #
-# Automatisiert die Schritte 4–8 aus docs/deployment-github-codespaces.md
+# Automatisiert die Schritte 4–10 aus docs/deployment-github-codespaces.md
 # (Software installieren, npm-Abhängigkeiten, apps/api/.env konfigurieren,
-# Datenbank-Schema anlegen, Backend bauen) für einen frisch erstellten
-# GitHub Codespace. Schritte 1–3 dort (Codespace erstellen, Branch/Maschine
-# wählen, Terminal öffnen) sind keine Kommandos — hier geht es erst ab
-# Schritt 4 los. Schritte 9+ (PM2 starten, Nginx konfigurieren, Port
-# veröffentlichen, Superadmin anlegen, …) sind bewusst NICHT Teil dieses
-# Scripts — dafür weiterhin docs/deployment-github-codespaces.md befolgen.
+# Datenbank-Schema anlegen, Backend bauen, PM2 starten, ersten Superadmin
+# anlegen, Nginx konfigurieren) für einen frisch erstellten GitHub Codespace.
+# Schritte 1–3 dort (Codespace erstellen, Branch/Maschine wählen, Terminal
+# öffnen) sind keine Kommandos — hier geht es erst ab Schritt 4 los.
+# Schritte 11+ (Port veröffentlichen, Testen, Anhalten/Fortsetzen, …) sind
+# bewusst NICHT Teil dieses Scripts — dafür weiterhin
+# docs/deployment-github-codespaces.md befolgen.
 #
 # Nutzung:
 #   bash scripts/setup-codespace.sh
 #
+# Superadmin-Zugangsdaten (Schritt 9.1) sind per Umgebungsvariable
+# überschreibbar, Default entspricht den Vorgaben für diesen Testlauf:
+#   SUPERADMIN_EMAIL=admin@test.de SUPERADMIN_PASSWORD=pwd12345 bash scripts/setup-codespace.sh
+#
 # Wiederholt ausführbar: bereits installierte Software wird übersprungen,
 # eine bereits vorhandene apps/api/.env wird NICHT überschrieben (verhindert,
 # dass ein erneuter Lauf das DB-Passwort/die JWT-Schlüssel unbemerkt
-# austauscht und damit die bereits laufende Konfiguration zerschießt).
+# austauscht und damit die bereits laufende Konfiguration zerschießt), ein
+# bereits vorhandenes Superadmin-Konto wird übersprungen statt das Script
+# abzubrechen, und PM2/Nginx werden neu gestartet statt doppelt angelegt.
 
 set -euo pipefail
 
@@ -83,9 +90,11 @@ npm install
 # --- Schritt 6: apps/api/.env konfigurieren ----------------------------------
 log "Schritt 6: apps/api/.env konfigurieren"
 ENV_FILE="apps/api/.env"
+ENV_WAS_CREATED=0
 if [[ -f "$ENV_FILE" ]]; then
   echo "  $ENV_FILE existiert bereits — wird nicht überschrieben."
 else
+  ENV_WAS_CREATED=1
   if [[ -n "${CODESPACE_NAME:-}" ]]; then
     PUBLIC_URL="https://${CODESPACE_NAME}-8080.app.github.dev"
   else
@@ -144,5 +153,93 @@ log "Schritt 7: Datenbank-Schema anlegen (prisma db push)"
 log "Schritt 8: Backend bauen (inkl. packages/shared-types, packages/sync-protocol über prebuild-Skripte)"
 npm run build --workspace=apps/api
 
-log "Fertig bis einschließlich Schritt 8."
-echo "Weiter geht es manuell mit Schritt 9 (PM2 starten) in docs/deployment-github-codespaces.md."
+# --- Schritt 9: Backend mit PM2 starten ---------------------------------------
+log "Schritt 9: Backend mit PM2 starten"
+if pm2 describe lane1-api >/dev/null 2>&1; then
+  echo "  Prozess lane1-api läuft bereits unter PM2 — wird neu gestartet."
+  (cd apps/api && pm2 restart lane1-api)
+else
+  (cd apps/api && pm2 start dist/index.js --name lane1-api)
+fi
+pm2 status
+
+# --- Schritt 9.1: Ersten Superadmin anlegen -----------------------------------
+log "Schritt 9.1: Ersten Superadmin anlegen"
+SUPERADMIN_EMAIL="${SUPERADMIN_EMAIL:-admin@test.de}"
+SUPERADMIN_PASSWORD="${SUPERADMIN_PASSWORD:-pwd12345}"
+SUPERADMIN_NAME="${SUPERADMIN_NAME:-Test Admin}"
+if [[ ${#SUPERADMIN_PASSWORD} -lt 8 ]]; then
+  echo "  Fehler: SUPERADMIN_PASSWORD muss mindestens 8 Zeichen lang sein (siehe apps/api/scripts/createSuperAdmin.ts)." >&2
+  exit 1
+fi
+if (
+  cd apps/api
+  npm run create-superadmin -- --email="${SUPERADMIN_EMAIL}" --password="${SUPERADMIN_PASSWORD}" --name="${SUPERADMIN_NAME}"
+); then
+  echo "  Superadmin ${SUPERADMIN_EMAIL} angelegt."
+else
+  echo "  Hinweis: Anlegen übersprungen/fehlgeschlagen — existiert vermutlich bereits (${SUPERADMIN_EMAIL})."
+fi
+
+# --- Schritt 10: Nginx konfigurieren ------------------------------------------
+log "Schritt 10: Nginx konfigurieren"
+sudo tee /etc/nginx/sites-available/lane1 >/dev/null <<NGINX
+server {
+    listen 8080;
+    server_name _;
+
+    # Weboberfläche (PWA) als statische Dateien ausliefern
+    root ${REPO_ROOT}/apps/web;
+    index index.html;
+
+    location / {
+        try_files \$uri \$uri/ /index.html;
+    }
+
+    # Service Worker & Manifest müssen exakt korrekt ausgeliefert werden
+    location = /sw.js {
+        add_header Cache-Control "no-cache";
+    }
+
+    # API-Anfragen an das Node.js-Backend weiterleiten
+    location /api/ {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+
+    # Login/Registrierung/Token-Refresh/Logout — bewusst EIGENER Block, da
+    # diese Routen im Backend ohne /api/-Präfix registriert sind.
+    location /auth/ {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+
+    # Health-Check-Endpunkt
+    location = /health {
+        proxy_pass http://127.0.0.1:3000/health;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+    }
+}
+NGINX
+
+sudo ln -sf /etc/nginx/sites-available/lane1 /etc/nginx/sites-enabled/lane1
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo nginx -t
+sudo service nginx restart
+
+log "Fertig bis einschließlich Schritt 10."
+echo "Superadmin-Login: ${SUPERADMIN_EMAIL} / ${SUPERADMIN_PASSWORD}"
+if [[ "$ENV_WAS_CREATED" == "1" ]]; then
+  echo "DB-Passwort (lane1_app, frisch erzeugt): ${DB_PASSWORD}"
+  echo "Öffentliche Adresse (CORS_ORIGIN/FRONTEND_BASE_URL): ${PUBLIC_URL}"
+fi
+echo "Weiter geht es manuell mit Schritt 11 (Port veröffentlichen) in docs/deployment-github-codespaces.md."
