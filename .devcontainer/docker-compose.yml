@@ -1,0 +1,31 @@
+# .devcontainer/docker-compose.yml — Overlay auf das Root-docker-compose.yml.
+# Wird von devcontainer.json zusätzlich zu "../docker-compose.yml" geladen:
+# die dort definierte "postgres"-Datenbank (inkl. lane1_app/lane1-Zugangsdaten)
+# wird unverändert übernommen, die "api"-Produktions-Service wird per Profil
+# deaktiviert (Codespace nutzt npm run dev:api statt des Docker-Images), und
+# ein neuer "app"-Service dient als eigentlicher Entwicklungscontainer.
+services:
+  api:
+    # Ohne aktives Profil startet "docker compose up" diesen Service nicht
+    # mehr mit — verhindert, dass beim Codespace-Start unnötig das
+    # Produktions-Dockerfile gebaut wird. Weiterhin nutzbar über
+    # `docker compose --profile production-like up api` (z. B. um das
+    # Produktions-Image lokal zu testen).
+    profiles: ["production-like"]
+
+  app:
+    image: mcr.microsoft.com/devcontainers/javascript-node:1-22-bookworm
+    volumes:
+      - ..:/workspace:cached # Projektwurzel (relativ zu diesem Compose-File)
+    command: sleep infinity
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: "postgresql://lane1_app:lane1_dev_password@postgres:5432/lane1"
+      # Nur für lokale Codespaces-Entwicklung — siehe .env.example für den
+      # produktiven Weg (openssl rand -base64 48).
+      JWT_SIGNING_KEY: "codespaces-dev-only-signing-key-do-not-use-in-prod"
+      CORS_ORIGIN: "http://localhost:5173"
+      FRONTEND_BASE_URL: "http://localhost:5173"
+    depends_on:
+      postgres:
+        condition: service_healthy
