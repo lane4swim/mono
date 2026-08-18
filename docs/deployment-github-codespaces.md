@@ -95,8 +95,10 @@ sudo service postgresql start
 > **Wichtig — `service` statt `systemctl`:** Codespaces-Container laufen ohne `systemd` als Init-System (typisch für Docker-basierte Entwicklungsumgebungen) — `sudo systemctl start postgresql` würde mit „Failed to connect to bus" fehlschlagen. Der klassische `service`-Befehl (spricht direkt die Init-Skripte an) funktioniert dagegen problemlos. Gilt für den ganzen Rest dieser Anleitung: überall `service` statt `systemctl`.
 
 ```bash
-sudo -u postgres psql
+sudo su - postgres -c psql
 ```
+> **Warum nicht `sudo -u postgres psql`?** Auf manchen Codespaces-Images ist das für den eigenen Benutzer (`vscode` o. ä.) nicht ohne Passwort erlaubt — `sudo` fragt dann nach dem Passwort **des eigenen Benutzers**, nicht nach einem Datenbank-Passwort. Da für diesen Benutzer in Codespaces aber gar kein Passwort gesetzt ist, schlägt jede Eingabe mit „Sorry, try again" fehl, egal was eingetippt wird. Reines `sudo` (ohne `-u <anderer-benutzer>`, also als root) ist dagegen ohne Passwort erlaubt — der Befehl oben nutzt das aus: `sudo` startet `su - postgres -c psql` als root, und root darf mit `su` ohne Passwort zu jedem Benutzer wechseln.
+
 Innerhalb der PostgreSQL-Konsole (Prompt `postgres=#`):
 ```sql
 CREATE DATABASE lane1;
@@ -387,6 +389,7 @@ Ein angehaltener (nicht gelöschter) Codespace verbraucht weiterhin Speicherkont
 | „502 Bad Gateway" | Backend läuft nicht (z. B. nach Fortsetzen des Codespace vergessen neu zu starten) | `pm2 status`, `pm2 logs lane1-api --nostream`, siehe Abschnitt 13 |
 | Seite lädt gar nicht / Verbindung wird abgelehnt | Nginx läuft nicht oder Port nicht weitergeleitet | `sudo service nginx status`, Ports-Tab prüfen (Schritt 11) |
 | `sudo systemctl start postgresql` meldet „Failed to connect to bus" | Kein `systemd` im Container (siehe Hinweis Schritt 4.2) | `sudo service postgresql start` statt `systemctl` verwenden |
+| `sudo -u postgres psql` fragt nach einem Passwort, jede Eingabe scheitert mit „Sorry, try again" | `sudo -u <anderer-benutzer>` erfordert auf diesem Image ein Passwort für den eigenen Benutzer — das aber in Codespaces gar nicht gesetzt ist (siehe Warnhinweis Schritt 4.2) | `sudo su - postgres -c psql` statt `sudo -u postgres psql` verwenden |
 | `node -v` zeigt nach der NodeSource-Installation weiterhin die alte/vorinstallierte Version (z. B. `v24.x` statt `v22.x`) | Kein Fehler — `nvm` (im Basisimage vorinstalliert) hängt weiter vorn im `PATH` als `/usr/bin`; da `package.json` nur `>=22` verlangt, erfüllt die angezeigte Version die Anforderung trotzdem meist bereits | Version mit `engines.node` in `package.json` vergleichen (`>=22` reicht); bei echtem Bedarf `/usr/bin/node`/`/usr/bin/npm` explizit verwenden, siehe Hinweis Schritt 4.1 |
 | Backend startet gar nicht (`pm2 status` zeigt „errored") | Pflicht-Umgebungsvariable fehlt/ungültig, z. B. `JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY` nicht gesetzt | `pm2 logs lane1-api --nostream` — `env.ts` gibt die genaue fehlende/ungültige Variable aus |
 | Login schlägt fehl, Konsole zeigt einen CORS-Fehler | `CORS_ORIGIN`/`FRONTEND_BASE_URL` in `.env` stimmen nicht exakt mit der tatsächlichen Codespace-Adresse überein | Adresse im Ports-Tab mit `.env` vergleichen (siehe Warnhinweis Schritt 11), danach `pm2 restart lane1-api` |
