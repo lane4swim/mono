@@ -141,7 +141,7 @@ export default {
     stopwatchLapSplit: 'Split', stopwatchLapTotal: 'Total time',
     stopwatchApplied: 'Time applied from stopwatch — remember to click "Save".',
     stopwatchLapCount: '{count} lap times',
-    liveModeStart: 'Start meet mode', liveModeTitle: 'Meet mode',
+    liveModeStart: 'Start meet mode', liveModeTitle: 'Meet mode', liveModeShort: 'Live',
     backToComp: '← Back to competition',
     liveModeNoEntries: 'Meet mode needs start-list entries with both an event number and a heat. Add matching entries in the start list.',
     liveModePosition: 'Heat {current} of {total}',

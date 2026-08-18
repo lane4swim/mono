@@ -141,7 +141,7 @@ export default {
     stopwatchLapSplit: 'Rundenzeit', stopwatchLapTotal: 'Gesamtzeit',
     stopwatchApplied: 'Zeit aus Stoppuhr übernommen — jetzt „Speichern" nicht vergessen.',
     stopwatchLapCount: '{count} Rundenzeiten',
-    liveModeStart: 'Wettkampfmodus starten', liveModeTitle: 'Wettkampfmodus',
+    liveModeStart: 'Wettkampfmodus starten', liveModeTitle: 'Wettkampfmodus', liveModeShort: 'Live',
     backToComp: '← Zurück zum Wettkampf',
     liveModeNoEntries: 'Für den Wettkampfmodus brauchen Startlisteneinträge eine Wettkampfnummer und einen Lauf. Lege in der Startliste passende Einträge an.',
     liveModePosition: 'Lauf {current} von {total}',

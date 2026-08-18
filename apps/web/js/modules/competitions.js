@@ -123,6 +123,14 @@ async function renderDetail(container, compId) {
   if (compEntries.length === 0) {
     startListCard.appendChild(el('p', {}, t('competitions.noEntries')));
   } else {
+    // Maps an entry to its position in the Wettkampfmodus sequence, so each
+    // row can link straight into that heat — the start list itself groups
+    // rows by Lauf-Nummer only (see groupByHeat), which can bundle several
+    // Wettkampfnummern under the same "Lauf N" heading, so this needs to be
+    // resolved per entry (eventNumber+heat), not per heading.
+    const liveGroups = buildLiveGroups(compEntries);
+    const liveIndexByKey = new Map(liveGroups.map((g, i) => [`${g.eventNumber}__${g.heat}`, i]));
+
     const groups = groupByHeat(compEntries);
     const heatKeys = Object.keys(groups).sort((a, b) => a === '__none__' ? 1 : b === '__none__' ? -1 : Number(a) - Number(b));
     heatKeys.forEach(key => {
@@ -134,7 +142,8 @@ async function renderDetail(container, compId) {
       ])));
       const tbody = el('tbody');
       groups[key].sort((a, b) => (a.lane ?? 99) - (b.lane ?? 99)).forEach(entry => {
-        appendEntryRows(tbody, entry, comp, athletes, results, refreshDetail);
+        const liveIndex = liveIndexByKey.get(`${entry.eventNumber}__${entry.heat}`);
+        appendEntryRows(tbody, entry, comp, athletes, results, refreshDetail, liveIndex);
       });
       table.appendChild(tbody);
       startListCard.appendChild(el('div', { class: 'table-wrap mb-8' }, table));
@@ -417,8 +426,11 @@ function buildAthleteCard(entry, comp, athletes, allResults, sharedClock) {
 // via the ⏱ button. Recorded laps are documented alongside the result
 // (results.laps) once "Zeit übernehmen" is used and the row is saved, so a
 // captured time immediately shows up in Times & Statistics as before, now
-// optionally with its splits.
-function appendEntryRows(tbody, entry, comp, athletes, results, onChanged) {
+// optionally with its splits. `liveIndex` (from renderDetail's
+// liveIndexByKey lookup) is the entry's position in the Wettkampfmodus
+// sequence, undefined if it's missing eventNumber/heat and therefore isn't
+// part of that sequence at all (see buildLiveGroups).
+function appendEntryRows(tbody, entry, comp, athletes, results, onChanged, liveIndex) {
   const athlete = athletes.find(a => a.id === entry.athleteId);
   const existingResult = findResultForEntry(results, entry);
   let recordedLaps = existingResult?.laps ? [...existingResult.laps] : [];
@@ -466,6 +478,13 @@ function appendEntryRows(tbody, entry, comp, athletes, results, onChanged) {
     onclick: () => { detailRow.hidden = !detailRow.hidden; },
   }, '⏱ ' + t('competitions.stopwatchToggle'));
 
+  const liveModeLink = liveIndex != null
+    ? el('button', {
+        type: 'button', class: 'btn btn-ghost btn-sm', title: t('competitions.liveModeStart'),
+        onclick: () => navigate('competitions', comp.id, 'live', String(liveIndex)),
+      }, '▶ ' + t('competitions.liveModeShort'))
+    : null;
+
   const mainRow = el('tr', {}, [
     el('td', { class: 'data' }, entry.lane != null ? String(entry.lane) : '—'),
     el('td', { class: 'data' }, entry.eventNumber || '—'),
@@ -475,6 +494,7 @@ function appendEntryRows(tbody, entry, comp, athletes, results, onChanged) {
     el('td', {}, [timeInput, ' ', saveBtn, existingResult?.isPB ? ' ' : null, existingResult?.isPB ? badge('PB', 'pb') : null, recordedLaps.length > 0 ? ' ' : null, recordedLaps.length > 0 ? badge(t('competitions.stopwatchLapCount', { count: recordedLaps.length }), 'neutral') : null]),
     el('td', {}, placeInput),
     el('td', {}, [
+      liveModeLink, liveModeLink ? ' ' : null,
       stopwatchBtn, ' ',
       el('button', { class: 'btn btn-ghost btn-sm', onclick: () => openEntryModal(entry, comp, athletes, onChanged) }, t('common.edit')),
       ' ',
