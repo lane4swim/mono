@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin-Handbuch · Lane 1</title>
+<meta name="description" content="Handbuch für Vereins- und Nutzerverwaltung in Lane 1">
+<link rel="icon" href="../icons/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../css/styles.css">
+<link rel="stylesheet" href="./help.css">
+</head>
+<body>
+
+<header class="help-topbar">
+  <div class="help-topbar-brand">
+    <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+      <path d="M2 22c3 0 3-3 6-3s3 3 6 3 3-3 6-3 3 3 6 3" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+    </svg>
+    <span class="brand-name">Lane 1 · Hilfe</span>
+  </div>
+  <a class="btn btn-ghost btn-sm" href="../index.html">Zur App</a>
+</header>
+
+<div class="help-shell">
+  <nav class="help-nav" aria-label="Hilfe-Bereiche">
+    <a href="./index.html">Kurzanleitung</a>
+    <a href="./faq.html">FAQ &amp; Fehlerbehebung</a>
+    <a href="./admin.html" aria-current="page">Admin-Handbuch</a>
+  </nav>
+
+  <article class="help-article">
+    <h1>Admin-Handbuch</h1>
+    <p class="help-lead">Vereins- und Nutzerverwaltung in Lane 1. Für die alltägliche Bedienung siehe die <a href="./index.html">Kurzanleitung</a>.</p>
+
+    <h2>Rollen im Überblick</h2>
+    <div class="help-role-badges">
+      <span class="badge badge-neutral">superadmin</span>
+      <span class="badge badge-neutral">admin</span>
+      <span class="badge badge-neutral">trainer</span>
+      <span class="badge badge-neutral">athlete</span>
+    </div>
+    <ul>
+      <li><strong>Superadmin</strong> — betreibt Lane 1 übergreifend, legt neue Vereine an. Zugang über die eigenständige Oberfläche unter <code>/admin</code> (bewusst getrennt von der normalen App, siehe unten).</li>
+      <li><strong>Admin</strong> (Vereinsverwaltung) — verwaltet den eigenen Verein: lädt Trainer:innen und Athlet:innen ein, verwaltet bestehende Zugänge. Zugriff über den Menüpunkt <strong>„Nutzerverwaltung“</strong> in der normalen App.</li>
+      <li><strong>Trainer:in</strong> — Zugriff auf Trainingsplanung, Athletendaten, Wettkämpfe, Statistiken (siehe Kurzanleitung).</li>
+      <li><strong>Athlet:in</strong> — eingeschränkter Zugriff auf eigene Zeiten, Pläne und Einheiten.</li>
+    </ul>
+
+    <h2>Neuen Verein anlegen (Superadmin)</h2>
+    <p>Die Superadmin-Oberfläche ist bewusst von der normalen App getrennt und unter <code>/admin</code> erreichbar (eigene Anmeldung, eigenes Layout). Sie ist <strong>ausschließlich online</strong> nutzbar — anders als die restliche App gibt es hier keine Offline-Funktion, da Vereins- und Nutzerverwaltung ohne Backend-Verbindung ohnehin nicht sinnvoll sind.</p>
+    <ol>
+      <li>Unter <code>/admin</code> anmelden.</li>
+      <li>„Verein anlegen“ wählen, Vereinsnamen sowie Name und E-Mail-Adresse der ersten Vereinsadministration eintragen.</li>
+      <li>Lane 1 verschickt automatisch eine Einladungs-E-Mail an die angegebene Adresse; der Link wird zusätzlich direkt angezeigt (siehe „Einladungslinks weitergeben“ unten).</li>
+    </ol>
+
+    <h2>Trainer:innen &amp; Athlet:innen einladen (Vereinsadministration)</h2>
+    <p>Innerhalb der normalen App, Menüpunkt <strong>„Nutzerverwaltung“</strong>:</p>
+    <ol>
+      <li>„Trainer:in/Athlet:in einladen“ wählen.</li>
+      <li>E-Mail-Adresse, Name und Rolle (Trainer:in oder Athlet:in) eintragen.</li>
+      <li>Lane 1 verschickt automatisch eine Einladungs-E-Mail; der Link wird zusätzlich direkt angezeigt.</li>
+    </ol>
+    <p>Offene Einladungen werden in einer eigenen Liste angezeigt und lassen sich bei Bedarf widerrufen (z. B. bei Tippfehlern in der E-Mail-Adresse) oder erneut versendet, falls der Link zwischenzeitlich abgelaufen ist.</p>
+
+    <div class="help-callout warn">
+      <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 9v4M12 17h.01M10.3 3.9L2.7 17a2 2 0 001.7 3h15.2a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/></svg>
+      <p>Einladungslinks sind zeitlich begrenzt gültig und enthalten ein Zugangs-Token — nur an die tatsächlich gemeinte Person weitergeben, z. B. per E-Mail oder Messenger, nicht öffentlich teilen.</p>
+    </div>
+
+    <h3>Einladungslinks weitergeben</h3>
+    <p>Der Link wird nach dem Erstellen einer Einladung automatisch per E-Mail an die eingeladene Person verschickt. Zusätzlich zeigt Lane 1 den Link direkt in einem Fenster an — praktisch, um ihn z. B. bei einer falsch geschriebenen oder nicht erreichbaren E-Mail-Adresse manuell über einen anderen Kanal (Messenger, persönlich) weiterzugeben. Nach dem Öffnen des Links legt die eingeladene Person selbst ein Passwort fest.</p>
+
+    <h2>Zugänge verwalten</h2>
+    <p>Bestehende Mitglieder des Vereins werden in der Nutzerverwaltung nach Rolle gruppiert aufgelistet (Name, E-Mail-Adresse). Für den Entzug eines Zugangs oder eine Rollenänderung wenden sich Vereinsadministrationen an die Superadmin-Betreuung.</p>
+
+    <h2>Verwandte Themen</h2>
+    <ul>
+      <li>Server-Betrieb, HTTPS, Backups: siehe <code>docs/deployment.md</code> im Projekt-Repository.</li>
+      <li>Allgemeine Bedienung der App: siehe <a href="./index.html">Kurzanleitung</a>.</li>
+      <li>Häufige Probleme: siehe <a href="./faq.html">FAQ &amp; Fehlerbehebung</a>.</li>
+    </ul>
+  </article>
+</div>
+
+</body>
+</html>

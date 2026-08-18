@@ -32,7 +32,7 @@ export default {
   },
   topbar: {
     offlineReady: 'Offline ready', offlineMode: 'Offline mode active',
-    settings: 'Settings', language: 'Language', logout: 'Log out',
+    settings: 'Settings', language: 'Language', logout: 'Log out', help: 'Help',
   },
   nav: {
     dashboard: 'Dashboard', athletes: 'Athletes & Team', competitions: 'Competitions',
@@ -141,6 +141,16 @@ export default {
     stopwatchLapSplit: 'Split', stopwatchLapTotal: 'Total time',
     stopwatchApplied: 'Time applied from stopwatch — remember to click "Save".',
     stopwatchLapCount: '{count} lap times',
+    liveModeStart: 'Start meet mode', liveModeTitle: 'Meet mode', liveModeShort: 'Live',
+    backToComp: '← Back to competition',
+    liveModeNoEntries: 'Meet mode needs start-list entries with both an event number and a heat. Add matching entries in the start list.',
+    liveModePosition: 'Heat {current} of {total}',
+    liveModeHeatTitle: 'Event {nr} · {event} · Heat {heat}',
+    liveModeNext: 'Next event/heat →', liveModeLastHeat: 'Last heat',
+    liveModeFinish: 'Finish', liveModeResetCard: 'Reset this athlete\'s capture',
+    liveModeAddActionItem: 'Add action item',
+    liveModeLaneShort: 'Lane {n}',
+    liveModeSeed: 'Seed time {time}', liveModeNoSeed: 'No seed time',
   },
   times: {
     eyebrow: '{count} times recorded', title: 'Times & Performance', addTime: '+ Record time',

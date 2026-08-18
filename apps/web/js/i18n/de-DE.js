@@ -32,7 +32,7 @@ export default {
   },
   topbar: {
     offlineReady: 'Offline bereit', offlineMode: 'Offline-Modus aktiv',
-    settings: 'Einstellungen', language: 'Sprache', logout: 'Abmelden',
+    settings: 'Einstellungen', language: 'Sprache', logout: 'Abmelden', help: 'Hilfe',
   },
   nav: {
     dashboard: 'Dashboard', athletes: 'Athleten & Team', competitions: 'Wettkämpfe',
@@ -141,6 +141,16 @@ export default {
     stopwatchLapSplit: 'Rundenzeit', stopwatchLapTotal: 'Gesamtzeit',
     stopwatchApplied: 'Zeit aus Stoppuhr übernommen — jetzt „Speichern" nicht vergessen.',
     stopwatchLapCount: '{count} Rundenzeiten',
+    liveModeStart: 'Wettkampfmodus starten', liveModeTitle: 'Wettkampfmodus', liveModeShort: 'Live',
+    backToComp: '← Zurück zum Wettkampf',
+    liveModeNoEntries: 'Für den Wettkampfmodus brauchen Startlisteneinträge eine Wettkampfnummer und einen Lauf. Lege in der Startliste passende Einträge an.',
+    liveModePosition: 'Lauf {current} von {total}',
+    liveModeHeatTitle: 'Wettkampf {nr} · {event} · Lauf {heat}',
+    liveModeNext: 'Nächster Wettkampf/Lauf →', liveModeLastHeat: 'Letzter Lauf',
+    liveModeFinish: 'Ziel', liveModeResetCard: 'Erfassung für diese:n Athlet:in zurücksetzen',
+    liveModeAddActionItem: 'Handlungsfeld anlegen',
+    liveModeLaneShort: 'Bahn {n}',
+    liveModeSeed: 'Meldezeit {time}', liveModeNoSeed: 'Keine Meldezeit',
   },
   times: {
     eyebrow: '{count} erfasste Zeiten', title: 'Zeiten & Leistung', addTime: '+ Zeit erfassen',

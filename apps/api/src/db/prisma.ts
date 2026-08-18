@@ -5,7 +5,14 @@
 // Wichtig für Tests — buildApp() übergibt dort immer einen authService-
 // Override (In-Memory-Repositories), sodass getPrisma() nie aufgerufen
 // wird und somit kein generierter Prisma Client vorhanden sein muss.
+import { createRequire } from 'node:module';
 import type { PrismaClient as PrismaClientType } from '@prisma/client';
+
+// apps/api ist ein ECMAScript-Modul ("type": "module") — ein nackter
+// `require(...)` ist dort zur Laufzeit nicht definiert
+// (ReferenceError: require is not defined). `createRequire` ist die von
+// Node offiziell vorgesehene Brücke, um trotzdem synchron/lazy zu laden.
+const require = createRequire(import.meta.url);
 
 declare global {
   // eslint-disable-next-line no-var

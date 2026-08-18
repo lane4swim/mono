@@ -8,7 +8,7 @@ Laden keine Internetverbindung mehr.
 ## Funktionsumfang
 
 - **Athleten- & Teammanagement** — Profile, Trainingsgruppen. Athletenprofile (Name/Identität) werden ausschließlich von Admins/Superadmins angelegt, geändert und gelöscht; Trainer:innen sehen den Bestand und arbeiten damit (Zeiten, Pläne, Einheiten, Handlungsfelder), können aber keine neuen Athlet:innen per Namenseingabe hinzufügen oder bestehende umbenennen/entfernen
-- **Wettkampfmanagement** — Wettkämpfe, Startlisten (Wettkampfnummer, Lauf, Startbahn) mit integrierter Stoppuhr (inkl. Rundenzeiten) zur direkten Zeitmessung, und Ergebniserfassung
+- **Wettkampfmanagement** — Wettkämpfe, Startlisten (Wettkampfnummer, Lauf, Startbahn) mit integrierter Stoppuhr (inkl. Rundenzeiten) zur direkten Zeitmessung, und Ergebniserfassung. Zusätzlich ein eigener **Wettkampfmodus** für den Beckenrand: startet direkt beim ersten gesetzten Wettkampf/Lauf, zeigt eine gemeinsame Stoppuhr oben sowie je Athlet:in eine Karte zum individuellen Erfassen von Runden- und Zielzeit (inkl. automatischer PB-Erkennung und Schnellzugriff auf ein neues Handlungsfeld), samt Schaltfläche zum nächsten Wettkampf/Lauf
 - **Zeiten- & Leistungserfassung** — Bestzeiten, Verlaufsdiagramme
 - **Trainingspläne** — Wochenkalender mit Sets/Serien **und Wiederholungsblöcken** (z. B. „3× [2×25 Sprint, 50 locker]“), aus Vorlagen erstellbar
 - **Wiederverwendbare Vorlagen** für Trainingspläne
@@ -87,6 +87,30 @@ bewusst **nur online verfügbaren** Oberfläche unter `apps/web/admin/`
 im Haupt-Service-Worker explizit von Cache/Precache ausgeschlossen — ein
 Aufruf ohne Internetverbindung schlägt bewusst fehl, statt (fälschlich)
 die normale App anzuzeigen.
+
+## Hilfeseiten
+
+Unter `apps/web/help/` liegt ein rein statischer, von der Single-Page-App
+unabhängiger Hilfebereich (kein Router-Modul, kein `t()`/i18n-System) —
+analog zu `apps/web/admin/` ein eigenständiger Ordner mit eigenem
+`index.html` je Seite, der über einen Link unten in der Seitenleiste
+(„Hilfe") in einem neuen Tab geöffnet wird:
+
+- **`help/index.html`** — Kurzanleitung (Zugang, Installation als App,
+  Offline-Nutzung & Synchronisierung, Überblick über die Module).
+- **`help/faq.html`** — häufige Fragen & Fehlerbehebung.
+- **`help/admin.html`** — Admin-Handbuch (Vereine anlegen, Trainer:innen/
+  Athlet:innen einladen, Rollen).
+- **`help/help.css`** — eigenes, schlankes Stylesheet für Lesetypografie;
+  nutzt dieselben Design-Tokens wie `css/styles.css` (dort weiterhin
+  eingebunden), duckt aber nicht darauf ab, dass die App-Shell geladen ist.
+
+Anders als `/admin` sind die Hilfeseiten bewusst **auch offline nutzbar**
+(z. B. um die FAQ zur Synchronisierung offline nachzulesen) und daher Teil
+von `PRECACHE_URLS` in `sw.js`. Inhalte sind aktuell nur auf Deutsch
+gepflegt (kein Duplikat pro Sprache) — bei Bedarf lassen sich weitere
+Sprachvarianten als zusätzliche Dateien (z. B. `help/en/index.html`) mit
+eigener Verlinkung ergänzen, ohne das bestehende Muster zu ändern.
 
 ## Architektur & Erweiterbarkeit
 
