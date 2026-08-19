@@ -10,6 +10,11 @@ import { t, trCode } from '../i18n.js';
 
 export const dashboardModule = {
   id: 'dashboard',
+  // Superadmin-Konten gehören zu keinem Verein und haben daher weder
+  // Athlet:innen, Gruppen, Wettkämpfe noch Trainingspläne, auf denen ein
+  // Dashboard aufbauen könnte — die Nutzerverwaltung deckt ihren
+  // gesamten Funktionsumfang ab (Vereine anlegen, Einladungen verwalten).
+  roles: ['trainer', 'admin', 'athlete'],
   icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="5" rx="1.5"/><rect x="13" y="11" width="8" height="10" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/></svg>`,
   async render(container) {
     const isCurrent = beginRender(container);
