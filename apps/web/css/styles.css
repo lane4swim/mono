@@ -86,6 +86,7 @@ button{ font-family: inherit; }
    Shell layout
    ========================================================================== */
 #app-shell{ min-height:100vh; display:flex; flex-direction:column; }
+#app-shell[hidden]{ display:none; }
 
 .topbar{
   height: var(--topbar-h);
@@ -287,6 +288,7 @@ tr:hover td{ background: var(--c-foam-2); }
   min-height: 100dvh; display: flex; align-items: center; justify-content: center;
   padding: 24px; background: var(--c-foam);
 }
+.auth-screen[hidden]{ display:none; }
 .auth-box{
   width: 100%; max-width: 440px; background: var(--c-white);
   border: 1px solid var(--c-line); border-radius: var(--radius-md);
