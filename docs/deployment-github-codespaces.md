@@ -33,6 +33,26 @@ Am Ende dieser Anleitung ist unter einer von GitHub bereitgestellten, temporäre
 | Backups/DSGVO-Löschfristen | eingerichtet | **entfällt bewusst** — reine Testdaten in einer temporären Umgebung, kein echter Nutzerbetrieb |
 | Laufende Kosten | ca. 5–6 €/Monat + Domain | nutzungsabhängiges Kontingent (Core-Stunden/Speicher), oft im kostenlosen Kontingent des GitHub-Kontos enthalten (siehe Abschnitt 15) |
 
+### 0.2 Schritte 4–10 automatisiert per Script
+
+Wer die Befehle aus den Abschnitten 4–10 nicht Schritt für Schritt von Hand eintippen möchte, kann stattdessen `scripts/setup-codespace.sh` ausführen — es fasst alles von der Softwareinstallation bis zur Nginx-Konfiguration in einem Lauf zusammen:
+
+```bash
+bash scripts/setup-codespace.sh
+```
+
+Vorausgesetzt sind die Abschnitte 1–3 (Codespace erstellen, Terminal öffnen) — das Script erwartet ein bereits geöffnetes Terminal im Projektordner. Es deckt dann genau ab: Abschnitt 4 (Node.js/PostgreSQL/Nginx/PM2 installieren), 5 (npm-Abhängigkeiten), 6 (`apps/api/.env` inkl. JWT-Schlüsseln, berechnet aus `$CODESPACE_NAME`), 7 (`prisma db push`), 8 (Backend bauen), 9 samt 9.1 (PM2 starten, ersten Superadmin anlegen) und 10 (Nginx konfigurieren) — mit denselben Befehlen und Begründungen (z. B. PostgreSQL-15-Schema-Grant, `/auth/`-Location-Sonderfall), die in den jeweiligen Abschnitten unten ausführlich erklärt sind.
+
+Der erste Superadmin wird dabei automatisch mit `admin@test.de` / `pwd12345` angelegt — überschreibbar über Umgebungsvariablen (Passwort muss mindestens 8 Zeichen haben):
+
+```bash
+SUPERADMIN_EMAIL=admin@verein.de SUPERADMIN_PASSWORD=eigenes-passwort bash scripts/setup-codespace.sh
+```
+
+Am Ende gibt das Script eine Zusammenfassung aus (Superadmin-Login, bei Erstlauf zusätzlich das generierte Datenbank-Passwort und die berechnete öffentliche Adresse). Es ist wiederholt ausführbar: bereits installierte Software, eine bestehende `.env` und ein bereits angelegter Superadmin werden übersprungen statt erneut angelegt/überschrieben, PM2 und Nginx werden bei einem erneuten Lauf einfach neu gestartet.
+
+Danach direkt weiter mit **Abschnitt 11** (Port veröffentlichen) — die Abschnitte 4–10 sind damit erledigt. Wer stattdessen jeden Schritt einzeln nachvollziehen oder anpassen möchte, liest ab Abschnitt 1 wie gewohnt weiter.
+
 ---
 
 ## 1. Voraussetzungen
