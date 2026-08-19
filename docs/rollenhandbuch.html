@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lane 1 Rollenhandbuch</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,440;9..144,600;9..144,700&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+  :root{
+    --deep:      #0B2E44;
+    --deep-2:    #082330;
+    --petrol:    #0F5C6B;
+    --foam:      #F1F7F6;
+    --foam-2:    #E4EFED;
+    --chlorine:  #1D9C86;
+    --lane:      #E0532F;
+    --ink:       #0E2027;
+    --slate:     #4E6B75;
+    --slate-2:   #6C8790;
+    --line:      #D3E3E1;
+
+    --bg:        var(--foam);
+    --surface:   #FFFFFF;
+    --surface-2: var(--foam-2);
+    --text:      var(--ink);
+    --text-dim:  var(--slate);
+    --border:    var(--line);
+    --accent:    var(--chlorine);
+    --accent-ink: #06342C;
+    --critical:  var(--lane);
+    --shadow: 0 1px 2px rgba(11,46,68,.06), 0 10px 28px rgba(11,46,68,.08);
+
+    --f-display: 'Fraunces', 'Iowan Old Style', ui-serif, Georgia, serif;
+    --f-body: 'Public Sans', -apple-system, 'Segoe UI', ui-sans-serif, Roboto, sans-serif;
+    --f-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  }
+
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:        var(--deep-2);
+      --surface:   #0E3A50;
+      --surface-2: #0B324A;
+      --text:      #EAF4F2;
+      --text-dim:  #9FC0BE;
+      --border:    rgba(255,255,255,.14);
+      --accent:    #3ED9BC;
+      --accent-ink: #06342C;
+      --critical:  #FF8B69;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 16px 34px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:        var(--deep-2);
+    --surface:   #0E3A50;
+    --surface-2: #0B324A;
+    --text:      #EAF4F2;
+    --text-dim:  #9FC0BE;
+    --border:    rgba(255,255,255,.14);
+    --accent:    #3ED9BC;
+    --accent-ink: #06342C;
+    --critical:  #FF8B69;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 16px 34px rgba(0,0,0,.35);
+  }
+
+  *{ box-sizing: border-box; }
+  html{ scroll-behavior: smooth; }
+  body{
+    margin:0; background: var(--bg); color: var(--text);
+    font-family: var(--f-body); font-size: 16px; line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection{ background: var(--accent); color: var(--accent-ink); }
+
+  a{ color: var(--accent); text-decoration: none; }
+  a:hover{ text-decoration: underline; }
+  a:focus-visible, button:focus-visible{ outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+
+  code, .mono{ font-family: var(--f-mono); }
+
+  h1,h2,h3,h4{ font-family: var(--f-display); font-weight: 600; line-height: 1.18; text-wrap: balance; margin: 0; color: var(--text); }
+  h2{ font-size: clamp(1.5rem, 1.1rem + 1.4vw, 2rem); font-weight: 700; }
+  h3{ font-size: 1.2rem; font-weight: 600; }
+  p{ margin: 0 0 .9em; color: var(--text-dim); max-width: 68ch; }
+  p:last-child{ margin-bottom: 0; }
+
+  .eyebrow{
+    font-family: var(--f-mono); font-size: .72rem; letter-spacing: .11em; text-transform: uppercase;
+    color: var(--accent); font-weight: 600; display: block; margin-bottom: .5em;
+  }
+
+  /* ---------- shell ---------- */
+  .topbar{
+    position: sticky; top: 0; z-index: 20;
+    display: flex; align-items: center; gap: 20px;
+    padding: 14px 28px; background: color-mix(in srgb, var(--bg) 82%, transparent);
+    backdrop-filter: blur(10px); border-bottom: 1px solid var(--border);
+  }
+  .brand{ display: flex; align-items: baseline; gap: 8px; font-family: var(--f-display); font-weight: 700; font-size: 1.05rem; white-space: nowrap; }
+  .brand .num{ color: var(--accent); font-family: var(--f-mono); font-size: .8rem; border: 1px solid var(--border); border-radius: 5px; padding: 1px 6px; }
+  .toc{ display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+  .toc::-webkit-scrollbar{ display: none; }
+  .toc a{
+    color: var(--text-dim); font-size: .84rem; font-weight: 500; white-space: nowrap;
+    padding: 6px 11px; border-radius: 999px; transition: background .15s, color .15s;
+  }
+  .toc a:hover{ background: var(--surface-2); color: var(--text); text-decoration: none; }
+
+  main{ max-width: 900px; margin: 0 auto; padding: 0 28px 120px; }
+
+  .hero{ padding: 56px 0 40px; border-bottom: 1px solid var(--border); }
+  .hero h1{ font-size: clamp(2rem, 1.5rem + 2vw, 2.9rem); max-width: 20ch; }
+  .hero .lede{ margin-top: 16px; font-size: 1.08rem; max-width: 58ch; }
+  .hero .meta{ margin-top: 22px; display: flex; gap: 18px; flex-wrap: wrap; font-family: var(--f-mono); font-size: .78rem; color: var(--text-dim); }
+  .hero .meta b{ color: var(--text); font-weight: 600; }
+
+  section{ padding: 56px 0; border-bottom: 1px solid var(--border); scroll-margin-top: 76px; }
+  section:last-of-type{ border-bottom: none; }
+  .section-head{ margin-bottom: 30px; }
+  .section-head h2{ margin-top: .15em; }
+
+  /* ---------- role cards ---------- */
+  .roles{ display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-top: 28px; }
+  @media (max-width: 660px){ .roles{ grid-template-columns: 1fr; } }
+  .role-card{
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    padding: 22px 24px; box-shadow: var(--shadow); position: relative; overflow: hidden;
+  }
+  .role-card::before{
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--rail, var(--accent));
+  }
+  .role-card.super{ --rail: var(--critical); }
+  .role-card.admin{ --rail: var(--accent); }
+  .role-card.trainer{ --rail: var(--petrol); }
+  .role-card.athlete{ --rail: var(--slate-2); }
+  .role-head{ display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
+  .role-name{ font-family: var(--f-display); font-weight: 700; font-size: 1.22rem; }
+  .role-slug{ font-family: var(--f-mono); font-size: .72rem; color: var(--text-dim); background: var(--surface-2); border: 1px solid var(--border); padding: 2px 8px; border-radius: 999px; }
+  .role-scope{ font-size: .84rem; color: var(--text-dim); margin-bottom: 14px; }
+  .role-card dl{ margin: 0; display: grid; gap: 10px; }
+  .role-card dt{ font-size: .7rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-dim); margin-bottom: 3px; }
+  .role-card dd{ margin: 0; font-size: .91rem; color: var(--text); }
+  .role-card dd ul{ margin: 0; padding-left: 1.15em; }
+  .role-card dd li{ margin-bottom: 3px; }
+  .role-card dd li:last-child{ margin-bottom: 0; }
+
+  /* ---------- figures ---------- */
+  figure{ margin: 30px 0 0; }
+  figure.panel{
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    padding: 22px 22px 16px; box-shadow: var(--shadow);
+  }
+  figure svg{ display: block; width: 100%; height: auto; color: var(--text); }
+  figcaption{ margin-top: 12px; font-size: .84rem; color: var(--text-dim); border-top: 1px solid var(--border); padding-top: 12px; }
+  figcaption b{ color: var(--text); font-weight: 600; }
+
+  .dg-box{ fill: var(--surface-2); stroke: var(--border); stroke-width: 1.4; }
+  .dg-box-strong{ fill: var(--surface); stroke: currentColor; stroke-width: 1.6; }
+  .dg-accent{ color: var(--accent); }
+  .dg-critical{ color: var(--critical); }
+  .dg-dash{ stroke-dasharray: 4 4; }
+  .dg-label{ font-family: var(--f-body); font-weight: 600; }
+  .dg-sub{ font-family: var(--f-mono); }
+  .dg-arrowlabel{ font-family: var(--f-mono); fill: var(--text-dim); }
+
+  /* ---------- tables ---------- */
+  .table-wrap{ overflow-x: auto; margin-top: 22px; border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); }
+  table{ border-collapse: collapse; width: 100%; min-width: 560px; background: var(--surface); font-size: .89rem; }
+  thead th{
+    position: sticky; top: 0; background: var(--surface-2); text-align: left; font-weight: 600;
+    padding: 11px 16px; border-bottom: 1px solid var(--border); white-space: nowrap;
+    font-size: .74rem; letter-spacing: .04em; text-transform: uppercase; color: var(--text-dim);
+  }
+  thead th.ctr, td.ctr{ text-align: center; }
+  tbody td{ padding: 10px 16px; border-bottom: 1px solid var(--border); vertical-align: top; color: var(--text); }
+  tbody tr:last-child td{ border-bottom: none; }
+  tbody tr:hover td{ background: color-mix(in srgb, var(--accent) 6%, transparent); }
+  td.mod-name{ font-weight: 600; white-space: nowrap; }
+  td.mod-name .id{ display: block; font-family: var(--f-mono); font-weight: 400; font-size: .74rem; color: var(--text-dim); }
+  .yes{ color: var(--accent); font-weight: 700; }
+  .no{ color: var(--text-dim); opacity: .45; }
+  .path{ font-family: var(--f-mono); font-size: .84rem; white-space: nowrap; }
+  .roletag{ display: inline-block; font-family: var(--f-mono); font-size: .72rem; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface-2); margin: 1px 3px 1px 0; white-space: nowrap; }
+  .roletag.pub{ color: var(--text-dim); font-style: italic; border-style: dashed; }
+
+  .callout{
+    margin-top: 22px; padding: 18px 22px; border-radius: 12px; border: 1px solid var(--border);
+    background: var(--surface-2); font-size: .92rem;
+  }
+  .callout h4{ font-family: var(--f-body); font-size: .92rem; font-weight: 700; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+  .callout ul{ margin: 8px 0 0; padding-left: 1.2em; color: var(--text-dim); }
+  .callout li{ margin-bottom: 4px; }
+  .callout p{ color: var(--text-dim); }
+
+  footer.legend{ display: flex; gap: 22px; flex-wrap: wrap; margin-top: 14px; font-size: .82rem; color: var(--text-dim); }
+  footer.legend span{ display: inline-flex; align-items: center; gap: 6px; }
+
+  /* ---------- data model glossary ---------- */
+  .glossary-group{ margin-top: 30px; }
+  .glossary-group h3{ margin-bottom: 4px; }
+  .glossary-group .g-desc{ font-size: .88rem; margin-bottom: 16px; }
+  .entity-grid{ display: grid; gap: 12px; }
+  .entity{
+    display: grid; grid-template-columns: 176px 1fr; gap: 4px 18px;
+    padding: 14px 18px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  }
+  @media (max-width: 620px){ .entity{ grid-template-columns: 1fr; } }
+  .entity .ename{ font-family: var(--f-mono); font-weight: 600; font-size: .88rem; color: var(--text); align-self: start; }
+  .entity .edesc{ font-size: .88rem; color: var(--text-dim); }
+  .entity .edesc code{ font-size: .82em; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; color: var(--text); }
+
+  .mermaid-wrap{ margin-top: 30px; }
+  .mermaid-wrap svg{ max-width: 100%; height: auto; }
+
+  .end-note{ padding: 60px 0 40px; text-align: center; }
+  .end-note p{ margin: 0 auto; font-size: .82rem; color: var(--text-dim); }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand"><span class="num">1</span>Lane 1 · Rollenhandbuch</div>
+  <nav class="toc">
+    <a href="#rollen">Rollen</a>
+    <a href="#einladung">Einladungsfluss</a>
+    <a href="#berechtigungen">Berechtigungen</a>
+    <a href="#api">API-Guards</a>
+    <a href="#datenmodell">Datenmodell</a>
+  </nav>
+</div>
+
+<main>
+
+  <div class="hero">
+    <span class="eyebrow">Interne Referenz</span>
+    <h1>Rollen, Rechte und Datenmodell von Lane 1</h1>
+    <p class="lede">Lane 1 ist eine offline-fähige Trainingsmanagement-App für Schwimmvereine. Der Zugriff ist über vier Rollen gestaffelt und über Vereine (Mandanten) strikt getrennt. Dieses Dokument fasst zusammen, wer was darf — in der App, in der API — und wie die zugrundeliegenden Daten zusammenhängen.</p>
+    <div class="meta">
+      <span><b>4</b> Rollen</span>
+      <span><b>1</b> Mandant je Konto (außer Superadmin)</span>
+      <span><b>15</b> fachliche Tabellen</span>
+      <span>Quelle: <code class="mono">schema.prisma</code> · <code class="mono">shared-types</code> · <code class="mono">router.js</code></span>
+    </div>
+  </div>
+
+  <!-- ============ ROLLEN ============ -->
+  <section id="rollen">
+    <div class="section-head">
+      <span class="eyebrow">01 — Zugriffsmodell</span>
+      <h2>Vier Rollen, ein Mandantenprinzip</h2>
+    </div>
+    <p>Jedes Konto hat genau eine Rolle. Mit Ausnahme des Superadmin gehört jedes Konto genau einem Verein (<code>clubId</code>) an — Daten verschiedener Vereine sind für die App unsichtbar füreinander.</p>
+
+    <figure class="panel">
+      <svg viewBox="0 0 860 320" role="img" aria-label="Superadmin steht außerhalb jedes Vereins und verwaltet mehrere Vereine; innerhalb eines Vereins gehört jede Rolle genau einem Verein an, Admin lädt Trainer und Athleten ein.">
+        <defs>
+          <marker id="rar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+          </marker>
+        </defs>
+
+        <!-- superadmin -->
+        <rect x="24" y="24" width="168" height="54" rx="10" class="dg-box-strong dg-critical"/>
+        <text x="108" y="46" text-anchor="middle" font-size="13" class="dg-label" fill="currentColor">Superadmin</text>
+        <text x="108" y="63" text-anchor="middle" font-size="10.5" class="dg-sub" fill="currentColor" opacity=".8">clubId = null</text>
+
+        <!-- platform boundary -->
+        <rect x="24" y="112" width="812" height="184" rx="14" fill="none" stroke="currentColor" stroke-width="1.2" class="dg-dash" opacity=".45"/>
+        <text x="40" y="134" font-size="10.5" class="dg-sub" fill="currentColor" opacity=".6">PLATTFORM — beliebig viele Vereine</text>
+
+        <!-- arrows superadmin -> club A/B -->
+        <path d="M95,78 C95,150 130,150 170,182" fill="none" stroke="currentColor" class="dg-critical" stroke-width="1.6" marker-end="url(#rar)"/>
+        <path d="M150,78 C300,140 430,150 470,182" fill="none" stroke="currentColor" class="dg-critical" stroke-width="1.6" marker-end="url(#rar)"/>
+        <text x="150" y="112" font-size="10" class="dg-arrowlabel" text-anchor="middle">legt an · lädt ersten Admin ein</text>
+
+        <!-- club A -->
+        <rect x="56" y="182" width="330" height="94" rx="12" class="dg-box"/>
+        <text x="76" y="204" font-size="11" class="dg-label" fill="currentColor" opacity=".7">VEREIN A</text>
+        <rect x="76" y="214" width="90" height="30" rx="15" class="dg-box-strong dg-accent"/>
+        <text x="121" y="233" text-anchor="middle" font-size="11" class="dg-label" fill="currentColor">Admin</text>
+        <path d="M121,244 C121,254 100,254 100,264" fill="none" stroke="currentColor" opacity=".55" stroke-width="1.3" marker-end="url(#rar)"/>
+        <path d="M121,244 C121,254 195,254 195,264" fill="none" stroke="currentColor" opacity=".55" stroke-width="1.3" marker-end="url(#rar)"/>
+        <path d="M121,244 C121,254 300,254 300,264" fill="none" stroke="currentColor" opacity=".55" stroke-width="1.3" marker-end="url(#rar)"/>
+        <rect x="76" y="252" width="112" height="24" rx="12" class="dg-box"/>
+        <text x="132" y="268" text-anchor="middle" font-size="10" class="dg-sub" fill="currentColor">Trainer ×N</text>
+        <rect x="192" y="252" width="7" height="24" fill="none"/>
+        <rect x="150" y="252" width="102" height="0" fill="none"/>
+        <rect x="200" y="252" width="106" height="24" rx="12" class="dg-box"/>
+        <text x="253" y="268" text-anchor="middle" font-size="10" class="dg-sub" fill="currentColor">Athlet ×N</text>
+
+        <!-- club B -->
+        <rect x="466" y="182" width="330" height="94" rx="12" class="dg-box"/>
+        <text x="486" y="204" font-size="11" class="dg-label" fill="currentColor" opacity=".7">VEREIN B</text>
+        <rect x="486" y="214" width="90" height="30" rx="15" class="dg-box-strong dg-accent"/>
+        <text x="531" y="233" text-anchor="middle" font-size="11" class="dg-label" fill="currentColor">Admin</text>
+        <path d="M531,244 C531,254 555,254 555,264" fill="none" stroke="currentColor" opacity=".55" stroke-width="1.3" marker-end="url(#rar)"/>
+        <path d="M531,244 C531,254 665,254 665,264" fill="none" stroke="currentColor" opacity=".55" stroke-width="1.3" marker-end="url(#rar)"/>
+        <rect x="500" y="252" width="112" height="24" rx="12" class="dg-box"/>
+        <text x="556" y="268" text-anchor="middle" font-size="10" class="dg-sub" fill="currentColor">Trainer ×N</text>
+        <rect x="618" y="252" width="112" height="24" rx="12" class="dg-box"/>
+        <text x="674" y="268" text-anchor="middle" font-size="10" class="dg-sub" fill="currentColor">Athlet ×N</text>
+      </svg>
+      <figcaption><b>Geltungsbereich der Rollen.</b> Nur der Superadmin steht außerhalb jedes Vereins und kann mehrere verwalten. Admin, Trainer und Athlet gehören jeweils zu genau einem Verein; der Admin lädt die Trainer:innen und Athlet:innen seines eigenen Vereins ein.</figcaption>
+    </figure>
+
+    <div class="roles">
+      <div class="role-card super">
+        <div class="role-head"><span class="role-name">Superadmin</span><span class="role-slug">superadmin</span></div>
+        <div class="role-scope">Kein Verein zugeordnet · eigene Oberfläche unter <code class="mono">/admin</code></div>
+        <dl>
+          <div><dt>Aufgabe</dt><dd>Legt neue Vereine an und stellt für jeden die erste Admin-Einladung aus. Das ist die einzige Möglichkeit, wie ein Verein überhaupt entsteht.</dd></div>
+          <div><dt>Besonderheit</dt><dd>Wird nie per Einladung vergeben, sondern einmalig per Server-Skript erzeugt. Nutzt die Hauptanwendung nicht — nur ein schlankes, separates Verwaltungs-UI ohne Offline-/IndexedDB-Bezug.</dd></div>
+          <div><dt>Geteilt mit Admin</dt><dd>Einladungen einsehen/ausstellen/widerrufen und Vereinsmitglieder auflisten — jeweils vereinsübergreifend, per <code class="mono">?clubId=</code>.</dd></div>
+        </dl>
+      </div>
+
+      <div class="role-card admin">
+        <div class="role-head"><span class="role-name">Admin</span><span class="role-slug">admin</span></div>
+        <div class="role-scope">Genau ein Verein · volle Hauptanwendung + Nutzerverwaltung</div>
+        <dl>
+          <div><dt>Aufgabe</dt><dd>Verwaltet einen Verein operativ und lädt dessen Trainer:innen und Athlet:innen ein.</dd></div>
+          <div><dt>Grenze</dt><dd>Die <code class="mono">clubId</code> einer ausgestellten Einladung wird serverseitig erzwungen — ein Admin kann nicht in einen fremden Verein einladen, selbst wenn er sie im Request angibt.</dd></div>
+          <div><dt>Zusatzrecht ggü. Trainer</dt><dd>Einziges Modul, das Trainer nicht sehen: <em>Nutzerverwaltung</em> (Einladungen, Mitgliederliste).</dd></div>
+        </dl>
+      </div>
+
+      <div class="role-card trainer">
+        <div class="role-head"><span class="role-name">Trainer</span><span class="role-slug">trainer</span></div>
+        <div class="role-scope">Genau ein Verein · operative Trainingssteuerung</div>
+        <dl>
+          <div><dt>Aufgabe</dt><dd>Trainingspläne und Übungskatalog pflegen, Anwesenheit &amp; Feedback erfassen, Wettkämpfe melden und Ergebnisse eintragen, Handlungsfelder je Athlet:in dokumentieren.</dd></div>
+          <div><dt>Sichtbereich</dt><dd>Sieht alle Athlet:innen und Daten des eigenen Vereins — nicht auf einzelne Gruppen beschränkt.</dd></div>
+          <div><dt>Kein Zugriff auf</dt><dd>Nutzerverwaltung (Einladungen/Mitgliederliste).</dd></div>
+        </dl>
+      </div>
+
+      <div class="role-card athlete">
+        <div class="role-head"><span class="role-name">Athlet</span><span class="role-slug">athlete</span></div>
+        <div class="role-scope">Genau ein Verein · optional an ein Athletenprofil geknüpft</div>
+        <dl>
+          <div><dt>Aufgabe</dt><dd>Eigene Einheiten, Trainingspläne der eigenen Gruppe, eigene Zeiten und eigene Handlungsfelder einsehen.</dd></div>
+          <div><dt>Datenfilterung</dt><dd>Das Frontend filtert clientseitig auf <code class="mono">user.athleteId</code> — z. B. zeigt „Einheiten &amp; Feedback" nur Termine, an denen genau dieser Athlet in der Anwesenheitsliste steht.</dd></div>
+          <div><dt>Kein Zugriff auf</dt><dd>Athleten- &amp; Teamverwaltung, Übungskatalog, Vorlagen, Wettkampfverwaltung, Statistiken, Nutzerverwaltung.</dd></div>
+        </dl>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ EINLADUNGSFLUSS ============ -->
+  <section id="einladung">
+    <div class="section-head">
+      <span class="eyebrow">02 — Onboarding</span>
+      <h2>Es gibt keine offene Registrierung</h2>
+    </div>
+    <p>Jedes Konto entsteht ausschließlich über ein zeitlich befristetes, einmal verwendbares Einladungs-Token. <code class="mono">POST /auth/register</code> ohne gültiges Token wird abgelehnt.</p>
+
+    <figure class="panel">
+      <svg viewBox="0 0 860 340" role="img" aria-label="Superadmin erstellt Verein und Admin-Einladung, der neue Admin akzeptiert und lädt seinerseits Trainer oder Athlet ein, die die Einladung ebenfalls akzeptieren.">
+        <defs>
+          <marker id="far" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+          </marker>
+        </defs>
+
+        <!-- row 1 -->
+        <rect x="20" y="24" width="196" height="70" rx="10" class="dg-box-strong dg-critical"/>
+        <text x="118" y="53" text-anchor="middle" font-size="12.5" class="dg-label" fill="currentColor">Superadmin</text>
+        <text x="118" y="72" text-anchor="middle" font-size="10" class="dg-sub" fill="currentColor" opacity=".75">akteure außerhalb jedes Vereins</text>
+
+        <path d="M216,59 H320" stroke="currentColor" stroke-width="1.6" marker-end="url(#far)"/>
+        <text x="268" y="46" text-anchor="middle" font-size="10" class="dg-arrowlabel">POST /api/clubs</text>
+
+        <rect x="320" y="24" width="216" height="70" rx="10" class="dg-box"/>
+        <text x="428" y="53" text-anchor="middle" font-size="12.5" class="dg-label" fill="currentColor">Verein + Einladung</text>
+        <text x="428" y="72" text-anchor="middle" font-size="10" class="dg-sub" fill="currentColor" opacity=".75">role: admin · expiresAt</text>
+
+        <path d="M536,59 H660" stroke="currentColor" stroke-width="1.6" marker-end="url(#far)"/>
+        <text x="598" y="46" text-anchor="middle" font-size="10" class="dg-arrowlabel">akzeptiert Token</text>
+
+        <rect x="660" y="24" width="180" height="70" rx="10" class="dg-box-strong dg-accent"/>
+        <text x="750" y="53" text-anchor="middle" font-size="12.5" class="dg-label" fill="currentColor">Admin — aktiv</text>
+        <text x="750" y="72" text-anchor="middle" font-size="10" class="dg-sub" fill="currentColor" opacity=".75">Passwort + Consent gesetzt</text>
+
+        <!-- turn connector -->
+        <path d="M750,94 V150 H150 V186" fill="none" stroke="currentColor" stroke-width="1.4" opacity=".55" marker-end="url(#far)"/>
+        <text x="750" y="112" font-size="10" class="dg-arrowlabel" text-anchor="end">lädt für eigenen Verein ein</text>
+
+        <!-- row 2 -->
+        <rect x="56" y="186" width="196" height="70" rx="10" class="dg-box-strong dg-accent"/>
+        <text x="154" y="215" text-anchor="middle" font-size="12.5" class="dg-label" fill="currentColor">Admin</text>
+        <text x="154" y="234" text-anchor="middle" font-size="10" class="dg-sub" fill="currentColor" opacity=".75">eigener Verein</text>
+
+        <path d="M252,221 H356" stroke="currentColor" stroke-width="1.6" marker-end="url(#far)"/>
+        <text x="304" y="208" text-anchor="middle" font-size="10" class="dg-arrowlabel">POST /api/invitations</text>
+
+        <rect x="356" y="186" width="230" height="70" rx="10" class="dg-box"/>
+        <text x="471" y="215" text-anchor="middle" font-size="12.5" class="dg-label" fill="currentColor">Einladung</text>
+        <text x="471" y="234" text-anchor="middle" font-size="10" class="dg-sub" fill="currentColor" opacity=".75">role: trainer | athlete</text>
+
+        <path d="M586,221 H700" stroke="currentColor" stroke-width="1.6" marker-end="url(#far)"/>
+        <text x="643" y="208" text-anchor="middle" font-size="10" class="dg-arrowlabel">akzeptiert Token</text>
+
+        <rect x="700" y="186" width="140" height="70" rx="10" class="dg-box-strong" style="color:var(--slate-2)"/>
+        <text x="770" y="215" text-anchor="middle" font-size="12.5" class="dg-label" fill="currentColor">Trainer /<tspan x="770" dy="14">Athlet — aktiv</tspan></text>
+
+        <text x="20" y="308" font-size="10.5" class="dg-sub" fill="currentColor" opacity=".65">Ein Athlet-Konto kann optional mit einem bereits angelegten Athlete-Datensatz verknüpft werden (athleteId) — Login-Konto und Athlet:innen-Stammdaten sind getrennte Entitäten.</text>
+      </svg>
+      <figcaption><b>Registrierungspfad.</b> Jede Stufe erzeugt oder verbraucht ein Einladungs-Token; ohne gültiges Token existiert kein Weg zu einem neuen Konto.</figcaption>
+    </figure>
+  </section>
+
+  <!-- ============ BERECHTIGUNGEN ============ -->
+  <section id="berechtigungen">
+    <div class="section-head">
+      <span class="eyebrow">03 — Frontend</span>
+      <h2>Sichtbare Module je Rolle</h2>
+    </div>
+    <p>Die Hauptanwendung blendet Navigationspunkte aus, für die die eigene Rolle nicht freigeschaltet ist — der Router prüft dieselbe Rollenliste, bevor ein Modul überhaupt gerendert wird.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Modul</th><th class="ctr">Admin</th><th class="ctr">Trainer</th><th class="ctr">Athlet</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="mod-name">Dashboard<span class="id">dashboard</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr yes">●</td></tr>
+          <tr><td class="mod-name">Athleten &amp; Team<span class="id">athletes</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr no">–</td></tr>
+          <tr><td class="mod-name">Übungskatalog<span class="id">catalog</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr no">–</td></tr>
+          <tr><td class="mod-name">Vorlagen<span class="id">templates</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr no">–</td></tr>
+          <tr><td class="mod-name">Trainingspläne<span class="id">plans</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr yes">●</td></tr>
+          <tr><td class="mod-name">Einheiten &amp; Feedback<span class="id">sessions</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr yes">●</td></tr>
+          <tr><td class="mod-name">Wettkämpfe<span class="id">competitions</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr no">–</td></tr>
+          <tr><td class="mod-name">Zeiten &amp; Leistung<span class="id">times</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr yes">●</td></tr>
+          <tr><td class="mod-name">Statistiken<span class="id">stats</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr no">–</td></tr>
+          <tr><td class="mod-name">Handlungsfelder<span class="id">actionitems</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr yes">●</td></tr>
+          <tr><td class="mod-name">Sync-Warteschlange<span class="id">syncqueue</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr no">–</td></tr>
+          <tr><td class="mod-name">Nutzerverwaltung<span class="id">usermgmt</span></td><td class="ctr yes">●</td><td class="ctr no">–</td><td class="ctr no">–</td></tr>
+          <tr><td class="mod-name">Mein Profil<span class="id">profile</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr yes">●</td></tr>
+          <tr><td class="mod-name">Rechtliches &amp; Datenschutz<span class="id">info</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr yes">●</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <footer class="legend"><span><span class="yes">●</span> sichtbar</span><span><span class="no">–</span> ausgeblendet</span></footer>
+
+    <div class="callout">
+      <h4>Wo bleibt der Superadmin?</h4>
+      <p>Der Superadmin ruft diese Hauptanwendung gar nicht auf. Er arbeitet in einer separaten, schlanken Oberfläche unter <code class="mono">/admin</code> — bewusst ohne IndexedDB/Offline-Anteil, da seine Aufgabe rein administrativ ist:</p>
+      <ul>
+        <li>Neue Vereine anlegen und deren erste Admin-Einladung ausstellen</li>
+        <li>Liste aller Vereine samt Mitgliederzahl je Rolle einsehen</li>
+        <li>Wie ein Admin: Einladungen ausstellen/einsehen/widerrufen und Mitgliederlisten abrufen — für jeden beliebigen Verein statt nur den eigenen</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ============ API ============ -->
+  <section id="api">
+    <div class="section-head">
+      <span class="eyebrow">04 — Backend</span>
+      <h2>Rollenprüfung auf API-Ebene</h2>
+    </div>
+    <p>Das Frontend blendet Module nur aus — durchgesetzt wird die Rolle serverseitig, per <code class="mono">requireRole(...)</code>-Guard nach der Authentifizierung. Ein Auszug der zugriffsrelevanten Endpunkte:</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Endpunkt</th><th>Erforderliche Rolle</th><th>Zweck</th></tr></thead>
+        <tbody>
+          <tr><td class="path">POST /api/clubs</td><td><span class="roletag">superadmin</span></td><td>Verein anlegen + erste Admin-Einladung ausstellen</td></tr>
+          <tr><td class="path">GET /api/clubs</td><td><span class="roletag">superadmin</span></td><td>Alle Vereine mit Mitgliederzahlen auflisten</td></tr>
+          <tr><td class="path">POST /api/invitations</td><td><span class="roletag">superadmin</span><span class="roletag">admin</span></td><td>Einladung ausstellen (Admin: <code>clubId</code> serverseitig auf eigenen Verein erzwungen)</td></tr>
+          <tr><td class="path">GET /api/invitations</td><td><span class="roletag">superadmin</span><span class="roletag">admin</span></td><td>Offene/verwendete Einladungen einsehen</td></tr>
+          <tr><td class="path">DELETE /api/invitations/:id</td><td><span class="roletag">superadmin</span><span class="roletag">admin</span></td><td>Einladung widerrufen</td></tr>
+          <tr><td class="path">GET /api/invitations/preview/:token</td><td><span class="roletag pub">öffentlich</span></td><td>Verein/Rolle einer Einladung vor dem Registrieren anzeigen</td></tr>
+          <tr><td class="path">POST /auth/register</td><td><span class="roletag pub">Token erforderlich</span></td><td>Konto per Einladungs-Token anlegen — keine offene Selbstregistrierung</td></tr>
+          <tr><td class="path">GET /api/users</td><td><span class="roletag">admin</span><span class="roletag">superadmin</span></td><td>Vereinsmitglieder auflisten (Admin: eigener Verein automatisch, Superadmin: <code>?clubId=</code> Pflicht)</td></tr>
+          <tr><td class="path">POST /api/sync/push · pull</td><td><span class="roletag">trainer</span><span class="roletag">admin</span><span class="roletag">athlete</span></td><td>Fachliche Offline-Änderungen synchronisieren — Superadmin hat keine fachlichen Daten</td></tr>
+          <tr><td class="path">GET · PATCH /api/me</td><td><span class="roletag pub">jede eingeloggte Rolle</span></td><td>Eigenes Profil ansehen/bearbeiten</td></tr>
+          <tr><td class="path">GET /api/me/export</td><td><span class="roletag pub">jede eingeloggte Rolle</span></td><td>DSGVO-Datenexport der eigenen Person</td></tr>
+          <tr><td class="path">DELETE /api/me</td><td><span class="roletag pub">jede eingeloggte Rolle</span></td><td>DSGVO-Löschantrag — Konto sofort funktionslos, Hard-Purge nach Fristablauf</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============ DATENMODELL ============ -->
+  <section id="datenmodell">
+    <div class="section-head">
+      <span class="eyebrow">05 — Struktur</span>
+      <h2>Das Datenmodell</h2>
+    </div>
+    <p>Jede fachliche Zeile trägt eine <code class="mono">clubId</code> — das ist die gesamte Mandantentrennung. Löschungen sind grundsätzlich Soft-Deletes (<code class="mono">deletedAt</code>), damit sie sich später korrekt auf andere Geräte synchronisieren. Verschachtelte, variable Strukturen (Sätze, Wochentage, Anwesenheitslisten, Kommentare) liegen als JSON, damit beim Sync kein verlustbehaftetes Mapping zum Offline-Frontend entsteht.</p>
+
+    <div class="glossary-group">
+      <h3>Konten &amp; Zugriff</h3>
+      <p class="g-desc">Alles rund um Login, Einladung und DSGVO-Lebenszyklus eines Kontos.</p>
+      <div class="mermaid-wrap">
+        <pre class="mermaid">
+erDiagram
+  CLUB ||--o{ USER : "beschäftigt"
+  CLUB ||--o{ INVITATION : "vergibt"
+  USER ||--o{ REFRESHTOKEN : "hält"
+  USER ||--o{ INVITATION : "stellt aus"
+  USER ||--o| DATADELETIONREQUEST : "beantragt"
+  USER }o--o| ATHLETE : "optional verknüpft mit"
+        </pre>
+      </div>
+      <div class="entity-grid">
+        <div class="entity"><div class="ename">Club</div><div class="edesc">Ein Verein / Mandant — Wurzel der Datenisolation.</div></div>
+        <div class="entity"><div class="ename">User</div><div class="edesc">Login-Konto (E-Mail, Passwort-Hash, <code>role</code>). <code>clubId</code> ist nur bei <code>superadmin</code> leer; <code>athleteId</code> verknüpft optional den zugehörigen Athlete-Datensatz.</div></div>
+        <div class="entity"><div class="ename">Invitation</div><div class="edesc">Zeitlich befristetes, einmal einlösbares Token samt vergebener Rolle. Bleibt nach Verbrauch als historischer Datensatz bestehen.</div></div>
+        <div class="entity"><div class="ename">RefreshToken</div><div class="edesc">Rotierendes Sitzungstoken je Login/Gerät (JWT-Refresh).</div></div>
+        <div class="entity"><div class="ename">DataDeletionRequest</div><div class="edesc">DSGVO-Löschantrag (Art. 17): sofort dokumentiert, Konto ab dann funktionslos; endgültiger Hard-Purge erst nach Karenzfrist (Standard 30 Tage).</div></div>
+      </div>
+    </div>
+
+    <div class="glossary-group">
+      <h3>Trainings- &amp; Wettkampfdaten</h3>
+      <p class="g-desc">Das eigentliche fachliche Modell — für jede Rolle unterschiedlich sicht- und bearbeitbar (siehe Berechtigungsmatrix oben).</p>
+      <div class="mermaid-wrap">
+        <pre class="mermaid">
+erDiagram
+  CLUB ||--o{ GROUP : "gliedert"
+  CLUB ||--o{ ATHLETE : "führt"
+  CLUB ||--o{ EXERCISE : "katalogisiert"
+  CLUB ||--o{ TEMPLATE : "besitzt"
+  CLUB ||--o{ PLAN : "besitzt"
+  CLUB ||--o{ TRAININGSESSION : "besitzt"
+  CLUB ||--o{ COMPETITION : "veranstaltet"
+  CLUB ||--o{ ACTIONITEM : "besitzt"
+  GROUP ||--o{ ATHLETE : "gruppiert"
+  GROUP ||--o{ PLAN : "adressiert"
+  GROUP ||--o{ TRAININGSESSION : "adressiert"
+  PLAN ||--o{ TRAININGSESSION : "wird durchgeführt als"
+  ATHLETE ||--o{ STARTLISTENTRY : "startet"
+  ATHLETE ||--o{ RESULT : "erzielt"
+  ATHLETE ||--o{ ACTIONITEM : "betrifft"
+  COMPETITION ||--o{ STARTLISTENTRY : "enthält"
+  COMPETITION ||--o{ RESULT : "erzeugt"
+        </pre>
+      </div>
+      <div class="entity-grid">
+        <div class="entity"><div class="ename">Group</div><div class="edesc">Trainingsgruppe innerhalb eines Vereins.</div></div>
+        <div class="entity"><div class="ename">Athlete</div><div class="edesc">Athlet:innen-Stammdatensatz (Name, Geburtsdatum, Gruppe, Status). Unabhängig vom optionalen <code>User</code>-Konto.</div></div>
+        <div class="entity"><div class="ename">Exercise</div><div class="edesc">Übungskatalog-Eintrag; <code>comments</code> als eingebettetes JSON-Array.</div></div>
+        <div class="entity"><div class="ename">Template</div><div class="edesc">Wiederverwendbare Vorlage; <code>sets</code> als JSON — Mix aus Einzelsätzen und Wiederholungsblöcken, keine eigene Kopie beim Einsatz in einem Plan.</div></div>
+        <div class="entity"><div class="ename">Plan</div><div class="edesc">Wochenplan je Gruppe; <code>days</code> als JSON-Array (Datum + Sets), plus planweite <code>comments</code>.</div></div>
+        <div class="entity"><div class="ename">TrainingSession</div><div class="edesc">Durchgeführte Einheit; <code>attendance</code> als JSON-Array — ein Eintrag je Athlet:in mit Anwesenheit, RPE und Notiz.</div></div>
+        <div class="entity"><div class="ename">Competition</div><div class="edesc">Wettkampf: Ort, Datum, Bahnlänge (<code>LCM</code>/<code>SCM</code>).</div></div>
+        <div class="entity"><div class="ename">StartlistEntry</div><div class="edesc">Meldung zu einem Wettkampf: Strecke, Lauf, Bahn, Meldezeit.</div></div>
+        <div class="entity"><div class="ename">Result</div><div class="edesc">Erzieltes Ergebnis, optional an einen Wettkampf gebunden; <code>laps</code> optional als JSON-Array (Rundenzeiten aus der Stoppuhr).</div></div>
+        <div class="entity"><div class="ename">ActionItem</div><div class="edesc">Handlungsfeld / Entwicklungsschwerpunkt je Athlet:in mit Status (<code>offen · progress · done</code>).</div></div>
+      </div>
+    </div>
+
+    <div class="callout">
+      <h4>Sync-Infrastruktur (ohne eigenes Diagramm)</h4>
+      <p>Änderungen entstehen offline und werden clientseitig als Events in einer lokalen Warteschlange gesammelt (Modul „Sync-Warteschlange"). Der Server verbucht eingehende Events idempotent in <code class="mono">SyncedEvent</code> und merkt sich Löschungen zusätzlich als <code class="mono">SyncTombstone</code> — unabhängig vom gelöschten Datensatz, damit eine Löschung auch nach dem endgültigen Hard-Purge eines Kontos noch an andere Geräte gemeldet werden kann.</p>
+    </div>
+  </section>
+
+  <div class="end-note">
+    <p>Stand: Code-Referenz aus <code class="mono">apps/api/prisma/schema.prisma</code>, <code class="mono">packages/shared-types</code> und <code class="mono">apps/web/js/router.js</code>. Bei Abweichungen zwischen Code und diesem Dokument gilt der Code.</p>
+  </div>
+
+</main>
+
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  mermaid.initialize({ startOnLoad: true, theme: isDark ? 'dark' : 'neutral', securityLevel: 'strict' });
+</script>
+
+</body>
+</html>
