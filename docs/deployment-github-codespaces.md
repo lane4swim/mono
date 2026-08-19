@@ -90,13 +90,28 @@ pwd
 
 Der Codespace-Benutzer `vscode` hat bereits passwortlosen `sudo`-Zugriff — kein eigener Benutzer, keine Firewall-Härtung, kein SSH-Setup nötig (siehe Vergleichstabelle oben).
 
-### 4.1 Node.js (über NodeSource, liefert eine aktuelle LTS-Version)
+Einmalig den lokalen `apt`-Paketindex aktualisieren, bevor die folgenden Pakete installiert werden:
+```bash
+sudo apt-get update
+```
+> **Warum nötig?** Frische Codespace-Container bringen zwar die Paketquellen-Liste mit, aber keinen aktuellen (oder teils gar keinen) lokalen Index dazu — `apt install` bricht dann mit „Unable to locate package …" ab, obwohl das Paket existiert. `apt-get update` lädt den Index einmalig nach; danach funktionieren die `apt install`-Befehle unten normal. (Der Node.js-Installationsbefehl in 4.1 bringt sein eigenes `apt-get update` über das NodeSource-Setup-Skript mit und ist davon nicht betroffen.)
+
+### 4.1 Node.js
+
+Erst prüfen, was im Codespace-Basisimage bereits vorinstalliert ist:
+```bash
+node -v
+```
+Das Projekt verlangt laut `package.json` (`engines.node`) nur **mindestens** Version 22 — jede neuere Version erfüllt das ebenfalls. Codespaces-Basisimages bringen über `nvm` meist bereits eine aktuelle Node-Version mit (z. B. `v24.x`), die diese Anforderung schon erfüllt — dann ist **kein weiterer Schritt nötig**, mit dieser Version direkt weitermachen.
+
+Zeigt `node -v` dagegen **gar keine** Version oder etwas **älter als v22**, Node explizit über NodeSource nachinstallieren:
 ```bash
 curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt install -y nodejs
+hash -r
 node -v
 ```
-Sollte `v22.x` anzeigen — unabhängig davon, welche Node-Version im Codespace-Basisimage bereits vorinstalliert war.
+> **Warum reicht ein einfaches `apt install` danach nicht immer?** Ist bereits eine über `nvm` verwaltete Node-Version aktiv, hängt deren Verzeichnis typischerweise weiter vorn im `PATH` als `/usr/bin` — `node -v` würde dann weiterhin die alte `nvm`-Version zeigen, obwohl die NodeSource-Installation erfolgreich war (`hash -r` erzwingt nur, dass die Shell ihren Befehls-Cache neu aufbaut, ändert aber nichts an der `PATH`-Reihenfolge selbst). In dem Fall entweder `nvm use 22` (falls `nvm` vorhanden) oder `/usr/bin/node`/`/usr/bin/npm` explizit statt `node`/`npm` verwenden.
 
 ### 4.2 PostgreSQL (Datenbank für das Backend)
 ```bash
@@ -106,8 +121,10 @@ sudo service postgresql start
 > **Wichtig — `service` statt `systemctl`:** Codespaces-Container laufen ohne `systemd` als Init-System (typisch für Docker-basierte Entwicklungsumgebungen) — `sudo systemctl start postgresql` würde mit „Failed to connect to bus" fehlschlagen. Der klassische `service`-Befehl (spricht direkt die Init-Skripte an) funktioniert dagegen problemlos. Gilt für den ganzen Rest dieser Anleitung: überall `service` statt `systemctl`.
 
 ```bash
-sudo -u postgres psql
+sudo su - postgres -c psql
 ```
+> **Warum nicht `sudo -u postgres psql`?** Auf manchen Codespaces-Images ist das für den eigenen Benutzer (`vscode` o. ä.) nicht ohne Passwort erlaubt — `sudo` fragt dann nach dem Passwort **des eigenen Benutzers**, nicht nach einem Datenbank-Passwort. Da für diesen Benutzer in Codespaces aber gar kein Passwort gesetzt ist, schlägt jede Eingabe mit „Sorry, try again" fehl, egal was eingetippt wird. Reines `sudo` (ohne `-u <anderer-benutzer>`, also als root) ist dagegen ohne Passwort erlaubt — der Befehl oben nutzt das aus: `sudo` startet `su - postgres -c psql` als root, und root darf mit `su` ohne Passwort zu jedem Benutzer wechseln.
+
 Innerhalb der PostgreSQL-Konsole (Prompt `postgres=#`):
 ```sql
 CREATE DATABASE lane1;
@@ -394,10 +411,13 @@ Ein angehaltener (nicht gelöschter) Codespace verbraucht weiterhin Speicherkont
 
 | Symptom | Wahrscheinliche Ursache | Prüfen |
 |---|---|---|
+| `sudo apt install -y postgresql` (oder `nginx`) meldet „Unable to locate package …" | Lokaler `apt`-Paketindex im frischen Container noch nicht aktualisiert | `sudo apt-get update` einmalig ausführen (siehe Hinweis Anfang Abschnitt 4), danach `apt install` erneut versuchen |
 | Geöffnete Adresse zeigt eine GitHub-Anmeldeseite statt der App | Port-Sichtbarkeit steht auf „Private" | Ports-Tab → Port 8080 → „Port Visibility" → „Public" (siehe Schritt 11) |
 | „502 Bad Gateway" | Backend läuft nicht (z. B. nach Fortsetzen des Codespace vergessen neu zu starten) | `pm2 status`, `pm2 logs lane1-api --nostream`, siehe Abschnitt 13 |
 | Seite lädt gar nicht / Verbindung wird abgelehnt | Nginx läuft nicht oder Port nicht weitergeleitet | `sudo service nginx status`, Ports-Tab prüfen (Schritt 11) |
 | `sudo systemctl start postgresql` meldet „Failed to connect to bus" | Kein `systemd` im Container (siehe Hinweis Schritt 4.2) | `sudo service postgresql start` statt `systemctl` verwenden |
+| `sudo -u postgres psql` fragt nach einem Passwort, jede Eingabe scheitert mit „Sorry, try again" | `sudo -u <anderer-benutzer>` erfordert auf diesem Image ein Passwort für den eigenen Benutzer — das aber in Codespaces gar nicht gesetzt ist (siehe Warnhinweis Schritt 4.2) | `sudo su - postgres -c psql` statt `sudo -u postgres psql` verwenden |
+| `node -v` zeigt nach der NodeSource-Installation weiterhin die alte/vorinstallierte Version (z. B. `v24.x` statt `v22.x`) | Kein Fehler — `nvm` (im Basisimage vorinstalliert) hängt weiter vorn im `PATH` als `/usr/bin`; da `package.json` nur `>=22` verlangt, erfüllt die angezeigte Version die Anforderung trotzdem meist bereits | Version mit `engines.node` in `package.json` vergleichen (`>=22` reicht); bei echtem Bedarf `/usr/bin/node`/`/usr/bin/npm` explizit verwenden, siehe Hinweis Schritt 4.1 |
 | Backend startet gar nicht (`pm2 status` zeigt „errored") | Pflicht-Umgebungsvariable fehlt/ungültig, z. B. `JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY` nicht gesetzt | `pm2 logs lane1-api --nostream` — `env.ts` gibt die genaue fehlende/ungültige Variable aus |
 | Login schlägt fehl, Konsole zeigt einen CORS-Fehler | `CORS_ORIGIN`/`FRONTEND_BASE_URL` in `.env` stimmen nicht exakt mit der tatsächlichen Codespace-Adresse überein | Adresse im Ports-Tab mit `.env` vergleichen (siehe Warnhinweis Schritt 11), danach `pm2 restart lane1-api` |
 | Login/Registrierung liefert die HTML-Startseite statt einer Fehlermeldung/eines Tokens | `/auth/`-Location-Block in nginx fehlt oder `proxy_pass` mit abschließendem `/` (siehe Warnhinweis Schritt 10) | `curl -i .../auth/login -X POST -d '{}'`, Antwort auf `<!DOCTYPE html>` prüfen |
