@@ -1,19 +1,17 @@
 // ============================================================
-// seed.js — one-time demo data so the app isn't empty on first
-// launch. Safe to call repeatedly: it checks isDbEmpty() first.
-// Also exposes resetDemoData() for the settings panel.
+// seed.js — demo data, loaded only on explicit request via the
+// "reset to demo data" button in the settings panel (resetDemoData()).
+// NOT run automatically on boot: every real account starts on a real,
+// empty club and gets its content from the backend via sync — auto-
+// seeding on first launch used to pollute a brand-new admin's very
+// first login with fake local athletes/groups/etc. before any sync
+// pull had a chance to run (see app.js boot()).
 // ============================================================
-import { getAll, put, bulkPut, uid, isDbEmpty, wipeAll } from './db.js';
+import { getAll, put, bulkPut, uid, wipeAll } from './db.js';
 import { todayISO, isoAddDays, startOfWeek } from './utils.js';
 import { EVENTS } from './refdata.js';
 
 function id(){ return uid('seed'); }
-
-export async function seedIfEmpty() {
-  if (!(await isDbEmpty())) return false;
-  await seedDemoData();
-  return true;
-}
 
 export async function resetDemoData() {
   await wipeAll();

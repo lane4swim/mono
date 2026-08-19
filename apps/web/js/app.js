@@ -28,7 +28,7 @@
 //   trotzdem aktualisiert.
 // ============================================================
 import { pendingSyncCount } from './db.js';
-import { seedIfEmpty, resetDemoData } from './seed.js';
+import { resetDemoData } from './seed.js';
 import { restoreSession, getCurrentUser, setUserLocale, getRole, logout, onUserChange, isLoggedIn } from './state.js';
 import { registerModule, visibleModules, currentRoute, navigate, onRouteChange, getModule } from './router.js';
 import { el, clear, toast, confirmAction, openModal, beginRender } from './utils.js';
@@ -80,7 +80,6 @@ let backgroundSyncIntervalId = null;
 
 async function boot() {
   registerServiceWorker();
-  await seedIfEmpty();
 
   const route = currentRoute();
   if (route.routeId === 'accept-invite' && route.params[0]) {

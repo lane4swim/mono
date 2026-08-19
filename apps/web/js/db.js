@@ -151,11 +151,6 @@ export async function countAll(store){
   return items.length;
 }
 
-export async function isDbEmpty(){
-  const athletes = await getAll('athletes');
-  return athletes.length === 0;
-}
-
 export async function exportAll(){
   const dump = {};
   for (const s of STORES) dump[s] = await getAll(s);
