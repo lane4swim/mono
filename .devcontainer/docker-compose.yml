@@ -14,7 +14,9 @@ services:
     profiles: ["production-like"]
 
   app:
-    image: mcr.microsoft.com/devcontainers/javascript-node:1-22-bookworm
+    build:
+      context: .
+      dockerfile: Dockerfile
     volumes:
       - ..:/workspace:cached # Projektwurzel (relativ zu diesem Compose-File)
     command: sleep infinity
