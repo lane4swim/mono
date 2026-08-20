@@ -350,3 +350,63 @@ tr:hover td{ background: var(--c-foam-2); }
   background: none; border: none; color: var(--c-slate); font-size: var(--fs-sm);
   text-decoration: underline; cursor: pointer; padding: 4px;
 }
+
+/* ---- Trainingsplan-PDF-Export (Druckansicht) ----
+   Baut keine echte PDF-Datei — nutzt window.print() auf einer eigenen,
+   druckoptimierten Ansicht (siehe js/modules/planPdfExport.js). Der
+   Nutzer speichert im Browser-Druckdialog "Als PDF". Auf dem Bildschirm
+   bleibt diese Ansicht unsichtbar außerhalb des Viewports; erst
+   @media print blendet sie ein und alles andere aus. Bewusst reines
+   Schwarz auf Weiß statt der App-Markenfarben, für maximalen Kontrast
+   auf Papier/Ausdruck. */
+.plan-print-root{ position: absolute; left: -99999px; top: 0; width: 0; height: 0; overflow: hidden; }
+.plan-print-sheet{
+  width: 190mm; background: #fff; color: #000; font-family: var(--f-body);
+}
+.print-head{ border-bottom: 1mm solid #000; padding-bottom: 3mm; margin-bottom: 5mm; }
+.print-title{
+  font-family: var(--f-display); font-weight: 700; font-size: 9mm; line-height: 1.1;
+  color: #000; margin: 0 0 2mm;
+}
+.print-sub{ font-size: 4mm; font-weight: 600; color: #000; }
+.print-days{ display: grid; grid-template-columns: repeat(auto-fill, minmax(82mm, 1fr)); gap: 6mm; }
+.print-day{ break-inside: avoid; min-width: 0; }
+.print-day-head{
+  display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 1mm 2mm;
+  border-bottom: 0.6mm solid #000; padding-bottom: 1.5mm; margin-bottom: 2mm; min-width: 0;
+}
+.print-day-date{ font-weight: 700; font-size: 4.6mm; text-transform: capitalize; }
+.print-day-total{ font-weight: 700; font-size: 3.8mm; font-family: var(--f-mono); }
+.print-entry-list{ display: flex; flex-direction: column; }
+.print-entry{
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 2mm;
+  padding: 1.6mm 0; border-bottom: 0.25mm solid #000;
+}
+.print-entry-qty{
+  font-family: var(--f-mono); font-weight: 800; font-size: 4.4mm; white-space: nowrap; color: #000;
+}
+.print-entry-name{ font-weight: 600; font-size: 4mm; color: #000; }
+.print-block{
+  border: 0.7mm solid #000; border-radius: 1.5mm; padding: 2mm 3mm; margin: 1.5mm 0 3mm;
+}
+.print-block-head{
+  font-weight: 800; font-size: 3.8mm; text-transform: uppercase; letter-spacing: 0.2mm; margin-bottom: 1mm;
+}
+.print-block-list .print-entry:last-child{ border-bottom: none; }
+.print-empty{ font-size: 4mm; color: #000; }
+
+@media print{
+  /* html/body normally carry height:100% + the app's foam background
+     (see rules near the top of this file) — left in place, that forced
+     full-viewport-height, colored box becomes part of the page's normal
+     flow and can push our (already single-page) content onto a second,
+     near-empty page. Reset both for print so only .plan-print-sheet
+     determines page height. */
+  html, body{ height: auto !important; background: #fff !important; }
+  body > *:not(.plan-print-root){ display: none !important; }
+  .plan-print-root{
+    position: static; width: auto; height: auto; overflow: visible;
+  }
+  .plan-print-sheet{ width: auto; }
+  @page{ size: A4; margin: 12mm; }
+}

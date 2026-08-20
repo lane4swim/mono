@@ -9,6 +9,7 @@ import {
 import { WEEKDAYS, EQUIPMENT_ITEMS } from '../refdata.js';
 import { renderSetEditor, totalDistance, cloneItems, collectEquipment } from './setEditor.js';
 import { renderCommentThread, commentsButton } from './comments.js';
+import { exportPlanToPdf } from './planPdfExport.js';
 import { navigate } from '../router.js';
 import { t, trLabel } from '../i18n.js';
 
@@ -64,6 +65,7 @@ async function renderDetail(container, planId) {
   wrap.appendChild(el('div', { class: 'page-head' }, [
     el('div', {}, [el('div', { class: 'page-eyebrow' }, group?.name || t('plans.noGroup')), el('h1', { class: 'mt-0' }, plan.name)]),
     el('div', { class: 'page-actions' }, [
+      el('button', { class: 'btn btn-ghost', onclick: () => exportPlanToPdf(plan, group, exercises) }, t('plans.exportPdf')),
       el('button', { class: 'btn btn-ghost', onclick: () => openPlanModal(plan, groups, templates, exercises, () => { clear(container); renderDetail(container, planId); }) }, t('common.edit')),
       el('button', { class: 'btn btn-danger', onclick: () => confirmAction(t('plans.deleteConfirm'), async () => { await remove('plans', planId); toast(t('plans.deleted')); navigate('plans'); }) }, t('common.delete')),
     ]),
