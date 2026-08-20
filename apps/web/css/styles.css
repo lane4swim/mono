@@ -130,7 +130,9 @@ button{ font-family: inherit; }
 .nav-group-label{
   font-size: 0.68rem; text-transform:uppercase; letter-spacing:.07em; font-weight:700;
   color: var(--c-slate-2); padding: 16px 12px 6px;
+  display:flex; align-items:center; gap:7px;
 }
+.nav-group-label .ic{ width:14px; height:14px; flex-shrink:0; opacity:.85; }
 .more-nav-list{ display:flex; flex-direction:column; }
 .more-nav-list .nav-link{ color: var(--c-ink); }
 .more-nav-list .nav-link:hover{ background: var(--c-foam-2); }
