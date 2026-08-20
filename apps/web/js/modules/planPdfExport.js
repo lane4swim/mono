@@ -148,10 +148,17 @@ function buildEntryNode(entry, exercises) {
 
 function buildSetRow(entrySet, exercises) {
   const name = entrySet.description || exerciseName(entrySet, exercises) || '—';
-  return el('div', { class: 'print-entry' }, [
+  const row = el('div', { class: 'print-entry' }, [
     el('span', { class: 'print-entry-qty' }, `${entrySet.reps || 1}×${entrySet.distance ?? '—'} m`),
     el('span', { class: 'print-entry-name' }, name),
   ]);
+  // Pause nur anzeigen, wenn tatsächlich eine geplant ist — bei 0s (z. B.
+  // Ein-/Ausschwimmen) würde "Pause: 0s" auf jeder Zeile nur Rauschen
+  // erzeugen, ohne den Trainer:innen etwas Neues zu sagen.
+  if (entrySet.restSec > 0) {
+    row.appendChild(el('span', { class: 'print-entry-rest' }, `${t('plans.colRest')}: ${entrySet.restSec}s`));
+  }
+  return row;
 }
 
 function exerciseName(entrySet, exercises) {
