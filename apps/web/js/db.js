@@ -72,7 +72,7 @@ const SYNC_EXCLUDED = new Set(['syncQueue', 'meta']);
 // über put() geschrieben (Nutzerverwaltung läuft über eigene REST-
 // Endpunkte, siehe apiClient.js) und ein Verein hat ohnehin keine eigene
 // clubId (seine id IST die clubId).
-const CLUB_SCOPED_STORES = new Set([
+export const CLUB_SCOPED_STORES = new Set([
   'athletes', 'groups', 'competitions', 'entries', 'results',
   'exercises', 'templates', 'plans', 'sessions', 'actionItems',
 ]);

@@ -3,11 +3,19 @@
 // launch. Safe to call repeatedly: it checks isDbEmpty() first.
 // Also exposes resetDemoData() for the settings panel.
 // ============================================================
-import { getAll, put, bulkPut, uid, isDbEmpty, wipeAll } from './db.js';
+import { getAll, put, bulkPut, uid, isDbEmpty, wipeAll, get, remove, clearStore, CLUB_SCOPED_STORES } from './db.js';
 import { todayISO, isoAddDays, startOfWeek, toIsoDateTime } from './utils.js';
 import { EVENTS } from './refdata.js';
 
 function id(){ return uid('seed'); }
+
+// Marker in 'meta' — gesetzt von seedDemoData() (siehe unten), konsumiert
+// von wipeDemoDataIfPresent() beim ersten erfolgreichen Login/Registrieren
+// auf diesem Gerät (siehe app.js: startAuthenticatedApp()). Zeigt an, dass
+// die aktuell in IndexedDB liegenden fachlichen Daten NUR der lokale Demo-
+// Datensatz sind (ohne clubId, siehe unten) und noch nie mit einem echten
+// Konto verbunden waren.
+const DEMO_SEED_META_KEY = 'demoDataSeeded';
 
 export async function seedIfEmpty() {
   if (!(await isDbEmpty())) return false;
@@ -20,7 +28,47 @@ export async function resetDemoData() {
   await seedDemoData();
 }
 
+// Entfernt den lokalen Demo-Datensatz, falls er noch vorhanden ist —
+// aufgerufen unmittelbar bei jedem Übergang in die authentifizierte App
+// (siehe app.js: startAuthenticatedApp()), sowohl nach frischem Login als
+// auch nach Registrierung/Einladung-Annahme, aber VOR dem ersten
+// Sync-Zyklus. Grund: seedIfEmpty() läuft in boot() bereits VOR der
+// Anmeldung (siehe dort) — ein frisches Gerät hat also immer lokale Demo-
+// Athlet:innen/-Wettkämpfe/… in IndexedDB, sobald die Login-Maske zum
+// ersten Mal erscheint. Diese Demo-Datensätze tragen bewusst KEINE clubId
+// (siehe seedDemoData() oben) und würden sich sonst nach dem Login mit den
+// echten, vom Server gepullten Daten des Vereins vermischen — sichtbar an
+// verdoppelten Einträgen in den Listen, und schlimmer: eine spätere
+// Bearbeitung eines solchen Demo-Datensatzes schlägt beim Sync-Push fehl
+// (fehlende clubId bzw. Fremdschlüssel-Verweis auf lokale, dem Server
+// unbekannte ids). Läuft dank des Markers DEMO_SEED_META_KEY nur einmal —
+// jeder weitere Aufruf (z. B. bei einer Sitzungswiederherstellung nach
+// einem Seiten-Reload) ist ein No-op, das lokal bereits synchronisierte
+// echte Daten NICHT anrührt. Gibt zurück, ob tatsächlich etwas entfernt
+// wurde (für einen optionalen Hinweis-Toast in app.js).
+export async function wipeDemoDataIfPresent() {
+  const flag = await get('meta', DEMO_SEED_META_KEY);
+  if (!flag?.active) return false;
+  for (const store of CLUB_SCOPED_STORES) await clearStore(store);
+  await remove('meta', DEMO_SEED_META_KEY);
+  return true;
+}
+
 async function seedDemoData() {
+  // Als ALLERERSTE Schreiboperation, nicht erst am Ende: seedDemoData()
+  // schreibt über mehrere await bulkPut()-Aufrufe hinweg in neun Stores —
+  // wird der Ladevorgang mittendrin unterbrochen (Reload, Navigation weg
+  // von der Seite, langsame/wacklige Verbindung beim allerersten Aufruf),
+  // blieben ohne dieses vorgezogene Flag einzelne Stores bereits mit
+  // Demo-Datensätzen gefüllt, während DEMO_SEED_META_KEY nie gesetzt
+  // würde — wipeDemoDataIfPresent() (siehe unten) fände dann nichts zum
+  // Aufräumen, und die Reste würden sich beim ersten Login mit den echten
+  // Daten vermischen. Ein zu früh gesetztes Flag ist dagegen unbedenklich:
+  // wipeDemoDataIfPresent() leert ohnehin JEDEN betroffenen Store
+  // vollständig, unabhängig davon, wie viele Demo-Datensätze tatsächlich
+  // (fertig) geschrieben wurden.
+  await put('meta', { id: DEMO_SEED_META_KEY, active: true });
+
   const groupA = { id: id(), name: 'Leistungsgruppe', description: 'Wettkampforientierte Athlet:innen, 6–8 Einheiten/Woche' };
   const groupB = { id: id(), name: 'Nachwuchs', description: 'Aufbaugruppe, Technik- und Grundlagenausbildung' };
   await bulkPut('groups', [groupA, groupB]);

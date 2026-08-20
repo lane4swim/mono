@@ -29,6 +29,7 @@ export default {
     errorInvitationExpired: 'Diese Einladung ist ungültig, abgelaufen oder wurde bereits verwendet.',
     errorEmailTaken: 'Diese E-Mail-Adresse ist bereits registriert.',
     errorUnknown: 'Ein unerwarteter Fehler ist aufgetreten.',
+    demoDataReplaced: 'Beispieldaten durch die Daten deines Vereins ersetzt.',
   },
   topbar: {
     offlineReady: 'Offline bereit', offlineMode: 'Offline-Modus aktiv',

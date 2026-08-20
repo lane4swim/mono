@@ -29,6 +29,7 @@ export default {
     errorInvitationExpired: 'This invitation is invalid, expired, or has already been used.',
     errorEmailTaken: 'This email address is already registered.',
     errorUnknown: 'An unexpected error occurred.',
+    demoDataReplaced: 'Sample data replaced with your club\'s data.',
   },
   topbar: {
     offlineReady: 'Offline ready', offlineMode: 'Offline mode active',
