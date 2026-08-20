@@ -188,7 +188,7 @@ export default {
     trainingDaysLabel: 'Training Days', dateLabel: 'Date:', removeDay: 'Remove day',
     emptyDayOption: '— empty day —', addDayButton: '+ Add training day',
     validationName: 'Please enter a name.', savedEdit: 'Changes saved', savedCreate: 'Plan created',
-    exportPdf: '📄 Export as PDF',
+    exportPdf: '📄 Export as PDF', exportDayPdf: '🖨️ Print day',
   },
   templates: {
     eyebrow: '{count} templates', title: 'Training Plan Templates', createTemplate: '+ Create template',

@@ -9,7 +9,7 @@ import {
 import { WEEKDAYS, EQUIPMENT_ITEMS } from '../refdata.js';
 import { renderSetEditor, totalDistance, cloneItems, collectEquipment } from './setEditor.js';
 import { renderCommentThread, commentsButton } from './comments.js';
-import { exportPlanToPdf } from './planPdfExport.js';
+import { exportPlanToPdf, exportDayToPdf } from './planPdfExport.js';
 import { navigate } from '../router.js';
 import { t, trLabel } from '../i18n.js';
 
@@ -88,6 +88,7 @@ async function renderDetail(container, planId) {
         el('h3', { class: 'mt-0' }, fmtDateLong(day.date)),
         el('div', { class: 'flex items-center gap-8' }, [
           badge(t('plans.totalBadge', { m: totalDistance(day.sets || []) }), 'neutral'),
+          el('button', { class: 'btn btn-ghost btn-sm', onclick: () => exportDayToPdf(plan, day, group, exercises) }, t('plans.exportDayPdf')),
         ]),
       ]),
     ]);

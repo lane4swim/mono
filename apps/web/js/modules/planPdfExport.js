@@ -10,7 +10,13 @@
 // "Einseitig" wird durch Messen + notfalls Herunterskalieren erzwungen:
 // der Inhalt wird zunächst in natürlicher Größe aufgebaut, dann gegen
 // die verfügbare A4-Druckhöhe geprüft; passt er nicht, wird er per
-// CSS-transform so weit verkleinert, dass er auf eine Seite passt.
+// CSS-zoom so weit verkleinert, dass er auf eine Seite passt.
+//
+// Neben dem ganzen Wochenplan (exportPlanToPdf) lässt sich auch ein
+// einzelner Trainingstag drucken (exportDayToPdf) — z. B. um nur den
+// heutigen Zettel poolside auszudrucken statt der ganzen Woche. Der
+// Einzeltag bekommt die volle Seitenbreite statt der Mehrspalten-Ansicht,
+// dadurch bleiben Übungsname/Distanz/Wiederholungen noch größer.
 // ============================================================
 import { el, clear, fmtDateLong } from '../utils.js';
 import { totalDistance } from './setEditor.js';
@@ -32,22 +38,29 @@ function getPrintRoot() {
 }
 
 export function exportPlanToPdf(plan, group, exercises) {
+  printSheet(buildSheet(plan, group, exercises));
+}
+
+export function exportDayToPdf(plan, day, group, exercises) {
+  printSheet(buildDaySheet(plan, day, group, exercises));
+}
+
+function printSheet(sheet) {
   const root = getPrintRoot();
   clear(root);
-  const sheet = buildSheet(plan, group, exercises);
   root.appendChild(sheet);
 
   // Erst ungeskaliert messen, dann nur bei Bedarf verkleinern — so bleibt
-  // der Text für kurze Pläne maximal groß. Kein unterer Anschlag für den
-  // Skalierungsfaktor: "einseitig" ist eine harte Anforderung, ein sehr
-  // umfangreicher Plan mit kleinerer Schrift ist besser als eine zweite
-  // Seite. Bewusst `zoom` statt `transform: scale()`: transform ist reines
-  // Paint-scaling und ändert die Layout-Box nicht, wodurch Chromiums
-  // Druck-Paginierung weiterhin mit der ungeskalierten Höhe rechnet und
-  // trotzdem eine zweite Seite anlegt — zoom verkleinert die Box auch für
-  // die Seitenumbruch-Berechnung. Der 3%-Sicherheitsabschlag fängt ab,
-  // dass die gemessene Breite (190mm) minimal von der tatsächlichen
-  // Druckbreite abweichen kann.
+  // der Text für kurze Pläne/Tage maximal groß. Kein unterer Anschlag für
+  // den Skalierungsfaktor: "einseitig" ist eine harte Anforderung, ein
+  // sehr umfangreicher Plan mit kleinerer Schrift ist besser als eine
+  // zweite Seite. Bewusst `zoom` statt `transform: scale()`: transform
+  // ist reines Paint-scaling und ändert die Layout-Box nicht, wodurch
+  // Chromiums Druck-Paginierung weiterhin mit der ungeskalierten Höhe
+  // rechnet und trotzdem eine zweite Seite anlegt — zoom verkleinert die
+  // Box auch für die Seitenumbruch-Berechnung. Der 3%-Sicherheitsabschlag
+  // fängt ab, dass die gemessene Breite (190mm) minimal von der
+  // tatsächlichen Druckbreite abweichen kann.
   const naturalHeight = sheet.scrollHeight;
   const targetHeight = (PAGE_HEIGHT_MM - PAGE_MARGIN_MM * 2) * MM_TO_PX;
   if (naturalHeight > targetHeight) {
@@ -85,6 +98,21 @@ function buildSheet(plan, group, exercises) {
   }
   sheet.appendChild(daysHost);
 
+  return sheet;
+}
+
+// Einzeltag-Ansicht: volle Seitenbreite statt Mehrspalten-Raster, damit
+// Übungsname/Distanz/Wiederholungen für einen einzelnen Tag noch größer
+// dargestellt werden können als in der Wochenübersicht.
+function buildDaySheet(plan, day, group, exercises) {
+  const sheet = el('div', { class: 'plan-print-sheet plan-print-sheet-solo' });
+  sheet.appendChild(el('div', { class: 'print-head' }, [
+    el('h1', { class: 'print-title' }, plan.name),
+    el('div', { class: 'print-sub' }, `${group?.name || t('plans.noGroup')} · ${t('plans.weekFrom', { date: fmtDateLong(plan.weekStart) })}`),
+  ]));
+  const daysHost = el('div', { class: 'print-days-solo' });
+  daysHost.appendChild(buildDayColumn(day, exercises));
+  sheet.appendChild(daysHost);
   return sheet;
 }
 

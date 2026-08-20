@@ -395,6 +395,18 @@ tr:hover td{ background: var(--c-foam-2); }
 .print-block-list .print-entry:last-child{ border-bottom: none; }
 .print-empty{ font-size: 4mm; color: #000; }
 
+/* Einzeltag-Druck (exportDayToPdf): volle Seitenbreite statt Raster,
+   dadurch bekommt jeder Eintrag deutlich mehr Platz — Schrift entsprechend
+   größer skaliert als in der Mehrtage-Übersicht. */
+.print-days-solo .print-day-head{ border-bottom-width: 1mm; padding-bottom: 2.5mm; margin-bottom: 4mm; }
+.print-days-solo .print-day-date{ font-size: 7mm; }
+.print-days-solo .print-day-total{ font-size: 5.5mm; }
+.print-days-solo .print-entry{ padding: 3mm 0; gap: 4mm; }
+.print-days-solo .print-entry-qty{ font-size: 7mm; min-width: 38mm; }
+.print-days-solo .print-entry-name{ font-size: 6.4mm; }
+.print-days-solo .print-block{ padding: 4mm 5mm; margin: 3mm 0 5mm; }
+.print-days-solo .print-block-head{ font-size: 6mm; margin-bottom: 2mm; }
+
 @media print{
   /* html/body normally carry height:100% + the app's foam background
      (see rules near the top of this file) — left in place, that forced

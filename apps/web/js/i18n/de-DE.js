@@ -188,7 +188,7 @@ export default {
     trainingDaysLabel: 'Trainingstage', dateLabel: 'Datum:', removeDay: 'Tag entfernen',
     emptyDayOption: '— leerer Tag —', addDayButton: '+ Trainingstag hinzufügen',
     validationName: 'Bitte einen Namen angeben.', savedEdit: 'Änderungen gespeichert', savedCreate: 'Plan angelegt',
-    exportPdf: '📄 Als PDF exportieren',
+    exportPdf: '📄 Als PDF exportieren', exportDayPdf: '🖨️ Tag drucken',
   },
   templates: {
     eyebrow: '{count} Vorlagen', title: 'Trainingsplan-Vorlagen', createTemplate: '+ Vorlage erstellen',
