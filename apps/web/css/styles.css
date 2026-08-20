@@ -127,6 +127,13 @@ button{ font-family: inherit; }
 }
 .sidenav ul{ list-style:none; margin:0; padding: 14px 10px; }
 .sidenav li{ margin-bottom: 2px; }
+.nav-group-label{
+  font-size: 0.68rem; text-transform:uppercase; letter-spacing:.07em; font-weight:700;
+  color: var(--c-slate-2); padding: 16px 12px 6px;
+}
+.more-nav-list{ display:flex; flex-direction:column; }
+.more-nav-list .nav-link{ color: var(--c-ink); }
+.more-nav-list .nav-link:hover{ background: var(--c-foam-2); }
 .nav-link{
   display:flex; align-items:center; gap:11px; width:100%; text-align:left;
   padding: 10px 12px; border-radius: var(--radius-sm); background:none; border:none;

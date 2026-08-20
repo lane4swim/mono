@@ -9,7 +9,7 @@ export default {
     confirmTitle: 'Please confirm', yes: 'Yes', no: 'No', loading: 'Loading…',
     all: 'All', optional: 'optional', notFoundTitle: 'Not found',
     nothingHereTitle: 'Nothing here', retry: 'Retry', close: 'Close',
-    somethingWentWrong: 'Something went wrong',
+    somethingWentWrong: 'Something went wrong', more: 'More',
   },
   auth: {
     loginTitle: 'Sign in', loginIntro: 'Sign in with your club account.',
@@ -41,6 +41,9 @@ export default {
     catalog: 'Exercise Catalog', sessions: 'Sessions & Feedback', actionitems: 'Focus Areas',
     stats: 'Statistics', syncqueue: 'Sync Queue', profile: 'My Profile', usermgmt: 'User Management',
     info: 'Legal & Privacy',
+    groups: {
+      training: 'Training', performance: 'Performance & Competition', team: 'Team', admin: 'Administration',
+    },
   },
   settings: {
     title: 'Settings', accounts: 'Accounts', roleLabel: 'Role',
