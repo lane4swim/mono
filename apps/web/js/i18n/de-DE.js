@@ -9,7 +9,7 @@ export default {
     confirmTitle: 'Bitte bestätigen', yes: 'Ja', no: 'Nein', loading: 'Lädt…',
     all: 'Alle', optional: 'optional', notFoundTitle: 'Nicht gefunden',
     nothingHereTitle: 'Nichts hier', retry: 'Erneut versuchen', close: 'Schließen',
-    somethingWentWrong: 'Etwas ist schiefgelaufen',
+    somethingWentWrong: 'Etwas ist schiefgelaufen', more: 'Mehr',
   },
   auth: {
     loginTitle: 'Anmelden', loginIntro: 'Melde dich mit deinem Vereinskonto an.',
@@ -41,6 +41,9 @@ export default {
     catalog: 'Übungskatalog', sessions: 'Einheiten & Feedback', actionitems: 'Handlungsfelder',
     stats: 'Statistiken', syncqueue: 'Sync-Warteschlange', profile: 'Mein Profil', usermgmt: 'Nutzerverwaltung',
     info: 'Rechtliches & Datenschutz',
+    groups: {
+      training: 'Training', performance: 'Leistung & Wettkampf', team: 'Team', admin: 'Verwaltung',
+    },
   },
   settings: {
     title: 'Einstellungen', accounts: 'Konten', roleLabel: 'Rolle',
