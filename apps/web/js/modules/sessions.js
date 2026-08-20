@@ -3,8 +3,8 @@
 // ============================================================
 import { getAll, put, remove } from '../db.js';
 import {
-  el, clear, field, textInput, selectInput, openModal, confirmAction, toast, badge,
-  emptyState, laneWave, fmtDateLong, todayISO, average, fullName, beginRender,
+  el, clear, field, textInput, selectInput, dateInput, openModal, confirmAction, toast, badge,
+  emptyState, laneWave, fmtDateLong, todayISO, toIsoDateTime, average, fullName, beginRender,
 } from '../utils.js';
 import { getRole, getCurrentUser } from '../state.js';
 import { navigate } from '../router.js';
@@ -124,13 +124,13 @@ function openSessionModal(session, groups, athletes, onSaved) {
   function attendanceFor(groupId) {
     return athletes.filter(a => a.groupId === groupId).map(a => {
       const existing = data.attendance.find(x => x.athleteId === a.id);
-      return existing || { athleteId: a.id, present: true, rpe: '', note: '' };
+      return existing || { athleteId: a.id, present: true, rpe: null, note: '' };
     });
   }
   if (!isEdit) data.attendance = attendanceFor(data.groupId);
 
   const form = el('form', { class: 'form-grid single' });
-  const fDate = el('input', { type: 'date', value: data.date });
+  const fDate = dateInput(data.date);
   const fGroup = selectInput(groups.map(g => ({ value: g.id, label: g.name })), data.groupId);
   const fNote = el('textarea', {}, data.trainerNote || '');
   form.appendChild(el('div', { class: 'form-grid' }, [field(t('sessions.formDate'), fDate), field(t('sessions.formGroup'), fGroup)]));
@@ -165,7 +165,7 @@ function openSessionModal(session, groups, athletes, onSaved) {
   ]));
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    await put('sessions', { ...data, date: fDate.value, groupId: fGroup.value, trainerNote: fNote.value.trim(), attendance: data.attendance });
+    await put('sessions', { ...data, date: toIsoDateTime(fDate.value), groupId: fGroup.value, trainerNote: fNote.value.trim(), attendance: data.attendance });
     toast(isEdit ? t('sessions.savedEdit') : t('sessions.savedCreate'));
     close(); onSaved?.();
   });

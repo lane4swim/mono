@@ -4,8 +4,8 @@
 // ============================================================
 import { getAll, put, remove } from '../db.js';
 import {
-  el, clear, field, textInput, selectInput, openModal, confirmAction, toast, badge,
-  emptyState, laneWave, fmtDateShort, todayISO, fullName, beginRender,
+  el, clear, field, textInput, selectInput, dateInput, openModal, confirmAction, toast, badge,
+  emptyState, laneWave, fmtDateShort, todayISO, toIsoDateTime, fullName, beginRender,
 } from '../utils.js';
 import { ACTION_CATEGORIES, ACTION_STATUS } from '../refdata.js';
 import { getRole, getCurrentUser } from '../state.js';
@@ -158,7 +158,7 @@ export function openItemModal(item, athletes, trainers, onSaved, presetAthleteId
   // Standardmäßig ist der/die Erfasser:in für ein neu angelegtes
   // Handlungsfeld zuständig — bleibt aber frei umzuweisen (siehe fTrainer
   // unten).
-  const data = item ? { ...item } : { athleteId: presetAthleteId || athletes[0]?.id || '', title: '', description: '', category: 'technik', status: 'offen', createdDate: todayISO(), dueDate: '', assignedTrainerId: currentUser?.id || '' };
+  const data = item ? { ...item } : { athleteId: presetAthleteId || athletes[0]?.id || '', title: '', description: '', category: 'technik', status: 'offen', createdDate: toIsoDateTime(todayISO()), dueDate: null, assignedTrainerId: currentUser?.id || '' };
   // Die/der aktuell zugeordnete Trainer:in muss als Option verfügbar
   // bleiben, auch wenn die Liste (z. B. mangels Netzwerkzugriff) nicht
   // vollständig geladen werden konnte.
@@ -172,7 +172,7 @@ export function openItemModal(item, athletes, trainers, onSaved, presetAthleteId
   const fCat = selectInput(trOptions(ACTION_CATEGORIES, 'actionCategories'), data.category);
   const fStatus = selectInput(trOptions(ACTION_STATUS, 'actionStatus'), data.status);
   const fTrainer = selectInput(trainerOptions.map(tr => ({ value: tr.id, label: tr.name })), data.assignedTrainerId);
-  const fDue = el('input', { type: 'date', value: data.dueDate || '' });
+  const fDue = dateInput(data.dueDate);
   const fDesc = el('textarea', {}, data.description || '');
   form.appendChild(field(t('actionitems.formAthlete'), fAthlete, { span2: true }));
   form.appendChild(field(t('actionitems.formTitle'), fTitle, { span2: true }));
@@ -188,7 +188,7 @@ export function openItemModal(item, athletes, trainers, onSaved, presetAthleteId
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     if (!fTitle.value.trim()) { toast(t('actionitems.validationTitle'), 'error'); return; }
-    await put('actionItems', { ...data, athleteId: fAthlete.value, title: fTitle.value.trim(), category: fCat.value, status: fStatus.value, assignedTrainerId: fTrainer.value || null, dueDate: fDue.value, description: fDesc.value.trim() });
+    await put('actionItems', { ...data, athleteId: fAthlete.value, title: fTitle.value.trim(), category: fCat.value, status: fStatus.value, assignedTrainerId: fTrainer.value || null, dueDate: toIsoDateTime(fDue.value), description: fDesc.value.trim() });
     toast(isEdit ? t('actionitems.savedEdit') : t('actionitems.savedCreate'));
     close(); onSaved?.();
   });

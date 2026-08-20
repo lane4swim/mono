@@ -3,7 +3,7 @@
 // ============================================================
 import { getAll, put, remove } from '../db.js';
 import {
-  el, clear, fullName, fmtDateLong, todayISO, field, textInput, selectInput,
+  el, clear, fullName, fmtDateLong, todayISO, toIsoDateTime, field, textInput, selectInput, dateInput,
   openModal, confirmAction, toast, badge, emptyState, laneWave, secToTime, timeToSec,
 } from '../utils.js';
 import { EVENTS, COURSES } from '../refdata.js';
@@ -588,7 +588,7 @@ function openCompModal(comp, onSaved) {
   const data = comp ? { ...comp } : { name: '', date: todayISO(), location: '', course: 'LCM', notes: '' };
   const form = el('form', { class: 'form-grid' });
   const fName = textInput(data.name, { required: true });
-  const fDate = el('input', { type: 'date', value: data.date });
+  const fDate = dateInput(data.date);
   const fLoc = textInput(data.location);
   const fCourse = selectInput(trOptions(COURSES, 'courses'), data.course);
   const fNotes = el('textarea', {}, data.notes || '');
@@ -604,7 +604,7 @@ function openCompModal(comp, onSaved) {
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     if (!fName.value.trim()) { toast(t('competitions.validationName'), 'error'); return; }
-    await put('competitions', { ...data, name: fName.value.trim(), date: fDate.value, location: fLoc.value.trim(), course: fCourse.value, notes: fNotes.value.trim() });
+    await put('competitions', { ...data, name: fName.value.trim(), date: toIsoDateTime(fDate.value), location: fLoc.value.trim(), course: fCourse.value, notes: fNotes.value.trim() });
     toast(isEdit ? t('competitions.savedEdit') : t('competitions.savedCreate'));
     close(); onSaved?.();
   });

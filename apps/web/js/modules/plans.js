@@ -3,8 +3,8 @@
 // ============================================================
 import { getAll, put, remove, uid } from '../db.js';
 import {
-  el, clear, field, textInput, selectInput, openModal, confirmAction, toast, badge,
-  emptyState, laneWave, fmtDateLong, fmtDateShort, todayISO, isoAddDays, startOfWeek, beginRender,
+  el, clear, field, textInput, selectInput, dateInput, openModal, confirmAction, toast, badge,
+  emptyState, laneWave, fmtDateLong, fmtDateShort, todayISO, toIsoDateTime, dateOnly, isoAddDays, startOfWeek, beginRender,
 } from '../utils.js';
 import { WEEKDAYS, EQUIPMENT_ITEMS } from '../refdata.js';
 import { renderSetEditor, totalDistance, cloneItems, collectEquipment } from './setEditor.js';
@@ -197,12 +197,17 @@ function renderBlockBox(block, exercises, plan) {
 
 function openPlanModal(plan, groups, templates, exercises, onSaved) {
   const isEdit = !!plan;
-  const data = plan ? { ...plan, days: (plan.days || []).map(d => ({ ...d, sets: cloneItems(d.sets) })) } : {
+  // data.days[].date wird intern durchgehend als reines "YYYY-MM-DD"
+  // geführt (siehe dateOnly() in utils.js) — sowohl für die Anzeige im
+  // <input type="date"> als auch für die Tagesarithmetik (isoAddDays)
+  // unten. Erst beim Speichern (siehe submit-Handler) wird daraus wieder
+  // das vom Backend erwartete vollständige ISO-Datum.
+  const data = plan ? { ...plan, days: (plan.days || []).map(d => ({ ...d, date: dateOnly(d.date), sets: cloneItems(d.sets) })) } : {
     name: `${t('nav.plans')} ${startOfWeek(todayISO())}`, weekStart: startOfWeek(todayISO()), groupId: groups[0]?.id || '', status: 'aktiv', days: [],
   };
   const form = el('form', { class: 'form-grid single' });
   const fName = textInput(data.name, { required: true });
-  const fWeek = el('input', { type: 'date', value: data.weekStart });
+  const fWeek = dateInput(data.weekStart);
   const fGroup = selectInput(groups.map(g => ({ value: g.id, label: g.name })), data.groupId);
   const fStatus = selectInput([{ value: 'aktiv', label: t('plans.statusActive') }, { value: 'archiv', label: t('plans.statusArchived') }], data.status);
   form.appendChild(field(t('plans.formName'), fName));
@@ -220,9 +225,9 @@ function openPlanModal(plan, groups, templates, exercises, onSaved) {
     clear(daysHost);
     data.days.forEach((day, di) => {
       const block = el('div', { class: 'day-block' });
-      const dateInput = el('input', { type: 'date', value: day.date, oninput: (e) => day.date = e.target.value });
+      const dayDateInput = dateInput(day.date, { oninput: (e) => day.date = e.target.value });
       block.appendChild(el('div', { class: 'day-block-head' }, [
-        el('div', { class: 'flex items-center gap-8' }, [el('strong', {}, t('plans.dateLabel')), dateInput]),
+        el('div', { class: 'flex items-center gap-8' }, [el('strong', {}, t('plans.dateLabel')), dayDateInput]),
         el('button', { type: 'button', class: 'btn btn-danger btn-sm', onclick: () => { data.days.splice(di, 1); drawDays(); } }, t('plans.removeDay')),
       ]));
       const setsHost = el('div');
@@ -251,7 +256,7 @@ function openPlanModal(plan, groups, templates, exercises, onSaved) {
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     if (!fName.value.trim()) { toast(t('plans.validationName'), 'error'); return; }
-    await put('plans', { ...data, name: fName.value.trim(), weekStart: fWeek.value, groupId: fGroup.value, status: fStatus.value, days: data.days });
+    await put('plans', { ...data, name: fName.value.trim(), weekStart: toIsoDateTime(fWeek.value), groupId: fGroup.value, status: fStatus.value, days: data.days.map(d => ({ ...d, date: toIsoDateTime(d.date) })) });
     toast(isEdit ? t('plans.savedEdit') : t('plans.savedCreate'));
     close(); onSaved?.();
   });
