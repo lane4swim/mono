@@ -70,7 +70,21 @@ export async function pull() {
       if (change.action === 'delete') {
         await removeWithoutSync(change.store, change.entityId).catch(() => { /* bereits lokal entfernt */ });
       } else {
-        await putWithoutSync(change.store, change.payload);
+        // `deletedAt` ist kein Feld der Entity-Schemas (siehe
+        // packages/shared-types/src/entities.ts) — die generische Sync-API
+        // liefert für nicht gelöschte Zeilen dennoch den vollständigen
+        // Prisma-Datensatz inkl. dieser (stets null-wertigen) Spalte. Würde
+        // sie hier unverändert lokal gespeichert, würde jede spätere
+        // Bearbeitung dieses Datensatzes (siehe modules/*.js: `{ ...data }`)
+        // sie beim nächsten Push wieder mitschicken — der `.strict()`-Zod-
+        // Schema-Check auf dem Server lehnt unbekannte Felder ab, das
+        // Update würde dann mit "Payload entspricht nicht dem Schema"
+        // fehlschlagen. Kein Frontend-Code liest `.deletedAt` lokal
+        // (Löschungen laufen ausschließlich über eigene "delete"-Sync-
+        // Events, siehe oben) — das Feld wird daher beim Übernehmen in die
+        // lokale Ablage konsequent entfernt statt nur ignoriert.
+        const { deletedAt, ...payload } = change.payload;
+        await putWithoutSync(change.store, payload);
       }
       totalChanges++;
     }

@@ -61,6 +61,7 @@ function makeActionItemPayload(overrides: Partial<Record<string, unknown>> = {})
     description: '',
     category: 'technik',
     status: 'offen',
+    assignedTrainerId: null,
     createdDate: now,
     dueDate: null,
     createdAt: now,

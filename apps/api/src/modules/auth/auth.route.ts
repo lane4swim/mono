@@ -154,6 +154,20 @@ export async function authRoutes(app: FastifyInstance, opts: { authService: Auth
     },
   );
 
+  // Mögliche Zuständige für ein Handlungsfeld (Trainer:innen + Admins des
+  // eigenen Vereins) — für den Dropdown in apps/web/js/modules/actionItems.js.
+  // Anders als /api/users auch für die Rolle "trainer" zugänglich (nicht
+  // nur admin/superadmin): Trainer:innen legen Handlungsfelder selbst an
+  // und müssen sie ggf. an eine Kollegin/einen Kollegen zuweisen können.
+  app.get(
+    '/api/users/trainers',
+    { preHandler: [app.authenticate, requireRole('trainer', 'admin')] },
+    async (request, reply) => {
+      const users = await authService.listAssignableTrainers({ clubId: request.user!.clubId });
+      return reply.code(200).send({ users });
+    },
+  );
+
   app.get('/api/me', { preHandler: app.authenticate }, async (request, reply) => {
     try {
       const user = await authService.getMe(request.user!.sub);

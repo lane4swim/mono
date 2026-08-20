@@ -75,6 +75,7 @@ model User {
   refreshTokens     RefreshToken[]
   sentInvitations   Invitation[] @relation("InvitationSender")
   deletionRequest   DataDeletionRequest?
+  assignedActionItems ActionItem[] @relation("ActionItemAssignedTrainer")
 
   @@map("users")
 }
@@ -364,6 +365,15 @@ model ActionItem {
   description String    @default("")
   category    String
   status      String    @default("offen") // "offen" | "progress" | "done"
+  // Zuständige Person (Trainer:in oder Admin). Nullable + SetNull statt
+  // Pflichtfeld mit Cascade — analog zu Invitation.invitedById (siehe dort):
+  // ein späteres DSGVO-Hard-Purge des zuständigen Kontos soll das
+  // Handlungsfeld als historischen Datensatz nicht mitreißen, sondern nur
+  // die Zuordnung auflösen. Der Standardwert (Erfasser:in ist zuständig)
+  // wird clientseitig beim Anlegen gesetzt (siehe
+  // apps/web/js/modules/actionItems.js: openItemModal).
+  assignedTrainerId String?
+  assignedTrainer   User?     @relation("ActionItemAssignedTrainer", fields: [assignedTrainerId], references: [id], onDelete: SetNull)
   createdDate DateTime
   dueDate     DateTime?
   createdAt   DateTime  @default(now())
@@ -372,6 +382,7 @@ model ActionItem {
 
   @@index([clubId])
   @@index([athleteId])
+  @@index([assignedTrainerId])
   @@map("action_items")
 }
 

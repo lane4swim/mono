@@ -383,4 +383,6 @@ Tests, siehe „Bekannte offene Punkte" oben) und Phase 6 (optionale
 Erweiterungen, z. B. Echtzeit-Sync).
 
 Für die Veröffentlichung auf einem Hetzner-Server siehe die separat
-erstellte `hetzner-deployment-anleitung.md`.
+erstellte `docs/deployment.md` (sowie die Varianten für andere Umgebungen:
+`docs/deployment-raspberry-pi.md`, `docs/deployment-macos.md`,
+`docs/deployment-github-codespaces.md`).

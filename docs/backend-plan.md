@@ -369,9 +369,9 @@ Details zu allen Funden dieser nachträglichen Review-Runden — einschließlich
 
 - ✅ **CI (GitHub Actions):** `.github/workflows/ci.yml` — führt bei jedem Push Typecheck, Lint, Test und Build für alle Workspaces aus (siehe Abschnitt 12 zur nachträglich ergänzten Typecheck-Stufe).
 - ✅ **Containerisierung:** `apps/api/Dockerfile`, `docker-compose.yml` im Root für lokale Entwicklung.
-- ✅ **Migrationen:** `prisma migrate deploy` als Deployment-Schritt (siehe `hetzner-deployment-anleitung.md`).
-- **Hosting:** Statt der ursprünglich verglichenen verwalteten Anbieter (Fly.io/Railway) wurde eine **eigene vServer-Lösung (Hetzner) mit Docker** gewählt und in einer separaten Anleitung (`hetzner-deployment-anleitung.md`) dokumentiert — Begründung: geringere laufende Kosten für einen einzelnen Verein, Wartungsaufwand als vertretbar bewertet.
-- **Neu, nicht im ursprünglichen Plan:** Der Purge-Cron-Job (`npm run purge-deleted-data`, Abschnitt 14) muss zusätzlich zum eigentlichen App-Deployment eingerichtet werden — Details in der Hetzner-Anleitung und in Abschnitt 14 unten.
+- ✅ **Migrationen — korrigiert:** ursprünglich hier fälschlich als `prisma migrate deploy` dokumentiert; tatsächlicher Deployment-Schritt ist `prisma db push` (siehe `docs/deployment.md`, Abschnitt 7.3), da `apps/api/prisma/migrations/` bewusst per `.gitignore` ausgeschlossen ist und im Repository noch keine committete Migrationshistorie existiert — `migrate deploy` hätte dort nichts anzuwenden und die Datenbank bliebe fälschlich leer, ohne dass ein Fehler auftritt. Sobald eine echte Migrationshistorie eingecheckt ist, sollte künftig auf `migrate deploy` umgestellt werden (siehe Hinweis dort).
+- **Hosting:** Statt der ursprünglich verglichenen verwalteten Anbieter (Fly.io/Railway) wurde eine **eigene vServer-Lösung (Hetzner) mit Docker** gewählt und in `docs/deployment.md` dokumentiert — Begründung: geringere laufende Kosten für einen einzelnen Verein, Wartungsaufwand als vertretbar bewertet.
+- **Neu, nicht im ursprünglichen Plan:** Der Purge-Cron-Job (`npm run purge-deleted-data`, Abschnitt 14) muss zusätzlich zum eigentlichen App-Deployment eingerichtet werden — Details in `docs/deployment.md` und in Abschnitt 14 unten.
 
 ---
 

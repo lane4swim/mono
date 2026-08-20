@@ -4,7 +4,7 @@
 // Also exposes resetDemoData() for the settings panel.
 // ============================================================
 import { getAll, put, bulkPut, uid, isDbEmpty, wipeAll } from './db.js';
-import { todayISO, isoAddDays, startOfWeek } from './utils.js';
+import { todayISO, isoAddDays, startOfWeek, toIsoDateTime } from './utils.js';
 import { EVENTS } from './refdata.js';
 
 function id(){ return uid('seed'); }
@@ -32,7 +32,7 @@ async function seedDemoData() {
     { firstName: 'Lukas', lastName: 'Weber', birthdate: '2011-09-05', gender: 'm', groupId: groupB.id, joinDate: '2021-09-01', active: true, notes: '' },
     { firstName: 'Nele', lastName: 'Schuster', birthdate: '2012-01-30', gender: 'w', groupId: groupB.id, joinDate: '2022-03-01', active: true, notes: '' },
     { firstName: 'Finn', lastName: 'Hartmann', birthdate: '2011-04-18', gender: 'm', groupId: groupB.id, joinDate: '2021-05-20', active: true, notes: 'Rückenschwimmen ausbauen' },
-  ].map(a => ({ id: id(), ...a }));
+  ].map(a => ({ id: id(), ...a, birthdate: toIsoDateTime(a.birthdate), joinDate: toIsoDateTime(a.joinDate) }));
   await bulkPut('athletes', athletes);
 
   // Phase 4: lokale Fake-Konten (users/clubs/invitations) werden NICHT mehr
@@ -44,8 +44,8 @@ async function seedDemoData() {
   // Trainingspläne, …) dienen als Offline-Cache-Inhalt, sobald ein echtes
   // Konto verbunden ist.
 
-  const comp1 = { id: id(), name: 'Bezirksmeisterschaften Kurzbahn', date: isoAddDays(todayISO(), 21), location: 'Hallenbad Nord', course: 'SCM', notes: 'Meldeschluss 10 Tage vorher' };
-  const comp2 = { id: id(), name: 'Vereinsvergleich Frühjahr', date: isoAddDays(todayISO(), -18), location: 'Freibad Ost', course: 'LCM', notes: '' };
+  const comp1 = { id: id(), name: 'Bezirksmeisterschaften Kurzbahn', date: toIsoDateTime(isoAddDays(todayISO(), 21)), location: 'Hallenbad Nord', course: 'SCM', notes: 'Meldeschluss 10 Tage vorher' };
+  const comp2 = { id: id(), name: 'Vereinsvergleich Frühjahr', date: toIsoDateTime(isoAddDays(todayISO(), -18)), location: 'Freibad Ost', course: 'LCM', notes: '' };
   await bulkPut('competitions', [comp1, comp2]);
 
   // Sample historical + recent results to power stats/PBs
@@ -59,7 +59,7 @@ async function seedDemoData() {
         base -= (Math.random() * 0.6 + 0.2); // gradual improvement
         resultSeed.push({
           id: id(), athleteId, event: evt, time: Math.max(base, 20),
-          date: isoAddDays(todayISO(), offset), course: 'LCM',
+          date: toIsoDateTime(isoAddDays(todayISO(), offset)), course: 'LCM',
           competitionId: i === pastDates.length - 1 ? comp2.id : null,
           place: Math.ceil(Math.random() * 8), isPB: i === pastDates.length - 1,
         });
@@ -122,23 +122,28 @@ async function seedDemoData() {
       : { ...s, id: id() });
   }
 
+  // wkStart bleibt hier bewusst ein reines "YYYY-MM-DD" (für den Plannamen
+  // und die Tagesarithmetik via isoAddDays) — erst beim Einfügen in ein
+  // schema-geprüftes Datumsfeld (weekStart/date) wird per toIsoDateTime()
+  // ins kanonische Speicherformat gewandelt (siehe utils.js: dateOnly()/
+  // toIsoDateTime()).
   const wkStart = startOfWeek(todayISO());
   const plan1 = {
-    id: id(), name: 'Trainingswoche ' + wkStart, weekStart: wkStart, groupId: groupA.id, status: 'aktiv',
+    id: id(), name: 'Trainingswoche ' + wkStart, weekStart: toIsoDateTime(wkStart), groupId: groupA.id, status: 'aktiv',
     days: [
-      { date: wkStart, sets: cloneSets(template1.sets) },
-      { date: isoAddDays(wkStart, 2), sets: cloneSets(template2.sets) },
-      { date: isoAddDays(wkStart, 4), sets: cloneSets(template1.sets) },
+      { date: toIsoDateTime(wkStart), sets: cloneSets(template1.sets) },
+      { date: toIsoDateTime(isoAddDays(wkStart, 2)), sets: cloneSets(template2.sets) },
+      { date: toIsoDateTime(isoAddDays(wkStart, 4)), sets: cloneSets(template1.sets) },
     ],
   };
   await bulkPut('plans', [plan1]);
 
   const session1 = {
-    id: id(), date: wkStart, groupId: groupA.id, planId: plan1.id, trainerNote: 'Gute Energie, Fokus auf Wenden verbessert.',
+    id: id(), date: toIsoDateTime(wkStart), groupId: groupA.id, planId: plan1.id, trainerNote: 'Gute Energie, Fokus auf Wenden verbessert.',
     attendance: athletes.filter(a => a.groupId === groupA.id).map(a => ({ athleteId: a.id, present: true, rpe: 6 + Math.round(Math.random() * 3), note: '' })),
   };
   const session2 = {
-    id: id(), date: isoAddDays(wkStart, -7), groupId: groupA.id, planId: null, trainerNote: 'Eine Athletin krank gemeldet.',
+    id: id(), date: toIsoDateTime(isoAddDays(wkStart, -7)), groupId: groupA.id, planId: null, trainerNote: 'Eine Athletin krank gemeldet.',
     attendance: athletes.filter(a => a.groupId === groupA.id).map((a, i) => ({ athleteId: a.id, present: i !== 2, rpe: i !== 2 ? 7 : null, note: i === 2 ? 'Krankheit' : '' })),
   };
   await bulkPut('sessions', [session1, session2]);
@@ -147,6 +152,6 @@ async function seedDemoData() {
     { athleteId: athletes[1].id, title: 'Atemtechnik bei Sprints', description: 'Neigt zum Luftanhalten in den letzten 15m. Bilaterales Atmen in Drills festigen.', status: 'progress', category: 'technik', createdDate: isoAddDays(todayISO(), -14), dueDate: isoAddDays(todayISO(), 14) },
     { athleteId: athletes[5].id, title: 'Rückenlage stabilisieren', description: 'Hüfte sinkt bei längeren Rückenserien ab. Rumpfkraft priorisieren.', status: 'offen', category: 'technik', createdDate: isoAddDays(todayISO(), -5), dueDate: isoAddDays(todayISO(), 25) },
     { athleteId: athletes[0].id, title: 'Wettkampf-Nervosität', description: 'Zeigt vor Wettkämpfen erhöhte Anspannung. Mentale Routine erarbeiten.', status: 'offen', category: 'mental', createdDate: isoAddDays(todayISO(), -3), dueDate: isoAddDays(todayISO(), 20) },
-  ].map(a => ({ id: id(), ...a }));
+  ].map(a => ({ id: id(), ...a, createdDate: toIsoDateTime(a.createdDate), dueDate: toIsoDateTime(a.dueDate) }));
   await bulkPut('actionItems', actionItems);
 }

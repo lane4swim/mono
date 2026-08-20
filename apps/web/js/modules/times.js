@@ -2,7 +2,7 @@
 // modules/times.js — Zeiten- und Leistungserfassung
 // ============================================================
 import { getAll, put, remove } from '../db.js';
-import { el, clear, fullName, fmtDateShort, todayISO, field, textInput, selectInput,
+import { el, clear, fullName, fmtDateShort, todayISO, toIsoDateTime, field, textInput, selectInput, dateInput,
   openModal, confirmAction, toast, badge, emptyState, laneWave, secToTime, timeToSec,
   groupBy, svgLineChart, beginRender,
 } from '../utils.js';
@@ -93,12 +93,12 @@ function renderView(container, athletes, results) {
 
 function openTimeModal(result, athletes, onSaved) {
   const isEdit = !!result;
-  const data = result ? { ...result } : { athleteId: athletes[0]?.id || '', event: EVENTS[0], time: '', date: todayISO(), course: 'LCM', isPB: false, competitionId: null };
+  const data = result ? { ...result } : { athleteId: athletes[0]?.id || '', event: EVENTS[0], time: '', date: todayISO(), course: 'LCM', isPB: false, competitionId: null, place: null };
   const form = el('form', { class: 'form-grid' });
   const fAthlete = selectInput(athletes.map(a => ({ value: a.id, label: fullName(a) })), data.athleteId);
   const fEvent = selectInput(trOptionsFlat(EVENTS, 'events'), data.event);
   const fTime = textInput(data.time ? secToTime(data.time) : '', { placeholder: 'mm:ss.cc', required: true });
-  const fDate = el('input', { type: 'date', value: data.date });
+  const fDate = dateInput(data.date);
   const fCourse = selectInput(trOptions(COURSES, 'courses'), data.course);
   const fPB = el('input', { type: 'checkbox' }); fPB.checked = !!data.isPB;
   form.appendChild(field(t('times.formAthlete'), fAthlete, { span2: true }));
@@ -115,7 +115,7 @@ function openTimeModal(result, athletes, onSaved) {
     e.preventDefault();
     const sec = timeToSec(fTime.value);
     if (!sec || isNaN(sec)) { toast(t('times.validationTime'), 'error'); return; }
-    await put('results', { ...data, athleteId: fAthlete.value, event: fEvent.value, time: sec, date: fDate.value, course: fCourse.value, isPB: fPB.checked });
+    await put('results', { ...data, athleteId: fAthlete.value, event: fEvent.value, time: sec, date: toIsoDateTime(fDate.value), course: fCourse.value, isPB: fPB.checked });
     toast(t('times.saved'));
     close(); onSaved?.();
   });
