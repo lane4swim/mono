@@ -11,7 +11,7 @@ import { navigate } from '../router.js';
 import { getRole } from '../state.js';
 import { t, trCode, trOptions, trOptionsFlat } from '../i18n.js';
 import { beginRender } from '../utils.js';
-import { openItemModal } from './actionItems.js';
+import { openItemModal, fetchAssignableTrainers } from './actionItems.js';
 
 export const competitionsModule = {
   id: 'competitions',
@@ -207,8 +207,8 @@ function buildLiveGroups(compEntries) {
 }
 
 async function renderLiveMode(container, compId, groupIndex) {
-  const [competitions, athletes, entries, results] = await Promise.all([
-    getAll('competitions'), getAll('athletes'), getAll('entries'), getAll('results'),
+  const [competitions, athletes, entries, results, trainers] = await Promise.all([
+    getAll('competitions'), getAll('athletes'), getAll('entries'), getAll('results'), fetchAssignableTrainers(),
   ]);
   const comp = competitions.find(c => c.id === compId);
   const wrap = el('div');
@@ -256,7 +256,7 @@ async function renderLiveMode(container, compId, groupIndex) {
   const sharedClock = buildSharedStopwatch(timerCard);
 
   const cardsGrid = el('div', { class: 'grid grid-3' });
-  group.entries.forEach(entry => cardsGrid.appendChild(buildAthleteCard(entry, comp, athletes, results, sharedClock)));
+  group.entries.forEach(entry => cardsGrid.appendChild(buildAthleteCard(entry, comp, athletes, results, sharedClock, trainers)));
   wrap.appendChild(cardsGrid);
 
   container.appendChild(wrap);
@@ -321,7 +321,7 @@ function buildSharedStopwatch(container) {
 // step — during a live heat there's no time to remember one), a small
 // reset for mis-clicks, and a shortcut to log a Handlungsfeld for that
 // athlete without leaving the screen.
-function buildAthleteCard(entry, comp, athletes, allResults, sharedClock) {
+function buildAthleteCard(entry, comp, athletes, allResults, sharedClock, trainers) {
   const athlete = athletes.find(a => a.id === entry.athleteId);
   // Mutable, not the initial findResultForEntry() snapshot: reassigned to
   // the freshly saved record after each "Ziel" press so a later save (e.g.
@@ -400,7 +400,7 @@ function buildAthleteCard(entry, comp, athletes, allResults, sharedClock) {
 
   const actionBtn = el('button', {
     type: 'button', class: 'btn btn-ghost btn-sm',
-    onclick: () => openItemModal(null, athletes, () => toast(t('actionitems.savedCreate')), entry.athleteId),
+    onclick: () => openItemModal(null, athletes, trainers, () => toast(t('actionitems.savedCreate')), entry.athleteId),
   }, '+ ' + t('competitions.liveModeAddActionItem'));
 
   const card = el('div', { class: `card live-athlete-card ${done ? 'live-card-done' : ''}` }, [

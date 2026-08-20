@@ -19,6 +19,7 @@ import { SyncStoreSchema } from '../src/syncEvent.js';
 
 const CLUB_ID = '11111111-1111-1111-1111-111111111111';
 const ATHLETE_ID = '22222222-2222-2222-2222-222222222222';
+const TRAINER_ID = '33333333-3333-3333-3333-333333333331';
 const now = new Date().toISOString();
 
 describe('GroupSchema', () => {
@@ -225,12 +226,18 @@ describe('TrainingSessionSchema', () => {
 });
 
 describe('ActionItemSchema', () => {
-  const valid = { id: ATHLETE_ID, clubId: CLUB_ID, athleteId: ATHLETE_ID, title: 'Atemtechnik', description: '', category: 'technik', status: 'offen', createdDate: now, dueDate: null, createdAt: now, updatedAt: now };
+  const valid = { id: ATHLETE_ID, clubId: CLUB_ID, athleteId: ATHLETE_ID, title: 'Atemtechnik', description: '', category: 'technik', status: 'offen', assignedTrainerId: TRAINER_ID, createdDate: now, dueDate: null, createdAt: now, updatedAt: now };
   it('akzeptiert ein vollständiges Handlungsfeld', () => {
     expect(ActionItemSchema.safeParse(valid).success).toBe(true);
   });
   it('lehnt einen ungültigen Status ab', () => {
     expect(ActionItemSchema.safeParse({ ...valid, status: 'fertig' }).success).toBe(false);
+  });
+  it('akzeptiert assignedTrainerId=null (z. B. nach Löschung des zuständigen Kontos)', () => {
+    expect(ActionItemSchema.safeParse({ ...valid, assignedTrainerId: null }).success).toBe(true);
+  });
+  it('lehnt eine ungültige assignedTrainerId ab', () => {
+    expect(ActionItemSchema.safeParse({ ...valid, assignedTrainerId: 'nicht-uuid' }).success).toBe(false);
   });
 });
 

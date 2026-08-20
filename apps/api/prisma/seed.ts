@@ -135,10 +135,14 @@ export function buildDemoData() {
   };
   const sessions = [session1, session2];
 
+  // assignedTrainerId: standardmäßig die/der Erfasser:in (siehe
+  // apps/web/js/modules/actionItems.js: openItemModal) — hier exemplarisch
+  // Sabine Reuter (trainerUser) für die ersten beiden, und der Admin für
+  // das dritte (zeigt, dass auch ein Admin-Konto zuständig sein kann).
   const actionItems = [
-    { id: id(), clubId: club.id, athleteId: athletes[1]!.id, title: 'Atemtechnik bei Sprints', description: 'Neigt zum Luftanhalten in den letzten 15m. Bilaterales Atmen in Drills festigen.', status: 'progress', category: 'technik', createdDate: addDays(todayISO(), -14), dueDate: addDays(todayISO(), 14) },
-    { id: id(), clubId: club.id, athleteId: athletes[5]!.id, title: 'Rückenlage stabilisieren', description: 'Hüfte sinkt bei längeren Rückenserien ab. Rumpfkraft priorisieren.', status: 'offen', category: 'technik', createdDate: addDays(todayISO(), -5), dueDate: addDays(todayISO(), 25) },
-    { id: id(), clubId: club.id, athleteId: athletes[0]!.id, title: 'Wettkampf-Nervosität', description: 'Zeigt vor Wettkämpfen erhöhte Anspannung. Mentale Routine erarbeiten.', status: 'offen', category: 'mental', createdDate: addDays(todayISO(), -3), dueDate: addDays(todayISO(), 20) },
+    { id: id(), clubId: club.id, athleteId: athletes[1]!.id, title: 'Atemtechnik bei Sprints', description: 'Neigt zum Luftanhalten in den letzten 15m. Bilaterales Atmen in Drills festigen.', status: 'progress', category: 'technik', assignedTrainerId: trainerUser.id, createdDate: addDays(todayISO(), -14), dueDate: addDays(todayISO(), 14) },
+    { id: id(), clubId: club.id, athleteId: athletes[5]!.id, title: 'Rückenlage stabilisieren', description: 'Hüfte sinkt bei längeren Rückenserien ab. Rumpfkraft priorisieren.', status: 'offen', category: 'technik', assignedTrainerId: trainerUser.id, createdDate: addDays(todayISO(), -5), dueDate: addDays(todayISO(), 25) },
+    { id: id(), clubId: club.id, athleteId: athletes[0]!.id, title: 'Wettkampf-Nervosität', description: 'Zeigt vor Wettkämpfen erhöhte Anspannung. Mentale Routine erarbeiten.', status: 'offen', category: 'mental', assignedTrainerId: adminUser.id, createdDate: addDays(todayISO(), -3), dueDate: addDays(todayISO(), 20) },
   ];
 
   const competition1 = { id: id(), clubId: club.id, name: 'Bezirksmeisterschaften Kurzbahn', date: addDays(todayISO(), 21), location: 'Hallenbad Nord', course: 'SCM', notes: 'Meldeschluss 10 Tage vorher' };

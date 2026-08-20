@@ -179,6 +179,12 @@ export function listClubMembers(clubId) {
   const query = clubId ? `?clubId=${encodeURIComponent(clubId)}` : '';
   return request(`/api/users${query}`);
 }
+// Trainer:innen + Admins des eigenen Vereins, als mögliche Zuständige für
+// ein Handlungsfeld (siehe modules/actionItems.js: openItemModal). Anders
+// als listClubMembers() auch für die Rolle "trainer" erreichbar.
+export function listAssignableTrainers() {
+  return request('/api/users/trainers');
+}
 
 // ---- Sync (Push/Pull) --------------------------------------------------
 export function syncPush(events) {
