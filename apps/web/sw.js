@@ -1,12 +1,13 @@
 // ============================================================
 // sw.js — offline-first service worker.
 // Strategy: cache-first for the app shell/static assets (precached
-// on install), network-first fallback to cache for anything else,
-// since this app has no external API calls at all.
+// on install), network-first fallback to cache for anything else.
+// Backend API calls (/api/*, /auth/*) are always passed straight
+// through to the network — see the fetch handler below.
 // Bump CACHE_VERSION whenever any cached file changes so clients
 // pick up the new version instead of serving stale assets.
 // ============================================================
-const CACHE_VERSION = 'lane1-v20';
+const CACHE_VERSION = 'lane1-v21';
 const PRECACHE_URLS = [
   './',
   './index.html',
@@ -75,6 +76,21 @@ self.addEventListener('fetch', (event) => {
   // gar keinen Service Worker registriert.
   const url = new URL(req.url);
   if (url.pathname.startsWith('/admin')) {
+    event.respondWith(fetch(req));
+    return;
+  }
+
+  // Backend-API-Aufrufe (apiClient.js, meist gleicher Origin hinter dem
+  // Reverse-Proxy — siehe apiClient.js) dürfen NIE aus dem Cache bedient
+  // werden: die Cache-first-Strategie unten war für die frühere, rein
+  // lokale Version dieser App gedacht ("hat gar keine externen API-
+  // Aufrufe" traf mit der Phase-4-Backend-Anbindung nicht mehr zu). Ohne
+  // diese Ausnahme lieferte z. B. ein GET /api/clubs direkt nach einem
+  // POST /api/clubs die alte, zwischengespeicherte Antwort zurück, sodass
+  // Übersichten (z. B. die Vereinsliste der Nutzerverwaltung) nach dem
+  // Anlegen leer blieben, bis ein Reload den Cache-Eintrag (der im
+  // Hintergrund per fetchAndCache aktualisiert wurde) erneut auslas.
+  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/auth/')) {
     event.respondWith(fetch(req));
     return;
   }

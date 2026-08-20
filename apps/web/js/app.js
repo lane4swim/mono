@@ -28,7 +28,7 @@
 //   trotzdem aktualisiert.
 // ============================================================
 import { pendingSyncCount } from './db.js';
-import { seedIfEmpty, resetDemoData, wipeDemoDataIfPresent } from './seed.js';
+import { resetDemoData, wipeDemoDataIfPresent } from './seed.js';
 import { restoreSession, getCurrentUser, setUserLocale, getRole, logout, onUserChange, isLoggedIn } from './state.js';
 import { registerModule, visibleModules, currentRoute, navigate, onRouteChange, getModule } from './router.js';
 import { el, clear, toast, confirmAction, openModal, beginRender } from './utils.js';
@@ -80,7 +80,6 @@ let backgroundSyncIntervalId = null;
 
 async function boot() {
   registerServiceWorker();
-  await seedIfEmpty();
 
   const route = currentRoute();
   if (route.routeId === 'accept-invite' && route.params[0]) {
@@ -108,14 +107,15 @@ async function startAuthenticatedApp() {
   appShellEl.hidden = false;
   if (location.hash.startsWith('#/accept-invite')) location.hash = '#/dashboard';
 
-  // Läuft VOR dem ersten Sync-Zyklus unten (startBackgroundSync()): ein
-  // frisches Gerät hat durch seedIfEmpty() in boot() immer schon lokale
-  // Demo-Daten, bevor überhaupt ein Login stattfand (siehe
-  // seed.js: wipeDemoDataIfPresent() für die ausführliche Begründung).
-  // No-op nach dem ersten erfolgreichen Login/Registrieren auf diesem
-  // Gerät — eine reine Sitzungswiederherstellung (z. B. nach einem
-  // Seiten-Reload) findet den Marker dann bereits konsumiert vor und
-  // rührt die inzwischen echten, synchronisierten Daten nicht an.
+  // Läuft VOR dem ersten Sync-Zyklus unten (startBackgroundSync()): räumt
+  // lokale Demo-Daten weg, falls noch vorhanden — heute i. d. R. ein No-op
+  // (kein automatisches Seeding mehr, siehe seed.js Dateikopf), greift aber
+  // noch für Geräte mit Altlasten aus einer früheren Version sowie nach
+  // einem bewussten "Auf Demo-Daten zurücksetzen" in den Einstellungen
+  // (siehe seed.js: wipeDemoDataIfPresent() für die ausführliche
+  // Begründung). Eine reine Sitzungswiederherstellung (z. B. nach einem
+  // Seiten-Reload) findet den Marker bereits konsumiert vor und rührt die
+  // inzwischen echten, synchronisierten Daten nicht an.
   if (await wipeDemoDataIfPresent()) toast(t('auth.demoDataReplaced'));
 
   populateCurrentUserLabel();
@@ -249,12 +249,28 @@ function markActive(routeId) {
   document.querySelectorAll('.nav-link, .bottomnav button').forEach(b => b.classList.toggle('active', b.dataset.route === routeId));
 }
 
+// Rolle -> bevorzugte Standard-Startseite, falls die angeforderte Route für
+// diese Rolle nicht zugänglich ist (z. B. noch kein Hash beim allerersten
+// Laden). Ohne Eintrag greift visibleModules(role)[0] — also schlicht das
+// erste für die Rolle sichtbare Modul in Registrierungsreihenfolge. Für
+// Superadmin wäre das sonst "Mein Profil" (vor der Nutzerverwaltung
+// registriert, da rollenoffen), obwohl die Nutzerverwaltung ihre
+// eigentliche, einzige relevante Startseite ist (siehe dashboard.js: kein
+// Dashboard für Superadmin, da kein Verein/keine Athlet:innen vorhanden).
+const DEFAULT_ROUTE_BY_ROLE = { superadmin: 'usermgmt' };
+
+function defaultModuleFor(role) {
+  const preferred = getModule(DEFAULT_ROUTE_BY_ROLE[role] || '');
+  if (preferred && (!preferred.roles || preferred.roles.includes(role))) return preferred;
+  return visibleModules(role)[0];
+}
+
 async function render(route) {
   if (!isLoggedIn()) return; // Sitzung zwischenzeitlich abgelaufen (z. B. Refresh Token ungültig) — boot() übernimmt beim nächsten Reload
   const isCurrent = beginRender(viewEl);
   const role = getRole();
   let mod = getModule(route.routeId);
-  if (!mod || (mod.roles && !mod.roles.includes(role))) mod = visibleModules(role)[0];
+  if (!mod || (mod.roles && !mod.roles.includes(role))) mod = defaultModuleFor(role);
   markActive(mod.id);
   viewEl.innerHTML = `<div class="empty-state">${t('common.loading')}</div>`;
   try {

@@ -1,27 +1,29 @@
 // ============================================================
-// seed.js — one-time demo data so the app isn't empty on first
-// launch. Safe to call repeatedly: it checks isDbEmpty() first.
-// Also exposes resetDemoData() for the settings panel.
+// seed.js — demo data, loaded only on explicit request via the
+// "reset to demo data" button in the settings panel (resetDemoData()).
+// NOT run automatically on boot: every real account starts on a real,
+// empty club and gets its content from the backend via sync — auto-
+// seeding on first launch used to pollute a brand-new admin's very
+// first login with fake local athletes/groups/etc. before any sync
+// pull had a chance to run (see app.js boot()).
 // ============================================================
-import { getAll, put, bulkPut, uid, isDbEmpty, wipeAll, get, remove, clearStore, CLUB_SCOPED_STORES } from './db.js';
+import { getAll, put, bulkPut, uid, wipeAll, get, remove, clearStore, CLUB_SCOPED_STORES } from './db.js';
 import { todayISO, isoAddDays, startOfWeek, toIsoDateTime } from './utils.js';
 import { EVENTS } from './refdata.js';
 
 function id(){ return uid('seed'); }
 
 // Marker in 'meta' — gesetzt von seedDemoData() (siehe unten), konsumiert
-// von wipeDemoDataIfPresent() beim ersten erfolgreichen Login/Registrieren
-// auf diesem Gerät (siehe app.js: startAuthenticatedApp()). Zeigt an, dass
-// die aktuell in IndexedDB liegenden fachlichen Daten NUR der lokale Demo-
-// Datensatz sind (ohne clubId, siehe unten) und noch nie mit einem echten
-// Konto verbunden waren.
+// von wipeDemoDataIfPresent() beim nächsten Übergang in die authentifizierte
+// App (siehe app.js: startAuthenticatedApp()). Zeigt an, dass die aktuell
+// in IndexedDB liegenden fachlichen Daten NUR der lokale Demo-Datensatz
+// sind (ohne clubId, siehe unten) und noch nie mit einem echten Konto
+// verbunden waren — greift heute nur noch, wenn jemand bewusst über den
+// Button "Auf Demo-Daten zurücksetzen" resettet und sich danach (ohne
+// erneuten Reset) wieder in ein echtes Konto einloggt; auf einem
+// wirklich frischen Gerät wird gar nicht mehr automatisch geseedet
+// (siehe Dateikopf), der Marker bleibt dort also von Anfang an leer.
 const DEMO_SEED_META_KEY = 'demoDataSeeded';
-
-export async function seedIfEmpty() {
-  if (!(await isDbEmpty())) return false;
-  await seedDemoData();
-  return true;
-}
 
 export async function resetDemoData() {
   await wipeAll();
@@ -32,20 +34,25 @@ export async function resetDemoData() {
 // aufgerufen unmittelbar bei jedem Übergang in die authentifizierte App
 // (siehe app.js: startAuthenticatedApp()), sowohl nach frischem Login als
 // auch nach Registrierung/Einladung-Annahme, aber VOR dem ersten
-// Sync-Zyklus. Grund: seedIfEmpty() läuft in boot() bereits VOR der
-// Anmeldung (siehe dort) — ein frisches Gerät hat also immer lokale Demo-
-// Athlet:innen/-Wettkämpfe/… in IndexedDB, sobald die Login-Maske zum
-// ersten Mal erscheint. Diese Demo-Datensätze tragen bewusst KEINE clubId
-// (siehe seedDemoData() oben) und würden sich sonst nach dem Login mit den
-// echten, vom Server gepullten Daten des Vereins vermischen — sichtbar an
-// verdoppelten Einträgen in den Listen, und schlimmer: eine spätere
-// Bearbeitung eines solchen Demo-Datensatzes schlägt beim Sync-Push fehl
-// (fehlende clubId bzw. Fremdschlüssel-Verweis auf lokale, dem Server
-// unbekannte ids). Läuft dank des Markers DEMO_SEED_META_KEY nur einmal —
-// jeder weitere Aufruf (z. B. bei einer Sitzungswiederherstellung nach
-// einem Seiten-Reload) ist ein No-op, das lokal bereits synchronisierte
-// echte Daten NICHT anrührt. Gibt zurück, ob tatsächlich etwas entfernt
-// wurde (für einen optionalen Hinweis-Toast in app.js).
+// Sync-Zyklus. Auf einem wirklich frischen Gerät ist das heute ein
+// No-op (kein automatisches Seeding mehr, siehe Dateikopf) — die Funktion
+// bleibt aber wichtig als Aufräumschritt für zwei verbleibende Fälle: (1)
+// Geräte, die noch von einer älteren Version dieser App automatisch
+// geseedet wurden, bevor dieses Verhalten entfernt wurde, und (2) der
+// bewusste "Auf Demo-Daten zurücksetzen"-Button in den Einstellungen —
+// meldet sich danach jemand mit einem echten Konto an, ohne vorher erneut
+// zurückzusetzen, sollen die Demo-Datensätze weichen. Diese Demo-
+// Datensätze tragen bewusst KEINE clubId (siehe seedDemoData() unten) und
+// würden sich sonst nach dem Login mit den echten, vom Server gepullten
+// Daten des Vereins vermischen — sichtbar an verdoppelten Einträgen in
+// den Listen, und schlimmer: eine spätere Bearbeitung eines solchen Demo-
+// Datensatzes schlägt beim Sync-Push fehl (fehlende clubId bzw.
+// Fremdschlüssel-Verweis auf lokale, dem Server unbekannte ids). Läuft
+// dank des Markers DEMO_SEED_META_KEY nur einmal — jeder weitere Aufruf
+// (z. B. bei einer Sitzungswiederherstellung nach einem Seiten-Reload)
+// ist ein No-op, das lokal bereits synchronisierte echte Daten NICHT
+// anrührt. Gibt zurück, ob tatsächlich etwas entfernt wurde (für einen
+// optionalen Hinweis-Toast in app.js).
 export async function wipeDemoDataIfPresent() {
   const flag = await get('meta', DEMO_SEED_META_KEY);
   if (!flag?.active) return false;
@@ -84,13 +91,13 @@ async function seedDemoData() {
   await bulkPut('athletes', athletes);
 
   // Phase 4: lokale Fake-Konten (users/clubs/invitations) werden NICHT mehr
-  // geseedet — Login erfolgt jetzt über das echte Backend (apps/api).
-  // Um die App auszuprobieren, ein echtes Konto per
-  // `npm run create-superadmin` (siehe apps/api) sowie Vereins-/Team-
-  // Einladungen über die Nutzerverwaltung anlegen. Die hier weiterhin
-  // geseedeten fachlichen Demo-Daten (Athlet:innen, Wettkämpfe, Übungen,
-  // Trainingspläne, …) dienen als Offline-Cache-Inhalt, sobald ein echtes
-  // Konto verbunden ist.
+  // geseedet — Login erfolgt jetzt über das echte Backend (apps/api). Um
+  // die App auszuprobieren, ein echtes Konto per `npm run create-superadmin`
+  // (siehe apps/api) sowie Vereins-/Team-Einladungen über die
+  // Nutzerverwaltung anlegen. Die hier geseedeten fachlichen Demo-Daten
+  // (Athlet:innen, Wettkämpfe, Übungen, Trainingspläne, …) laufen NICHT
+  // mehr automatisch beim Start (siehe Dateikopf) — nur noch bewusst über
+  // "Auf Demo-Daten zurücksetzen" in den Einstellungen.
 
   const comp1 = { id: id(), name: 'Bezirksmeisterschaften Kurzbahn', date: toIsoDateTime(isoAddDays(todayISO(), 21)), location: 'Hallenbad Nord', course: 'SCM', notes: 'Meldeschluss 10 Tage vorher' };
   const comp2 = { id: id(), name: 'Vereinsvergleich Frühjahr', date: toIsoDateTime(isoAddDays(todayISO(), -18)), location: 'Freibad Ost', course: 'LCM', notes: '' };
