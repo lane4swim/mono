@@ -3,8 +3,8 @@
 // ============================================================
 import { getAll, put, remove } from '../db.js';
 import {
-  el, clear, esc, fullName, ageFromBirthdate, fmtDateShort, todayISO,
-  field, textInput, selectInput, openModal, confirmAction, toast, badge,
+  el, clear, esc, fullName, ageFromBirthdate, fmtDateShort, todayISO, toIsoDateTime,
+  field, textInput, selectInput, dateInput, openModal, confirmAction, toast, badge,
   emptyState, laneWave, groupBy, secToTime,
 } from '../utils.js';
 import { getRole, isAdminOrSuperAdmin } from '../state.js';
@@ -175,10 +175,10 @@ function openAthleteModal(athlete, groups, onSaved) {
   const form = el('form', { class: 'form-grid' });
   const fFirst = textInput(data.firstName, { required: true });
   const fLast = textInput(data.lastName, { required: true });
-  const fBirth = el('input', { type: 'date', value: data.birthdate || '' });
+  const fBirth = dateInput(data.birthdate);
   const fGender = selectInput([{ value: 'w', label: t('athletes.genderF') }, { value: 'm', label: t('athletes.genderM') }, { value: 'd', label: t('athletes.genderD') }], data.gender);
   const fGroup = selectInput(groups.map(g => ({ value: g.id, label: g.name })), data.groupId);
-  const fJoin = el('input', { type: 'date', value: data.joinDate || todayISO() });
+  const fJoin = dateInput(data.joinDate || todayISO());
   const fActive = el('input', { type: 'checkbox' }); fActive.checked = data.active !== false;
   const fNotes = el('textarea', {}, data.notes || '');
 
@@ -201,8 +201,8 @@ function openAthleteModal(athlete, groups, onSaved) {
     e.preventDefault();
     if (!fFirst.value.trim() || !fLast.value.trim()) { toast(t('athletes.validationName'), 'error'); return; }
     const obj = {
-      ...data, firstName: fFirst.value.trim(), lastName: fLast.value.trim(), birthdate: fBirth.value,
-      gender: fGender.value, groupId: fGroup.value, joinDate: fJoin.value, active: fActive.checked, notes: fNotes.value.trim(),
+      ...data, firstName: fFirst.value.trim(), lastName: fLast.value.trim(), birthdate: toIsoDateTime(fBirth.value),
+      gender: fGender.value, groupId: fGroup.value, joinDate: toIsoDateTime(fJoin.value), active: fActive.checked, notes: fNotes.value.trim(),
     };
     await put('athletes', obj);
     toast(isEdit ? t('athletes.savedEdit') : t('athletes.savedCreate'));

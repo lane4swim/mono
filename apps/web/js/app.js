@@ -28,7 +28,7 @@
 //   trotzdem aktualisiert.
 // ============================================================
 import { pendingSyncCount } from './db.js';
-import { resetDemoData } from './seed.js';
+import { resetDemoData, wipeDemoDataIfPresent } from './seed.js';
 import { restoreSession, getCurrentUser, setUserLocale, getRole, logout, onUserChange, isLoggedIn } from './state.js';
 import { registerModule, visibleModules, currentRoute, navigate, onRouteChange, getModule } from './router.js';
 import { el, clear, toast, confirmAction, openModal, beginRender } from './utils.js';
@@ -106,6 +106,17 @@ async function startAuthenticatedApp() {
   authScreenEl.hidden = true;
   appShellEl.hidden = false;
   if (location.hash.startsWith('#/accept-invite')) location.hash = '#/dashboard';
+
+  // Läuft VOR dem ersten Sync-Zyklus unten (startBackgroundSync()): räumt
+  // lokale Demo-Daten weg, falls noch vorhanden — heute i. d. R. ein No-op
+  // (kein automatisches Seeding mehr, siehe seed.js Dateikopf), greift aber
+  // noch für Geräte mit Altlasten aus einer früheren Version sowie nach
+  // einem bewussten "Auf Demo-Daten zurücksetzen" in den Einstellungen
+  // (siehe seed.js: wipeDemoDataIfPresent() für die ausführliche
+  // Begründung). Eine reine Sitzungswiederherstellung (z. B. nach einem
+  // Seiten-Reload) findet den Marker bereits konsumiert vor und rührt die
+  // inzwischen echten, synchronisierten Daten nicht an.
+  if (await wipeDemoDataIfPresent()) toast(t('auth.demoDataReplaced'));
 
   populateCurrentUserLabel();
   populateLanguageSelect();

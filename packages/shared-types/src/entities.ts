@@ -222,6 +222,13 @@ export const ActionItemSchema = z.object({
   description: z.string().default(''),
   category: z.string().min(1),
   status: ActionItemStatusSchema,
+  // Zuständige Person (Trainer:in oder Admin) für dieses Handlungsfeld.
+  // Wird beim Anlegen clientseitig standardmäßig auf den/die Erfasser:in
+  // gesetzt (siehe apps/web/js/modules/actionItems.js: openItemModal),
+  // bleibt aber frei umzuweisen. Nullable + SetNull (siehe schema.prisma),
+  // damit ein gelöschtes Trainer:innen-Konto das Handlungsfeld nicht
+  // blockiert.
+  assignedTrainerId: z.string().uuid().nullable(),
   createdDate: isoDate,
   dueDate: nullableIsoDate,
   createdAt: isoDate,

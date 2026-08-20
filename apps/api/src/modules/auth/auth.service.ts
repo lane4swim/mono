@@ -231,6 +231,23 @@ export function createAuthService(deps: AuthServiceDeps) {
       });
       return sorted.map(toPublicUser);
     },
+
+    // GET /api/users/trainers — mögliche Zuständige für ein Handlungsfeld
+    // (siehe ActionItem.assignedTrainerId): Trainer:innen UND Admins des
+    // eigenen Vereins, da ein Handlungsfeld auch von einem Admin erfasst
+    // werden kann und der/die Erfasser:in dann standardmäßig selbst
+    // zuständig ist (siehe apps/web/js/modules/actionItems.js). Anders als
+    // listClubMembers() ohne clubId-Parameter — die Rolle "trainer" darf
+    // (anders als admin/superadmin) keinen fremden Verein abfragen, und
+    // beide anfragenden Rollen haben stets eine eigene clubId.
+    async listAssignableTrainers(requester: { clubId: string | null }) {
+      if (!requester.clubId) throw new ClubIdRequiredError();
+
+      const users = await deps.users.listByClub(requester.clubId);
+      const assignable = users.filter((u) => u.role === 'trainer' || u.role === 'admin');
+      const sorted = [...assignable].sort((a, b) => a.name.localeCompare(b.name));
+      return sorted.map(toPublicUser);
+    },
   };
 }
 

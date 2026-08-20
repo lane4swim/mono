@@ -1,6 +1,7 @@
 // db.js — thin promise-based wrapper around IndexedDB.
 // One database, one object store per entity. Generic CRUD so new
 // modules can add a store name and get get/getAll/put/remove for free.
+import { getCurrentUser } from './state.js';
 
 const DB_NAME = 'lane1-db';
 const DB_VERSION = 2; // v2: 'clubs' + 'invitations' Stores ergänzt (Nutzerverwaltung)
@@ -63,9 +64,36 @@ export async function get(store, id){
 // syncQueue itself, and 'meta' is purely local app state).
 const SYNC_EXCLUDED = new Set(['syncQueue', 'meta']);
 
+// Mandantenfähige fachliche Stores — deckungsgleich mit ENTITY_STORE_NAMES
+// in apps/api/src/db/entityRegistry.ts. Jedes zugehörige Entity-Schema
+// (packages/shared-types/src/entities.ts) verlangt ein Pflichtfeld
+// `clubId`. 'users'/'clubs'/'invitations' (ebenfalls in STORES, siehe
+// oben) sind bewusst NICHT hier aufgeführt: sie werden aktuell nirgends
+// über put() geschrieben (Nutzerverwaltung läuft über eigene REST-
+// Endpunkte, siehe apiClient.js) und ein Verein hat ohnehin keine eigene
+// clubId (seine id IST die clubId).
+export const CLUB_SCOPED_STORES = new Set([
+  'athletes', 'groups', 'competitions', 'entries', 'results',
+  'exercises', 'templates', 'plans', 'sessions', 'actionItems',
+]);
+
 export async function put(store, obj){
   const isNew = !obj.id;
   if (!obj.id) obj.id = uid();
+  // clubId fehlte bislang bei jedem neu über eines der Formulare
+  // (modules/*.js) angelegten Datensatz — die Formulare kennen nur die
+  // fachlichen Felder, nicht den eingeloggten Verein. Das zugehörige
+  // Entity-Schema verlangt clubId aber als Pflichtfeld, also scheiterte
+  // der allererste Sync-Push eines neu angelegten Datensatzes IMMER mit
+  // "Payload entspricht nicht dem Schema" — zentral hier statt in jedem
+  // einzelnen Formular ergänzt, damit kein Store dabei vergessen werden
+  // kann. Überschreibt eine bereits vorhandene clubId nie (z. B. bei
+  // einer Bearbeitung, wo sie schon aus dem ursprünglichen Datensatz
+  // stammt).
+  if (obj.clubId === undefined && CLUB_SCOPED_STORES.has(store)) {
+    const clubId = getCurrentUser()?.clubId;
+    if (clubId) obj.clubId = clubId;
+  }
   obj.updatedAt = new Date().toISOString();
   if (!obj.createdAt) obj.createdAt = obj.updatedAt;
   const os = await tx(store, 'readwrite');
@@ -75,7 +103,18 @@ export async function put(store, obj){
     req.onerror = () => reject(req.error);
   });
   if (!SYNC_EXCLUDED.has(store)) {
-    await enqueueSyncEvent(store, saved.id, isNew ? 'create' : 'update', saved);
+    // `deletedAt` ist kein Feld der Entity-Schemas (siehe
+    // packages/shared-types/src/entities.ts) und würde von der Sync-API
+    // per .strict()-Zod-Check abgelehnt ("Payload entspricht nicht dem
+    // Schema"). Ein lokal gespeicherter Datensatz kann dieses Feld tragen,
+    // wenn er ursprünglich vom Server gepullt wurde (siehe syncClient.js:
+    // pull() — dort wird es seit der Behebung dieses Fehlers zwar nicht
+    // mehr NEU eingeschleust, ein VOR dieser Änderung bereits lokal
+    // abgelegter Datensatz kann es aber noch tragen) — wird hier daher
+    // sicherheitshalber aus dem Sync-Event-Payload entfernt, unabhängig
+    // davon, ob es im übergebenen `obj` steckt.
+    const { deletedAt, ...payload } = saved;
+    await enqueueSyncEvent(store, saved.id, isNew ? 'create' : 'update', payload);
   }
   return saved;
 }

@@ -389,3 +389,56 @@ describe('GET /api/users (Nutzerverwaltung: bestehende Vereinsmitglieder)', () =
     await app.close();
   });
 });
+
+describe('GET /api/users/trainers (mögliche Zuständige für ein Handlungsfeld)', () => {
+  it('liefert 401 ohne Authentifizierung', async () => {
+    const { app } = await buildTestApp();
+    const response = await app.inject({ method: 'GET', url: '/api/users/trainers' });
+    expect(response.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it('lehnt eine athlete-Rolle ab (403)', async () => {
+    const { app, invitations } = await buildTestApp();
+    const token = await seedInvitationToken(invitations, { email: 'athlet@example.org', role: 'athlete' });
+    const registerResponse = await app.inject({ method: 'POST', url: '/auth/register', payload: { token, name: 'X', password: 'ein-sicheres-passwort', consent: true } });
+    const { accessToken } = registerResponse.json();
+
+    const response = await app.inject({ method: 'GET', url: '/api/users/trainers', headers: { authorization: `Bearer ${accessToken}` } });
+    expect(response.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it('trainer-Rolle erhält (anders als bei GET /api/users) Zugriff und sieht Trainer:innen + Admins, aber keine Athlet:innen', async () => {
+    const { app, invitations } = await buildTestApp();
+
+    const trainerToken = await seedInvitationToken(invitations, { email: 'zora@example.org', role: 'trainer' });
+    const trainerReg = await app.inject({ method: 'POST', url: '/auth/register', payload: { token: trainerToken, name: 'Zora Trainer', password: 'ein-sicheres-passwort', consent: true } });
+    const { accessToken: trainerAccessToken } = trainerReg.json();
+
+    const adminToken = await seedInvitationToken(invitations, { email: 'admin@example.org', role: 'admin' });
+    await app.inject({ method: 'POST', url: '/auth/register', payload: { token: adminToken, name: 'Die Admin', password: 'ein-sicheres-passwort', consent: true } });
+
+    const athleteToken = await seedInvitationToken(invitations, { email: 'ben@example.org', role: 'athlete' });
+    await app.inject({ method: 'POST', url: '/auth/register', payload: { token: athleteToken, name: 'Ben Athlet', password: 'ein-sicheres-passwort', consent: true } });
+
+    const response = await app.inject({ method: 'GET', url: '/api/users/trainers', headers: { authorization: `Bearer ${trainerAccessToken}` } });
+    expect(response.statusCode).toBe(200);
+    const { users } = response.json();
+    expect(users.map((u: { name: string }) => u.name)).toEqual(['Die Admin', 'Zora Trainer']);
+    expect(users.every((u: Record<string, unknown>) => !('passwordHash' in u))).toBe(true);
+    await app.close();
+  });
+
+  it('admin erhält ebenfalls Zugriff', async () => {
+    const { app, invitations } = await buildTestApp();
+    const adminToken = await seedInvitationToken(invitations, { email: 'admin@example.org', role: 'admin' });
+    const adminReg = await app.inject({ method: 'POST', url: '/auth/register', payload: { token: adminToken, name: 'Die Admin', password: 'ein-sicheres-passwort', consent: true } });
+    const { accessToken: adminAccessToken } = adminReg.json();
+
+    const response = await app.inject({ method: 'GET', url: '/api/users/trainers', headers: { authorization: `Bearer ${adminAccessToken}` } });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().users.map((u: { name: string }) => u.name)).toEqual(['Die Admin']);
+    await app.close();
+  });
+});

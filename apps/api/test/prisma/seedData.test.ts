@@ -73,6 +73,11 @@ describe('buildDemoData — referenzielle Integrität', () => {
     data.actionItems.forEach((item) => expect(athleteIds.has(item.athleteId)).toBe(true));
   });
 
+  it('jedes Handlungsfeld ist standardmäßig einer/einem existierenden Trainer:in oder Admin zugeordnet', () => {
+    const assignableUserIds = new Set(data.users.filter((u) => u.role === 'trainer' || u.role === 'admin').map((u) => u.id));
+    data.actionItems.forEach((item) => expect(assignableUserIds.has(item.assignedTrainerId)).toBe(true));
+  });
+
   it('alle erzeugten IDs sind innerhalb der Demo-Daten eindeutig', () => {
     const allIds = [
       data.club.id,
