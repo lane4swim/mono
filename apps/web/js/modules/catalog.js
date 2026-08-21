@@ -9,6 +9,18 @@ import { t, trLabel, trCode, trOptions } from '../i18n.js';
 import { renderCommentThread } from './comments.js';
 import { libraryTransferButtons } from './libraryTransfer.js';
 
+const VIEW_STORAGE_KEY = 'lane1-catalog-view';
+function loadCatalogView() {
+  try { return localStorage.getItem(VIEW_STORAGE_KEY) === 'list' ? 'list' : 'grid'; }
+  catch (e) { return 'grid'; }
+}
+function saveCatalogView(mode) {
+  try { localStorage.setItem(VIEW_STORAGE_KEY, mode); } catch (e) { /* ignore (private mode etc.) */ }
+}
+
+const ICON_VIEW_GRID = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg>`;
+const ICON_VIEW_LIST = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01" stroke-linecap="round" stroke-width="2.6"/></svg>`;
+
 export const catalogModule = {
   id: 'catalog',
   roles: ['trainer', 'admin'],
@@ -24,9 +36,24 @@ export const catalogModule = {
 
 function renderList(container, exercises) {
   const wrap = el('div');
+  let viewMode = loadCatalogView();
+
+  const gridBtn = el('button', {
+    type: 'button', class: `view-toggle-btn ${viewMode === 'grid' ? 'active' : ''}`,
+    title: t('catalog.viewGrid'), 'aria-label': t('catalog.viewGrid'), 'aria-pressed': viewMode === 'grid',
+    html: ICON_VIEW_GRID, onclick: () => setView('grid'),
+  });
+  const listBtn = el('button', {
+    type: 'button', class: `view-toggle-btn ${viewMode === 'list' ? 'active' : ''}`,
+    title: t('catalog.viewList'), 'aria-label': t('catalog.viewList'), 'aria-pressed': viewMode === 'list',
+    html: ICON_VIEW_LIST, onclick: () => setView('list'),
+  });
+  const viewToggle = el('div', { class: 'view-toggle' }, [gridBtn, listBtn]);
+
   wrap.appendChild(el('div', { class: 'page-head' }, [
     el('div', {}, [el('div', { class: 'page-eyebrow' }, t('catalog.eyebrow', { count: exercises.length })), el('h1', { class: 'mt-0' }, t('catalog.title'))]),
     el('div', { class: 'page-actions' }, [
+      viewToggle,
       libraryTransferButtons({ onImported: refresh }),
       el('button', { class: 'btn btn-primary', onclick: () => openExerciseModal(null, refresh) }, t('catalog.createExercise')),
     ]),
@@ -40,9 +67,20 @@ function renderList(container, exercises) {
   ]);
   wrap.appendChild(controls);
 
-  const host = el('div', { class: 'grid grid-3' });
+  const host = el('div');
   wrap.appendChild(host);
   container.appendChild(wrap);
+
+  function setView(mode) {
+    if (mode === viewMode) return;
+    viewMode = mode;
+    saveCatalogView(mode);
+    gridBtn.classList.toggle('active', mode === 'grid');
+    listBtn.classList.toggle('active', mode === 'list');
+    gridBtn.setAttribute('aria-pressed', String(mode === 'grid'));
+    listBtn.setAttribute('aria-pressed', String(mode === 'list'));
+    draw();
+  }
 
   function draw() {
     clear(host);
@@ -50,6 +88,11 @@ function renderList(container, exercises) {
     if (catFilter !== 'all') filtered = filtered.filter(e => e.category === catFilter);
     if (search) filtered = filtered.filter(e => (e.name + ' ' + (e.description || '')).toLowerCase().includes(search));
     if (filtered.length === 0) { host.appendChild(emptyState(t('catalog.noExercisesTitle'), t('catalog.noExercisesMsg'), null)); return; }
+    if (viewMode === 'list') drawTable(filtered); else drawGrid(filtered);
+  }
+
+  function drawGrid(filtered) {
+    const grid = el('div', { class: 'grid grid-3' });
     filtered.forEach(ex => {
       const catLabel = trLabel(EXERCISE_CATEGORIES, ex.category, 'exerciseCategories');
       const card = el('div', { class: 'card' }, [
@@ -66,9 +109,36 @@ function renderList(container, exercises) {
           el('button', { class: 'btn btn-danger btn-sm', onclick: () => confirmAction(t('catalog.deleteConfirm', { name: ex.name }), async () => { await remove('exercises', ex.id); toast(t('catalog.deleted')); refresh(); }) }, t('common.delete')),
         ]),
       ]);
-      host.appendChild(card);
+      grid.appendChild(card);
     });
+    host.appendChild(grid);
   }
+
+  function drawTable(filtered) {
+    const table = el('table');
+    table.appendChild(el('thead', {}, el('tr', {}, [
+      el('th', {}, t('catalog.colName')), el('th', {}, t('catalog.colCategory')), el('th', {}, t('catalog.colStroke')),
+      el('th', {}, t('catalog.colDistance')), el('th', {}, t('catalog.colEquipment')), el('th', {}, ''),
+    ])));
+    const tbody = el('tbody');
+    filtered.forEach(ex => {
+      const catLabel = trLabel(EXERCISE_CATEGORIES, ex.category, 'exerciseCategories');
+      tbody.appendChild(el('tr', {}, [
+        el('td', {}, [el('strong', {}, ex.name), ex.description ? el('div', { class: 'text-sm', style: 'color:var(--c-slate)' }, ex.description) : null].filter(Boolean)),
+        el('td', {}, badge(catLabel, 'neutral')),
+        el('td', {}, ex.stroke ? badge(trCode(ex.stroke, 'strokes'), 'progress') : '—'),
+        el('td', {}, ex.defaultDistance ? `${ex.defaultDistance} m` : '—'),
+        el('td', {}, el('div', { class: 'pill-group' }, (ex.equipment || []).map(eq => badge(trLabel(EQUIPMENT_ITEMS, eq, 'equipment'), 'pb')))),
+        el('td', {}, el('div', { class: 'flex gap-8' }, [
+          el('button', { class: 'btn btn-ghost btn-sm', onclick: () => openExerciseModal(ex, refresh) }, t('common.edit')),
+          el('button', { class: 'btn btn-danger btn-sm', onclick: () => confirmAction(t('catalog.deleteConfirm', { name: ex.name }), async () => { await remove('exercises', ex.id); toast(t('catalog.deleted')); refresh(); }) }, t('common.delete')),
+        ])),
+      ]));
+    });
+    table.appendChild(tbody);
+    host.appendChild(el('div', { class: 'table-wrap card' }, table));
+  }
+
   draw();
 
   async function refresh() { const e2 = await getAll('exercises'); clear(container); renderList(container, e2); }

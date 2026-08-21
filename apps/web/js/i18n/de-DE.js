@@ -206,6 +206,8 @@ export default {
   },
   catalog: {
     eyebrow: '{count} Übungen', title: 'Übungskatalog', createExercise: '+ Übung anlegen',
+    viewGrid: 'Kartenansicht', viewList: 'Listenansicht',
+    colName: 'Name', colCategory: 'Kategorie', colStroke: 'Schwimmlage', colDistance: 'Distanz', colEquipment: 'Ausrüstung',
     searchLabel: 'Suche', searchPlaceholder: 'Name oder Beschreibung…',
     categoryLabel: 'Kategorie', allCategories: 'Alle Kategorien',
     noExercisesTitle: 'Keine Übungen', noExercisesMsg: 'Für diese Filter wurden keine Übungen gefunden.',

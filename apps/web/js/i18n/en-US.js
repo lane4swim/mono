@@ -206,6 +206,8 @@ export default {
   },
   catalog: {
     eyebrow: '{count} exercises', title: 'Exercise Catalog', createExercise: '+ Add exercise',
+    viewGrid: 'Grid view', viewList: 'List view',
+    colName: 'Name', colCategory: 'Category', colStroke: 'Stroke', colDistance: 'Distance', colEquipment: 'Equipment',
     searchLabel: 'Search', searchPlaceholder: 'Name or description…',
     categoryLabel: 'Category', allCategories: 'All categories',
     noExercisesTitle: 'No exercises', noExercisesMsg: 'No exercises found for these filters.',

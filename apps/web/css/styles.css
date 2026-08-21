@@ -166,6 +166,13 @@ button{ font-family: inherit; }
 .page-eyebrow{ font-size: var(--fs-xs); text-transform:uppercase; letter-spacing: 0.09em; color: var(--c-chlorine-d); font-weight:700; margin-bottom:4px; }
 .page-actions{ display:flex; gap:10px; flex-wrap:wrap; }
 
+.view-toggle{ display:inline-flex; border:1px solid var(--c-line); border-radius: var(--radius-sm); overflow:hidden; }
+.view-toggle-btn{ display:flex; align-items:center; justify-content:center; width:36px; height:36px; background: var(--c-white); border:none; color: var(--c-slate); cursor:pointer; }
+.view-toggle-btn + .view-toggle-btn{ border-left:1px solid var(--c-line); }
+.view-toggle-btn svg{ width:18px; height:18px; }
+.view-toggle-btn:hover:not(.active){ background: var(--c-foam-2); }
+.view-toggle-btn.active{ background: var(--c-deep); color: var(--c-white); }
+
 .btn{
   font-size: var(--fs-sm); padding: 9px 16px; border-radius: var(--radius-sm);
   border: 1px solid transparent; cursor:pointer; font-weight:600; display:inline-flex; align-items:center; gap:7px;
