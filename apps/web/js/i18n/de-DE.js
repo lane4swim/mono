@@ -34,6 +34,8 @@ export default {
   topbar: {
     offlineReady: 'Offline bereit', offlineMode: 'Offline-Modus aktiv',
     settings: 'Einstellungen', language: 'Sprache', logout: 'Abmelden', help: 'Hilfe',
+    demoBadge: 'Demo · nur lokal gespeichert', demoAccountLabel: 'Demo-Konto',
+    exitDemo: 'Zur echten App',
   },
   nav: {
     dashboard: 'Dashboard', athletes: 'Athleten & Team', competitions: 'Wettkämpfe',
@@ -367,6 +369,7 @@ export default {
     errorApi: 'Fehler bei der Synchronisierung: {message}',
     errorUnknown: 'Ein unerwarteter Fehler ist bei der Synchronisierung aufgetreten.',
     syncDoneOk: 'Sync erfolgreich abgeschlossen', syncDoneFailed: 'Sync abgeschlossen, {count} Event(s) fehlgeschlagen',
+    demoDisabled: 'In dieser Demo ist die Synchronisierung deaktiviert — alle Daten bleiben ausschließlich lokal in diesem Browser gespeichert.',
   },
   profile: {
     eyebrow: 'Mein Konto', title: 'Mein Profil',

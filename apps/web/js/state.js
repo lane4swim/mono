@@ -15,6 +15,7 @@
 // ============================================================
 import * as api from './apiClient.js';
 import { setLocale, detectInitialLocale } from './i18n.js';
+import { IS_DEMO } from './demoMode.js';
 
 // Muss inhaltlich mit CURRENT_CONSENT_VERSION im Backend
 // (packages/shared-types/src/auth.ts) übereinstimmen — nur zur Anzeige
@@ -66,7 +67,25 @@ export async function acceptInvitation(token, name, password, consent) {
   return user;
 }
 
+// demo.html: übernimmt eines der beiden festen Konten aus demoMode.js als
+// "aktuellen Nutzer" — ohne Backend-Aufruf, analog zu login()/
+// acceptInvitation() oben, nur ohne den Netzwerk-Umweg. Kopiert das
+// Fixture-Objekt (statt es direkt zu referenzieren), damit spätere lokale
+// Änderungen (z. B. über "Mein Profil", siehe updateProfile() unten) nicht
+// die gemeinsam genutzte DEMO_USERS-Konstante selbst verändern — sonst
+// würde ein bearbeiteter Name/E-Mail beim nächsten Umschalten auf dasselbe
+// Konto "kleben bleiben", obwohl ein Seiten-Reload die Demo eigentlich neu
+// starten soll.
+export function loginDemo(user) {
+  if (!IS_DEMO) throw new Error('loginDemo() ist nur im Demo-Modus verfügbar.');
+  current = { ...user };
+  setLocale(current.locale || detectInitialLocale());
+  emit();
+  return current;
+}
+
 export async function logout() {
+  if (IS_DEMO) { current = null; emit(); return; }
   await api.logoutRemote();
   api.clearTokens();
   current = null;
@@ -80,15 +99,19 @@ export async function logout() {
 // depends on the active user).
 export async function setUserLocale(locale) {
   if (!current) { setLocale(locale); return null; }
+  if (IS_DEMO) { current = { ...current, locale }; setLocale(locale); return current; }
   current = await api.updateMe({ locale });
   setLocale(locale);
   return current;
 }
 
 // Updates the *current* user's own personal data (e.g. name, email) —
-// used by the "Mein Profil" / "My Profile" module.
+// used by the "Mein Profil" / "My Profile" module. In demo mode there is
+// no backend to persist this against, so the change is applied to the
+// in-memory demo user only (see loginDemo() above for why it's a copy).
 export async function updateProfile(patch) {
   if (!current) return null;
+  if (IS_DEMO) { current = { ...current, ...patch }; emit(); return current; }
   current = await api.updateMe(patch);
   emit();
   return current;

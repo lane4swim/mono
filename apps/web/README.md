@@ -88,6 +88,29 @@ im Haupt-Service-Worker explizit von Cache/Precache ausgeschlossen — ein
 Aufruf ohne Internetverbindung schlägt bewusst fehl, statt (fälschlich)
 die normale App anzuzeigen.
 
+## Demo ohne Backend (`demo.html`)
+
+Wer die App ausprobieren möchte, ohne `apps/api` zu betreiben, kann
+stattdessen `demo.html` öffnen — nutzt dieselben Fachmodule wie `index.html`,
+aber ganz ohne Backend:
+
+- Zwei feste Konten statt Login — **Sabine Reuter** (Trainerin) und **Maya
+  Vogel** (Athletin) — umschaltbar über ein Dropdown neben der
+  Sprachauswahl in der Kopfzeile.
+- Eigene, von `index.html` vollständig getrennte IndexedDB-Datenbank (siehe
+  `js/db.js`) — Demo-Daten können nie mit einem echten, synchronisierten
+  Konto in Berührung kommen, in keiner Richtung.
+- Alle Demo-Datensätze tragen eine feste `clubId` (`js/demoMode.js`) zur
+  eindeutigen Kennzeichnung.
+- Die Sync-Warteschlange ist sichtbar, aber nicht funktional — es gibt
+  keinen Server, an den synchronisiert werden könnte; alle Daten bleiben
+  ausschließlich lokal in diesem Browser.
+- Über „Einstellungen" lässt sich die Demo jederzeit auf ihre
+  Ausgangsdaten zurücksetzen (`js/demoSeed.js`).
+
+Details zur Umsetzung siehe die Hauptrepo-`README.md`, Abschnitt „Demo ohne
+Backend unter `demo.html`".
+
 ## Hilfeseiten
 
 Unter `apps/web/help/` liegt ein rein statischer, von der Single-Page-App

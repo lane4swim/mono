@@ -11,6 +11,7 @@
 import { getSyncQueue, updateSyncEvent, clearSyncedEvents, pendingSyncCount, remove } from '../db.js';
 import { runSync } from '../syncClient.js';
 import { ApiError, NetworkError } from '../apiClient.js';
+import { IS_DEMO } from '../demoMode.js';
 import {
   el, clear, badge, emptyState, laneWave, toast, confirmAction, beginRender,
 } from '../utils.js';
@@ -51,6 +52,12 @@ function renderView(container, queue) {
     ]),
   ]));
   wrap.appendChild(laneWave());
+
+  if (IS_DEMO) {
+    wrap.appendChild(el('div', { class: 'card mb-16' }, [
+      el('p', { style: 'margin:0' }, t('syncqueue.demoDisabled')),
+    ]));
+  }
 
   wrap.appendChild(el('div', { class: 'card mb-16' }, [
     el('p', { class: 'mt-0' }, t('syncqueue.introP1')),
@@ -105,6 +112,12 @@ function renderView(container, queue) {
 // API-Fehler (z. B. abgelaufene Sitzung) werden mit unterschiedlichen,
 // verständlichen Meldungen angezeigt statt eines rohen Fehlertexts.
 async function runRealSync(onDone) {
+  // demo.html: kein Backend vorhanden — die Synchronisierung bleibt
+  // bewusst nicht funktional, alle Daten liegen ausschließlich lokal in
+  // dieser (eigenen, siehe db.js) IndexedDB. Statt einen zwangsläufig
+  // scheiternden Netzwerkaufruf zu versuchen, wird das hier klar
+  // kommuniziert.
+  if (IS_DEMO) { toast(t('syncqueue.demoDisabled')); return; }
   const queue = await getSyncQueue();
   const toSend = queue.filter(e => e.status === 'pending' || e.status === 'error');
   if (toSend.length === 0) { toast(t('syncqueue.nothingToSync')); return; }
