@@ -34,6 +34,8 @@ export default {
   topbar: {
     offlineReady: 'Offline ready', offlineMode: 'Offline mode active',
     settings: 'Settings', language: 'Language', logout: 'Log out', help: 'Help',
+    demoBadge: 'Demo · stored locally only', demoAccountLabel: 'Demo account',
+    exitDemo: 'Go to the real app',
   },
   nav: {
     dashboard: 'Dashboard', athletes: 'Athletes & Team', competitions: 'Competitions',
@@ -367,6 +369,7 @@ export default {
     errorApi: 'Sync error: {message}',
     errorUnknown: 'An unexpected error occurred while syncing.',
     syncDoneOk: 'Sync completed successfully', syncDoneFailed: 'Sync completed, {count} event(s) failed',
+    demoDisabled: 'Sync is disabled in this demo — all data stays stored locally in this browser only.',
   },
   profile: {
     eyebrow: 'My Account', title: 'My Profile',

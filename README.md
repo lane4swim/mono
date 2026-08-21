@@ -368,6 +368,44 @@ siehe `.env.example`.
 `memberCounts: { admin, trainer, athlete }` — ermittelt per
 `prisma.user.groupBy()`, zählt nur aktive (nicht gelöschte) Konten.
 
+## Demo ohne Backend unter `demo.html`
+
+`apps/web/demo.html` — eigener Einstiegspunkt neben `index.html`, der die
+**gleichen Fachmodule** (`js/modules/*.js`) über denselben Router nutzt,
+aber **ganz ohne** `apps/api` läuft:
+
+- **Zwei feste Konten** statt Login: Sabine Reuter (Trainerin) und Maya
+  Vogel (Athletin), umschaltbar über ein Dropdown direkt neben der
+  Sprachauswahl in der Kopfzeile (`js/demoMode.js`: `DEMO_USERS`,
+  `js/state.js`: `loginDemo()` — übernimmt eines der beiden Objekte 1:1
+  als "aktuellen Nutzer", ganz ohne HTTP-Aufruf).
+- **Vollständig isolierte Datenhaltung:** `js/db.js` öffnet für `demo.html`
+  eine eigene IndexedDB-Datenbank (`lane1-demo-db` statt `lane1-db`) —
+  erkannt über `js/demoMode.js`: `IS_DEMO` (Pfadprüfung auf `demo.html`).
+  Dadurch kann die Demo weder bereits synchronisierte Daten eines echten
+  Kontos sehen, noch bleiben nach einem echten Login jemals Demo-Daten
+  zurück — beide Datenbanken existieren unabhängig nebeneinander im
+  selben Origin, es gibt schlicht nichts zu vermischen oder aufzuräumen.
+- **Feste `clubId`** `'0'` (`js/demoMode.js`: `DEMO_CLUB_ID`) auf jedem
+  geseedeten sowie jedem in der Demo neu angelegten Datensatz (via
+  `db.js: put()`, wie im echten Betrieb), um Demo-Daten eindeutig zu
+  kennzeichnen. Bewusst ein String statt der Zahl `0` — als Zahl würde die
+  bestehende `if (clubId)`-Prüfung in `put()` sie als "keine clubId"
+  werten.
+- **Sync-Warteschlange nicht funktional:** `js/modules/syncQueue.js`
+  bricht "Jetzt synchronisieren" im Demo-Modus vor jedem Netzwerkaufruf ab
+  und zeigt stattdessen einen Hinweis — alle Daten bleiben ausschließlich
+  lokal in diesem Browser.
+- **`js/demoSeed.js`** — Beispieldaten (Gruppen, Athlet:innen inkl. Maya
+  Vogels verknüpftem Athletenprofil, Wettkämpfe, Zeiten, Übungen,
+  Vorlagen, ein Trainingsplan, Einheiten, Handlungsfelder), analog zu
+  `js/seed.js`, aber mit fester `clubId` und ohne dessen
+  Aufräum-/Marker-Logik, die dort nur für den (in der Demo unmöglichen)
+  Fall gebraucht wird, dass sich anschließend ein echtes Konto anmeldet.
+- **`js/app-demo.js`** — eigener, schlanker Bootstrap statt `js/app.js`:
+  registriert dieselben Module, aber ohne Login-Bildschirm und ohne
+  automatische Hintergrund-Synchronisation.
+
 ## Build
 
 ```bash

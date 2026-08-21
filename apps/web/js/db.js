@@ -2,8 +2,15 @@
 // One database, one object store per entity. Generic CRUD so new
 // modules can add a store name and get get/getAll/put/remove for free.
 import { getCurrentUser } from './state.js';
+import { IS_DEMO } from './demoMode.js';
 
-const DB_NAME = 'lane1-db';
+// demo.html läuft mit einer eigenen, vollständig getrennten IndexedDB-
+// Datenbank statt 'lane1-db' — dadurch kann die Demo weder bereits
+// synchronisierte Daten eines echten Kontos sehen, noch hinterlässt sie
+// nach einem echten Login irgendwelche Spuren: beide laufen im selben
+// Origin, aber IndexedDB ist pro Datenbankname isoliert, also gibt es
+// schlicht nichts zum Vermischen oder Aufräumen.
+const DB_NAME = IS_DEMO ? 'lane1-demo-db' : 'lane1-db';
 const DB_VERSION = 2; // v2: 'clubs' + 'invitations' Stores ergänzt (Nutzerverwaltung)
 
 export const STORES = [
