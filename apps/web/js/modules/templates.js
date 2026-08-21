@@ -6,6 +6,7 @@ import { el, clear, field, textInput, openModal, confirmAction, toast, badge, em
 import { renderSetEditor, totalDistance, cloneItems, collectEquipment } from './setEditor.js';
 import { EQUIPMENT_ITEMS } from '../refdata.js';
 import { t, trLabel } from '../i18n.js';
+import { libraryTransferButtons } from './libraryTransfer.js';
 
 export const templatesModule = {
   id: 'templates',
@@ -24,7 +25,10 @@ function renderList(container, templates, exercises) {
   const wrap = el('div');
   wrap.appendChild(el('div', { class: 'page-head' }, [
     el('div', {}, [el('div', { class: 'page-eyebrow' }, t('templates.eyebrow', { count: templates.length })), el('h1', { class: 'mt-0' }, t('templates.title'))]),
-    el('div', { class: 'page-actions' }, [el('button', { class: 'btn btn-primary', onclick: () => openTemplateModal(null, exercises, refresh) }, t('templates.createTemplate'))]),
+    el('div', { class: 'page-actions' }, [
+      libraryTransferButtons({ onImported: refresh }),
+      el('button', { class: 'btn btn-primary', onclick: () => openTemplateModal(null, exercises, refresh) }, t('templates.createTemplate')),
+    ]),
   ]));
   wrap.appendChild(laneWave());
   wrap.appendChild(el('p', {}, t('templates.intro')));

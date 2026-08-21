@@ -7,6 +7,7 @@ import { EXERCISE_CATEGORIES, STROKES, EQUIPMENT_ITEMS } from '../refdata.js';
 import { getRole } from '../state.js';
 import { t, trLabel, trCode, trOptions } from '../i18n.js';
 import { renderCommentThread } from './comments.js';
+import { libraryTransferButtons } from './libraryTransfer.js';
 
 export const catalogModule = {
   id: 'catalog',
@@ -25,7 +26,10 @@ function renderList(container, exercises) {
   const wrap = el('div');
   wrap.appendChild(el('div', { class: 'page-head' }, [
     el('div', {}, [el('div', { class: 'page-eyebrow' }, t('catalog.eyebrow', { count: exercises.length })), el('h1', { class: 'mt-0' }, t('catalog.title'))]),
-    el('div', { class: 'page-actions' }, [el('button', { class: 'btn btn-primary', onclick: () => openExerciseModal(null, refresh) }, t('catalog.createExercise'))]),
+    el('div', { class: 'page-actions' }, [
+      libraryTransferButtons({ onImported: refresh }),
+      el('button', { class: 'btn btn-primary', onclick: () => openExerciseModal(null, refresh) }, t('catalog.createExercise')),
+    ]),
   ]));
   wrap.appendChild(laneWave());
 

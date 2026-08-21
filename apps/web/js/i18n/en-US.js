@@ -219,6 +219,14 @@ export default {
     noEquipment: 'No equipment needed',
     validationName: 'Please enter a name.', savedEdit: 'Changes saved', savedCreate: 'Exercise added',
   },
+  libraryTransfer: {
+    exportButton: 'Export (JSON)', importButton: 'Import (JSON)',
+    exportStarted: 'Export started',
+    importConfirmTitle: 'Confirm import',
+    importConfirm: 'Import {exercises} exercise(s) and {templates} template(s)? They will be added as new entries to your club.',
+    importDone: 'Imported {exercises} exercise(s) and {templates} template(s)',
+    importError: "Couldn't read this file — is it a valid template/exercise catalog export?",
+  },
   comments: {
     title: 'Comments', empty: 'No comments yet.',
     placeholder: 'Write a comment…', add: 'Comment',

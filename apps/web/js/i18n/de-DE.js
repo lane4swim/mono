@@ -219,6 +219,14 @@ export default {
     noEquipment: 'Keine Ausrüstung nötig',
     validationName: 'Bitte einen Namen angeben.', savedEdit: 'Änderungen gespeichert', savedCreate: 'Übung angelegt',
   },
+  libraryTransfer: {
+    exportButton: 'Export (JSON)', importButton: 'Import (JSON)',
+    exportStarted: 'Export gestartet',
+    importConfirmTitle: 'Import bestätigen',
+    importConfirm: '{exercises} Übung(en) und {templates} Vorlage(n) importieren? Sie werden als neue Einträge zu deinem Verein hinzugefügt.',
+    importDone: '{exercises} Übung(en) und {templates} Vorlage(n) importiert',
+    importError: 'Die Datei konnte nicht gelesen werden — ist es ein gültiger Vorlagen-/Übungskatalog-Export?',
+  },
   comments: {
     title: 'Kommentare', empty: 'Noch keine Kommentare.',
     placeholder: 'Kommentar schreiben…', add: 'Kommentieren',
