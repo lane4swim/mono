@@ -9,7 +9,11 @@ services:
       POSTGRES_USER: lane1_app
       POSTGRES_PASSWORD: lane1_dev_password
     ports:
-      - "5432:5432"
+      # Nur auf localhost binden statt auf allen Interfaces — sonst ist
+      # Postgres mit diesem hartcodierten Dev-Passwort für jeden im
+      # gleichen Netz erreichbar und komplett unauthentifiziert
+      # zugänglich, ohne dass die App/Login-Seite involviert ist.
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:

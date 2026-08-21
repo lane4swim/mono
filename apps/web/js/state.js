@@ -16,6 +16,7 @@
 import * as api from './apiClient.js';
 import { setLocale, detectInitialLocale } from './i18n.js';
 import { IS_DEMO } from './demoMode.js';
+import { wipeAll } from './db.js';
 
 // Muss inhaltlich mit CURRENT_CONSENT_VERSION im Backend
 // (packages/shared-types/src/auth.ts) übereinstimmen — nur zur Anzeige
@@ -84,10 +85,17 @@ export function loginDemo(user) {
   return current;
 }
 
+// Widerruft die Sitzung beim Backend und räumt danach ALLE lokal
+// zwischengespeicherten Daten auf (IndexedDB) — nicht nur die Tokens.
+// Ohne wipeAll() blieben zuvor synchronisierte fachliche Daten (Athleten,
+// Notizen, Sessions ...) nach dem Logout unverändert in der Browser-DB
+// liegen und wären auf einem geteilten Gerät ohne erneuten Login über
+// DevTools auslesbar.
 export async function logout() {
   if (IS_DEMO) { current = null; emit(); return; }
   await api.logoutRemote();
   api.clearTokens();
+  await wipeAll();
   current = null;
   emit();
 }
