@@ -355,11 +355,12 @@ tr:hover td{ background: var(--c-foam-2); }
    Baut keine echte PDF-Datei — nutzt window.print() auf einer eigenen,
    druckoptimierten Ansicht (siehe js/modules/planPdfExport.js). Der
    Nutzer speichert im Browser-Druckdialog "Als PDF". Auf dem Bildschirm
-   bleibt diese Ansicht unsichtbar außerhalb des Viewports; erst
+   bleibt diese Ansicht durch height:0/overflow:hidden unsichtbar (ohne
+   position-Trickserei, siehe Begründung unten bei @media print); erst
    @media print blendet sie ein und alles andere aus. Bewusst reines
    Schwarz auf Weiß statt der App-Markenfarben, für maximalen Kontrast
    auf Papier/Ausdruck. */
-.plan-print-root{ position: absolute; left: -99999px; top: 0; width: 0; height: 0; overflow: hidden; }
+.plan-print-root{ height: 0; overflow: hidden; }
 .plan-print-sheet{
   width: 190mm; background: #fff; color: #000; font-family: var(--f-body);
 }
@@ -420,9 +421,19 @@ tr:hover td{ background: var(--c-foam-2); }
      near-empty page. Reset both for print so only .plan-print-sheet
      determines page height. */
   html, body{ height: auto !important; background: #fff !important; }
-  body > *:not(.plan-print-root){ display: none !important; }
+  /* Isolate .plan-print-root for printing via the classic visibility-swap
+     (not display:none + a position:absolute→static flip): Safari has
+     long-standing bugs where an element that only becomes position:static
+     for print — especially one kept off-screen via position:absolute on
+     screen — fails to render or is placed incorrectly in the print output.
+     Toggling only `visibility` (everything stays in normal flow, nothing
+     changes `display`) and moving just .plan-print-root to position:absolute
+     for print only (a one-way change, never round-tripped) is the
+     well-tested cross-browser pattern for "print just this one element". */
+  body *{ visibility: hidden; }
+  .plan-print-root, .plan-print-root *{ visibility: visible; }
   .plan-print-root{
-    position: static; width: auto; height: auto; overflow: visible;
+    position: absolute; top: 0; left: 0; width: 100%; height: auto; overflow: visible;
   }
   .plan-print-sheet{ width: auto; }
   @page{ size: A4; margin: 12mm; }
