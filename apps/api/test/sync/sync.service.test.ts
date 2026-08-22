@@ -204,6 +204,11 @@ describe('syncService.push — Konfliktlogik (last-write-wins, z. B. "groups")',
 describe('syncService.push — Konfliktlogik ("results": never-overwrite)', () => {
   it('legt bei einem Konflikt einen zusätzlichen Datensatz mit NEUER id an, statt eine Zeitmessung zu überschreiben', async () => {
     const { service, gateway } = makeService();
+    // Fremdschlüssel-Eigentümerprüfung (siehe sync.service.ts:
+    // assertForeignKeysWithinClub()) verlangt jetzt, dass die
+    // referenzierte athleteId tatsächlich im eigenen Verein existiert.
+    const athlete = makeAthletePayload();
+    gateway.seed('athletes', { ...athlete, birthdate: new Date(athlete.birthdate), joinDate: new Date(athlete.joinDate), updatedAt: new Date(athlete.updatedAt), createdAt: new Date(athlete.createdAt), deletedAt: null });
     const serverResult = makeResultPayload({ time: 60.1, updatedAt: '2026-06-10T00:00:00.000Z' });
     gateway.seed('results', { ...serverResult, updatedAt: new Date(serverResult.updatedAt), deletedAt: null });
 
@@ -526,6 +531,105 @@ describe('syncService.push — Vereins-Scoping bei UPDATE eines bestehenden frem
   });
 });
 
+describe('syncService.push — Fremdschlüssel-Eigentümerprüfung (Sicherheitsreview, Nachtrag)', () => {
+  it('lehnt ein "results"-Event mit einer athleteId eines FREMDEN Vereins ab, obwohl clubId korrekt der eigene Verein ist', async () => {
+    const { service, gateway } = makeService();
+    const foreignAthlete = makeAthletePayload({ id: '55555555-5555-5555-5555-555555555555', clubId: CLUB_B });
+    gateway.seed('athletes', { ...foreignAthlete, birthdate: new Date(foreignAthlete.birthdate), joinDate: new Date(foreignAthlete.joinDate), updatedAt: new Date(foreignAthlete.updatedAt), createdAt: new Date(foreignAthlete.createdAt), deletedAt: null });
+
+    const payload = makeResultPayload(); // athleteId zeigt auf die soeben angelegte, fremde Athletin.
+    const results = await service.push(
+      [{ id: 'evt-fk-foreign-athlete', store: 'results', entityId: payload.id, action: 'create', payload, clientUpdatedAt: payload.updatedAt }],
+      asTrainer(CLUB_A),
+    );
+    expect(results[0]!.status).toBe('error');
+    // Dieselbe Meldung wie bei einer gar nicht existierenden Referenz —
+    // schließt das Existenz-Orakel (siehe FOREIGN_ENTITY_ERROR).
+    expect(results[0]!.message).toContain('existiert nicht mehr');
+
+    // Es darf tatsächlich kein Ergebnis-Datensatz entstanden sein.
+    const stored = await gateway.findById('results', payload.id);
+    expect(stored).toBeNull();
+  });
+
+  it('lehnt ein "results"-Event mit einer athleteId ab, die gar nicht existiert (identische Meldung wie beim fremden Verein)', async () => {
+    const { service } = makeService();
+    const payload = makeResultPayload(); // athleteId wurde nirgends geseedet.
+    const results = await service.push(
+      [{ id: 'evt-fk-missing-athlete', store: 'results', entityId: payload.id, action: 'create', payload, clientUpdatedAt: payload.updatedAt }],
+      asTrainer(CLUB_A),
+    );
+    expect(results[0]!.status).toBe('error');
+    expect(results[0]!.message).toContain('existiert nicht mehr');
+  });
+
+  it('lehnt ein "actionItems"-Event mit einer assignedTrainerId eines Users aus einem FREMDEN Verein ab', async () => {
+    const { service, gateway } = makeService();
+    const athlete = makeAthletePayload();
+    gateway.seed('athletes', { ...athlete, birthdate: new Date(athlete.birthdate), joinDate: new Date(athlete.joinDate), updatedAt: new Date(athlete.updatedAt), createdAt: new Date(athlete.createdAt), deletedAt: null });
+    const foreignTrainerId = 'aaaaaaaa-0000-0000-0000-000000000001';
+    gateway.seedUser(foreignTrainerId, CLUB_B);
+
+    const payload = makeActionItemPayload({ assignedTrainerId: foreignTrainerId });
+    const results = await service.push(
+      [{ id: 'evt-fk-foreign-trainer', store: 'actionItems', entityId: payload.id, action: 'create', payload, clientUpdatedAt: payload.updatedAt }],
+      asTrainer(CLUB_A),
+    );
+    expect(results[0]!.status).toBe('error');
+  });
+
+  it('akzeptiert eine assignedTrainerId, die zu einem User des EIGENEN Vereins gehört', async () => {
+    const { service, gateway } = makeService();
+    const athlete = makeAthletePayload();
+    gateway.seed('athletes', { ...athlete, birthdate: new Date(athlete.birthdate), joinDate: new Date(athlete.joinDate), updatedAt: new Date(athlete.updatedAt), createdAt: new Date(athlete.createdAt), deletedAt: null });
+    const ownTrainerId = 'aaaaaaaa-0000-0000-0000-000000000002';
+    gateway.seedUser(ownTrainerId, CLUB_A);
+
+    const payload = makeActionItemPayload({ assignedTrainerId: ownTrainerId });
+    const results = await service.push(
+      [{ id: 'evt-fk-own-trainer', store: 'actionItems', entityId: payload.id, action: 'create', payload, clientUpdatedAt: payload.updatedAt }],
+      asTrainer(CLUB_A),
+    );
+    expect(results[0]!.status).toBe('applied');
+  });
+
+  it('lehnt ein "athletes"-Event mit einer groupId eines FREMDEN Vereins ab', async () => {
+    const { service, gateway } = makeService();
+    const foreignGroupId = 'bbbbbbbb-0000-0000-0000-000000000001';
+    gateway.seed('groups', { id: foreignGroupId, clubId: CLUB_B, name: 'Fremde Gruppe', updatedAt: new Date(), deletedAt: null });
+
+    const payload = makeAthletePayload({ groupId: foreignGroupId });
+    const results = await service.push(
+      [{ id: 'evt-fk-foreign-group', store: 'athletes', entityId: payload.id, action: 'create', payload, clientUpdatedAt: payload.updatedAt }],
+      asTrainer(CLUB_A),
+    );
+    expect(results[0]!.status).toBe('error');
+  });
+
+  it('akzeptiert eine groupId, die zu einer Gruppe des EIGENEN Vereins gehört', async () => {
+    const { service, gateway } = makeService();
+    const ownGroupId = 'bbbbbbbb-0000-0000-0000-000000000002';
+    gateway.seed('groups', { id: ownGroupId, clubId: CLUB_A, name: 'Eigene Gruppe', updatedAt: new Date(), deletedAt: null });
+
+    const payload = makeAthletePayload({ groupId: ownGroupId });
+    const results = await service.push(
+      [{ id: 'evt-fk-own-group', store: 'athletes', entityId: payload.id, action: 'create', payload, clientUpdatedAt: payload.updatedAt }],
+      asTrainer(CLUB_A),
+    );
+    expect(results[0]!.status).toBe('applied');
+  });
+
+  it('lässt eine null-Referenz (z. B. "groupId": null) unbeanstandet — nichts zu prüfen', async () => {
+    const { service } = makeService();
+    const payload = makeAthletePayload({ groupId: null });
+    const results = await service.push(
+      [{ id: 'evt-fk-null-ref', store: 'athletes', entityId: payload.id, action: 'create', payload, clientUpdatedAt: payload.updatedAt }],
+      asTrainer(CLUB_A),
+    );
+    expect(results[0]!.status).toBe('applied');
+  });
+});
+
 describe('syncService — Rollen-Scopierung für "athlete" (Sicherheitsregression, Patch #6)', () => {
   it('lehnt einen PUSH auf "actionItems" durch die Rolle "athlete" ab (create)', async () => {
     const { service } = makeService();
@@ -561,7 +665,11 @@ describe('syncService — Rollen-Scopierung für "athlete" (Sicherheitsregressio
   });
 
   it('trainer/admin sind von der Schreibsperre NICHT betroffen — dürfen "actionItems"/"sessions" weiterhin verändern', async () => {
-    const { service } = makeService();
+    const { service, gateway } = makeService();
+    // Fremdschlüssel-Eigentümerprüfung verlangt eine im eigenen Verein
+    // existierende athleteId (siehe Test oben bei "results").
+    const athlete = makeAthletePayload();
+    gateway.seed('athletes', { ...athlete, birthdate: new Date(athlete.birthdate), joinDate: new Date(athlete.joinDate), updatedAt: new Date(athlete.updatedAt), createdAt: new Date(athlete.createdAt), deletedAt: null });
     const payload = makeActionItemPayload();
     const results = await service.push(
       [{ id: 'evt-trainer-write', store: 'actionItems', entityId: payload.id, action: 'create', payload, clientUpdatedAt: payload.updatedAt }],

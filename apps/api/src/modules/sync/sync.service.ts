@@ -68,6 +68,86 @@ const PULL_PAGE_SIZE = 200;
 // können.
 const ATHLETE_WRITE_FORBIDDEN_STORES: ReadonlySet<EntityStoreName> = new Set(['actionItems', 'sessions']);
 
+// ---- Fremdschlüssel-Eigentümerprüfung ------------------------------------
+//
+// Sicherheitsreview (Nachtrag): das Vereins-Scoping oben deckt nur die
+// clubId des Top-Level-Datensatzes selbst ab. Mehrere Stores referenzieren
+// aber ZUSÄTZLICH andere fachliche Entitäten über eine ID (athleteId,
+// groupId, competitionId, planId, assignedTrainerId) — die Zod-Schemas in
+// packages/shared-types/src/entities.ts prüfen dafür nur das UUID-Format,
+// nicht die Zugehörigkeit zum eigenen Verein. Ohne diese Prüfung könnte
+// z. B. ein Trainer aus Verein A ein Ergebnis mit clubId=A, aber einer
+// bekannten/erratenen athleteId aus Verein B einreichen — Prismas
+// Fremdschlüssel-Constraint verlangt nur, dass die Zeile IRGENDWO
+// existiert, nicht im richtigen Verein. Das ermöglichte sowohl eine
+// Cross-Tenant-Datenverknüpfung (fabrizierte Ergebnisse/Handlungsfelder an
+// fremde Athlet:innen-IDs) als auch ein Existenz-Orakel über
+// Vereinsgrenzen hinweg (unterscheidbare Antworten für "existiert
+// nirgends" vs. "existiert in fremdem Verein"). Analog zum bereits
+// bestehenden Muster in invitations.service.ts (AthleteClubMismatchError)
+// wird hier für jedes referenzierte Feld geprüft, dass die Zielentität
+// TATSÄCHLICH zum eigenen Verein gehört.
+type ForeignKeyRef =
+  | { field: string; store: EntityStoreName } // referenziert einen der zehn fachlichen Sync-Stores
+  | { field: string; kind: 'user' }; // referenziert users.id (kein Sync-Store, siehe findClubIdForUser())
+
+const FOREIGN_KEY_REFS: Partial<Record<EntityStoreName, ForeignKeyRef[]>> = {
+  athletes: [{ field: 'groupId', store: 'groups' }],
+  results: [
+    { field: 'athleteId', store: 'athletes' },
+    { field: 'competitionId', store: 'competitions' },
+  ],
+  entries: [
+    { field: 'athleteId', store: 'athletes' },
+    { field: 'competitionId', store: 'competitions' },
+  ],
+  actionItems: [
+    { field: 'athleteId', store: 'athletes' },
+    { field: 'assignedTrainerId', kind: 'user' },
+  ],
+  plans: [{ field: 'groupId', store: 'groups' }],
+  sessions: [
+    { field: 'groupId', store: 'groups' },
+    { field: 'planId', store: 'plans' },
+  ],
+};
+
+// Bewusst dieselbe Formulierung wie describeSyncError() für Prismas
+// "P2003" (siehe unten) — macht "Referenz existiert gar nicht" und
+// "Referenz gehört einem fremden Verein" für den Aufrufer ununterscheidbar
+// und schließt so das Existenz-Orakel, statt es nur zu verschieben.
+const FOREIGN_ENTITY_ERROR =
+  'Die referenzierte Person oder der referenzierte Datensatz existiert nicht mehr (wurde vermutlich zwischenzeitlich endgültig gelöscht).';
+
+// Prüft alle für `store` relevanten Fremdschlüsselfelder eines bereits
+// Zod-validierten Payloads: jede gesetzte (nicht-null/undefined) Referenz
+// muss zu genau `clubId` gehören. `findById()` ist bereits club-gescoped
+// (liefert null sowohl bei "nicht gefunden" als auch bei "fremder
+// Verein", siehe sync.gateway.ts) — das reicht hier direkt aus, ohne
+// zwischen beiden Fällen unterscheiden zu müssen.
+async function assertForeignKeysWithinClub(
+  gateway: SyncGateway,
+  store: EntityStoreName,
+  payload: Record<string, unknown>,
+  clubId: string,
+): Promise<string | null> {
+  const refs = FOREIGN_KEY_REFS[store];
+  if (!refs) return null;
+
+  for (const ref of refs) {
+    const value = payload[ref.field];
+    if (value === null || value === undefined) continue; // optionale Referenz, nicht gesetzt
+
+    const ownedByClub =
+      'store' in ref
+        ? (await gateway.findById(ref.store, value as string, clubId)) !== null
+        : (await gateway.findClubIdForUser(value as string)) === clubId;
+
+    if (!ownedByClub) return FOREIGN_ENTITY_ERROR;
+  }
+  return null;
+}
+
 // Prüft, ob eine Rolle="athlete" auf ein Attendance-Element eines
 // TrainingSession-Payloads zugreifen darf (nur das eigene).
 function isOwnAttendanceRecord(record: unknown, athleteId: string | null): boolean {
@@ -194,6 +274,20 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
         if (event.action !== 'delete' && payloadClubId !== requester.clubId) {
           results.push({ eventId: event.id, status: 'error', message: 'clubId des Events stimmt nicht mit dem eigenen Verein überein.' });
           continue;
+        }
+
+        // Fremdschlüssel-Eigentümerprüfung (siehe Kommentar bei
+        // FOREIGN_KEY_REFS oben): erst NACH der clubId-Prüfung des
+        // Top-Level-Datensatzes, aber VOR jedem Lese-/Schreibzugriff, der
+        // referenzierte IDs verwenden würde — ein Event mit einer
+        // clubId-fremden Referenz (z. B. athleteId eines fremden Vereins)
+        // wird komplett zurückgewiesen, statt teilweise angewendet zu werden.
+        if (event.action !== 'delete') {
+          const fkError = await assertForeignKeysWithinClub(deps.gateway, store, validatedPayload as Record<string, unknown>, requester.clubId);
+          if (fkError) {
+            results.push({ eventId: event.id, status: 'error', message: fkError });
+            continue;
+          }
         }
 
         // WICHTIG: clubId wird IMMER mitgegeben. Ein Datensatz eines

@@ -63,6 +63,15 @@ export interface SyncGateway {
   listChangedSince(clubId: string, since: Date | null, limit: number): Promise<ChangedRecord[]>;
   isEventProcessed(eventId: string): Promise<boolean>;
   markEventProcessed(eventId: string, clubId: string, store: EntityStoreName, action: string): Promise<void>;
+  // Ermittelt die clubId eines Users — für die Eigentümerprüfung von
+  // ActionItem.assignedTrainerId (siehe sync.service.ts:
+  // assertForeignKeysWithinClub()). Eigene Methode statt findById(), da
+  // "users" keine der zehn fachlichen Sync-Tabellen ist (kein
+  // EntityDelegate über db/entityRegistry.ts verfügbar). Liefert null
+  // sowohl wenn die userId nicht existiert als auch wenn sie zu keinem
+  // Verein gehört (z. B. superadmin) — ausreichend, da der Aufrufer die ID
+  // ohnehin nur gegen eine konkrete erwartete clubId vergleicht.
+  findClubIdForUser(userId: string): Promise<string | null>;
 }
 
 const ALL_STORES: EntityStoreName[] = [
@@ -156,5 +165,10 @@ export class PrismaSyncGateway implements SyncGateway {
 
   async markEventProcessed(eventId: string, clubId: string, store: EntityStoreName, action: string): Promise<void> {
     await this.prisma.syncedEvent.create({ data: { id: eventId, clubId, store, action } });
+  }
+
+  async findClubIdForUser(userId: string): Promise<string | null> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { clubId: true } });
+    return user?.clubId ?? null;
   }
 }
