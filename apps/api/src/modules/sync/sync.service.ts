@@ -38,15 +38,17 @@ const PULL_PAGE_SIZE = 200;
 // ---- Rollen-Scopierung für die Rolle "athlete" ---------------------------
 //
 // Hintergrund (siehe Sicherheitsreview): die generische Sync-API kannte
-// bisher NUR clubId-Scoping — jede authentifizierte Rolle (trainer, admin,
-// athlete) bekam denselben, vollständigen Vereinsdatensatz. Für die
-// meisten Stores ist das tatsächlich so gewollt (apps/web zeigt z. B.
-// Zeiten/Trainingspläne bewusst der gesamten Mannschaft, auch der Rolle
-// "athlete" — siehe js/modules/times.js, js/modules/plans.js, die für
-// ALLE Rollen identisch die volle Liste anzeigen und auch schreiben
-// lassen). Für zwei Stores ist die Rollentrennung im Frontend jedoch
-// bereits klar erkennbar angelegt — nur eben bisher nur clientseitig,
-// nicht serverseitig durchgesetzt:
+// ursprünglich NUR clubId-Scoping — jede authentifizierte Rolle (trainer,
+// admin, athlete) bekam denselben, vollständigen Vereinsdatensatz. Für
+// "results" und "plans" ist geteiltes Lesen UND Schreiben tatsächlich so
+// gewollt (apps/web zeigt Zeiten/Trainingspläne bewusst der gesamten
+// Mannschaft, auch der Rolle "athlete" — siehe js/modules/times.js,
+// js/modules/plans.js, die für ALLE Rollen identisch die volle Liste
+// anzeigen und auch schreiben lassen). Für die übrigen acht Stores ist die
+// Rollentrennung im Frontend jedoch klar erkennbar angelegt — jedes
+// zugehörige Modul grenzt seine Bearbeitungs-UI per `roles: [...]` im
+// Router (apps/web/js/router.js) auf "trainer"/"admin" ein, nur eben bisher
+// nur clientseitig, nicht serverseitig durchgesetzt:
 //
 //   - "actionItems" (Handlungsfelder/Coaching-Notizen): das Frontend hat
 //     für die Rolle "athlete" eine eigene, rein lesende Ansicht
@@ -59,14 +61,37 @@ const PULL_PAGE_SIZE = 200;
 //     die EIGENE Zeile aus dem `attendance`-Array zeigt — nie die der
 //     anderen. Anlegen/Bearbeiten (openSessionModal) existiert nur in der
 //     Trainer:innen-/Admin-Ansicht.
+//   - "athletes"/"groups" (Athleten- & Team-Verwaltung): js/modules/athletes.js
+//     hat `roles: ['trainer', 'admin']` — für "athlete" existiert dafür
+//     keinerlei Bearbeitungs-UI. js/modules/profile.js ("Mein Profil", für
+//     alle Rollen zugänglich) lässt ausdrücklich NUR Name/E-Mail/Sprache
+//     des eigenen Kontos ändern — Athleten-Stammdaten (Geburtsdatum,
+//     Gruppe, Notizen, …) bleiben laut eigenem Kommentar dort bewusst
+//     "coach-managed", auch für das eigene, verknüpfte Athletenprofil.
+//   - "exercises" (Übungskatalog): js/modules/catalog.js hat
+//     `roles: ['trainer', 'admin']`.
+//   - "templates" (Trainingsplan-Vorlagen): js/modules/templates.js hat
+//     `roles: ['trainer', 'admin']`.
+//   - "competitions"/"entries" (Wettkampf- & Startlisten-Verwaltung):
+//     js/modules/competitions.js hat `roles: ['trainer', 'admin']`.
 //
-// Für genau diese beiden Stores wird die Rollentrennung jetzt auch
-// serverseitig erzwungen — vorher hätte jede Person mit einem gültigen
-// Athlet:innen-Konto (z. B. per curl/DevTools, unabhängig vom Frontend)
-// die Handlungsfelder und Trainings-Notizen/RPE-Werte ALLER anderen
-// Athlet:innen des Vereins lesen und dort sogar schreibend eingreifen
-// können.
-const ATHLETE_WRITE_FORBIDDEN_STORES: ReadonlySet<EntityStoreName> = new Set(['actionItems', 'sessions']);
+// Für all diese acht Stores wird die Rollentrennung jetzt auch serverseitig
+// erzwungen — vorher hätte jede Person mit einem gültigen Athlet:innen-
+// Konto (z. B. per curl/DevTools, unabhängig vom Frontend) dort lesend UND
+// SCHREIBEND eingreifen können, obwohl die App-Navigation ihr dafür
+// bewusst keine Werkzeuge gibt (z. B. fremde Athletendatensätze oder
+// Gruppen anlegen/ändern/löschen, den Übungskatalog oder Trainingsplan-
+// Vorlagen manipulieren, Wettkämpfe/Startlisten anlegen oder verändern).
+const ATHLETE_WRITE_FORBIDDEN_STORES: ReadonlySet<EntityStoreName> = new Set([
+  'actionItems',
+  'sessions',
+  'athletes',
+  'groups',
+  'exercises',
+  'templates',
+  'competitions',
+  'entries',
+]);
 
 // ---- Fremdschlüssel-Eigentümerprüfung ------------------------------------
 //
@@ -299,19 +324,6 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
         // create() gewählt wird.
         const existing = await deps.gateway.findById(store, event.entityId, requester.clubId);
 
-        // Schreibschutz für "notes" (siehe scopeChangeForAthlete oben für
-        // die Begründung): eine Rolle "athlete" kann über den generischen
-        // Push-Endpunkt grundsätzlich Athletendatensätze schreiben (z. B.
-        // um z. B. Gruppendaten zu spiegeln) — das freie Notizfeld darf
-        // dabei aber nie verändert werden. Statt den gesamten Store für
-        // "athlete" zu sperren (dafür gibt es aktuell keinen belegten
-        // Bedarf), wird "notes" hier stillschweigend auf den bisherigen
-        // Serverstand zurückgesetzt — ein Versuch, "notes" zu ändern,
-        // schlägt fehl, ohne den Rest des Updates zu blockieren.
-        if (requester.role === 'athlete' && store === 'athletes' && validatedPayload) {
-          validatedPayload.notes = (existing as { notes?: string } | null)?.notes ?? '';
-        }
-
         const decision = resolveConflict(
           store,
           { clientUpdatedAt: event.clientUpdatedAt },
@@ -319,17 +331,13 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
         );
 
         if (decision.outcome === 'conflict-server-wins') {
-          // Gleiche Redaktion wie beim Pull (siehe scopeChangeForAthlete):
-          // "serverVersion" hier ist im Grunde ein Mini-Pull dieses einen
-          // Datensatzes — ohne diese Zeile könnte eine Rolle "athlete"
-          // durch gezieltes Auslösen eines Konflikts (z. B. mit einer
-          // künstlich alten clientUpdatedAt) trotzdem an das
-          // unredigierte "notes"-Feld eines Athletendatensatzes kommen.
-          const serverVersion =
-            requester.role === 'athlete' && store === 'athletes' && existing
-              ? { ...(existing as Record<string, unknown>), notes: '' }
-              : (existing as Record<string, unknown> | null);
-          results.push({ eventId: event.id, status: 'conflict', serverVersion });
+          // Kein Redaktionsbedarf für Rolle "athlete" hier (anders als beim
+          // Pull, siehe scopeChangeForAthlete): "athletes" steht seit der
+          // Erweiterung von ATHLETE_WRITE_FORBIDDEN_STORES oben für diese
+          // Rolle gar nicht mehr bis hierher — ein Push-Versuch wird
+          // bereits ganz oben abgewiesen, dieser Zweig ist für "athlete"
+          // auf "athletes" also unerreichbar.
+          results.push({ eventId: event.id, status: 'conflict', serverVersion: existing as Record<string, unknown> | null });
           continue;
         }
 

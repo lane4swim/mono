@@ -678,6 +678,58 @@ describe('syncService — Rollen-Scopierung für "athlete" (Sicherheitsregressio
     expect(results[0]!.status).toBe('applied');
   });
 
+  it.each([
+    ['athletes', () => makeAthletePayload({ id: '55555555-5555-5555-5555-555555555556' })],
+    ['groups', () => makeGroupPayload({ id: '99999999-1111-1111-1111-111111111111' })],
+    ['exercises', () => makeExercisePayload({ id: '99999999-2222-2222-2222-222222222222' })],
+    ['templates', () => ({
+      id: '99999999-3333-3333-3333-333333333333', clubId: CLUB_A, name: 'Vorlage', description: '', tags: [], sets: [],
+      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    })],
+    ['competitions', () => ({
+      id: '99999999-4444-4444-4444-444444444444', clubId: CLUB_A, name: 'Vereinsmeisterschaft', date: new Date().toISOString(),
+      location: '', course: 'LCM', notes: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    })],
+  ] as const)(
+    'lehnt einen PUSH (create) auf "%s" durch die Rolle "athlete" ab — nur in der UI versteckt, nicht serverseitig durchgesetzt war die eigentliche Lücke',
+    async (store, makePayload) => {
+      const { service } = makeService();
+      const payload = makePayload();
+      const results = await service.push(
+        [{ id: `evt-athlete-write-${store}`, store, entityId: payload.id, action: 'create', payload, clientUpdatedAt: payload.updatedAt }],
+        asAthlete(CLUB_A, '55555555-5555-5555-5555-555555555555'),
+      );
+      expect(results[0]!.status).toBe('error');
+    },
+  );
+
+  it('lehnt einen PUSH (create) auf "entries" durch die Rolle "athlete" ab', async () => {
+    const { service, gateway } = makeService();
+    const athlete = makeAthletePayload();
+    gateway.seed('athletes', { ...athlete, birthdate: new Date(athlete.birthdate), joinDate: new Date(athlete.joinDate), updatedAt: new Date(athlete.updatedAt), createdAt: new Date(athlete.createdAt), deletedAt: null });
+    const now = new Date().toISOString();
+    const payload = {
+      id: '99999999-5555-5555-5555-555555555555', clubId: CLUB_A, competitionId: '99999999-4444-4444-4444-444444444444',
+      athleteId: athlete.id, event: '50 Freistil', eventNumber: '', heat: null, lane: null, seedTime: null,
+      createdAt: now, updatedAt: now,
+    };
+    const results = await service.push(
+      [{ id: 'evt-athlete-write-entries', store: 'entries', entityId: payload.id, action: 'create', payload, clientUpdatedAt: now }],
+      asAthlete(CLUB_A, athlete.id),
+    );
+    expect(results[0]!.status).toBe('error');
+  });
+
+  it('trainer/admin sind von der erweiterten Schreibsperre NICHT betroffen — dürfen "athletes"/"groups"/"exercises"/"templates"/"competitions" weiterhin verändern', async () => {
+    const { service } = makeService();
+    const payload = makeGroupPayload({ id: '99999999-6666-6666-6666-666666666666' });
+    const results = await service.push(
+      [{ id: 'evt-trainer-write-group', store: 'groups', entityId: payload.id, action: 'create', payload, clientUpdatedAt: payload.updatedAt }],
+      asTrainer(CLUB_A),
+    );
+    expect(results[0]!.status).toBe('applied');
+  });
+
   it('PULL für Rolle "athlete": "actionItems" werden auf die eigenen Einträge gefiltert', async () => {
     const { service, gateway } = makeService();
     const mine = makeActionItemPayload({ id: 'ai-mine', athleteId: '55555555-5555-5555-5555-555555555555' });
@@ -778,7 +830,12 @@ describe('syncService — "Athlete.notes"-Redaktion für Rolle "athlete" (Sicher
     expect((result.changes[0]!.payload as Record<string, unknown>).notes).toBe('Coaching-Notiz');
   });
 
-  it('PUSH: ein Versuch der Rolle "athlete", "notes" zu ändern, wird stillschweigend verworfen (Rest des Updates gelingt weiterhin)', async () => {
+  it('PUSH: die Rolle "athlete" darf den Store "athletes" grundsätzlich nicht mehr verändern — auch nicht das eigene, verknüpfte Profil', async () => {
+    // Seit der Erweiterung von ATHLETE_WRITE_FORBIDDEN_STORES (siehe
+    // sync.service.ts) ist "athletes" für Rolle "athlete" komplett
+    // gesperrt — konsistent mit js/modules/profile.js, das für das eigene
+    // Konto ausdrücklich NUR Name/E-Mail/Sprache bearbeitbar macht;
+    // Athleten-Stammdaten (inkl. "notes") bleiben coach-managed.
     const { service, gateway } = makeService();
     const original = makeAthletePayload({ notes: 'Original-Notiz von Trainer:in' });
     gateway.seed('athletes', { ...original, birthdate: new Date(original.birthdate), joinDate: new Date(original.joinDate), updatedAt: new Date(original.updatedAt), createdAt: new Date(original.createdAt), deletedAt: null });
@@ -792,26 +849,10 @@ describe('syncService — "Athlete.notes"-Redaktion für Rolle "athlete" (Sicher
       [{ id: 'evt-athlete-notes', store: 'athletes', entityId: original.id, action: 'update', payload: maliciousUpdate, clientUpdatedAt: maliciousUpdate.updatedAt }],
       asAthlete(CLUB_A, original.id),
     );
-    expect(results[0]!.status).toBe('applied');
+    expect(results[0]!.status).toBe('error');
 
     const stored = await gateway.findById('athletes', original.id);
     expect((stored as Record<string, unknown>).notes).toBe('Original-Notiz von Trainer:in');
-  });
-
-  it('PUSH-Konflikt: "serverVersion" enthält für Rolle "athlete" ebenfalls kein unredigiertes "notes"-Feld', async () => {
-    const { service, gateway } = makeService();
-    const original = makeAthletePayload({ notes: 'Geheime Coaching-Notiz', updatedAt: '2026-06-10T00:00:00.000Z' });
-    gateway.seed('athletes', { ...original, birthdate: new Date(original.birthdate), joinDate: new Date(original.joinDate), updatedAt: new Date(original.updatedAt), createdAt: new Date(original.createdAt), deletedAt: null });
-
-    // Absichtlich veralteter Client-Stand -> löst "conflict-server-wins" aus.
-    const staleClientUpdate = makeAthletePayload({ updatedAt: '2026-01-01T00:00:00.000Z' });
-    const results = await service.push(
-      [{ id: 'evt-athlete-conflict', store: 'athletes', entityId: original.id, action: 'update', payload: staleClientUpdate, clientUpdatedAt: staleClientUpdate.updatedAt }],
-      asAthlete(CLUB_A, original.id),
-    );
-    expect(results[0]!.status).toBe('conflict');
-    expect((results[0] as { serverVersion?: Record<string, unknown> }).serverVersion?.notes).toBe('');
-    expect(JSON.stringify(results[0])).not.toContain('Geheime');
   });
 
   it('trainer/admin: "notes" lässt sich weiterhin normal ändern', async () => {
