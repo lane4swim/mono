@@ -730,6 +730,36 @@ describe('syncService — Rollen-Scopierung für "athlete" (Sicherheitsregressio
     expect(results[0]!.status).toBe('applied');
   });
 
+  it.each(['results', 'plans'] as const)(
+    'STORE_PERMISSIONS "geteilt": die Rolle "athlete" darf "%s" weiterhin lesen UND schreiben (times.js/plans.js zeigen/bearbeiten das team-weit)',
+    async (store) => {
+      const { service, gateway } = makeService();
+      const athlete = makeAthletePayload();
+      gateway.seed('athletes', { ...athlete, birthdate: new Date(athlete.birthdate), joinDate: new Date(athlete.joinDate), updatedAt: new Date(athlete.updatedAt), createdAt: new Date(athlete.createdAt), deletedAt: null });
+      const now = new Date().toISOString();
+      const payload =
+        store === 'results'
+          ? { id: '99999999-7777-7777-7777-777777777771', clubId: CLUB_A, athleteId: athlete.id, event: '100 Freistil', time: 61.2, date: now, course: 'LCM', competitionId: null, place: null, isPB: false, createdAt: now, updatedAt: now }
+          : { id: '99999999-7777-7777-7777-777777777772', clubId: CLUB_A, name: 'Eigener Plan', weekStart: now, groupId: null, status: 'aktiv', days: [], comments: [], createdAt: now, updatedAt: now };
+      const results = await service.push(
+        [{ id: `evt-athlete-shared-write-${store}`, store, entityId: payload.id, action: 'create', payload, clientUpdatedAt: now }],
+        asAthlete(CLUB_A, athlete.id),
+      );
+      expect(results[0]!.status).toBe('applied');
+    },
+  );
+
+  it('PUSH: ein Event mit einem laut STORE_PERMISSIONS unbekannten Store (z. B. "users") wird sauber als "error" gemeldet, statt die Anfrage abstürzen zu lassen', async () => {
+    const { service } = makeService();
+    const now = new Date().toISOString();
+    const results = await service.push(
+      [{ id: 'evt-unknown-store', store: 'users', entityId: 'irgendeine-id', action: 'create', payload: { foo: 'bar' }, clientUpdatedAt: now }],
+      asTrainer(CLUB_A),
+    );
+    expect(results[0]!.status).toBe('error');
+    expect(results[0]!.message).toContain('Unbekannter Store');
+  });
+
   it('PULL für Rolle "athlete": "actionItems" werden auf die eigenen Einträge gefiltert', async () => {
     const { service, gateway } = makeService();
     const mine = makeActionItemPayload({ id: 'ai-mine', athleteId: '55555555-5555-5555-5555-555555555555' });
@@ -831,9 +861,9 @@ describe('syncService — "Athlete.notes"-Redaktion für Rolle "athlete" (Sicher
   });
 
   it('PUSH: die Rolle "athlete" darf den Store "athletes" grundsätzlich nicht mehr verändern — auch nicht das eigene, verknüpfte Profil', async () => {
-    // Seit der Erweiterung von ATHLETE_WRITE_FORBIDDEN_STORES (siehe
-    // sync.service.ts) ist "athletes" für Rolle "athlete" komplett
-    // gesperrt — konsistent mit js/modules/profile.js, das für das eigene
+    // Laut STORE_PERMISSIONS (siehe sync.service.ts) ist "athletes" für
+    // Rolle "athlete" komplett gesperrt — konsistent mit
+    // js/modules/profile.js, das für das eigene
     // Konto ausdrücklich NUR Name/E-Mail/Sprache bearbeitbar macht;
     // Athleten-Stammdaten (inkl. "notes") bleiben coach-managed.
     const { service, gateway } = makeService();

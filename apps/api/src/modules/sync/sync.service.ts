@@ -16,6 +16,7 @@ import {
   type SyncEvent,
   type SyncEventResult,
   type SyncChange,
+  type SyncStore,
   type EntityStoreName,
   type Role,
 } from '@lane1/shared-types';
@@ -28,70 +29,116 @@ export interface SyncRequester {
   // Rollen-Scopierung in der Sync-API") — clubId allein reicht nicht:
   // ein Athlet:innen-Konto darf zwar denselben Verein sehen wie
   // Trainer:innen/Admins, aber nicht dieselbe Datentiefe (siehe Kommentar
-  // bei ATHLETE_WRITE_FORBIDDEN_STORES unten).
+  // bei STORE_PERMISSIONS unten).
   role: Role;
   athleteId: string | null;
 }
 
 const PULL_PAGE_SIZE = 200;
 
-// ---- Rollen-Scopierung für die Rolle "athlete" ---------------------------
+// ---- Rollen-/Store-Berechtigungsmatrix ------------------------------------
 //
 // Hintergrund (siehe Sicherheitsreview): die generische Sync-API kannte
-// ursprünglich NUR clubId-Scoping — jede authentifizierte Rolle (trainer,
-// admin, athlete) bekam denselben, vollständigen Vereinsdatensatz. Für
-// "results" und "plans" ist geteiltes Lesen UND Schreiben tatsächlich so
-// gewollt (apps/web zeigt Zeiten/Trainingspläne bewusst der gesamten
-// Mannschaft, auch der Rolle "athlete" — siehe js/modules/times.js,
-// js/modules/plans.js, die für ALLE Rollen identisch die volle Liste
-// anzeigen und auch schreiben lassen). Für die übrigen acht Stores ist die
-// Rollentrennung im Frontend jedoch klar erkennbar angelegt — jedes
-// zugehörige Modul grenzt seine Bearbeitungs-UI per `roles: [...]` im
-// Router (apps/web/js/router.js) auf "trainer"/"admin" ein, nur eben bisher
-// nur clientseitig, nicht serverseitig durchgesetzt:
+// ursprünglich NUR clubId-Scoping — jede authentifizierte Rolle bekam
+// denselben, vollständigen Vereinsdatensatz, lesend UND schreibend. Diese
+// Tabelle ist die EINE Stelle, die für jeden Store und jede Rolle festlegt,
+// ob Lesen (Pull) bzw. Schreiben (Push: create/update/delete) erlaubt ist —
+// push()/pull() unten fragen ausschließlich diese Tabelle ab (canRead()/
+// canWrite()), statt Rollen-Sonderfälle im Ablauf selbst zu verdrahten.
 //
-//   - "actionItems" (Handlungsfelder/Coaching-Notizen): das Frontend hat
-//     für die Rolle "athlete" eine eigene, rein lesende Ansicht
-//     (renderAthleteList in js/modules/actionItems.js), die nur die
-//     eigenen Einträge zeigt; Anlegen/Bearbeiten (openItemModal) existiert
-//     dort nicht — nur in der Trainer:innen-/Admin-Ansicht.
-//   - "sessions" (Trainingseinheiten inkl. Anwesenheit/RPE/Notiz JE
-//     Athlet:in): ebenfalls eine eigene, rein lesende Ansicht
-//     (renderAthleteView in js/modules/sessions.js), die zusätzlich nur
-//     die EIGENE Zeile aus dem `attendance`-Array zeigt — nie die der
-//     anderen. Anlegen/Bearbeiten (openSessionModal) existiert nur in der
-//     Trainer:innen-/Admin-Ansicht.
-//   - "athletes"/"groups" (Athleten- & Team-Verwaltung): js/modules/athletes.js
-//     hat `roles: ['trainer', 'admin']` — für "athlete" existiert dafür
-//     keinerlei Bearbeitungs-UI. js/modules/profile.js ("Mein Profil", für
-//     alle Rollen zugänglich) lässt ausdrücklich NUR Name/E-Mail/Sprache
-//     des eigenen Kontos ändern — Athleten-Stammdaten (Geburtsdatum,
-//     Gruppe, Notizen, …) bleiben laut eigenem Kommentar dort bewusst
-//     "coach-managed", auch für das eigene, verknüpfte Athletenprofil.
-//   - "exercises" (Übungskatalog): js/modules/catalog.js hat
-//     `roles: ['trainer', 'admin']`.
-//   - "templates" (Trainingsplan-Vorlagen): js/modules/templates.js hat
-//     `roles: ['trainer', 'admin']`.
-//   - "competitions"/"entries" (Wettkampf- & Startlisten-Verwaltung):
-//     js/modules/competitions.js hat `roles: ['trainer', 'admin']`.
+// BEWUSST als Whitelist (statt der früheren Blacklist
+// "ATHLETE_WRITE_FORBIDDEN_STORES", die nur "athlete" kannte): eine Rolle,
+// die für einen Store nicht explizit gelistet ist, hat dort KEINEN Zugriff.
+// Das ist die entscheidende Eigenschaft für Erweiterbarkeit — kommt künftig
+// eine weitere Rolle hinzu (z. B. "co-trainer" oder "parent" in
+// packages/shared-types/src/user.ts: RoleSchema), hat sie automatisch
+// NIRGENDS Zugriff, bis sie hier für die passenden Stores explizit
+// eingetragen wird. Ein Vergessen fällt so als "zu wenig Rechte" auf (leicht
+// zu beheben), nicht als übersehene Sicherheitslücke (siehe genau der Fall,
+// der zur bisherigen Erweiterung von ATHLETE_WRITE_FORBIDDEN_STORES führte).
+// `Record<EntityStoreName, StoreAccess>` erzwingt zusätzlich zur Compile-
+// Zeit, dass JEDER Store einen Eintrag hat — ein künftiger elfter Store
+// ohne Zeile hier lässt sich nicht kompilieren.
 //
-// Für all diese acht Stores wird die Rollentrennung jetzt auch serverseitig
-// erzwungen — vorher hätte jede Person mit einem gültigen Athlet:innen-
-// Konto (z. B. per curl/DevTools, unabhängig vom Frontend) dort lesend UND
-// SCHREIBEND eingreifen können, obwohl die App-Navigation ihr dafür
-// bewusst keine Werkzeuge gibt (z. B. fremde Athletendatensätze oder
-// Gruppen anlegen/ändern/löschen, den Übungskatalog oder Trainingsplan-
-// Vorlagen manipulieren, Wettkämpfe/Startlisten anlegen oder verändern).
-const ATHLETE_WRITE_FORBIDDEN_STORES: ReadonlySet<EntityStoreName> = new Set([
-  'actionItems',
-  'sessions',
-  'athletes',
-  'groups',
-  'exercises',
-  'templates',
-  'competitions',
-  'entries',
-]);
+// Rollen-Übersicht (siehe docs/backend-plan.md / packages/shared-types/src/
+// user.ts): "superadmin" gehört zu keinem Verein und darf laut
+// sync.route.ts (requireRole('trainer','admin','athlete')) ohnehin nie
+// synchronisieren — taucht in keinem Set unten auf (== überall kein
+// Zugriff), auch wenn requireRole() sich künftig einmal ändern sollte.
+//
+// Zusammenfassung Lese-/Schreibrechte je Store (R = lesen/Pull, W =
+// schreiben/Push create+update+delete; "admin"/"trainer" identisch, daher
+// als "Coach" zusammengefasst):
+//
+//   Store          | Coach (trainer/admin) | athlete | Begründung
+//   ---------------|------------------------|---------|--------------------
+//   results        | R + W                  | R + W   | js/modules/times.js zeigt/bearbeitet für ALLE Rollen identisch die volle Liste.
+//   plans          | R + W                  | R + W   | js/modules/plans.js: ebenso, für alle Rollen geteilt.
+//   athletes       | R + W                  | R only  | js/modules/athletes.js: `roles:['trainer','admin']`; "notes" zusätzlich per scopeChangeForAthlete() beim Lesen redigiert (Zeilen-/Feldebene, siehe unten).
+//   groups         | R + W                  | R only  | wird nur innerhalb von athletes.js verwaltet (kein eigenes Modul).
+//   exercises      | R + W                  | R only  | js/modules/catalog.js: `roles:['trainer','admin']`.
+//   templates      | R + W                  | R only  | js/modules/templates.js: `roles:['trainer','admin']`.
+//   competitions   | R + W                  | R only  | js/modules/competitions.js: `roles:['trainer','admin']`.
+//   entries        | R + W                  | R only  | dito (Startlisten-Verwaltung ist Teil von competitions.js).
+//   actionItems    | R + W                  | R only* | js/modules/actionItems.js: eigene rein lesende Athlet:innen-Ansicht (renderAthleteList); *zusätzlich per scopeChangeForAthlete() beim Lesen auf die EIGENEN Einträge gefiltert (Zeilenebene).
+//   sessions       | R + W                  | R only* | js/modules/sessions.js: eigene rein lesende Athlet:innen-Ansicht (renderAthleteView); *zusätzlich per scopeChangeForAthlete() beim Lesen auf die EIGENE attendance-Zeile reduziert (Zeilenebene).
+//
+// Diese Tabelle regelt nur die STORE-Ebene (ganzer Store lesbar/schreibbar
+// ja/nein). Die mit * markierten, feineren Einschränkungen (nur eigene
+// Zeile/eigenes Feld statt ganzer Store) bleiben zusätzlich über
+// scopeChangeForAthlete() (Pull) bzw. die ATHLETE_WRITE_FORBIDDEN_STORES-
+// Vorgängerin ersetzenden canWrite()-Prüfung (Push, sperrt den Store hier
+// bereits komplett) abgedeckt — sie sind bewusst nicht Teil dieser
+// generischen Rollen-Tabelle, da sie vom KONKRETEN Dateninhalt abhängen
+// (eigene athleteId im Payload/Attendance-Eintrag), nicht nur von Rolle+Store.
+interface StoreAccess {
+  read: ReadonlySet<Role>;
+  write: ReadonlySet<Role>;
+}
+
+// Die drei Rollen, die überhaupt ein Vereinskonto haben und synchronisieren
+// dürfen (siehe SyncRequester.clubId-Kommentar oben).
+const TEAM_ROLES: readonly Role[] = ['trainer', 'admin', 'athlete'];
+
+// Zwei wiederkehrende Zugriffsprofile, um die Tabelle unten knapp zu halten:
+//   - geteilt: alle drei Rollen lesen UND schreiben (results, plans).
+//   - coachVerwaltet: alle drei Rollen lesen, nur trainer/admin schreiben
+//     (die übrigen acht Stores).
+const geteilt: StoreAccess = { read: new Set(TEAM_ROLES), write: new Set(TEAM_ROLES) };
+const coachVerwaltet: StoreAccess = { read: new Set(TEAM_ROLES), write: new Set(['trainer', 'admin']) };
+
+const STORE_PERMISSIONS: Record<EntityStoreName, StoreAccess> = {
+  results: geteilt,
+  plans: geteilt,
+  athletes: coachVerwaltet,
+  groups: coachVerwaltet,
+  exercises: coachVerwaltet,
+  templates: coachVerwaltet,
+  competitions: coachVerwaltet,
+  entries: coachVerwaltet,
+  actionItems: coachVerwaltet,
+  sessions: coachVerwaltet,
+};
+
+// Nimmt bewusst den weiteren Wire-Typ `SyncStore` entgegen (nicht nur
+// `EntityStoreName`): `SyncStore` (packages/shared-types/src/syncEvent.ts)
+// führt zusätzlich "users" — für die generische Sync-API (noch) kein
+// echter, per ENTITY_SCHEMAS/STORE_PERMISSIONS bekannter Store (Nutzer-
+// verwaltung läuft über eigene REST-Endpunkte, siehe modules/auth). Ein
+// Store ohne Tabelleneintrag gilt konsequent als nicht lesbar/schreibbar
+// (sicherer Default), statt bei einer künftigen Erweiterung von
+// `SyncStore` einen fehlenden Eintrag hier stillschweigend durchzulassen.
+function isKnownStore(store: SyncStore): store is EntityStoreName {
+  return store in STORE_PERMISSIONS;
+}
+
+function canRead(store: SyncStore, role: Role): boolean {
+  return isKnownStore(store) && STORE_PERMISSIONS[store].read.has(role);
+}
+
+function canWrite(store: SyncStore, role: Role): boolean {
+  return isKnownStore(store) && STORE_PERMISSIONS[store].write.has(role);
+}
 
 // ---- Fremdschlüssel-Eigentümerprüfung ------------------------------------
 //
@@ -242,19 +289,35 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
           continue;
         }
         const event = parsedEvent.data;
-        const store = event.store as EntityStoreName;
 
-        // Rollen-Scopierung (siehe Kommentar bei ATHLETE_WRITE_FORBIDDEN_STORES
-        // oben): eine Rolle "athlete" darf "actionItems"/"sessions" NIE
-        // schreibend verändern — unabhängig von action (create/update/delete)
-        // und unabhängig davon, ob der Datensatz ihr selbst "gehört". Das
-        // Frontend bietet dafür ohnehin keine Schreib-UI; diese Prüfung
-        // schließt lediglich die serverseitige Lücke.
-        if (requester.role === 'athlete' && ATHLETE_WRITE_FORBIDDEN_STORES.has(store)) {
+        // "store" ist laut SyncEventSchema nur als der breitere Wire-Typ
+        // `SyncStore` geprüft (der zusätzlich "users" kennt, siehe
+        // isKnownStore()-Kommentar oben — Nutzerverwaltung läuft über
+        // eigene REST-Endpunkte, nicht über diese generische Sync-API).
+        // Ohne diese Prüfung würde ein Event mit einem solchen, hier
+        // unbekannten Store weiter unten bei `ENTITY_SCHEMAS[store]` bzw.
+        // `getEntityDelegate()` auf ein fehlendes Delegate treffen und die
+        // gesamte Anfrage mit einer rohen TypeError abbrechen, statt als
+        // reguläres "error"-Ergebnis für genau dieses Event gemeldet zu
+        // werden.
+        if (!isKnownStore(event.store)) {
+          results.push({ eventId: event.id, status: 'error', message: `Unbekannter Store "${event.store}".` });
+          continue;
+        }
+        const store = event.store;
+
+        // Rollen-Scopierung (siehe STORE_PERMISSIONS oben): unabhängig von
+        // action (create/update/delete) und unabhängig davon, ob der
+        // Datensatz der anfragenden Person selbst "gehört" — wer für einen
+        // Store laut Tabelle nicht schreiben darf, kommt hier gar nicht
+        // erst weiter. Für die betroffenen Stores bietet das Frontend
+        // ohnehin keine Schreib-UI für diese Rolle; diese Prüfung schließt
+        // lediglich die serverseitige Lücke.
+        if (!canWrite(store, requester.role)) {
           results.push({
             eventId: event.id,
             status: 'error',
-            message: `Die Rolle "athlete" darf den Store "${store}" nicht verändern.`,
+            message: `Die Rolle "${requester.role}" darf den Store "${store}" nicht verändern.`,
           });
           continue;
         }
@@ -332,11 +395,10 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
 
         if (decision.outcome === 'conflict-server-wins') {
           // Kein Redaktionsbedarf für Rolle "athlete" hier (anders als beim
-          // Pull, siehe scopeChangeForAthlete): "athletes" steht seit der
-          // Erweiterung von ATHLETE_WRITE_FORBIDDEN_STORES oben für diese
-          // Rolle gar nicht mehr bis hierher — ein Push-Versuch wird
-          // bereits ganz oben abgewiesen, dieser Zweig ist für "athlete"
-          // auf "athletes" also unerreichbar.
+          // Pull, siehe scopeChangeForAthlete): "athletes" steht laut
+          // STORE_PERMISSIONS oben für diese Rolle nicht mehr bis hierher —
+          // canWrite() weist einen Push-Versuch bereits ganz oben ab,
+          // dieser Zweig ist für "athlete" auf "athletes" also unerreichbar.
           results.push({ eventId: event.id, status: 'conflict', serverVersion: existing as Record<string, unknown> | null });
           continue;
         }
@@ -390,15 +452,27 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
         updatedAt: row.updatedAt.toISOString(),
       }));
 
-      // Rollen-Scopierung beim Lesen (siehe Kommentar bei
-      // ATHLETE_WRITE_FORBIDDEN_STORES oben): "actionItems" werden auf
+      // Rollen-Scopierung beim Lesen, Store-Ebene (siehe STORE_PERMISSIONS
+      // oben): Changes aus einem Store, den die anfragende Rolle laut
+      // Tabelle gar nicht lesen darf, werden komplett unterdrückt. Mit den
+      // heutigen drei synchronisierenden Rollen (trainer/admin/athlete) ist
+      // das noch ein No-Op — jeder Store ist für alle drei lesbar (siehe
+      // Tabelle) — aber der Mechanismus greift automatisch, sobald künftig
+      // eine Rolle mit eingeschränktem Lesezugriff hinzukommt.
+      changes = changes.filter((change) => canRead(change.store, requester.role));
+
+      // Rollen-Scopierung beim Lesen, Zeilen-/Feld-Ebene: zusätzlich zur
+      // Store-Ebene oben werden für Rolle "athlete" "actionItems" auf
       // eigene Einträge gefiltert, "sessions" auf die eigene Zeile im
-      // attendance-Array reduziert bzw. komplett ausgeblendet, wenn die
-      // anfragende Person gar nicht Teil der Einheit war. WICHTIG: die
-      // Filterung erfolgt NACH der Pagination (auf `page`, nicht auf
-      // `rows`) — `hasMore`/`nextCursor` bleiben dadurch unverändert
-      // korrekt, auch wenn dem Client dadurch weniger als PULL_PAGE_SIZE
-      // sichtbare Changes in dieser Seite ankommen.
+      // attendance-Array reduziert bzw. komplett ausgeblendet (wenn die
+      // anfragende Person gar nicht Teil der Einheit war), und bei
+      // "athletes" das "notes"-Feld redigiert (siehe scopeChangeForAthlete).
+      // Diese Feinheiten hängen vom KONKRETEN Dateninhalt ab, nicht nur von
+      // Rolle+Store, und bleiben daher bewusst außerhalb von
+      // STORE_PERMISSIONS. WICHTIG: die Filterung erfolgt NACH der
+      // Pagination (auf `page`, nicht auf `rows`) — `hasMore`/`nextCursor`
+      // bleiben dadurch unverändert korrekt, auch wenn dem Client dadurch
+      // weniger als PULL_PAGE_SIZE sichtbare Changes in dieser Seite ankommen.
       if (requester.role === 'athlete') {
         changes = changes
           .map((change) => scopeChangeForAthlete(change, requester.athleteId))
