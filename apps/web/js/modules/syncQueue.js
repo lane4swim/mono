@@ -13,7 +13,7 @@ import { runSync } from '../syncClient.js';
 import { ApiError, NetworkError } from '../apiClient.js';
 import { IS_DEMO } from '../demoMode.js';
 import {
-  el, clear, badge, emptyState, laneWave, toast, confirmAction, beginRender,
+  el, clear, badge, emptyState, laneWave, toast, confirmAction, beginRender, statCard,
 } from '../utils.js';
 import { t, getLocale } from '../i18n.js';
 
@@ -65,9 +65,9 @@ function renderView(container, queue) {
   ]));
 
   wrap.appendChild(el('div', { class: 'grid grid-3 mb-16' }, [
-    (() => { const d = el('div', { class: 'stat-card' }); d.innerHTML = `<div class="stat-label">${t('syncqueue.statPending')}</div><div class="stat-value">${pending}</div><div class="stat-sub">${t('syncqueue.statPendingSub')}</div>`; return d; })(),
-    (() => { const d = el('div', { class: 'stat-card alt' }); d.innerHTML = `<div class="stat-label">${t('syncqueue.statError')}</div><div class="stat-value">${errored}</div><div class="stat-sub">${t('syncqueue.statErrorSub')}</div>`; return d; })(),
-    (() => { const d = el('div', { class: 'stat-card' }); d.innerHTML = `<div class="stat-label">${t('syncqueue.statSynced')}</div><div class="stat-value">${synced}</div><div class="stat-sub">${t('syncqueue.statSyncedSub')}</div>`; return d; })(),
+    statCard({ label: t('syncqueue.statPending'), value: pending, sub: t('syncqueue.statPendingSub') }),
+    statCard({ label: t('syncqueue.statError'), value: errored, sub: t('syncqueue.statErrorSub'), alt: true }),
+    statCard({ label: t('syncqueue.statSynced'), value: synced, sub: t('syncqueue.statSyncedSub') }),
   ]));
 
   const host = el('div');
