@@ -3,9 +3,9 @@
 // ============================================================
 import { getAll, put, remove } from '../db.js';
 import {
-  el, clear, esc, fullName, ageFromBirthdate, fmtDateShort, todayISO, toIsoDateTime,
+  el, clear, fullName, ageFromBirthdate, fmtDateShort, todayISO, toIsoDateTime,
   field, textInput, selectInput, dateInput, openModal, confirmAction, toast, badge,
-  emptyState, laneWave, groupBy, secToTime,
+  emptyState, laneWave, groupBy, secToTime, statCard,
 } from '../utils.js';
 import { getRole, isAdminOrSuperAdmin } from '../state.js';
 import { navigate } from '../router.js';
@@ -120,10 +120,10 @@ async function renderDetail(container, athleteId, athletes, groups) {
   wrap.appendChild(laneWave());
 
   wrap.appendChild(el('div', { class: 'grid grid-4 mb-16' }, [
-    (() => { const d = el('div', { class: 'stat-card' }); d.innerHTML = `<div class="stat-label">${esc(t('athletes.statAge'))}</div><div class="stat-value">${ageFromBirthdate(athlete.birthdate) ?? '—'}</div><div class="stat-sub">${athlete.birthdate ? fmtDateShort(athlete.birthdate) : ''}</div>`; return d; })(),
-    (() => { const d = el('div', { class: 'stat-card alt' }); d.innerHTML = `<div class="stat-label">${esc(t('athletes.statAttendance'))}</div><div class="stat-value">${total ? Math.round(attended/total*100) : 0}%</div><div class="stat-sub">${esc(t('athletes.statAttendanceSub', { present: attended, total }))}</div>`; return d; })(),
-    (() => { const d = el('div', { class: 'stat-card' }); d.innerHTML = `<div class="stat-label">${esc(t('athletes.statTimes'))}</div><div class="stat-value">${myResults.length}</div><div class="stat-sub">${esc(t('athletes.statDisciplines', { count: new Set(myResults.map(r=>r.event)).size }))}</div>`; return d; })(),
-    (() => { const d = el('div', { class: 'stat-card alt' }); d.innerHTML = `<div class="stat-label">${esc(t('athletes.statActions'))}</div><div class="stat-value">${myActions.filter(a=>a.status!=='done').length}</div><div class="stat-sub">${esc(t('athletes.statActionsOpen', { total: myActions.length }))}</div>`; return d; })(),
+    statCard({ label: t('athletes.statAge'), value: ageFromBirthdate(athlete.birthdate) ?? '—', sub: athlete.birthdate ? fmtDateShort(athlete.birthdate) : '' }),
+    statCard({ label: t('athletes.statAttendance'), value: `${total ? Math.round(attended / total * 100) : 0}%`, sub: t('athletes.statAttendanceSub', { present: attended, total }), alt: true }),
+    statCard({ label: t('athletes.statTimes'), value: myResults.length, sub: t('athletes.statDisciplines', { count: new Set(myResults.map(r => r.event)).size }) }),
+    statCard({ label: t('athletes.statActions'), value: myActions.filter(a => a.status !== 'done').length, sub: t('athletes.statActionsOpen', { total: myActions.length }), alt: true }),
   ]));
 
   const grid = el('div', { class: 'grid grid-2' });
