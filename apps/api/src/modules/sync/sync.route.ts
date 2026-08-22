@@ -7,11 +7,23 @@
 // requireRole ausgeschlossen.
 import type { FastifyInstance } from 'fastify';
 import { SyncPushRequestSchema } from '@lane1/shared-types';
-import type { SyncService } from './sync.service.js';
+import type { SyncService, SyncRequester } from './sync.service.js';
 import { requireRole } from '../../plugins/authorize.js';
 
 export interface SyncRoutesOptions {
   syncService: SyncService;
+}
+
+// requireRole hat bereits sichergestellt, dass die Rolle stimmt; eine Rolle
+// ohne Verein (theoretisch nur superadmin) kommt hier also nicht an —
+// clubId ist an dieser Stelle immer gesetzt. role/athleteId werden
+// zusätzlich mitgegeben, damit der Service die Rollen-Scopierung für
+// "athlete" anwenden kann (siehe sync.service.ts). Analog zu requesterFrom()
+// in invitations.route.ts — eine Stelle statt einer Wiederholung dieses
+// Objekt-Literals in push()/pull().
+function requesterFrom(request: { user?: { role: SyncRequester['role']; clubId: string | null; athleteId: string | null } }): SyncRequester {
+  const user = request.user!;
+  return { clubId: user.clubId!, role: user.role, athleteId: user.athleteId };
 }
 
 export async function syncRoutes(app: FastifyInstance, opts: SyncRoutesOptions) {
@@ -23,13 +35,7 @@ export async function syncRoutes(app: FastifyInstance, opts: SyncRoutesOptions) 
     if (!parsed.success) {
       return reply.code(400).send({ error: 'validation_failed', issues: parsed.error.issues });
     }
-    // requireRole hat bereits sichergestellt, dass die Rolle stimmt; eine
-    // Rolle ohne Verein (theoretisch nur superadmin) kommt hier also nicht
-    // an — clubId ist an dieser Stelle immer gesetzt. role/athleteId werden
-    // zusätzlich mitgegeben, damit der Service die Rollen-Scopierung für
-    // "athlete" anwenden kann (siehe sync.service.ts).
-    const clubId = request.user!.clubId!;
-    const results = await syncService.push(parsed.data.events, { clubId, role: request.user!.role, athleteId: request.user!.athleteId });
+    const results = await syncService.push(parsed.data.events, requesterFrom(request));
     return reply.code(200).send({ results });
   });
 
@@ -37,8 +43,7 @@ export async function syncRoutes(app: FastifyInstance, opts: SyncRoutesOptions) 
     '/api/sync/pull',
     { preHandler: syncGuard },
     async (request, reply) => {
-      const clubId = request.user!.clubId!;
-      const result = await syncService.pull(request.query, { clubId, role: request.user!.role, athleteId: request.user!.athleteId });
+      const result = await syncService.pull(request.query, requesterFrom(request));
       return reply.code(200).send(result);
     },
   );

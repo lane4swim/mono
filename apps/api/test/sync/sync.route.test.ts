@@ -24,16 +24,6 @@ const testEnv = loadEnv({
 async function buildTestApp() {
   const keyPair = generateFreshKeyPair();
   const invitations = new InMemoryInvitationRepository();
-  const authService = createAuthService({
-    users: new InMemoryUserRepository(),
-    refreshTokens: new InMemoryRefreshTokenRepository(),
-    invitations,
-    profileGateway: new InMemoryProfileDataGateway({ users: [], athletes: [], results: [], entries: [], actionItems: [], sessions: [] }),
-    dataErasureRetentionDays: 30,
-    keyPair,
-    accessTtlSeconds: 900,
-    refreshTtlDays: 30,
-  });
   const invitationsService = createInvitationsService({
     clubs: new InMemoryClubRepository(),
     invitations,
@@ -42,6 +32,16 @@ async function buildTestApp() {
     frontendBaseUrl: 'https://app.example.org',
     clubInvitationTtlDays: 14,
     memberInvitationTtlDays: 7,
+  });
+  const authService = createAuthService({
+    users: new InMemoryUserRepository(),
+    refreshTokens: new InMemoryRefreshTokenRepository(),
+    invitations: invitationsService,
+    profileGateway: new InMemoryProfileDataGateway({ users: [], athletes: [], results: [], entries: [], actionItems: [], sessions: [] }),
+    dataErasureRetentionDays: 30,
+    keyPair,
+    accessTtlSeconds: 900,
+    refreshTtlDays: 30,
   });
   const gateway = new InMemorySyncGateway();
   const syncService = createSyncService({ gateway });

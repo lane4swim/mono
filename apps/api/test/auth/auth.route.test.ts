@@ -39,12 +39,11 @@ async function buildTestApp() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const profileDb: any = { users: [], athletes: [], results: [], entries: [], actionItems: [], sessions: [] };
 
-  const authService = createAuthService({
-    users, refreshTokens, invitations,
-    profileGateway: new InMemoryProfileDataGateway(profileDb),
-    dataErasureRetentionDays: 30,
-    keyPair, accessTtlSeconds: 900, refreshTtlDays: 30,
-  });
+  // invitationsService MUSS vor authService gebaut werden: authService
+  // nutzt sie als InvitationValidator (findValidByToken()/markUsed()) für
+  // acceptInvitation(), statt selbst eine zweite Gültigkeitsprüfung
+  // gegen das Invitation-Repository zu implementieren (siehe
+  // AuthServiceDeps.invitations-Kommentar in auth.service.ts).
   const invitationsService = createInvitationsService({
     clubs,
     invitations,
@@ -53,6 +52,12 @@ async function buildTestApp() {
     frontendBaseUrl: 'https://app.example.org',
     clubInvitationTtlDays: 14,
     memberInvitationTtlDays: 7,
+  });
+  const authService = createAuthService({
+    users, refreshTokens, invitations: invitationsService,
+    profileGateway: new InMemoryProfileDataGateway(profileDb),
+    dataErasureRetentionDays: 30,
+    keyPair, accessTtlSeconds: 900, refreshTtlDays: 30,
   });
   const syncService = createSyncService({ gateway: new InMemorySyncGateway() });
 

@@ -94,20 +94,39 @@ function toPublicInvitation(invitation: InvitationRecord): Omit<InvitationRecord
   return publicInvitation;
 }
 
+// Analog zu STORE_PERMISSIONS in sync.service.ts: EINE Stelle, die für jede
+// einfache (nicht datenabhängige — "welche Rolle darf diese Aktion
+// überhaupt ausführen", unabhängig vom konkreten Datensatz) Aktion dieses
+// Moduls festlegt, welche Rollen sie ausführen dürfen — statt denselben
+// Rollenvergleich als rohen String-Vergleich an jeder einzelnen Stelle neu
+// zu schreiben (vormals u. a. in createClub(), listClubs() und beiden
+// Zweigen von assertCanIssueRole() dupliziert, mit leicht unterschiedlicher
+// Formulierung). list() und revoke() bleiben bewusst AUSSERHALB dieser
+// Tabelle: sie kombinieren die Rolle zusätzlich mit einer datenabhängigen
+// Scopierung (eigener Verein bzw. Eigentümerschaft der Einladung) — genau
+// die Art Prüfung, die sync.service.ts aus demselben Grund ebenfalls
+// bewusst nicht in STORE_PERMISSIONS aufnimmt (siehe dortiger Kommentar).
+const ACTION_ROLES = {
+  createClub: new Set(['superadmin']),
+  listClubs: new Set(['superadmin']),
+  issueAdminInvitation: new Set(['superadmin']),
+  issueMemberInvitation: new Set(['admin', 'superadmin']),
+} as const satisfies Record<string, ReadonlySet<string>>;
+
+function requireActionRole(requester: RequesterContext, allowed: ReadonlySet<string>, message: string) {
+  if (!allowed.has(requester.role)) throw new ForbiddenError(message);
+}
+
 function assertCanIssueRole(requester: RequesterContext, role: InvitationRole, targetClubId: string | null) {
   if (role === 'admin') {
-    if (requester.role !== 'superadmin') {
-      throw new ForbiddenError('Nur Superadministrator:innen dürfen Admin-Einladungen ausstellen.');
-    }
+    requireActionRole(requester, ACTION_ROLES.issueAdminInvitation, 'Nur Superadministrator:innen dürfen Admin-Einladungen ausstellen.');
     if (!targetClubId) {
       throw new ForbiddenError('Für eine Admin-Einladung muss ein bestehender Verein angegeben werden.');
     }
     return;
   }
   // role === 'trainer' | 'athlete'
-  if (requester.role !== 'admin' && requester.role !== 'superadmin') {
-    throw new ForbiddenError('Nur Admins (oder Superadministrator:innen) dürfen Trainer:innen/Athlet:innen einladen.');
-  }
+  requireActionRole(requester, ACTION_ROLES.issueMemberInvitation, 'Nur Admins (oder Superadministrator:innen) dürfen Trainer:innen/Athlet:innen einladen.');
   if (requester.role === 'admin' && !requester.clubId) {
     // Sollte praktisch nie vorkommen (jeder Admin gehört zu einem Verein),
     // aber defensiv geprüft.
@@ -131,9 +150,7 @@ function resolveTargetClubId(requester: RequesterContext, role: InvitationRole, 
 export function createInvitationsService(deps: InvitationsServiceDeps) {
   return {
     async createClub(input: { name: string; adminEmail: string; adminName: string }, requester: RequesterContext) {
-      if (requester.role !== 'superadmin') {
-        throw new ForbiddenError('Nur Superadministrator:innen dürfen Vereine anlegen.');
-      }
+      requireActionRole(requester, ACTION_ROLES.createClub, 'Nur Superadministrator:innen dürfen Vereine anlegen.');
       const club = await deps.clubs.create({ name: input.name });
       const { plainToken, tokenHash, expiresAt } = generateInvitationToken(deps.clubInvitationTtlDays);
       const invitation = await deps.invitations.create({
@@ -272,9 +289,7 @@ export function createInvitationsService(deps: InvitationsServiceDeps) {
     // shared-types) — Fastifys JSON-Serialisierung wandelt Date -> String
     // an der HTTP-Grenze automatisch um, wie überall sonst im Backend.
     async listClubs(requester: RequesterContext): Promise<Array<ClubRecord & { memberCounts: ClubMemberCounts }>> {
-      if (requester.role !== 'superadmin') {
-        throw new ForbiddenError('Nur Superadministrator:innen dürfen alle Vereine einsehen.');
-      }
+      requireActionRole(requester, ACTION_ROLES.listClubs, 'Nur Superadministrator:innen dürfen alle Vereine einsehen.');
       const clubs = await deps.clubs.list();
       const counts = await deps.clubs.countMembersForClubs(clubs.map((c) => c.id));
       return clubs.map((club) => ({

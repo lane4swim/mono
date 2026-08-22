@@ -90,7 +90,12 @@ export async function buildApp(env: Env, overrides: BuildAppOverrides = {}): Pro
     createAuthService({
       users: new PrismaUserRepository(getPrisma()),
       refreshTokens: new PrismaRefreshTokenRepository(getPrisma()),
-      invitations: new PrismaInvitationRepository(getPrisma()),
+      // Dieselbe invitationsService-Instanz wie oben (nicht ein zweites,
+      // unabhängiges PrismaInvitationRepository) — acceptInvitation() nutzt
+      // dadurch exakt deren findValidByToken()/markUsed() statt einer
+      // zweiten, potenziell abweichenden Implementierung (siehe
+      // AuthServiceDeps.invitations-Kommentar in auth.service.ts).
+      invitations: invitationsService,
       profileGateway: new PrismaProfileDataGateway(getPrisma()),
       dataErasureRetentionDays: env.DATA_ERASURE_RETENTION_DAYS,
       keyPair,

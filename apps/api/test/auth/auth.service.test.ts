@@ -8,7 +8,9 @@ import {
   InvalidInvitationError,
 } from '../../src/modules/auth/auth.service.js';
 import { InMemoryUserRepository, InMemoryRefreshTokenRepository } from '../../src/modules/auth/auth.repository.memory.js';
-import { InMemoryInvitationRepository } from '../../src/modules/invitations/invitations.repository.memory.js';
+import { createInvitationsService } from '../../src/modules/invitations/invitations.service.js';
+import { InMemoryClubRepository, InMemoryInvitationRepository, InMemoryAthleteRepository } from '../../src/modules/invitations/invitations.repository.memory.js';
+import { InMemoryMailSender } from '../../src/mail/mailer.memory.js';
 import { InMemoryProfileDataGateway } from '../../src/modules/profile/profile.repository.memory.js';
 import { generateFreshKeyPair } from '../../src/auth/keys.js';
 import { verifyAccessToken } from '../../src/auth/tokens.js';
@@ -21,12 +23,28 @@ function makeService() {
   const users = new InMemoryUserRepository();
   const refreshTokens = new InMemoryRefreshTokenRepository();
   const invitations = new InMemoryInvitationRepository();
+  // acceptInvitation() nutzt dieselbe Gültigkeitsprüfung wie
+  // invitations.service.ts (siehe deren findValidByToken() sowie den
+  // AuthServiceDeps.invitations-Kommentar in auth.service.ts) — daher hier
+  // eine echte InvitationsService-Instanz statt eines Handrolls der
+  // Validierungslogik. clubs/athletes/mailer erreicht acceptInvitation()
+  // selbst nicht (nur findValidByToken()/markUsed()), bekommen aber der
+  // Vollständigkeit halber echte In-Memory-Implementierungen.
+  const invitationsService = createInvitationsService({
+    clubs: new InMemoryClubRepository(),
+    invitations,
+    athletes: new InMemoryAthleteRepository(),
+    mailer: new InMemoryMailSender(),
+    frontendBaseUrl: 'https://app.example.org',
+    clubInvitationTtlDays: 14,
+    memberInvitationTtlDays: 7,
+  });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const profileDb: any = { users: [], athletes: [], results: [], entries: [], actionItems: [], sessions: [] };
   const profileGateway = new InMemoryProfileDataGateway(profileDb);
   const keyPair = generateFreshKeyPair();
   const service = createAuthService({
-    users, refreshTokens, invitations, profileGateway, dataErasureRetentionDays: 30,
+    users, refreshTokens, invitations: invitationsService, profileGateway, dataErasureRetentionDays: 30,
     keyPair, accessTtlSeconds: 900, refreshTtlDays: 30,
   });
   return { service, users, refreshTokens, invitations, keyPair, profileDb };
