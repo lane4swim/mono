@@ -30,15 +30,15 @@ async function buildTestApp() {
   const athletes = new InMemoryAthleteRepository();
   const mailer = new InMemoryMailSender();
 
-  const authService = createAuthService({
-    users, refreshTokens, invitations,
-    profileGateway: new InMemoryProfileDataGateway({ users: [], athletes: [], results: [], entries: [], actionItems: [], sessions: [] }),
-    dataErasureRetentionDays: 30,
-    keyPair, accessTtlSeconds: 900, refreshTtlDays: 30,
-  });
   const invitationsService = createInvitationsService({
     clubs, invitations, athletes, mailer, frontendBaseUrl: 'https://app.example.org',
     clubInvitationTtlDays: 14, memberInvitationTtlDays: 7,
+  });
+  const authService = createAuthService({
+    users, refreshTokens, invitations: invitationsService,
+    profileGateway: new InMemoryProfileDataGateway({ users: [], athletes: [], results: [], entries: [], actionItems: [], sessions: [] }),
+    dataErasureRetentionDays: 30,
+    keyPair, accessTtlSeconds: 900, refreshTtlDays: 30,
   });
   const syncService = createSyncService({ gateway: new InMemorySyncGateway() });
 

@@ -51,6 +51,15 @@ function asAthlete(clubId: string, athleteId: string | null) {
   return { clubId, role: 'athlete' as const, athleteId };
 }
 
+// "athletes" ist seit der Access-Konsistenz-Korrektur (siehe STORE_PERMISSIONS)
+// das einzige Store, für das "trainer" NICHT dieselben Schreibrechte wie
+// "admin" hat — daher braucht der Store-übergreifende asTrainer()-Helfer
+// hier oben ein eigenes admin-Pendant für Tests, die ausschließlich die
+// Fremdschlüssel-/Feld-Logik prüfen wollen, unabhängig von der Rollensperre.
+function asAdmin(clubId: string) {
+  return { clubId, role: 'admin' as const, athleteId: null };
+}
+
 function makeActionItemPayload(overrides: Partial<Record<string, unknown>> = {}) {
   const now = new Date().toISOString();
   return {
@@ -599,9 +608,13 @@ describe('syncService.push — Fremdschlüssel-Eigentümerprüfung (Sicherheitsr
     gateway.seed('groups', { id: foreignGroupId, clubId: CLUB_B, name: 'Fremde Gruppe', updatedAt: new Date(), deletedAt: null });
 
     const payload = makeAthletePayload({ groupId: foreignGroupId });
+    // asAdmin() statt asTrainer(): "athletes" ist inzwischen adminVerwaltet
+    // (siehe STORE_PERMISSIONS) — mit asTrainer() würde dieser Test bereits
+    // an der Rollensperre scheitern und gar nicht mehr die hier eigentlich
+    // geprüfte Fremdschlüssel-Logik erreichen.
     const results = await service.push(
       [{ id: 'evt-fk-foreign-group', store: 'athletes', entityId: payload.id, action: 'create', payload, clientUpdatedAt: payload.updatedAt }],
-      asTrainer(CLUB_A),
+      asAdmin(CLUB_A),
     );
     expect(results[0]!.status).toBe('error');
   });
@@ -614,7 +627,7 @@ describe('syncService.push — Fremdschlüssel-Eigentümerprüfung (Sicherheitsr
     const payload = makeAthletePayload({ groupId: ownGroupId });
     const results = await service.push(
       [{ id: 'evt-fk-own-group', store: 'athletes', entityId: payload.id, action: 'create', payload, clientUpdatedAt: payload.updatedAt }],
-      asTrainer(CLUB_A),
+      asAdmin(CLUB_A),
     );
     expect(results[0]!.status).toBe('applied');
   });
@@ -624,6 +637,54 @@ describe('syncService.push — Fremdschlüssel-Eigentümerprüfung (Sicherheitsr
     const payload = makeAthletePayload({ groupId: null });
     const results = await service.push(
       [{ id: 'evt-fk-null-ref', store: 'athletes', entityId: payload.id, action: 'create', payload, clientUpdatedAt: payload.updatedAt }],
+      asAdmin(CLUB_A),
+    );
+    expect(results[0]!.status).toBe('applied');
+  });
+
+  it.each(['templates', 'plans'] as const)(
+    'lehnt ein "%s"-Event mit einer exerciseId eines FREMDEN Vereins ab, verschachtelt in sets[]/days[].sets[] (Access-Konsistenz-Korrektur)',
+    async (store) => {
+      const { service, gateway } = makeService();
+      const foreignExerciseId = 'cccccccc-0000-0000-0000-000000000001';
+      gateway.seed('exercises', {
+        id: foreignExerciseId, clubId: CLUB_B, name: 'Fremde Übung', category: 'kick', stroke: null,
+        description: '', defaultDistance: null, tags: [], equipment: [], comments: [], updatedAt: new Date(), deletedAt: null,
+      });
+      const now = new Date().toISOString();
+      const plainSet = { kind: 'set' as const, id: 'set-1', description: '', distance: null, reps: 1, intensity: '', restSec: 0, exerciseId: foreignExerciseId, comments: [] };
+      // Für "templates" steckt exerciseId direkt in `sets[]`; für "plans" eine Ebene
+      // tiefer in `days[].sets[]` — zusätzlich innerhalb eines RepeatBlocks
+      // ("kind: 'block'"), um auch die verschachtelte Block-Struktur abzudecken.
+      const payload =
+        store === 'templates'
+          ? { id: '99999999-8888-8888-8888-888888888881', clubId: CLUB_A, name: 'Vorlage', description: '', tags: [], sets: [{ kind: 'block', id: 'block-1', label: '', repeatCount: 2, sets: [plainSet] }], createdAt: now, updatedAt: now }
+          : { id: '99999999-8888-8888-8888-888888888882', clubId: CLUB_A, name: 'Plan', weekStart: now, groupId: null, status: 'aktiv', days: [{ date: now, sets: [plainSet] }], comments: [], createdAt: now, updatedAt: now };
+      const results = await service.push(
+        [{ id: `evt-fk-foreign-exercise-${store}`, store, entityId: payload.id, action: 'create', payload, clientUpdatedAt: now }],
+        store === 'templates' ? asTrainer(CLUB_A) : asAthlete(CLUB_A, '55555555-5555-5555-5555-555555555555'),
+      );
+      expect(results[0]!.status).toBe('error');
+      const stored = await gateway.findById(store, payload.id);
+      expect(stored).toBeNull();
+    },
+  );
+
+  it('akzeptiert eine exerciseId, die zu einer Übung des EIGENEN Vereins gehört (verschachtelt in "templates".sets[])', async () => {
+    const { service, gateway } = makeService();
+    const ownExerciseId = 'cccccccc-0000-0000-0000-000000000002';
+    gateway.seed('exercises', {
+      id: ownExerciseId, clubId: CLUB_A, name: 'Eigene Übung', category: 'kick', stroke: null,
+      description: '', defaultDistance: null, tags: [], equipment: [], comments: [], updatedAt: new Date(), deletedAt: null,
+    });
+    const now = new Date().toISOString();
+    const payload = {
+      id: '99999999-8888-8888-8888-888888888883', clubId: CLUB_A, name: 'Vorlage', description: '', tags: [],
+      sets: [{ kind: 'set' as const, id: 'set-1', description: '', distance: null, reps: 1, intensity: '', restSec: 0, exerciseId: ownExerciseId, comments: [] }],
+      createdAt: now, updatedAt: now,
+    };
+    const results = await service.push(
+      [{ id: 'evt-fk-own-exercise-templates', store: 'templates', entityId: payload.id, action: 'create', payload, clientUpdatedAt: now }],
       asTrainer(CLUB_A),
     );
     expect(results[0]!.status).toBe('applied');
@@ -720,7 +781,7 @@ describe('syncService — Rollen-Scopierung für "athlete" (Sicherheitsregressio
     expect(results[0]!.status).toBe('error');
   });
 
-  it('trainer/admin sind von der erweiterten Schreibsperre NICHT betroffen — dürfen "athletes"/"groups"/"exercises"/"templates"/"competitions" weiterhin verändern', async () => {
+  it('trainer/admin sind von der erweiterten Schreibsperre NICHT betroffen — dürfen "groups"/"exercises"/"templates"/"competitions" weiterhin verändern (anders als "athletes", siehe adminVerwaltet-Tests oben)', async () => {
     const { service } = makeService();
     const payload = makeGroupPayload({ id: '99999999-6666-6666-6666-666666666666' });
     const results = await service.push(
@@ -865,9 +926,9 @@ describe('syncService — "Athlete.notes"-Redaktion für Rolle "athlete" (Sicher
     // Rolle "athlete" komplett gesperrt — konsistent mit
     // js/modules/profile.js, das für das eigene
     // Konto ausdrücklich NUR Name/E-Mail/Sprache bearbeitbar macht;
-    // Athleten-Stammdaten (inkl. "notes") bleiben coach-managed.
+    // Athleten-Stammdaten (inkl. "notes") bleiben admin-managed.
     const { service, gateway } = makeService();
-    const original = makeAthletePayload({ notes: 'Original-Notiz von Trainer:in' });
+    const original = makeAthletePayload({ notes: 'Original-Notiz von Admin' });
     gateway.seed('athletes', { ...original, birthdate: new Date(original.birthdate), joinDate: new Date(original.joinDate), updatedAt: new Date(original.updatedAt), createdAt: new Date(original.createdAt), deletedAt: null });
 
     const maliciousUpdate = makeAthletePayload({
@@ -882,22 +943,37 @@ describe('syncService — "Athlete.notes"-Redaktion für Rolle "athlete" (Sicher
     expect(results[0]!.status).toBe('error');
 
     const stored = await gateway.findById('athletes', original.id);
-    expect((stored as Record<string, unknown>).notes).toBe('Original-Notiz von Trainer:in');
+    expect((stored as Record<string, unknown>).notes).toBe('Original-Notiz von Admin');
   });
 
-  it('trainer/admin: "notes" lässt sich weiterhin normal ändern', async () => {
+  it('PUSH: die Rolle "trainer" darf den Store "athletes" ebenfalls NICHT mehr verändern (Access-Konsistenz-Korrektur — vorher inkonsistent mit js/modules/athletes.js\' isAdminOrSuperAdmin()-Gate)', async () => {
     const { service, gateway } = makeService();
     const original = makeAthletePayload({ notes: 'Alte Notiz' });
     gateway.seed('athletes', { ...original, birthdate: new Date(original.birthdate), joinDate: new Date(original.joinDate), updatedAt: new Date(original.updatedAt), createdAt: new Date(original.createdAt), deletedAt: null });
 
-    const update = makeAthletePayload({ notes: 'Neue Notiz von Trainer:in', updatedAt: new Date(Date.now() + 60_000).toISOString() });
+    const update = makeAthletePayload({ notes: 'Von Trainer:in eingeschleuste Notiz', updatedAt: new Date(Date.now() + 60_000).toISOString() });
     const results = await service.push(
       [{ id: 'evt-trainer-notes', store: 'athletes', entityId: original.id, action: 'update', payload: update, clientUpdatedAt: update.updatedAt }],
       asTrainer(CLUB_A),
     );
+    expect(results[0]!.status).toBe('error');
+    const stored = await gateway.findById('athletes', original.id);
+    expect((stored as Record<string, unknown>).notes).toBe('Alte Notiz');
+  });
+
+  it('admin: "notes" lässt sich weiterhin normal ändern', async () => {
+    const { service, gateway } = makeService();
+    const original = makeAthletePayload({ notes: 'Alte Notiz' });
+    gateway.seed('athletes', { ...original, birthdate: new Date(original.birthdate), joinDate: new Date(original.joinDate), updatedAt: new Date(original.updatedAt), createdAt: new Date(original.createdAt), deletedAt: null });
+
+    const update = makeAthletePayload({ notes: 'Neue Notiz von Admin', updatedAt: new Date(Date.now() + 60_000).toISOString() });
+    const results = await service.push(
+      [{ id: 'evt-admin-notes', store: 'athletes', entityId: original.id, action: 'update', payload: update, clientUpdatedAt: update.updatedAt }],
+      asAdmin(CLUB_A),
+    );
     expect(results[0]!.status).toBe('applied');
     const stored = await gateway.findById('athletes', original.id);
-    expect((stored as Record<string, unknown>).notes).toBe('Neue Notiz von Trainer:in');
+    expect((stored as Record<string, unknown>).notes).toBe('Neue Notiz von Admin');
   });
 });
 

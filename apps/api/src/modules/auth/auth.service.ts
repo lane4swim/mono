@@ -13,10 +13,16 @@
 import type { LoginRequest, AcceptInvitationRequest, AccessTokenClaims } from '@lane1/shared-types';
 import { CURRENT_CONSENT_VERSION } from '@lane1/shared-types';
 import type { UserRepository, RefreshTokenRepository, UserRecord } from './auth.repository.js';
-import type { InvitationRepository } from '../invitations/invitations.repository.js';
+import type { InvitationRecord } from '../invitations/invitations.repository.js';
+import {
+  InvitationNotFoundError,
+  InvitationRevokedError,
+  InvitationAlreadyUsedError,
+  InvitationExpiredError,
+} from '../invitations/invitations.service.js';
 import type { ProfileDataGateway } from '../profile/profile.repository.js';
 import { hashPassword, verifyPassword } from '../../auth/password.js';
-import { signAccessToken, generateRefreshToken, hashRefreshToken, hashInvitationToken } from '../../auth/tokens.js';
+import { signAccessToken, generateRefreshToken, hashRefreshToken } from '../../auth/tokens.js';
 import type { KeyPair } from '../../auth/keys.js';
 
 export class EmailAlreadyRegisteredError extends Error {
@@ -59,10 +65,25 @@ export interface AuthTokens {
   expiresIn: number;
 }
 
+// Schmale Abhängigkeit statt der vollen InvitationRepository: erzwingt, dass
+// acceptInvitation() unten dieselbe Gültigkeitsprüfung verwendet wie
+// invitations.service.ts' preview() — nämlich GENAU dessen
+// findValidByToken() —, statt die vier Prüfungen (nicht gefunden/
+// widerrufen/verwendet/abgelaufen) hier ein zweites Mal, potenziell
+// abweichend, zu implementieren (siehe Code-Review: die beiden Prüfungen
+// waren bereits einmal auseinandergelaufen — unterschiedliche Fehlertypen
+// trotz eines Kommentars dort, der fälschlich eine gemeinsame Nutzung
+// behauptete). In Produktion (app.ts) ist dies dieselbe InvitationsService-
+// Instanz, die auch preview() bedient.
+export interface InvitationValidator {
+  findValidByToken(token: string): Promise<InvitationRecord>;
+  markUsed(id: string): Promise<void>;
+}
+
 export interface AuthServiceDeps {
   users: UserRepository;
   refreshTokens: RefreshTokenRepository;
-  invitations: InvitationRepository;
+  invitations: InvitationValidator;
   profileGateway: ProfileDataGateway;
   dataErasureRetentionDays: number;
   keyPair: KeyPair;
@@ -96,12 +117,26 @@ export function createAuthService(deps: AuthServiceDeps) {
     // aus der serverseitig gespeicherten Einladung — ein manipulierter
     // Client könnte sich sonst z. B. selbst die Rolle "admin" zuweisen.
     async acceptInvitation(input: AcceptInvitationRequest) {
-      const tokenHash = hashInvitationToken(input.token);
-      const invitation = await deps.invitations.findByTokenHash(tokenHash);
-      if (!invitation) throw new InvalidInvitationError();
-      if (invitation.revokedAt) throw new InvalidInvitationError('Diese Einladung wurde widerrufen.');
-      if (invitation.usedAt) throw new InvalidInvitationError('Diese Einladung wurde bereits verwendet.');
-      if (invitation.expiresAt.getTime() < Date.now()) throw new InvalidInvitationError('Diese Einladung ist abgelaufen.');
+      let invitation: InvitationRecord;
+      try {
+        invitation = await deps.invitations.findValidByToken(input.token);
+      } catch (err) {
+        // Die vier Gültigkeitsfehler von findValidByToken() (siehe deren
+        // Kommentar in invitations.service.ts) auf den schmaleren,
+        // öffentlichen InvalidInvitationError dieses Moduls abgebildet —
+        // auth.route.ts antwortet dadurch weiterhin einheitlich mit
+        // HTTP 410, ohne die vier internen Fehlertypen selbst kennen zu
+        // müssen (die gehören zur Domäne von invitations.service.ts).
+        if (
+          err instanceof InvitationNotFoundError ||
+          err instanceof InvitationRevokedError ||
+          err instanceof InvitationAlreadyUsedError ||
+          err instanceof InvitationExpiredError
+        ) {
+          throw new InvalidInvitationError(err.message);
+        }
+        throw err;
+      }
 
       const existingUser = await deps.users.findByEmail(invitation.email);
       if (existingUser) throw new EmailAlreadyRegisteredError();

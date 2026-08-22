@@ -67,21 +67,21 @@ const PULL_PAGE_SIZE = 200;
 // Zugriff), auch wenn requireRole() sich künftig einmal ändern sollte.
 //
 // Zusammenfassung Lese-/Schreibrechte je Store (R = lesen/Pull, W =
-// schreiben/Push create+update+delete; "admin"/"trainer" identisch, daher
-// als "Coach" zusammengefasst):
+// schreiben/Push create+update+delete; "admin"/"trainer" sind für ALLE
+// Stores außer "athletes" identisch, dort als "Coach" zusammengefasst):
 //
-//   Store          | Coach (trainer/admin) | athlete | Begründung
-//   ---------------|------------------------|---------|--------------------
-//   results        | R + W                  | R + W   | js/modules/times.js zeigt/bearbeitet für ALLE Rollen identisch die volle Liste.
-//   plans          | R + W                  | R + W   | js/modules/plans.js: ebenso, für alle Rollen geteilt.
-//   athletes       | R + W                  | R only  | js/modules/athletes.js: `roles:['trainer','admin']`; "notes" zusätzlich per scopeChangeForAthlete() beim Lesen redigiert (Zeilen-/Feldebene, siehe unten).
-//   groups         | R + W                  | R only  | wird nur innerhalb von athletes.js verwaltet (kein eigenes Modul).
-//   exercises      | R + W                  | R only  | js/modules/catalog.js: `roles:['trainer','admin']`.
-//   templates      | R + W                  | R only  | js/modules/templates.js: `roles:['trainer','admin']`.
-//   competitions   | R + W                  | R only  | js/modules/competitions.js: `roles:['trainer','admin']`.
-//   entries        | R + W                  | R only  | dito (Startlisten-Verwaltung ist Teil von competitions.js).
-//   actionItems    | R + W                  | R only* | js/modules/actionItems.js: eigene rein lesende Athlet:innen-Ansicht (renderAthleteList); *zusätzlich per scopeChangeForAthlete() beim Lesen auf die EIGENEN Einträge gefiltert (Zeilenebene).
-//   sessions       | R + W                  | R only* | js/modules/sessions.js: eigene rein lesende Athlet:innen-Ansicht (renderAthleteView); *zusätzlich per scopeChangeForAthlete() beim Lesen auf die EIGENE attendance-Zeile reduziert (Zeilenebene).
+//   Store          | trainer | admin | athlete | Begründung
+//   ---------------|---------|-------|---------|--------------------
+//   results        | R + W   | R + W | R + W   | js/modules/times.js zeigt/bearbeitet für ALLE Rollen identisch die volle Liste.
+//   plans          | R + W   | R + W | R + W   | js/modules/plans.js: ebenso, für alle Rollen geteilt.
+//   athletes       | R only  | R + W | R only  | js/modules/athletes.js: die Seite selbst ist laut `roles:['trainer','admin']` für trainer sichtbar, aber Anlegen/Ändern des Athleten-Stamms (inkl. "notes") ist dort zusätzlich hinter isAdminOrSuperAdmin() versteckt ("Verteidigung in der Tiefe"-Kommentar in openAthleteModal()) — write bewusst NICHT im "Coach"-Profil (anders als die übrigen coachVerwaltet-Stores unten), sonst wäre die UI-Restriktion nur Fassade. "notes" zusätzlich per scopeChangeForAthlete() beim Lesen redigiert (Zeilen-/Feldebene, siehe unten).
+//   groups         | R + W   | R + W | R only  | wird nur innerhalb von athletes.js verwaltet (kein eigenes Modul).
+//   exercises      | R + W   | R + W | R only  | js/modules/catalog.js: `roles:['trainer','admin']`.
+//   templates      | R + W   | R + W | R only  | js/modules/templates.js: `roles:['trainer','admin']`.
+//   competitions   | R + W   | R + W | R only  | js/modules/competitions.js: `roles:['trainer','admin']`.
+//   entries        | R + W   | R + W | R only  | dito (Startlisten-Verwaltung ist Teil von competitions.js).
+//   actionItems    | R + W   | R + W | R only* | js/modules/actionItems.js: eigene rein lesende Athlet:innen-Ansicht (renderAthleteList); *zusätzlich per scopeChangeForAthlete() beim Lesen auf die EIGENEN Einträge gefiltert (Zeilenebene).
+//   sessions       | R + W   | R + W | R only* | js/modules/sessions.js: eigene rein lesende Athlet:innen-Ansicht (renderAthleteView); *zusätzlich per scopeChangeForAthlete() beim Lesen auf die EIGENE attendance-Zeile reduziert (Zeilenebene).
 //
 // Diese Tabelle regelt nur die STORE-Ebene (ganzer Store lesbar/schreibbar
 // ja/nein). Die mit * markierten, feineren Einschränkungen (nur eigene
@@ -100,17 +100,25 @@ interface StoreAccess {
 // dürfen (siehe SyncRequester.clubId-Kommentar oben).
 const TEAM_ROLES: readonly Role[] = ['trainer', 'admin', 'athlete'];
 
-// Zwei wiederkehrende Zugriffsprofile, um die Tabelle unten knapp zu halten:
+// Drei wiederkehrende Zugriffsprofile, um die Tabelle unten knapp zu halten:
 //   - geteilt: alle drei Rollen lesen UND schreiben (results, plans).
 //   - coachVerwaltet: alle drei Rollen lesen, nur trainer/admin schreiben
-//     (die übrigen acht Stores).
+//     (sieben der übrigen acht Stores).
+//   - adminVerwaltet: alle drei Rollen lesen, NUR admin schreibt (athletes
+//     — siehe Begründung in der Tabelle oben: js/modules/athletes.js
+//     versteckt Anlegen/Ändern des Athleten-Stamms per isAdminOrSuperAdmin()
+//     ausdrücklich auch vor "trainer", nicht nur vor "athlete"; ein
+//     gemeinsames coachVerwaltet-Profil würde diese UI-Restriktion serverseitig
+//     unterlaufen — jede Person könnte per direktem Push an /api/sync
+//     trotzdem als "trainer" schreiben).
 const geteilt: StoreAccess = { read: new Set(TEAM_ROLES), write: new Set(TEAM_ROLES) };
 const coachVerwaltet: StoreAccess = { read: new Set(TEAM_ROLES), write: new Set(['trainer', 'admin']) };
+const adminVerwaltet: StoreAccess = { read: new Set(TEAM_ROLES), write: new Set(['admin']) };
 
 const STORE_PERMISSIONS: Record<EntityStoreName, StoreAccess> = {
   results: geteilt,
   plans: geteilt,
-  athletes: coachVerwaltet,
+  athletes: adminVerwaltet,
   groups: coachVerwaltet,
   exercises: coachVerwaltet,
   templates: coachVerwaltet,
@@ -161,7 +169,36 @@ function canWrite(store: SyncStore, role: Role): boolean {
 // TATSÄCHLICH zum eigenen Verein gehört.
 type ForeignKeyRef =
   | { field: string; store: EntityStoreName } // referenziert einen der zehn fachlichen Sync-Stores
-  | { field: string; kind: 'user' }; // referenziert users.id (kein Sync-Store, siehe findClubIdForUser())
+  | { field: string; kind: 'user' } // referenziert users.id (kein Sync-Store, siehe findClubIdForUser())
+  | { kind: 'nested'; store: EntityStoreName; extract: (payload: Record<string, unknown>) => string[] }; // mehrere Referenzen verschachtelt im Payload, siehe collectSetExerciseIds() unten
+
+// "templates.sets" und "plans.days[].sets" tragen dieselbe SetEntry[]-Struktur
+// (packages/shared-types/src/entities.ts: PlainSetSchema/RepeatBlockSchema)
+// wie das Frontend in js/modules/setEditor.js verwendet: ein Eintrag ist
+// entweder ein einzelner Satz (kind: 'set', trägt optional eine exerciseId)
+// oder ein Block (kind: 'block'), der wiederum mehrere einzelne Sätze
+// enthält (keine verschachtelten Blöcke). Anders als athleteId/groupId/
+// competitionId/assignedTrainerId ist exerciseId hier NICHT top-level,
+// sondern beliebig tief in diesem Array verschachtelt — die generische
+// { field, store }-Form von ForeignKeyRef (die nur payload[field] liest)
+// erreicht sie nicht. Diese Funktion sammelt alle gesetzten exerciseId-Werte
+// aus einem SetEntry[]-Array unabhängig von der Verschachtelung ein, damit
+// assertForeignKeysWithinClub() jede davon genauso gegen den eigenen Verein
+// prüfen kann wie jede andere Fremdschlüssel-Referenz.
+function collectSetExerciseIds(sets: unknown): string[] {
+  if (!Array.isArray(sets)) return [];
+  const ids: string[] = [];
+  for (const entry of sets) {
+    if (!entry || typeof entry !== 'object') continue;
+    const e = entry as { kind?: unknown; exerciseId?: unknown; sets?: unknown };
+    if (e.kind === 'set') {
+      if (typeof e.exerciseId === 'string') ids.push(e.exerciseId);
+    } else if (e.kind === 'block') {
+      ids.push(...collectSetExerciseIds(e.sets));
+    }
+  }
+  return ids;
+}
 
 const FOREIGN_KEY_REFS: Partial<Record<EntityStoreName, ForeignKeyRef[]>> = {
   athletes: [{ field: 'groupId', store: 'groups' }],
@@ -177,7 +214,20 @@ const FOREIGN_KEY_REFS: Partial<Record<EntityStoreName, ForeignKeyRef[]>> = {
     { field: 'athleteId', store: 'athletes' },
     { field: 'assignedTrainerId', kind: 'user' },
   ],
-  plans: [{ field: 'groupId', store: 'groups' }],
+  templates: [
+    { kind: 'nested', store: 'exercises', extract: (payload) => collectSetExerciseIds(payload.sets) },
+  ],
+  plans: [
+    { field: 'groupId', store: 'groups' },
+    {
+      kind: 'nested',
+      store: 'exercises',
+      extract: (payload) =>
+        Array.isArray(payload.days)
+          ? (payload.days as unknown[]).flatMap((day) => collectSetExerciseIds((day as { sets?: unknown } | null)?.sets))
+          : [],
+    },
+  ],
   sessions: [
     { field: 'groupId', store: 'groups' },
     { field: 'planId', store: 'plans' },
@@ -207,6 +257,14 @@ async function assertForeignKeysWithinClub(
   if (!refs) return null;
 
   for (const ref of refs) {
+    if ('kind' in ref && ref.kind === 'nested') {
+      for (const value of ref.extract(payload)) {
+        const ownedByClub = (await gateway.findById(ref.store, value, clubId)) !== null;
+        if (!ownedByClub) return FOREIGN_ENTITY_ERROR;
+      }
+      continue;
+    }
+
     const value = payload[ref.field];
     if (value === null || value === undefined) continue; // optionale Referenz, nicht gesetzt
 
