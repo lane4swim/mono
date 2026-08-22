@@ -10,6 +10,9 @@ export class InMemorySyncGateway implements SyncGateway {
   // store -> (id -> record)
   private data = new Map<EntityStoreName, Map<string, SyncRecord>>();
   private processedEvents = new Set<string>();
+  // userId -> clubId, für findClubIdForUser() (Eigentümerprüfung von
+  // ActionItem.assignedTrainerId, siehe sync.service.ts).
+  private users = new Map<string, string | null>();
 
   // Von außen injizierbar (z. B. dieselbe Array-Referenz, die auch
   // InMemoryErasureJobGateway befüllt) — ermöglicht Tests, die den
@@ -27,6 +30,16 @@ export class InMemorySyncGateway implements SyncGateway {
   // diesen Datensatz bereits synchronisiert".
   seed(store: EntityStoreName, record: SyncRecord): void {
     this.table(store).set(record.id, record);
+  }
+
+  // Test-Hilfsfunktion analog zu seed(), aber für den User -> clubId-
+  // Zusammenhang, den findClubIdForUser() abfragt.
+  seedUser(userId: string, clubId: string | null): void {
+    this.users.set(userId, clubId);
+  }
+
+  async findClubIdForUser(userId: string): Promise<string | null> {
+    return this.users.get(userId) ?? null;
   }
 
   async findById(store: EntityStoreName, id: string, clubId?: string): Promise<SyncRecord | null> {
