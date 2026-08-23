@@ -71,7 +71,14 @@ function printSheet(sheet) {
     sheet.style.zoom = String(scale);
   }
 
-  window.print();
+  // Safari nimmt den Druck-Snapshot manchmal auf, bevor die obige
+  // Style-Änderung (Breite/zoom) tatsächlich in ein neues Layout
+  // eingeflossen ist, und druckt dann noch die ungeskalierte Fassung —
+  // dadurch laufen gerade lange Trainingstage (die überhaupt erst
+  // herunterskaliert werden müssen) auf eine zweite Seite über. Chrome/
+  // Firefox layouten vor dem Druck synchron neu, Safari braucht dafür
+  // einen Tick Verzögerung.
+  setTimeout(() => window.print(), 50);
 }
 
 function buildSheet(plan, group, exercises) {
