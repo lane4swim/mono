@@ -28,10 +28,10 @@
 //   trotzdem aktualisiert.
 // ============================================================
 import { pendingSyncCount } from './db.js';
-import { resetDemoData, wipeDemoDataIfPresent } from './seed.js';
+import { wipeDemoDataIfPresent } from './seed.js';
 import { restoreSession, getCurrentUser, setUserLocale, getRole, logout, onUserChange, isLoggedIn } from './state.js';
 import { registerModule, visibleModules, currentRoute, navigate, onRouteChange, getModule } from './router.js';
-import { el, clear, toast, confirmAction, openModal, beginRender } from './utils.js';
+import { el, clear, toast, openModal, beginRender } from './utils.js';
 import { t, getLocale, getAvailableLocales, onLocaleChange } from './i18n.js';
 import { renderLoginScreen, renderAcceptInvitationScreen } from './modules/authScreens.js';
 import { runSync } from './syncClient.js';
@@ -141,12 +141,13 @@ async function startAuthenticatedApp() {
   // Läuft VOR dem ersten Sync-Zyklus unten (startBackgroundSync()): räumt
   // lokale Demo-Daten weg, falls noch vorhanden — heute i. d. R. ein No-op
   // (kein automatisches Seeding mehr, siehe seed.js Dateikopf), greift aber
-  // noch für Geräte mit Altlasten aus einer früheren Version sowie nach
-  // einem bewussten "Auf Demo-Daten zurücksetzen" in den Einstellungen
-  // (siehe seed.js: wipeDemoDataIfPresent() für die ausführliche
-  // Begründung). Eine reine Sitzungswiederherstellung (z. B. nach einem
-  // Seiten-Reload) findet den Marker bereits konsumiert vor und rührt die
-  // inzwischen echten, synchronisierten Daten nicht an.
+  // noch für Geräte mit Altlasten aus einer früheren Version dieser App,
+  // die noch automatisch geseedet oder über den inzwischen entfernten
+  // "Auf Demo-Daten zurücksetzen"-Button zurückgesetzt wurden (siehe
+  // seed.js: wipeDemoDataIfPresent() für die ausführliche Begründung).
+  // Eine reine Sitzungswiederherstellung (z. B. nach einem Seiten-Reload)
+  // findet den Marker bereits konsumiert vor und rührt die inzwischen
+  // echten, synchronisierten Daten nicht an.
   if (await wipeDemoDataIfPresent()) toast(t('auth.demoDataReplaced'));
 
   populateCurrentUserLabel();
@@ -397,7 +398,6 @@ async function openSettings() {
   body.appendChild(el('p', { class: 'hint' }, t('settings.storageNote')));
   body.appendChild(el('div', { class: 'form-actions', style: 'justify-content:flex-start;margin-top:20px' }, [
     el('button', { class: 'btn btn-ghost', onclick: exportData }, t('settings.exportButton')),
-    el('button', { class: 'btn btn-danger', onclick: () => confirmAction(t('settings.resetConfirm'), async () => { await resetDemoData(); toast(t('settings.resetDone')); location.reload(); }, { title: t('settings.resetConfirmLabel'), confirmLabel: t('settings.resetConfirmLabel') }) }, t('settings.resetButton')),
   ]));
   openModal({ title: t('settings.title'), bodyNode: body, wide: true });
 }
