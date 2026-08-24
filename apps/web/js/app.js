@@ -31,7 +31,7 @@ import { pendingSyncCount } from './db.js';
 import { wipeDemoDataIfPresent } from './seed.js';
 import { restoreSession, getCurrentUser, setUserLocale, getRole, logout, onUserChange, isLoggedIn } from './state.js';
 import { registerModule, visibleModules, currentRoute, navigate, onRouteChange, getModule } from './router.js';
-import { el, clear, toast, openModal, beginRender } from './utils.js';
+import { el, clear, toast, openModal, beginRender, confirmAction } from './utils.js';
 import { t, getLocale, getAvailableLocales, onLocaleChange } from './i18n.js';
 import { renderLoginScreen, renderAcceptInvitationScreen } from './modules/authScreens.js';
 import { runSync } from './syncClient.js';
@@ -230,11 +230,39 @@ function populateCurrentUserLabel() {
   currentUserLabel.textContent = `${user.name} (${roleLabel})`;
   btnLogout.textContent = t('topbar.logout');
   document.getElementById('link-help').textContent = t('topbar.help');
-  btnLogout.onclick = async () => {
-    if (backgroundSyncIntervalId !== null) { clearInterval(backgroundSyncIntervalId); backgroundSyncIntervalId = null; }
-    await logout();
-    location.reload();
-  };
+  btnLogout.onclick = handleLogoutClick;
+}
+
+// Code-Review, Befund 13: state.js' logout() ruft wipeAll() auf, das ALLE
+// lokalen Daten löscht — inklusive der Sync-Warteschlange (syncQueue). Noch
+// nicht synchronisierte Änderungen (z. B. gerade erfasste Zeiten, während
+// offline) gingen dadurch beim Abmelden kommentarlos verloren. Diese
+// Funktion versucht deshalb ZUERST, ausstehende Änderungen noch zu
+// übertragen (best effort — schlägt z. B. offline fehl), und fragt nur
+// dann aktiv nach, wenn danach immer noch etwas aussteht.
+async function handleLogoutClick() {
+  const pendingBefore = await pendingSyncCount();
+  if (pendingBefore > 0) {
+    try { await runSync(); } catch { /* offline/Server nicht erreichbar — wird unten über den erneuten Zähler abgefangen */ }
+  }
+
+  const pendingAfter = await pendingSyncCount();
+  if (pendingAfter > 0) {
+    confirmAction(
+      t('topbar.logoutPendingSyncConfirm', { count: pendingAfter }),
+      finishLogout,
+      { title: t('topbar.logoutPendingSyncTitle'), confirmLabel: t('topbar.logoutAnyway') },
+    );
+    return;
+  }
+
+  await finishLogout();
+}
+
+async function finishLogout() {
+  if (backgroundSyncIntervalId !== null) { clearInterval(backgroundSyncIntervalId); backgroundSyncIntervalId = null; }
+  await logout();
+  location.reload();
 }
 
 function populateLanguageSelect() {

@@ -36,6 +36,9 @@ export default {
     settings: 'Settings', language: 'Language', logout: 'Log out', help: 'Help',
     demoBadge: 'Demo · stored locally only', demoAccountLabel: 'Demo account',
     exitDemo: 'Go to the real app',
+    logoutPendingSyncTitle: 'Unsynced changes',
+    logoutPendingSyncConfirm: '{count} changes have not been synced to the server yet and will be lost on logout. Log out anyway?',
+    logoutAnyway: 'Log out anyway',
   },
   nav: {
     dashboard: 'Dashboard', athletes: 'Athletes & Team', competitions: 'Competitions',

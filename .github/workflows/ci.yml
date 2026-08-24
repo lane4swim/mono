@@ -86,7 +86,18 @@ jobs:
         # diese Fehlerklasse ("No workspaces found").
         run: cd apps/api && npm run prisma:generate
 
-      - name: Typecheck apps/api (inkl. test/, scripts/, prisma/)
+      - name: Prisma-Schema in die Test-Datenbank pushen
+        # Der oben gestartete Postgres-Service-Container ist leer — ohne
+        # diesen Schritt existieren die Anwendungstabellen dort nicht.
+        # `db push` statt `migrate deploy` aus demselben Grund wie im
+        # Produktions-Deployment (siehe docs/deployment.md, Abschnitt 7.3):
+        # es gibt (noch) keine committete Migrationshistorie im Repository.
+        # Nötig für die Prisma-Integrationstests unten (Code-Review,
+        # Befund 14) — der Service-Container lief zuvor bereits mit, wurde
+        # aber nie tatsächlich mit dem Anwendungsschema befüllt.
+        run: cd apps/api && npx prisma db push --skip-generate
+
+      - name: Typecheck apps/api (inkl. test/, test-integration/, scripts/, prisma/)
         # WICHTIG: "Build apps/api" (unten) prüft per tsconfig.json NUR
         # src/ — Typfehler in Testdateien blieben dadurch lange unentdeckt,
         # obwohl vitest (esbuild, ohne Typprüfung) grün lief. Dieser Schritt
@@ -98,6 +109,17 @@ jobs:
 
       - name: Test (alle Workspaces)
         run: npm run test --workspaces --if-present
+
+      - name: Prisma-Integrationstests (apps/api, gegen den echten Postgres-Service-Container)
+        # Eigener Schritt statt Teil von "Test" oben (siehe Code-Review,
+        # Befund 14 und vitest.integration.config.ts): die Suite oben läuft
+        # bewusst nur gegen die *.repository.memory.ts-Doubles, ohne
+        # Datenbank — diese hier prüft dieselbe Business-Logik zusätzlich
+        # gegen die ECHTEN Prisma-Implementierungen (PrismaSyncGateway,
+        # PrismaUserRepository, PrismaProfileDataGateway,
+        # PrismaErasureJobGateway), wo das sicherheitskritische
+        # Vereins-Scoping ("where: { id, clubId }") tatsächlich sitzt.
+        run: cd apps/api && npm run test:integration
 
       - name: Build apps/api
         run: cd apps/api && npm run build
