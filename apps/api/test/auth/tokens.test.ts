@@ -1,5 +1,16 @@
 // apps/api/test/auth/tokens.test.ts
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+
+// Umhüllt importPKCS8()/importSPKI() aus "jose" mit Spies (Delegation an
+// die echte Implementierung), damit die Tests zu Befund P1 unten prüfen
+// können, WIE OFT tatsächlich importiert wird — ohne das echte
+// PEM-Parsing/die Schlüsselkonstruktion zu ersetzen.
+vi.mock('jose', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('jose')>();
+  return { ...actual, importPKCS8: vi.fn(actual.importPKCS8), importSPKI: vi.fn(actual.importSPKI) };
+});
+
+import * as jose from 'jose';
 import {
   signAccessToken,
   verifyAccessToken,
@@ -76,5 +87,58 @@ describe('generateRefreshToken / hashRefreshToken', () => {
     const { expiresAt } = generateRefreshToken(30);
     const expectedMs = Date.now() + 30 * 24 * 60 * 60 * 1000;
     expect(Math.abs(expiresAt.getTime() - expectedMs)).toBeLessThan(5000); // Toleranz für Testlaufzeit
+  });
+});
+
+// Regressionstests für Befund P1 (Code-Review): importPKCS8()/importSPKI()
+// liefen zuvor bei JEDEM Sign/Verify neu — messbar bei jedem einzelnen
+// authentifizierten Request. Das Schlüsselpaar ist prozessweit konstant,
+// der Import muss also pro PEM-String nur einmal stattfinden.
+describe('Schlüssel-Caching (Befund P1)', () => {
+  it('importiert den privaten Schlüssel nur einmal für mehrere signAccessToken()-Aufrufe mit demselben Schlüsselpaar', async () => {
+    const keyPair = generateFreshKeyPair();
+    vi.mocked(jose.importPKCS8).mockClear();
+
+    await signAccessToken(claims, keyPair, 900);
+    await signAccessToken(claims, keyPair, 900);
+    await signAccessToken(claims, keyPair, 900);
+
+    expect(jose.importPKCS8).toHaveBeenCalledTimes(1);
+  });
+
+  it('importiert den öffentlichen Schlüssel nur einmal für mehrere verifyAccessToken()-Aufrufe mit demselben Schlüsselpaar', async () => {
+    const keyPair = generateFreshKeyPair();
+    const token = await signAccessToken(claims, keyPair, 900);
+    vi.mocked(jose.importSPKI).mockClear();
+
+    await verifyAccessToken(token, keyPair);
+    await verifyAccessToken(token, keyPair);
+    await verifyAccessToken(token, keyPair);
+
+    expect(jose.importSPKI).toHaveBeenCalledTimes(1);
+  });
+
+  it('importiert erneut, wenn sich das Schlüsselpaar (also das PEM) unterscheidet', async () => {
+    const keyPairA = generateFreshKeyPair();
+    const keyPairB = generateFreshKeyPair();
+    vi.mocked(jose.importPKCS8).mockClear();
+
+    await signAccessToken(claims, keyPairA, 900);
+    await signAccessToken(claims, keyPairB, 900);
+
+    expect(jose.importPKCS8).toHaveBeenCalledTimes(2);
+  });
+
+  it('bündelt gleichzeitige (parallele) Aufrufe mit demselben Schlüsselpaar ebenfalls auf einen einzigen Import', async () => {
+    const keyPair = generateFreshKeyPair();
+    vi.mocked(jose.importPKCS8).mockClear();
+
+    await Promise.all([
+      signAccessToken(claims, keyPair, 900),
+      signAccessToken(claims, keyPair, 900),
+      signAccessToken(claims, keyPair, 900),
+    ]);
+
+    expect(jose.importPKCS8).toHaveBeenCalledTimes(1);
   });
 });

@@ -12,6 +12,7 @@
 // es für den tatsächlichen Produktionscodepfad).
 import { describe, it, expect, afterEach, afterAll } from 'vitest';
 import { randomUUID } from 'node:crypto';
+import { PrismaClient } from '@prisma/client';
 import { PrismaSyncGateway } from '../src/modules/sync/sync.gateway.js';
 import { getTestPrisma, closeTestPrisma, truncateAll, createTestClub } from './helpers.js';
 
@@ -148,6 +149,78 @@ describe('PrismaSyncGateway.listChangedSince()', () => {
     const changes = await gateway.listChangedSince(club.id, null, 100);
     expect(changes.map((c) => c.entityId)).toEqual([stillExisting.id, 'purged-athlete']);
     expect(changes[1]).toMatchObject({ store: 'athletes', action: 'delete', payload: null });
+  });
+
+  // Code-Review, Befund P2: listChangedSince() holte vormals aus JEDEM der
+  // zehn Stores bis zu `limit` VOLLSTÄNDIGE Zeilen — bei einem Store mit
+  // deutlich mehr Kandidaten, als am Ende global ausgeliefert werden, war
+  // das größtenteils verschwendete Arbeit (Nutzdaten geladen, die
+  // Millisekunden später wieder verworfen wurden). Diese Tests beweisen
+  // die Korrektur strukturell (per Query-Log), nicht nur das bereits oben
+  // abgedeckte funktionale Verhalten (korrekte globale Sortierung/Kürzung).
+  describe('kein Volltreffer-Overfetch pro Store (Code-Review, Befund P2)', () => {
+    it('lädt für einen Store mit vielen Kandidaten, der NICHT in die finalen `limit` Zeilen fällt, gar keine Nutzdaten nach', async () => {
+      const club = await createTestClub();
+
+      // 5 "groups"-Zeilen mit ÄLTEREN Zeitstempeln — garantiert innerhalb
+      // der finalen (aufsteigend sortierten) limit=5 Zeilen.
+      for (let i = 0; i < 5; i++) {
+        await prisma.group.create({
+          data: { clubId: club.id, name: `Gruppe ${i}`, updatedAt: new Date(2020, 0, 1 + i) },
+        });
+      }
+      // 20 "sessions"-Zeilen mit NEUEREN Zeitstempeln — allesamt außerhalb
+      // der finalen limit=5 Zeilen (die 5 älteren "groups"-Zeilen belegen
+      // bereits die gesamte Seite).
+      for (let i = 0; i < 20; i++) {
+        await prisma.trainingSession.create({
+          data: { clubId: club.id, date: new Date(), attendance: [{ athleteId: randomUUID(), present: true }], updatedAt: new Date(2025, 0, 1 + i) },
+        });
+      }
+
+      const instrumented = new PrismaClient({ log: [{ emit: 'event', level: 'query' }] });
+      const queries: string[] = [];
+      instrumented.$on('query' as never, (e: { query: string }) => queries.push(e.query));
+      let changes;
+      try {
+        const instrumentedGateway = new PrismaSyncGateway(instrumented);
+        changes = await instrumentedGateway.listChangedSince(club.id, null, 5);
+      } finally {
+        await instrumented.$disconnect();
+      }
+
+      // Funktional weiterhin korrekt: die fünf älteren "groups"-Zeilen.
+      expect(changes).toHaveLength(5);
+      expect(changes.every((c) => c.store === 'groups')).toBe(true);
+
+      // "sessions" wird für die schlanke Wasserstand-Abfrage EINMAL
+      // abgefragt — aber NIE für die volle Nutzlast (keine Abfrage
+      // enthält die JSONB-Spalte "attendance"), da kein einziger
+      // Kandidat aus "sessions" die finalen limit=5 Zeilen erreicht.
+      const sessionQueries = queries.filter((q) => q.includes('"sessions"'));
+      expect(sessionQueries).toHaveLength(1);
+      expect(sessionQueries[0]).not.toContain('"attendance"');
+
+      // "groups" wird zweimal abgefragt: einmal die schlanke
+      // Wasserstand-Abfrage, einmal die volle Nutzlast NUR für die 5
+      // tatsächlich benötigten ids.
+      const groupQueries = queries.filter((q) => q.includes('"groups"') && !q.includes('"clubs"'));
+      expect(groupQueries).toHaveLength(2);
+      expect(groupQueries.some((q) => q.includes('"name"'))).toBe(true);
+    });
+
+    it('lädt Nutzdaten aus MEHREREN Stores, wenn die finalen `limit` Zeilen sich über sie verteilen', async () => {
+      const club = await createTestClub();
+      const group = await prisma.group.create({ data: { clubId: club.id, name: 'X', updatedAt: new Date('2026-01-01') } });
+      const session = await prisma.trainingSession.create({
+        data: { clubId: club.id, date: new Date(), attendance: [], updatedAt: new Date('2026-01-02') },
+      });
+
+      const changes = await gateway.listChangedSince(club.id, null, 100);
+      expect(changes.map((c) => c.entityId)).toEqual([group.id, session.id]);
+      expect(changes[0]?.payload).toMatchObject({ name: 'X' });
+      expect(changes[1]?.payload).toMatchObject({ id: session.id });
+    });
   });
 });
 

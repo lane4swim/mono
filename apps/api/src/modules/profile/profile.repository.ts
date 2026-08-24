@@ -80,13 +80,31 @@ export class PrismaProfileDataGateway implements ProfileDataGateway {
         // stillschweigend zu vertrauen: ohne clubId werden explizit KEINE
         // Anwesenheitsdaten geladen, statt eine ungescoped Abfrage
         // auszuführen.
-        user.clubId ? this.prisma.trainingSession.findMany({ where: { clubId: user.clubId } }) : Promise.resolve([]),
+        //
+        // Ineffizienz-Korrektur (Code-Review, Befund P3): vormals wurden
+        // ALLE Trainingseinheiten des VEREINS geladen (findMany({ where:
+        // { clubId } })), nur um daraus per JS-.find() die Anwesenheitszeile
+        // EINER Person herauszufiltern — bei einem Verein mit
+        // mehrjähriger Trainingshistorie potenziell Tausende Zeilen samt
+        // vollständiger Anwesenheits-Arrays für einen einzigen
+        // Auskunftsantrag. Analog zum Hard-Purge (erasure.repository.ts,
+        // Befund C4) grenzt die JSONB-Containment-Bedingung (`@>`) die
+        // Abfrage direkt in Postgres auf die Zeilen ein, die den Eintrag
+        // dieser Person überhaupt enthalten.
+        user.clubId
+          ? this.prisma.$queryRaw<Array<{ id: string; date: Date; attendance: Array<Record<string, unknown>> }>>`
+              SELECT id, date, attendance
+              FROM "sessions"
+              WHERE "clubId" = ${user.clubId}
+                AND "attendance" @> ${JSON.stringify([{ athleteId: user.athleteId }])}::jsonb
+            `
+          : Promise.resolve([]),
       ]);
       athlete = athleteRow;
       results = resultRows;
       entries = entryRows;
       actionItems = actionItemRows;
-      attendance = (sessionRows as Array<{ id: string; date: Date; attendance: Array<Record<string, unknown>> }>)
+      attendance = sessionRows
         .map((session): Record<string, unknown> | null => {
           const record = session.attendance.find((a) => a.athleteId === user.athleteId);
           return record ? { sessionId: session.id, date: session.date, ...record } : null;

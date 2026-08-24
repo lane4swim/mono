@@ -149,6 +149,90 @@ describe('Sync-Warteschlange — Bookkeeping', () => {
     expect(queueAfter).toHaveLength(1);
     expect(queueAfter[0].entityId).not.toBe(a.id);
   });
+
+  it('clearSyncedEvents() liefert 0, ohne etwas zu löschen, wenn keine "synced"-Einträge vorliegen', async () => {
+    await db.put('groups', { name: 'A' });
+    expect(await db.clearSyncedEvents()).toBe(0);
+    expect(await db.getSyncQueue()).toHaveLength(1);
+  });
+
+  // Regressionstests für Befund P5 (Code-Review): pendingSyncCount() und
+  // clearSyncedEvents() lasen zuvor bei JEDEM Aufruf die GESAMTE
+  // Warteschlange (getAll()) — dieser Pfad läuft nach jedem Render, jedem
+  // Sync-Zyklus und beim Logout. Der neue status-Index (siehe db.js:
+  // openDb()) erlaubt stattdessen gezielte count()/getAllKeys()-Abfragen.
+  // Per Spy auf die IndexedDB-Primitive selbst geprüft (nicht nur das
+  // Ergebnis) — beweist, dass tatsächlich der Index genutzt wird, nicht
+  // nur, dass das Endergebnis zufällig übereinstimmt.
+  describe('nutzt den status-Index statt getAll() (Befund P5)', () => {
+    it('pendingSyncCount() ruft NIE objectStore.getAll() auf, sondern index("status").count() zweimal', async () => {
+      const a = await db.put('groups', { name: 'A' });
+      await db.put('groups', { name: 'B' });
+      await db.put('groups', { name: 'C' });
+      const queue = await db.getSyncQueue();
+      await db.updateSyncEvent(queue.find((e) => e.entityId === a.id).id, { status: 'synced' });
+
+      const getAllSpy = vi.spyOn(IDBObjectStore.prototype, 'getAll');
+      const countSpy = vi.spyOn(IDBIndex.prototype, 'count');
+      try {
+        expect(await db.pendingSyncCount()).toBe(2);
+        expect(getAllSpy).not.toHaveBeenCalled();
+        expect(countSpy).toHaveBeenCalledTimes(2);
+        expect(countSpy.mock.calls.map((c) => c[0]).sort()).toEqual(['error', 'pending']);
+      } finally {
+        getAllSpy.mockRestore();
+        countSpy.mockRestore();
+      }
+    });
+
+    it('clearSyncedEvents() ruft NIE objectStore.getAll() auf, sondern index("status").getAllKeys("synced")', async () => {
+      const a = await db.put('groups', { name: 'A' });
+      await db.put('groups', { name: 'B' });
+      const queue = await db.getSyncQueue();
+      await db.updateSyncEvent(queue.find((e) => e.entityId === a.id).id, { status: 'synced' });
+
+      const getAllSpy = vi.spyOn(IDBObjectStore.prototype, 'getAll');
+      const getAllKeysSpy = vi.spyOn(IDBIndex.prototype, 'getAllKeys');
+      try {
+        expect(await db.clearSyncedEvents()).toBe(1);
+        expect(getAllSpy).not.toHaveBeenCalled();
+        expect(getAllKeysSpy).toHaveBeenCalledTimes(1);
+        expect(getAllKeysSpy).toHaveBeenCalledWith('synced');
+      } finally {
+        getAllSpy.mockRestore();
+        getAllKeysSpy.mockRestore();
+      }
+    });
+  });
+});
+
+describe('countAll()', () => {
+  it('liefert die Anzahl der Datensätze eines Stores', async () => {
+    await db.put('groups', { name: 'A' });
+    await db.put('groups', { name: 'B' });
+    expect(await db.countAll('groups')).toBe(2);
+  });
+
+  it('liefert 0 für einen leeren Store', async () => {
+    expect(await db.countAll('groups')).toBe(0);
+  });
+
+  // Regressionstest für Befund P5: countAll() lud vormals ALLE
+  // Datensätze (getAll()), nur um deren .length zurückzugeben.
+  it('ruft objectStore.count() auf, NICHT getAll()', async () => {
+    await db.put('groups', { name: 'A' });
+
+    const getAllSpy = vi.spyOn(IDBObjectStore.prototype, 'getAll');
+    const countSpy = vi.spyOn(IDBObjectStore.prototype, 'count');
+    try {
+      expect(await db.countAll('groups')).toBe(1);
+      expect(getAllSpy).not.toHaveBeenCalled();
+      expect(countSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      getAllSpy.mockRestore();
+      countSpy.mockRestore();
+    }
+  });
 });
 
 describe('bulkPut()/exportAll()/importAll()/wipeAll()', () => {

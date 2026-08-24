@@ -92,6 +92,81 @@ describe('PrismaProfileDataGateway.exportUserData() — Befund-11-Regression', (
   });
 });
 
+// Code-Review, Befund P3: exportUserData() lud vormals ALLE
+// Trainingseinheiten des Vereins (findMany({ where: { clubId } })), nur
+// um daraus per JS-.find() die Anwesenheitszeile EINER Person
+// herauszufiltern — analog zur C4-Korrektur in erasure.repository.ts
+// grenzt eine JSONB-Containment-Bedingung (`@>`) die Abfrage direkt in
+// Postgres auf die tatsächlich betroffenen Zeilen ein.
+describe('PrismaProfileDataGateway.exportUserData() — kein club-weiter Scan (Code-Review, Befund P3)', () => {
+  it('liefert weiterhin genau die Anwesenheitszeilen dieser Person, unabhängig von der Zahl unbeteiligter Einheiten im Verein', async () => {
+    const club = await createTestClub();
+    const { user, athlete } = await seedAthleteUser(club.id);
+
+    for (let i = 0; i < 50; i++) {
+      await prisma.trainingSession.create({
+        data: { clubId: club.id, date: new Date(), attendance: [{ athleteId: randomUUID(), present: true }] },
+      });
+    }
+    const affectedA = await prisma.trainingSession.create({
+      data: { clubId: club.id, date: new Date('2026-06-01'), attendance: [{ athleteId: athlete!.id, present: true, rpe: 7 }] },
+    });
+    const affectedB = await prisma.trainingSession.create({
+      data: { clubId: club.id, date: new Date('2026-06-08'), attendance: [{ athleteId: athlete!.id, present: false, rpe: 3 }] },
+    });
+
+    const result = await profileGateway.exportUserData(user.id);
+
+    expect(result.attendance).toHaveLength(2);
+    expect(result.attendance.map((a) => a.sessionId).sort()).toEqual([affectedA.id, affectedB.id].sort());
+  });
+
+  // Der eigentliche Regressionstest: beweist, dass die Abfrage NICHT mehr
+  // club-weit skaliert. Statt einer laufzeitbasierten Prüfung (in CI je
+  // nach Auslastung unzuverlässig) wird gezählt, WIE VIELE Zeilen die
+  // SQL-Abfrage gegen "sessions" tatsächlich zurückliefert — unabhängig
+  // von der Zahl unbeteiligter Einheiten im Verein darf es dafür genau so
+  // viele sein, wie diese Person tatsächlich betreffen, nicht die
+  // Gesamtzahl der Einheiten des Vereins.
+  it('liest von "sessions" nur so viele Zeilen, wie diese Person tatsächlich betreffen, nicht alle Einheiten des Vereins', async () => {
+    const club = await createTestClub();
+    const { user, athlete } = await seedAthleteUser(club.id);
+
+    for (let i = 0; i < 50; i++) {
+      await prisma.trainingSession.create({
+        data: { clubId: club.id, date: new Date(), attendance: [{ athleteId: randomUUID(), present: true }] },
+      });
+    }
+    for (let i = 0; i < 3; i++) {
+      await prisma.trainingSession.create({
+        data: { clubId: club.id, date: new Date(), attendance: [{ athleteId: athlete!.id, present: true }] },
+      });
+    }
+
+    const instrumented = new PrismaClient({ log: [{ emit: 'event', level: 'query' }] });
+    const queries: string[] = [];
+    instrumented.$on('query' as never, (e: { query: string }) => queries.push(e.query));
+    let exportResult;
+    try {
+      const instrumentedGateway = new PrismaProfileDataGateway(instrumented);
+      exportResult = await instrumentedGateway.exportUserData(user.id);
+    } finally {
+      await instrumented.$disconnect();
+    }
+
+    const sessionQueries = queries.filter((q) => q.includes('"sessions"'));
+    expect(sessionQueries).toHaveLength(1);
+    expect(sessionQueries[0]).toMatch(/^\s*SELECT/);
+    // Der eigentliche Beweis: die Abfrage filtert per JSONB-Containment
+    // (`@>`) direkt in Postgres, statt (wie vor der Korrektur) nur nach
+    // "clubId" zu filtern und ALLE 53 Einheiten des Vereins zu laden.
+    expect(sessionQueries[0]).toContain('@>');
+    // 53 Einheiten insgesamt existieren im Verein, aber nur 3 betreffen
+    // diese Person — genau die 3 kommen im Export an.
+    expect(exportResult.attendance).toHaveLength(3);
+  });
+});
+
 describe('PrismaErasureJobGateway.purgeUserAndDependents()', () => {
   it('löscht unwiderruflich RefreshTokens/Athlet:innen-Profil samt abhängiger Daten und legt Tombstones an', async () => {
     const club = await createTestClub();

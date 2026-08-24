@@ -18,7 +18,8 @@
 // dieselbe Datei importieren, in Konflikt geraten — `id` ist in der
 // Datenbank global eindeutig (Primärschlüssel), nicht je Verein.
 // ============================================================
-import { getAll, put } from '../db.js';
+import { getAll, bulkPut, bulkEnqueueSyncEvents } from '../db.js';
+import { getCurrentUser } from '../state.js';
 import { el, uid, toast, openModal } from '../utils.js';
 import { t } from '../i18n.js';
 
@@ -99,16 +100,37 @@ function remapSetEntry(entry, idMap) {
   };
 }
 
-// clubId wird bewusst NICHT hier gesetzt — put() (siehe db.js) ergänzt sie
-// automatisch anhand des eingeloggten Nutzers, sofern sie im übergebenen
-// Objekt fehlt.
+// clubId wird bewusst NICHT aus der Datei übernommen, sondern hier einmal
+// anhand des eingeloggten Nutzers ermittelt (sofern vorhanden) und auf
+// jeden importierten Datensatz angewendet — analog zu put()'s
+// automatischer clubId-Ergänzung (siehe db.js), die hier NICHT genutzt
+// wird (siehe Kommentar zu bulkPut() unten).
+//
+// Ineffizienz-Korrektur (Code-Review, Befund P7): put() pro Datensatz rief
+// vormals sowohl eine eigene IndexedDB-Transaktion für den Datensatz
+// selbst als auch (via enqueueSyncEvent()) eine zweite für dessen
+// Sync-Event auf — bei einem Bundle mit 200 Übungen samt Vorlagen also bis
+// zu 400 Transaktionen. bulkPut() (bereits vorhanden, bislang nur für
+// Seeding/Vollimport ohne Sync-Events genutzt) schreibt alle Zeilen EINES
+// Stores in einer einzigen Transaktion; bulkEnqueueSyncEvents() (neu,
+// siehe db.js) tut dasselbe für die zugehörigen Sync-Events. Da bulkPut()
+// (anders als put()) weder clubId/Zeitstempel automatisch ergänzt noch
+// selbst ein Sync-Event erzeugt, übernimmt importLibrary() diese beiden
+// Schritte jetzt explizit.
 export async function importLibrary(dump) {
   const exercises = (Array.isArray(dump.exercises) ? dump.exercises : []).filter(ex => ex && ex.name && ex.category);
   const templates = (Array.isArray(dump.templates) ? dump.templates : []).filter(tpl => tpl && tpl.name);
 
+  const clubId = getCurrentUser()?.clubId;
+  const now = new Date().toISOString();
+
   const idMap = new Map(); // exportierte exercise.id -> neu vergebene id
-  for (const ex of exercises) {
-    const saved = await put('exercises', {
+  const exerciseRows = exercises.map(ex => {
+    const id = uid();
+    if (ex.id) idMap.set(ex.id, id);
+    return {
+      id,
+      ...(clubId ? { clubId } : {}),
       name: ex.name,
       category: ex.category,
       stroke: ex.stroke ?? null,
@@ -117,20 +139,30 @@ export async function importLibrary(dump) {
       tags: ex.tags || [],
       equipment: ex.equipment || [],
       comments: [],
-    });
-    if (ex.id) idMap.set(ex.id, saved.id);
-  }
+      createdAt: now,
+      updatedAt: now,
+    };
+  });
+  await bulkPut('exercises', exerciseRows);
 
-  for (const tpl of templates) {
-    await put('templates', {
-      name: tpl.name,
-      description: tpl.description || '',
-      tags: tpl.tags || [],
-      sets: (tpl.sets || []).map(s => remapSetEntry(s, idMap)),
-    });
-  }
+  const templateRows = templates.map(tpl => ({
+    id: uid(),
+    ...(clubId ? { clubId } : {}),
+    name: tpl.name,
+    description: tpl.description || '',
+    tags: tpl.tags || [],
+    sets: (tpl.sets || []).map(s => remapSetEntry(s, idMap)),
+    createdAt: now,
+    updatedAt: now,
+  }));
+  await bulkPut('templates', templateRows);
 
-  return { exercises: exercises.length, templates: templates.length };
+  await bulkEnqueueSyncEvents([
+    ...exerciseRows.map(row => ({ store: 'exercises', entityId: row.id, action: 'create', payload: row })),
+    ...templateRows.map(row => ({ store: 'templates', entityId: row.id, action: 'create', payload: row })),
+  ]);
+
+  return { exercises: exerciseRows.length, templates: templateRows.length };
 }
 
 function downloadJSON(filename, data) {

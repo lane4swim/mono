@@ -5,19 +5,45 @@
 // ein opakes Zufalls-Token — der Server speichert nur dessen SHA-256-Hash,
 // nie den Klartext (analog zu Passwort-Handling, nur ohne Argon2, da schon
 // hochentropisch/zufällig statt nutzergewählt).
-import { SignJWT, jwtVerify, importPKCS8, importSPKI } from 'jose';
+import { SignJWT, jwtVerify, importPKCS8, importSPKI, type KeyLike } from 'jose';
 import { randomBytes, createHash } from 'node:crypto';
 import type { AccessTokenClaims } from '@lane1/shared-types';
 import type { KeyPair } from './keys.js';
 
 const ALG = 'RS256';
 
+// Code-Review, Befund P1: importPKCS8()/importSPKI() liefen zuvor bei
+// JEDEM Sign/Verify neu — also bei jedem einzelnen authentifizierten
+// Request (siehe plugins/authenticate.ts). Das Schlüsselpaar ist
+// prozessweit konstant (resolveKeyPair() cacht es bereits), daher genügt
+// ein einmaliger, lazy pro PEM-String gecachter Import.
+const privateKeyCache = new Map<string, Promise<KeyLike>>();
+const publicKeyCache = new Map<string, Promise<KeyLike>>();
+
+function getPrivateKey(pem: string): Promise<KeyLike> {
+  let cached = privateKeyCache.get(pem);
+  if (!cached) {
+    cached = importPKCS8(pem, ALG);
+    privateKeyCache.set(pem, cached);
+  }
+  return cached;
+}
+
+function getPublicKey(pem: string): Promise<KeyLike> {
+  let cached = publicKeyCache.get(pem);
+  if (!cached) {
+    cached = importSPKI(pem, ALG);
+    publicKeyCache.set(pem, cached);
+  }
+  return cached;
+}
+
 export async function signAccessToken(
   claims: AccessTokenClaims,
   keyPair: KeyPair,
   ttlSeconds: number,
 ): Promise<string> {
-  const privateKey = await importPKCS8(keyPair.privateKey, ALG);
+  const privateKey = await getPrivateKey(keyPair.privateKey);
   return new SignJWT({ role: claims.role, clubId: claims.clubId, athleteId: claims.athleteId })
     .setProtectedHeader({ alg: ALG })
     .setSubject(claims.sub)
@@ -29,7 +55,7 @@ export async function signAccessToken(
 export class InvalidAccessTokenError extends Error {}
 
 export async function verifyAccessToken(token: string, keyPair: KeyPair): Promise<AccessTokenClaims> {
-  const publicKey = await importSPKI(keyPair.publicKey, ALG);
+  const publicKey = await getPublicKey(keyPair.publicKey);
   try {
     const { payload } = await jwtVerify(token, publicKey, { algorithms: [ALG] });
     if (!payload.sub) throw new InvalidAccessTokenError('Token ohne "sub"-Claim.');

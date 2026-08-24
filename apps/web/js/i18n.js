@@ -57,6 +57,9 @@ export function detectInitialLocale() {
 
 export function onLocaleChange(fn) { listeners.push(fn); }
 
+// Einmal kompiliert statt pro t()-Aufruf (Befund P8, siehe unten).
+const PLACEHOLDER_RE = /\{(\w+)\}/g;
+
 function lookup(dict, path) {
   return path.split('.').reduce((node, key) => (node && node[key] !== undefined ? node[key] : undefined), dict);
 }
@@ -69,12 +72,18 @@ export function t(key, vars) {
   if (str === undefined) str = lookup(LOCALES[FALLBACK_LOCALE]?.dict, key);
   if (str === undefined) return key;
   if (vars) {
+    // Einzelner Durchlauf mit einer festen RegExp statt einer neuen
+    // RegExp PRO Variable und Aufruf (Code-Review, Befund P8) — t() ist
+    // die meistgerufene Funktion der Anwendung (jedes Label, jedes
+    // Render). Ein unbekannter Platzhalter (kein eigener Schlüssel in
+    // `vars`) bleibt unverändert stehen, wie zuvor.
+    //
     // Ersetzungs-Funktion statt -String (Code-Review, Befund C6): bei
     // einem String als zweitem replace()-Argument sind "$&", "$`", "$'"
     // und "$<n>" Sonderzeichen — ein eingesetzter Wert mit "$&" (z. B.
     // ein Athleten- oder Vereinsname) würde sonst falsch gerendert
     // (verdoppelt den gesamten Treffer statt ihn zu ersetzen).
-    Object.entries(vars).forEach(([k, v]) => { str = str.replace(new RegExp(`\\{${k}\\}`, 'g'), () => v); });
+    str = str.replace(PLACEHOLDER_RE, (match, k) => (Object.prototype.hasOwnProperty.call(vars, k) ? vars[k] : match));
   }
   return str;
 }

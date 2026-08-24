@@ -27,4 +27,21 @@ describe('t() — Platzhalter-Ersetzung', () => {
   it('fällt bei unbekanntem Key auf den Key selbst zurück', () => {
     expect(t('does.not.exist')).toBe('does.not.exist');
   });
+
+  // Regressionstest für Befund P8 (Code-Review): die Umstellung auf einen
+  // einzigen Durchlauf mit fester RegExp (statt einer neuen RegExp pro
+  // Variable) darf das Verhalten bei mehreren Platzhaltern in einem
+  // String nicht verändern — alle drei müssen weiterhin korrekt und
+  // unabhängig voneinander ersetzt werden.
+  it('ersetzt mehrere verschiedene Platzhalter in einem String korrekt', () => {
+    expect(t('auth.acceptInviteIntro', { role: 'Trainer:in', club: 'SV Wasserfreunde', email: 'a@b.de' })).toBe(
+      'Du wurdest als Trainer:in für "SV Wasserfreunde" eingeladen (a@b.de). Bitte lege ein Passwort fest, um dein Konto zu aktivieren.',
+    );
+  });
+
+  it('lässt einen Platzhalter unverändert stehen, für den `vars` keinen eigenen Schlüssel enthält', () => {
+    expect(t('auth.acceptInviteIntro', { role: 'Trainer:in', club: 'SV Wasserfreunde' })).toBe(
+      'Du wurdest als Trainer:in für "SV Wasserfreunde" eingeladen ({email}). Bitte lege ein Passwort fest, um dein Konto zu aktivieren.',
+    );
+  });
 });

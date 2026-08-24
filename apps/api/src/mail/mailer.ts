@@ -90,19 +90,34 @@ export interface SmtpConfig {
 // SMTP-Host konfiguriert ist (siehe app.ts) — sonst greift
 // ConsoleMailSender als Ausweichlösung für lokale Entwicklung/Demo.
 export class SmtpMailSender implements MailSender {
+  // Code-Review, Befund P4: nodemailer.createTransport() lief zuvor bei
+  // JEDER Einladung erneut (samt dynamischem Import) — jede E-Mail baute
+  // eine eigene SMTP-Verbindung auf, die anschließend offen im
+  // Verbindungspool des Prozesses verblieb (nie geschlossen). Der
+  // Transport ist zustandslos konfiguriert und gehört daher nur einmal
+  // angelegt, lazy (behält den schlanken Kaltstart) und mit `pool: true`
+  // für Verbindungs-Wiederverwendung über mehrere Sendevorgänge hinweg.
+  private transportPromise: Promise<import('nodemailer').Transporter> | null = null;
+
   constructor(private readonly config: SmtpConfig) {}
 
+  private getTransport(): Promise<import('nodemailer').Transporter> {
+    if (!this.transportPromise) {
+      this.transportPromise = import('nodemailer').then((nodemailer) =>
+        nodemailer.createTransport({
+          host: this.config.host,
+          port: this.config.port,
+          secure: this.config.secure,
+          auth: this.config.user ? { user: this.config.user, pass: this.config.password } : undefined,
+          pool: true,
+        }),
+      );
+    }
+    return this.transportPromise;
+  }
+
   async sendInvitationEmail(payload: InvitationMailPayload): Promise<void> {
-    // Dynamischer Import, damit `nodemailer` nur geladen wird, wenn SMTP
-    // tatsächlich konfiguriert ist — hält den Kaltstart schlank, wenn
-    // nicht gebraucht.
-    const nodemailer = await import('nodemailer');
-    const transport = nodemailer.createTransport({
-      host: this.config.host,
-      port: this.config.port,
-      secure: this.config.secure,
-      auth: this.config.user ? { user: this.config.user, pass: this.config.password } : undefined,
-    });
+    const transport = await this.getTransport();
     await transport.sendMail({
       from: `"${this.config.fromName}" <${this.config.fromEmail}>`,
       to: payload.to,
