@@ -25,6 +25,17 @@ export function el(tag, attrs = {}, children = []) {
 }
 export const h = el;
 
+// Code-Review, Befund S8: nur für ELEMENT-INHALTE gedacht (Text zwischen
+// zwei Tags, z. B. `<title>${esc(x)}</title>` in den SVG-Chart-Buildern
+// unten) — nicht für Attributwerte (z. B. `title="${esc(x)}"`). Der Browser
+// escaped beim Serialisieren eines Textknotens zurück zu HTML bewusst nur
+// "&"/"<"/">" — Anführungszeichen haben in Element-Inhalten keine
+// syntaktische Bedeutung, dort also korrekt und ausreichend. Für einen
+// Attributwert reicht das NICHT: ein "'"/'"' im Wert könnte das Attribut
+// aufbrechen — dafür müsste der Wert stattdessen als Attribut über el()
+// (siehe oben) gesetzt werden, das per node.setAttribute() geht und damit
+// automatisch korrekt/vollständig escapt, statt esc() für einen
+// String-zusammengebauten Attributwert zu missbrauchen.
 export function esc(str) {
   const d = document.createElement('div');
   d.textContent = str ?? '';

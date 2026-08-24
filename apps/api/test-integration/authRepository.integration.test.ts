@@ -106,6 +106,28 @@ describe('PrismaUserRepository.create()/update()', () => {
     const updated = await repo.update(created.id, { name: 'Geänderter Name' });
     expect(updated.name).toBe('Geänderter Name');
   });
+
+  // Regressionstest für Befund S5 (Code-Review): update() filterte
+  // bislang — anders als findByEmail()/findById()/listByClub() oben —
+  // NICHT auf `deletedAt: null` (`where: { id }` allein). Ein zwischen
+  // Prüfung und Aktualisierung (z. B. durch eine gleichzeitige DSGVO-
+  // Löschanfrage) soft-gelöschtes Konto hätte die Änderung dadurch
+  // trotzdem stillschweigend übernommen.
+  it('lehnt eine Aktualisierung eines bereits soft-gelöschten Kontos ab (Befund S5)', async () => {
+    const club = await createTestClub();
+    const user = await seedUser(club.id, { deletedAt: new Date() });
+
+    await expect(repo.update(user.id, { name: 'Sollte nicht ankommen' })).rejects.toMatchObject({ code: 'P2025' });
+
+    // Der Datensatz selbst bleibt unverändert (kein Teil-Update).
+    const stillDeleted = await prisma.user.findUnique({ where: { id: user.id } });
+    expect(stillDeleted?.name).toBe('Mara Vogel');
+    expect(stillDeleted?.deletedAt).not.toBeNull();
+  });
+
+  it('lehnt eine Aktualisierung einer unbekannten id identisch ab (bestehendes Verhalten bleibt erhalten)', async () => {
+    await expect(repo.update(randomUUID(), { name: 'X' })).rejects.toMatchObject({ code: 'P2025' });
+  });
 });
 
 // Regressionstest für die Code-Review-Korrektur: User.athleteId war

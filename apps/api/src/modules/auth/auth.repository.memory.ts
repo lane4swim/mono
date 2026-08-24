@@ -54,9 +54,19 @@ export class InMemoryUserRepository implements UserRepository {
     return { ...user };
   }
 
+  // Spiegelt PrismaUserRepository.update() (Code-Review, Befund S5): ein
+  // bereits soft-gelöschtes Konto gilt hier wie bei findById()/
+  // findByEmail() als "nicht gefunden" — sonst könnte dieses Double eine
+  // Regression durchwinken, die die echte Implementierung längst
+  // ausschließt (genau die Art Auseinanderlaufen, vor der mehrere andere
+  // Kommentare in diesem Modul bereits warnen).
   async update(id: string, input: UpdateUserInput): Promise<UserRecord> {
     const existing = this.usersById.get(id);
-    if (!existing) throw new Error(`Kein Nutzer mit id ${id} gefunden.`);
+    if (!existing || existing.deletedAt) {
+      const err = new Error('An operation failed because it depends on one or more records that were required but not found. No record was found for an update.') as Error & { code: string };
+      err.code = 'P2025';
+      throw err;
+    }
     const updated: UserRecord = { ...existing, ...input, updatedAt: new Date() };
     this.usersById.set(id, updated);
     return { ...updated };

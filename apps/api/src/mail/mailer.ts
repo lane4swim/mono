@@ -60,8 +60,20 @@ export function buildHtmlBody(payload: InvitationMailPayload): string {
   `.trim();
 }
 
+// Sicherheitskorrektur (Code-Review, Befund S8): escapte bislang keine
+// einfachen Anführungszeichen. Heute folgenlos, da jedes Attribut in
+// buildHtmlBody() doppelt gequotet ist (ein `'` bricht ein `"`-delimitiertes
+// Attribut nicht auf) — aber das ist eine Eigenschaft der heutigen
+// Aufrufer, nicht dieser Funktion: als benannte, allgemein wirkende
+// "escapeHtml"-Hilfsfunktion sollte sie unabhängig davon, wie sie gerade
+// verwendet wird, vollständig escapen, damit ein künftiger Aufrufer (z. B.
+// ein einfach gequotetes Attribut) nicht stillschweigend eine Lücke erbt.
+// `&#39;` statt `&apos;`: Erstere ist auch in älteren/eingeschränkten
+// HTML-Renderern (u. a. manche E-Mail-Clients) zuverlässig unterstützt,
+// `&apos;` erst seit HTML5 offiziell Teil des HTML-Standards (war zuvor
+// nur in XHTML gültig).
 function escapeHtml(value: string): string {
-  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 export interface SmtpConfig {

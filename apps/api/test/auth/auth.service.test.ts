@@ -344,6 +344,27 @@ describe('authService.getMe / updateMe', () => {
     expect(updated.email).toBe('gleich@example.org');
     expect(updated.name).toBe('Trotzdem geändert');
   });
+
+  // Regressionstest für Befund S5 (Code-Review): UserRepository.update()
+  // filterte bislang — anders als findById()/findByEmail() — NICHT auf
+  // `deletedAt: null`. In der Praxis rufen login()/updateMe() update() nur
+  // nach einem bereits aktiv-gescopten findById()/findByEmail() auf,
+  // weshalb der Fall über den Service-Aufrufpfad nicht beobachtbar ist —
+  // dieser Test prüft daher das Repository direkt (Vertrag: identisch zu
+  // PrismaUserRepository.update(), siehe dessen Integrationstest-Pendant).
+  it('UserRepository.update() lehnt ein bereits soft-gelöschtes Konto ab, statt es stillschweigend zu aktualisieren (Befund S5)', async () => {
+    const { users, invitations, service } = makeService();
+    const { user } = await registerViaInvitation(service, invitations, { email: 'wird-geloescht@example.org' });
+
+    // Simuliert den Soft-Delete-Schritt von requestErasure() (Art. 17
+    // DSGVO) — in Produktion via direktem Prisma-Zugriff in
+    // profile.repository.ts, hier über dieselbe update()-Methode, deren
+    // eigenes Verhalten geprüft wird (an dieser Stelle noch aktiv, greift
+    // also normal).
+    await users.update(user.id, { deletedAt: new Date() });
+
+    await expect(users.update(user.id, { name: 'Sollte nicht ankommen' })).rejects.toMatchObject({ code: 'P2025' });
+  });
 });
 
 describe('authService.exportMyData / requestAccountDeletion', () => {

@@ -43,6 +43,16 @@ async function handleAuthenticated(user) {
   if (user.role !== 'superadmin') {
     // Kein Superadmin-Konto — diese Oberfläche ist ausschließlich für
     // diese Rolle gedacht. Sofort wieder abmelden statt Zugriff zu zeigen.
+    //
+    // Sicherheitskorrektur (Code-Review, Befund S6): vormals nur
+    // api.clearTokens() (rein lokal) — das gerade erst ausgestellte
+    // Refresh Token blieb dadurch serverseitig bis zu seinem regulären
+    // Ablauf (Standard: 30 Tage) gültig, obwohl diese Seite den Zugriff
+    // sofort verweigert. api.logoutRemote() (analog zum Logout-Button
+    // unten) widerruft es zusätzlich beim Server — MUSS vor
+    // clearTokens() aufgerufen werden, da logoutRemote() das Token noch
+    // aus dem localStorage lesen muss, das clearTokens() entfernt.
+    await api.logoutRemote();
     api.clearTokens();
     showLogin(t('admin.notSuperadmin'));
     return;

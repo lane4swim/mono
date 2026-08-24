@@ -91,8 +91,32 @@ export class PrismaUserRepository implements UserRepository {
   async create(input: CreateUserInput): Promise<UserRecord> {
     return this.prisma.user.create({ data: { ...input, athleteId: input.athleteId ?? null } });
   }
+  // Sicherheitskorrektur (Code-Review, Befund S5): `findByEmail()`/
+  // `findById()`/`listByClub()` oben filtern bewusst und dokumentiert auf
+  // `deletedAt: null` — `update()` tat das bislang NICHT (`where: { id }`
+  // allein). In der Praxis rufen beide heutigen Aufrufer (auth.service.ts:
+  // login()/updateMe()) `update()` erst NACH einem bereits aktiv-
+  // gescopten `findById()`/`findByEmail()`, weshalb der Fall bislang nicht
+  // beobachtbar war — aber ein dazwischen (z. B. durch eine gleichzeitige
+  // DSGVO-Löschanfrage) soft-gelöschtes Konto hätte die Aktualisierung
+  // trotzdem stillschweigend übernommen, statt sie wie jede andere
+  // Operation auf einem bereits gelöschten Konto abzulehnen. `updateMany`
+  // mit `{ id, deletedAt: null }` in der where-Klausel schließt die Lücke
+  // strukturell, statt sich auf die Aufrufreihenfolge der Aufrufer zu
+  // verlassen. `updateMany` liefert (anders als `update`) keinen
+  // aktualisierten Datensatz zurück — bei `count: 0` (nicht gefunden ODER
+  // bereits gelöscht) wird deshalb ein zu Prismas eigenem "Record not
+  // found" (P2025) gleichgeformter Fehler geworfen, damit sich diese
+  // Methode für Aufrufer weiterhin identisch zu einem echten
+  // `prisma.user.update()` auf eine nicht (mehr) existente id verhält.
   async update(id: string, input: UpdateUserInput): Promise<UserRecord> {
-    return this.prisma.user.update({ where: { id }, data: input });
+    const result = await this.prisma.user.updateMany({ where: { id, deletedAt: null }, data: input });
+    if (result.count === 0) {
+      const err = new Error('An operation failed because it depends on one or more records that were required but not found. No record was found for an update.') as Error & { code: string };
+      err.code = 'P2025';
+      throw err;
+    }
+    return (await this.findById(id))!;
   }
   async listByClub(clubId: string): Promise<UserRecord[]> {
     return this.prisma.user.findMany({ where: { clubId, deletedAt: null } });

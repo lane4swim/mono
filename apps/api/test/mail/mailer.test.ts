@@ -74,4 +74,24 @@ describe('buildHtmlBody() — HTML-Escaping', () => {
     });
     expect(html).toContain('href="https://app.example.org/#/accept-invite/abc123"');
   });
+
+  // Regressionstest für Befund S8 (Code-Review): escapeHtml() escapte
+  // bislang keine einfachen Anführungszeichen. Heute folgenlos (jedes
+  // Attribut in buildHtmlBody() ist doppelt gequotet), aber die Funktion
+  // heißt allgemein "escapeHtml" und sollte als solche vollständig
+  // escapen, unabhängig von der aktuellen Verwendung durch ihre Aufrufer.
+  it('escaped einfache Anführungszeichen in clubName/recipientName', () => {
+    const html = buildHtmlBody({
+      to: 'x@example.org',
+      recipientName: "O'Brien",
+      role: 'trainer',
+      clubName: "Verein 'X'",
+      inviteUrl: 'https://app.example.org/#/accept-invite/abc123',
+      expiresAt: new Date('2026-08-01T00:00:00.000Z'),
+    });
+    expect(html).not.toContain("O'Brien");
+    expect(html).not.toContain("Verein 'X'");
+    expect(html).toContain('O&#39;Brien');
+    expect(html).toContain('Verein &#39;X&#39;');
+  });
 });
