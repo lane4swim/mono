@@ -25,9 +25,28 @@ import { hashPassword, verifyPassword } from '../../auth/password.js';
 import { signAccessToken, generateRefreshToken, hashRefreshToken } from '../../auth/tokens.js';
 import type { KeyPair } from '../../auth/keys.js';
 
+// Fest einprogrammierter, gültig kodierter argon2id-Hash für ein beliebiges
+// Dummy-Passwort — dient AUSSCHLIESSLICH dazu, login() bei einer unbekannten
+// E-Mail-Adresse denselben Rechenaufwand durchlaufen zu lassen wie bei
+// einer bekannten (siehe login()-Kommentar dort). Kein echtes Nutzerkonto
+// verwendet diesen Wert; er muss nicht geheim gehalten werden.
+const DUMMY_PASSWORD_HASH_FOR_TIMING_SAFETY =
+  '$argon2id$v=19$m=65536,t=3,p=1$BwcHBwcHBwcHBwcHBwcHBw$+bswrS8sR9j3B1OQvLnpXgVUe+eYdjzgsPy1U28dBpk';
+
 export class EmailAlreadyRegisteredError extends Error {
   constructor() {
     super('Diese E-Mail-Adresse ist bereits registriert.');
+  }
+}
+// Aufräumarbeit (Code-Review): User.athleteId trägt jetzt ein
+// Unique-Constraint (siehe schema.prisma) — verhindert, dass zwei Konten
+// auf dasselbe Athletenprofil zeigen. Tritt praktisch nur auf, wenn ein
+// Admin versehentlich zwei Einladungen mit derselben athleteId ausstellt
+// (die Einladungsausstellung selbst prüft das nicht, siehe
+// invitations.service.ts) und beide angenommen werden.
+export class AthleteAlreadyLinkedError extends Error {
+  constructor() {
+    super('Für dieses Athletenprofil existiert bereits ein Nutzerkonto.');
   }
 }
 export class InvalidCredentialsError extends Error {
@@ -142,20 +161,46 @@ export function createAuthService(deps: AuthServiceDeps) {
       if (existingUser) throw new EmailAlreadyRegisteredError();
 
       const passwordHash = await hashPassword(input.password);
-      const user = await deps.users.create({
-        clubId: invitation.clubId,
-        name: input.name,
-        email: invitation.email,
-        passwordHash,
-        role: invitation.role,
-        athleteId: invitation.athleteId,
-        // input.consent ist an dieser Stelle bereits durch
-        // AcceptInvitationRequestSchema (consent: z.literal(true)) erzwungen —
-        // wird hier dennoch nicht blind angenommen, sondern explizit als
-        // Zeitpunkt/Version dokumentiert (DSGVO-Nachweispflicht).
-        consentGivenAt: new Date(),
-        consentVersion: CURRENT_CONSENT_VERSION,
-      });
+      let user: UserRecord;
+      try {
+        user = await deps.users.create({
+          clubId: invitation.clubId,
+          name: input.name,
+          email: invitation.email,
+          passwordHash,
+          role: invitation.role,
+          athleteId: invitation.athleteId,
+          // input.consent ist an dieser Stelle bereits durch
+          // AcceptInvitationRequestSchema (consent: z.literal(true)) erzwungen —
+          // wird hier dennoch nicht blind angenommen, sondern explizit als
+          // Zeitpunkt/Version dokumentiert (DSGVO-Nachweispflicht).
+          consentGivenAt: new Date(),
+          consentVersion: CURRENT_CONSENT_VERSION,
+        });
+      } catch (err) {
+        // Zwei unterschiedliche Unique-Constraints auf "users" können hier
+        // greifen (siehe schema.prisma: email, athleteId) — Prismas
+        // meta.target nennt zuverlässig das betroffene Feld (empirisch
+        // geprüft), damit beide mit der jeweils richtigen, spezifischen
+        // Fehlermeldung beantwortet werden, statt beide unter einem
+        // pauschalen "E-Mail bereits registriert" zu vermischen.
+        const target = err && typeof err === 'object' && 'meta' in err ? (err as { meta?: { target?: string[] } }).meta?.target : undefined;
+        if (err && typeof err === 'object' && 'code' in err && (err as { code?: string }).code === 'P2002') {
+          if (target?.includes('athleteId')) throw new AthleteAlreadyLinkedError();
+          // findByEmail() oben liefert bewusst NUR aktive Konten (siehe
+          // dessen Kommentar in auth.repository.ts) — für eine E-Mail, die
+          // einem bereits SOFT-gelöschten Konto gehört (Recht auf Löschung,
+          // Art. 17 DSGVO, noch vor dem endgültigen Hard-Purge), liefert
+          // findByEmail() fälschlich `null`, obwohl `email` in der
+          // Datenbank weiterhin `@unique` ist — genau dieser Fall tritt
+          // ein, wenn eine gelöschte Person erneut eingeladen wird und die
+          // Einladung annimmt. Ohne diesen Fang würde Prismas "P2002" hier
+          // als ungefangener 500 durchschlagen, statt als derselbe, bereits
+          // vorhandene 409, den findByEmail() für ein aktives Konto liefert.
+          throw new EmailAlreadyRegisteredError();
+        }
+        throw err;
+      }
       await deps.invitations.markUsed(invitation.id);
 
       const tokens = await issueTokens(user);
@@ -164,7 +209,22 @@ export function createAuthService(deps: AuthServiceDeps) {
 
     async login(input: LoginRequest) {
       const user = await deps.users.findByEmail(input.email); // findByEmail liefert nie gelöschte Konten
-      if (!user) throw new InvalidCredentialsError();
+      if (!user) {
+        // Sicherheitskorrektur (Code-Review): ohne diesen Zweig kehrte
+        // login() bei einer unbekannten E-Mail-Adresse SOFORT zurück,
+        // während eine bekannte Adresse erst nach einem vollständigen,
+        // absichtlich teuren argon2id-Vergleich (64 MiB Speicher, siehe
+        // auth/password.ts) fehlschlug. Dieser klar messbare Zeitunterschied
+        // hebelt den bewusst generischen InvalidCredentialsError unten aus
+        // (siehe dessen Kommentar: "verrät nicht, ob die E-Mail existiert")
+        // — ein Angreifer könnte per Timing-Messung trotzdem systematisch
+        // registrierte E-Mail-Adressen von unregistrierten unterscheiden.
+        // Der Vergleich läuft daher IMMER gegen einen fest einprogrammierten
+        // Dummy-Hash (mit denselben Kostenparametern), das Ergebnis wird
+        // verworfen — der Rechenaufwand bleibt für beide Fälle derselbe.
+        await verifyPassword(input.password, DUMMY_PASSWORD_HASH_FOR_TIMING_SAFETY);
+        throw new InvalidCredentialsError();
+      }
 
       const passwordOk = await verifyPassword(input.password, user.passwordHash);
       if (!passwordOk) throw new InvalidCredentialsError();

@@ -1,7 +1,8 @@
 // apps/api/test/sync/sync.service.test.ts
 import { describe, it, expect } from 'vitest';
-import { createSyncService, describeSyncError } from '../../src/modules/sync/sync.service.js';
+import { createSyncService, describeSyncError, splitAtSafeTimestampBoundary } from '../../src/modules/sync/sync.service.js';
 import { InMemorySyncGateway } from '../../src/modules/sync/sync.gateway.memory.js';
+import type { ChangedRecord } from '../../src/modules/sync/sync.gateway.js';
 
 const CLUB_A = '11111111-1111-1111-1111-111111111111';
 const CLUB_B = '22222222-2222-2222-2222-222222222222';
@@ -334,6 +335,53 @@ describe('syncService.push — Mass-Assignment-Schutz (Sicherheitsregression, Pa
   });
 });
 
+describe('syncService.push — serverseitige Zeitstempel-Hoheit (Sicherheitskorrektur, kritischer Befund 2)', () => {
+  it('ignoriert ein client-geliefertes "updatedAt" beim Anlegen und setzt stattdessen die eigene Serverzeit', async () => {
+    const { service, gateway } = makeService();
+    // Weit in der Vergangenheit — würde diese Zeitmarke persistiert, wäre
+    // der Datensatz für jeden Client, dessen Sync-Cursor bereits danach
+    // liegt, dauerhaft unsichtbar (stiller Datenverlust beim Pull).
+    const spoofedPast = '2000-01-01T00:00:00.000Z';
+    const payload = makeGroupPayload({ createdAt: spoofedPast, updatedAt: spoofedPast });
+
+    const before = Date.now();
+    const results = await service.push(
+      [{ id: 'evt-timestamp-spoof-create', store: 'groups', entityId: payload.id, action: 'create', payload, clientUpdatedAt: spoofedPast }],
+      asTrainer(CLUB_A),
+    );
+    expect(results[0]!.status).toBe('applied');
+
+    const stored = await gateway.findById('groups', payload.id);
+    expect(stored?.updatedAt.getTime()).toBeGreaterThanOrEqual(before);
+    expect((stored as Record<string, unknown> | null)?.createdAt).toBeInstanceOf(Date);
+    expect(((stored as Record<string, unknown>).createdAt as Date).getTime()).toBeGreaterThanOrEqual(before);
+  });
+
+  it('ignoriert ein client-geliefertes "updatedAt" beim Aktualisieren und setzt stattdessen die eigene Serverzeit', async () => {
+    const { service, gateway } = makeService();
+    const original = makeGroupPayload({ id: '77777777-7777-7777-7777-777777777777' });
+    gateway.seed('groups', { ...original, updatedAt: new Date(original.updatedAt), createdAt: new Date(original.createdAt), deletedAt: null });
+
+    // Weit in der Zukunft — würde diese Zeitmarke persistiert, erschiene der
+    // Datensatz gegenüber jedem echten, gleichzeitig eintreffenden Update
+    // permanent als "der neueste Stand".
+    const spoofedFuture = '2099-01-01T00:00:00.000Z';
+    const payload = { ...original, name: 'Geänderter Name', updatedAt: spoofedFuture };
+
+    const before = Date.now();
+    const results = await service.push(
+      [{ id: 'evt-timestamp-spoof-update', store: 'groups', entityId: payload.id, action: 'update', payload, clientUpdatedAt: original.updatedAt }],
+      asTrainer(CLUB_A),
+    );
+    expect(results[0]!.status).toBe('applied');
+
+    const stored = await gateway.findById('groups', payload.id);
+    expect(stored?.name).toBe('Geänderter Name');
+    expect(stored?.updatedAt.getTime()).toBeGreaterThanOrEqual(before);
+    expect(stored?.updatedAt.toISOString()).not.toBe(spoofedFuture);
+  });
+});
+
 describe('syncService.push — Löschung', () => {
   it('markiert einen Datensatz als gelöscht (Soft-Delete), scoped auf den eigenen Verein', async () => {
     const { service, gateway } = makeService();
@@ -381,12 +429,15 @@ describe('syncService.pull', () => {
     expect(result.changes[0]!.payload).toBeNull();
   });
 
-  it('paginiert bei mehr als einer Seite Änderungen und liefert einen nextCursor', async () => {
+  // Sicherheitskorrektur (Code-Review, kritischer Befund 1): vormals wurde
+  // `nextCursor` nur zurückgegeben, wenn `hasMore` gesetzt war — auf der
+  // (hier einzigen) letzten Seite eines Sync-Zyklus blieb er fälschlich
+  // `null`. Der Client (syncClient.js: pull()) persistiert einen Cursor
+  // aber nur, wenn er nicht `null` ist — jeder automatische
+  // Hintergrund-Sync zog dadurch dauerhaft den kompletten Vereinsbestand
+  // erneut, statt seit dem letzten Mal fortzusetzen.
+  it('liefert einen nextCursor auch dann, wenn alle Änderungen in eine einzige Seite passen (hasMore: false)', async () => {
     const { service, gateway } = makeService();
-    // Mehr als eine "Seite" an Änderungen erzeugen (Seitengröße ist intern
-    // 200 — hier reicht ein kleiner, aber über die Zeit gestaffelter Satz,
-    // um hasMore/nextCursor grundsätzlich zu testen, indem wir gezielt
-    // genug Datensätze für eine zweite Abfrage seeden).
     for (let i = 0; i < 5; i++) {
       gateway.seed('groups', {
         id: `g-${i}`, clubId: CLUB_A, name: `Gruppe ${i}`,
@@ -396,13 +447,108 @@ describe('syncService.pull', () => {
     const result = await service.pull({}, asTrainer(CLUB_A));
     expect(result.changes).toHaveLength(5);
     expect(result.hasMore).toBe(false);
-    expect(result.nextCursor).toBeNull();
+    // Letzte Zeile ist "g-4" (2026-01-05) — der Cursor zeigt auf sie, nicht
+    // auf `null`.
+    expect(result.nextCursor).toBe(new Date(2026, 0, 5).toISOString());
   });
 
   it('liefert eine leere, abgeschlossene Änderungsliste, wenn nichts vorhanden ist', async () => {
     const { service } = makeService();
     const result = await service.pull({}, asTrainer(CLUB_A));
     expect(result).toEqual({ changes: [], nextCursor: null, hasMore: false });
+  });
+
+  // Echter Mehrseiten-Test (die Seitengröße ist intern 200, siehe
+  // PULL_PAGE_SIZE in sync.service.ts): mehr Änderungen als in eine Seite
+  // passen, jede mit eindeutigem Zeitstempel — deckt ab, dass eine zweite
+  // Pull-Runde mit dem zurückgegebenen Cursor tatsächlich genau den Rest
+  // liefert, ohne Überschneidung oder Lücke.
+  it('paginiert bei mehr als 200 Änderungen über zwei Pull-Runden vollständig und ohne Überschneidung', async () => {
+    const { service, gateway } = makeService();
+    const TOTAL = 205;
+    for (let i = 0; i < TOTAL; i++) {
+      gateway.seed('groups', {
+        id: `g-${i}`, clubId: CLUB_A, name: `Gruppe ${i}`,
+        updatedAt: new Date(Date.UTC(2026, 0, 1, 0, 0, 0, i)), deletedAt: null,
+      });
+    }
+
+    const first = await service.pull({}, asTrainer(CLUB_A));
+    expect(first.changes).toHaveLength(200);
+    expect(first.hasMore).toBe(true);
+    expect(first.nextCursor).not.toBeNull();
+
+    const second = await service.pull({ cursor: first.nextCursor! }, asTrainer(CLUB_A));
+    expect(second.changes).toHaveLength(5);
+    expect(second.hasMore).toBe(false);
+
+    const allIds = [...first.changes, ...second.changes].map((c) => c.entityId).sort();
+    const expectedIds = Array.from({ length: TOTAL }, (_, i) => `g-${i}`).sort();
+    expect(allIds).toEqual(expectedIds);
+  });
+
+  // Sicherheitskorrektur (Code-Review, kritischer Befund 3): mehrere Zeilen
+  // mit EXAKT demselben Zeitstempel dürfen nicht mitten durch die
+  // Seitengrenze geschnitten werden — sonst würde die "zweite Hälfte" der
+  // Gruppe beim nächsten Pull mit `updatedAt > cursor` (strikt) auf ewig
+  // übersprungen. Hier: 200 Zeilen mit fortlaufenden Zeitstempeln (füllen
+  // exakt die erste Seite) plus 3 weitere, die sich alle den letzten
+  // dieser Zeitstempel teilen — die Grenze liegt damit genau in der
+  // Kollisionsgruppe.
+  it('teilt eine Seite nicht mitten durch mehrere Zeilen mit exakt demselben Zeitstempel', async () => {
+    const { service, gateway } = makeService();
+    for (let i = 0; i < 199; i++) {
+      gateway.seed('groups', {
+        id: `g-${i}`, clubId: CLUB_A, name: `Gruppe ${i}`,
+        updatedAt: new Date(Date.UTC(2026, 0, 1, 0, 0, 0, i)), deletedAt: null,
+      });
+    }
+    const tiedAt = new Date(Date.UTC(2026, 0, 1, 0, 0, 0, 199));
+    for (let i = 0; i < 4; i++) {
+      gateway.seed('groups', { id: `tied-${i}`, clubId: CLUB_A, name: `Kollision ${i}`, updatedAt: tiedAt, deletedAt: null });
+    }
+    // Insgesamt 199 + 4 = 203 Zeilen; die ersten 199 haben je einen eigenen
+    // Zeitstempel, die letzten 4 teilen sich exakt tiedAt — die
+    // Seitengrenze (200) liegt damit mitten in dieser 4er-Gruppe.
+
+    const first = await service.pull({}, asTrainer(CLUB_A));
+    // Keine der 4 kollidierenden Zeilen darf isoliert (ohne die übrigen)
+    // auf dieser Seite landen.
+    const tiedOnFirstPage = first.changes.filter((c) => c.entityId.startsWith('tied-'));
+    expect(tiedOnFirstPage.length === 0 || tiedOnFirstPage.length === 4).toBe(true);
+    expect(first.hasMore).toBe(true);
+
+    const second = await service.pull({ cursor: first.nextCursor! }, asTrainer(CLUB_A));
+    const allIds = new Set([...first.changes, ...second.changes].map((c) => c.entityId));
+    for (let i = 0; i < 4; i++) expect(allIds.has(`tied-${i}`)).toBe(true);
+    for (let i = 0; i < 199; i++) expect(allIds.has(`g-${i}`)).toBe(true);
+    // Keine Zeile darf doppelt geliefert worden sein.
+    expect(allIds.size).toBe(203);
+  });
+
+  // Extremfall von splitAtSafeTimestampBoundary(): MEHR als PULL_PAGE_SIZE+1
+  // Zeilen teilen sich allesamt exakt denselben Zeitstempel — innerhalb des
+  // Blickfensters gibt es keine sichere Grenze, pull() muss auf die
+  // gezielte Nachfrage (Sicherheits-Deckel) ausweichen, um sie vollständig
+  // in einer Runde aufzulösen, statt denselben Sprung endlos zu wiederholen.
+  it('löst eine Kollisionsgruppe auf, die größer als die Seitengröße ist, vollständig über die gezielte Nachfrage', async () => {
+    const { service, gateway } = makeService();
+    const TOTAL = 205;
+    const tiedAt = new Date('2026-01-01T00:00:00.000Z');
+    for (let i = 0; i < TOTAL; i++) {
+      gateway.seed('groups', { id: `tied-${i}`, clubId: CLUB_A, name: `Kollision ${i}`, updatedAt: tiedAt, deletedAt: null });
+    }
+
+    const first = await service.pull({}, asTrainer(CLUB_A));
+    expect(first.changes).toHaveLength(TOTAL);
+    expect(new Set(first.changes.map((c) => c.entityId)).size).toBe(TOTAL);
+    expect(first.nextCursor).toBe(tiedAt.toISOString());
+
+    // Ein Folge-Pull mit diesem Cursor liefert korrekt nichts mehr — die
+    // Kollisionsgruppe wurde bereits vollständig ausgeliefert.
+    const second = await service.pull({ cursor: first.nextCursor! }, asTrainer(CLUB_A));
+    expect(second.changes).toHaveLength(0);
+    expect(second.hasMore).toBe(false);
   });
 });
 
@@ -977,6 +1123,35 @@ describe('syncService — "Athlete.notes"-Redaktion für Rolle "athlete" (Sicher
   });
 });
 
+describe('splitAtSafeTimestampBoundary()', () => {
+  function row(entityId: string, ms: number): ChangedRecord {
+    return { store: 'groups', entityId, action: 'update', payload: null, updatedAt: new Date(ms) };
+  }
+
+  it('gibt alle Zeilen unverändert zurück, wenn sie in die Seite passen', () => {
+    const rows = [row('a', 1), row('b', 2)];
+    expect(splitAtSafeTimestampBoundary(rows, 5)).toEqual(rows);
+  });
+
+  it('schneidet an einer sauberen Zeitstempel-Grenze exakt bei pageSize ab', () => {
+    const rows = [row('a', 1), row('b', 2), row('c', 3)];
+    expect(splitAtSafeTimestampBoundary(rows, 2).map((r) => r.entityId)).toEqual(['a', 'b']);
+  });
+
+  it('kürzt die Seite, wenn die Zeile GENAU an der Grenze denselben Zeitstempel wie die letzte reguläre Zeile trägt', () => {
+    // pageSize=2: rows[1] (Grenze) und rows[2] (erste ausgeschlossene Zeile)
+    // teilen sich den Zeitstempel 2 -> beide dürfen nicht getrennt werden,
+    // die Seite wird auf die einzige verbleibende sichere Zeile gekürzt.
+    const rows = [row('a', 1), row('b', 2), row('c', 2)];
+    expect(splitAtSafeTimestampBoundary(rows, 2).map((r) => r.entityId)).toEqual(['a']);
+  });
+
+  it('liefert eine leere Seite, wenn ALLE gepufferten Zeilen denselben Zeitstempel teilen', () => {
+    const rows = [row('a', 1), row('b', 1), row('c', 1)];
+    expect(splitAtSafeTimestampBoundary(rows, 2)).toEqual([]);
+  });
+});
+
 describe('describeSyncError()', () => {
   it('übersetzt einen Fehler mit Prisma-Code "P2003" (Fremdschlüssel-Verletzung) in eine verständliche deutsche Meldung', () => {
     const fakeError = { code: 'P2003', message: 'Foreign key constraint failed on the field: `athleteId`' };
@@ -985,17 +1160,21 @@ describe('describeSyncError()', () => {
     );
   });
 
-  it('gibt die Original-Fehlermeldung für einen normalen Error unverändert zurück', () => {
-    expect(describeSyncError(new Error('Etwas anderes ist schiefgelaufen'))).toBe('Etwas anderes ist schiefgelaufen');
+  it('gibt für einen normalen Error NICHT dessen Original-Nachricht zurück (kein Leak interner Fehlerdetails)', () => {
+    // Sicherheitskorrektur: die rohe err.message darf den Client nicht
+    // erreichen (siehe Kommentar bei describeSyncError() — Prismas Texte
+    // nennen z. B. Spalten-/Constraint-Namen aus dem internen Schema).
+    expect(describeSyncError(new Error('Unique constraint failed on the fields: (`tokenHash`)')))
+      .toBe('Der Vorgang konnte nicht angewendet werden (interner Fehler).');
   });
 
   it('liefert einen generischen Text für Fehler ohne erkennbare Form', () => {
-    expect(describeSyncError('nur ein String')).toBe('Unbekannter Fehler.');
-    expect(describeSyncError(undefined)).toBe('Unbekannter Fehler.');
+    expect(describeSyncError('nur ein String')).toBe('Der Vorgang konnte nicht angewendet werden (interner Fehler).');
+    expect(describeSyncError(undefined)).toBe('Der Vorgang konnte nicht angewendet werden (interner Fehler).');
   });
 
   it('behandelt einen Fehler mit anderem Code nicht als Fremdschlüssel-Verletzung', () => {
     const fakeError = { code: 'P2002', message: 'Unique constraint failed' };
-    expect(describeSyncError(fakeError)).toBe('Unbekannter Fehler.');
+    expect(describeSyncError(fakeError)).toBe('Der Vorgang konnte nicht angewendet werden (interner Fehler).');
   });
 });

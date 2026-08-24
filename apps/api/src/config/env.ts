@@ -10,8 +10,6 @@ const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(3000),
   DATABASE_URL: z.string().min(1, 'DATABASE_URL ist erforderlich (siehe .env.example)'),
-  JWT_SIGNING_KEY: z.string().min(32, 'JWT_SIGNING_KEY muss mindestens 32 Zeichen lang sein'),
-  JWT_ACCESS_TTL: z.string().default('15m'),
   JWT_ACCESS_TTL_SECONDS: z.coerce.number().int().positive().default(900),
   JWT_REFRESH_TTL_DAYS: z.coerce.number().int().positive().default(30),
   // RS256-Schlüsselpaar für die Access-Token-Signatur (Abschnitt 5.2 des
@@ -35,7 +33,16 @@ const EnvSchema = z.object({
   // Entwicklung/Demo ohne eigenen Mailserver.
   SMTP_HOST: z.string().optional(),
   SMTP_PORT: z.coerce.number().int().positive().default(587),
-  SMTP_SECURE: z.coerce.boolean().default(false),
+  // Bewusst NICHT z.coerce.boolean(): dessen Umwandlung ist
+  // `Boolean(irgendein-nichtleerer-String)`, macht also z. B. auch den
+  // Text "false" fälschlich zu `true` (bekannte JS-Eigenheit, siehe
+  // .env.example) — ein für einen sicherheitsrelevanten TLS-Schalter
+  // besonders unglücklicher Bug, der sich lokal leicht unbemerkt einschleicht.
+  // z.enum(['true','false']) akzeptiert nur die beiden erwarteten
+  // Zeichenketten und lässt jeden anderen Wert (inkl. Tippfehlern) beim
+  // Start mit einer klaren Fehlermeldung scheitern, statt ihn stillschweigend
+  // als "true" zu interpretieren.
+  SMTP_SECURE: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
   SMTP_USER: z.string().optional(),
   SMTP_PASSWORD: z.string().optional(),
   SMTP_FROM_EMAIL: z.string().email().default('noreply@lane1.example.org'),
@@ -47,6 +54,15 @@ const EnvSchema = z.object({
   // unangemessene Verzögerung", aber mit kurzer Frist z. B. für
   // versehentliche Löschungen oder laufende Backup-Zyklen).
   DATA_ERASURE_RETENTION_DAYS: z.coerce.number().int().positive().default(30),
+
+  // Aufräumarbeit (Code-Review): SyncedEvent (Idempotenz-Ledger für
+  // POST /api/sync/push) und SyncTombstone (Löschmarkierungen, siehe
+  // jobs/erasure.repository.ts) wuchsen bislang unbegrenzt — siehe
+  // jobs/syncBookkeeping.repository.ts für die Begründung der beiden
+  // unterschiedlichen Fristen. Ausgeführt zusammen mit dem DSGVO-Hard-Purge
+  // (scripts/purgeDeletedData.ts).
+  SYNC_EVENT_RETENTION_DAYS: z.coerce.number().int().positive().default(90),
+  SYNC_TOMBSTONE_RETENTION_DAYS: z.coerce.number().int().positive().default(180),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

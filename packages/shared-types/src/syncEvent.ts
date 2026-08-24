@@ -54,9 +54,17 @@ export const SyncPushResponseSchema = z.object({
 });
 export type SyncPushResponse = z.infer<typeof SyncPushResponseSchema>;
 
+// "cursor" ist ebenfalls als .datetime() geprüft (nicht nur als
+// beliebiger String): der Server generiert ihn ausschließlich selbst aus
+// einer Change-Zeile (`updatedAt.toISOString()`, siehe sync.service.ts:
+// pull()) — ein Client sendet ihn nur unverändert zurück. Ohne diese
+// Prüfung erzeugte ein manipulierter/kaputter Wert (z. B. "?cursor=abc")
+// im Service ein `Invalid Date`, das die anschließende Datenbankabfrage
+// mit einem ungefangenen Fehler statt einer regulären 400-Antwort
+// quittierte.
 export const SyncPullQuerySchema = z.object({
   since: z.string().datetime().optional(),
-  cursor: z.string().optional(),
+  cursor: z.string().datetime().optional(),
 });
 export type SyncPullQuery = z.infer<typeof SyncPullQuerySchema>;
 

@@ -24,6 +24,19 @@ export interface ClubMemberCounts {
 
 export interface ClubRepository {
   create(input: CreateClubInput): Promise<ClubRecord>;
+  // Legt einen Verein UND dessen erste Admin-Einladung ATOMAR an (siehe
+  // createClub() in invitations.service.ts). Vormals zwei unabhängige
+  // Aufrufe (club.create(), danach invitations.create()) — schlug der
+  // zweite fehl (z. B. kurzzeitiger DB-Fehler), blieb ein Verein OHNE
+  // jede Einladung zurück: für niemanden erreichbar, nicht über die API
+  // reparierbar (siehe Code-Review). `buildInvitation` bekommt den bereits
+  // angelegten Verein (für dessen id als clubId) — die Einladung kann
+  // erst NACH dem Verein konstruiert werden, deren tokenHash/expiresAt
+  // liegen aber schon vorher fest (siehe Aufrufer).
+  createWithAdminInvitation(
+    club: CreateClubInput,
+    buildInvitation: (club: ClubRecord) => CreateInvitationInput,
+  ): Promise<{ club: ClubRecord; invitation: InvitationRecord }>;
   findById(id: string): Promise<ClubRecord | null>;
   list(): Promise<ClubRecord[]>;
   // Für die Superadmin-Oberfläche ("/admin"): Anzahl aktiver (nicht
@@ -92,6 +105,19 @@ export class PrismaClubRepository implements ClubRepository {
   async create(input: CreateClubInput): Promise<ClubRecord> {
     return this.prisma.club.create({ data: { name: input.name } });
   }
+
+  async createWithAdminInvitation(
+    club: CreateClubInput,
+    buildInvitation: (club: ClubRecord) => CreateInvitationInput,
+  ): Promise<{ club: ClubRecord; invitation: InvitationRecord }> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return this.prisma.$transaction(async (tx: any) => {
+      const createdClub: ClubRecord = await tx.club.create({ data: { name: club.name } });
+      const invitation: InvitationRecord = await tx.invitation.create({ data: buildInvitation(createdClub) });
+      return { club: createdClub, invitation };
+    });
+  }
+
   async findById(id: string): Promise<ClubRecord | null> {
     return this.prisma.club.findUnique({ where: { id } });
   }

@@ -9,7 +9,10 @@ import type { SyncGateway, SyncRecord, ChangedRecord, TombstoneRecord } from './
 export class InMemorySyncGateway implements SyncGateway {
   // store -> (id -> record)
   private data = new Map<EntityStoreName, Map<string, SyncRecord>>();
-  private processedEvents = new Set<string>();
+  // eventId -> clubId, die das Event verarbeitet hat (siehe
+  // isEventProcessed()/markEventProcessed() unten — clubId-gescoped,
+  // spiegelt PrismaSyncGateway).
+  private processedEvents = new Map<string, string>();
   // userId -> clubId, für findClubIdForUser() (Eigentümerprüfung von
   // ActionItem.assignedTrainerId, siehe sync.service.ts).
   private users = new Map<string, string | null>();
@@ -67,7 +70,17 @@ export class InMemorySyncGateway implements SyncGateway {
       err.code = 'P2002';
       throw err;
     }
-    this.table(store).set(id, this.normalizeDates(payload));
+    // Spiegelt Prismas `@default(now())`/`@updatedAt` (siehe schema.prisma):
+    // sync.service.ts entfernt "createdAt"/"updatedAt" mittlerweile bewusst
+    // aus dem Payload, BEVOR er hier ankommt (Sicherheitskorrektur — die
+    // Client-Uhr durfte nicht mehr den serverseitigen Zeitstempel
+    // bestimmen, der zugleich als Pull-Sync-Cursor dient). Ein echter
+    // Prisma-Client setzt beide Felder in diesem Fall selbst; dieses
+    // Test-Double muss dasselbe tun, sonst fehlt `updatedAt` beim
+    // gespeicherten Datensatz komplett (listChangedSince() bräche dann auf
+    // `record.updatedAt.getTime()` ab).
+    const now = new Date();
+    this.table(store).set(id, this.normalizeDates({ ...payload, createdAt: payload.createdAt ?? now, updatedAt: now }));
   }
 
   async update(store: EntityStoreName, id: string, clubId: string, payload: Record<string, unknown>): Promise<void> {
@@ -80,7 +93,10 @@ export class InMemorySyncGateway implements SyncGateway {
     // verhalten — kein Schreibzugriff auf fremde Daten — ist identisch.)
     if (current && current.clubId !== clubId) return;
     this.assertReferencedEntityExists(payload);
-    const merged = { ...(current ?? {}), ...payload };
+    // "updatedAt" wird — wie bei create() oben — IMMER serverseitig neu
+    // gesetzt, unabhängig davon, ob der (mittlerweile bereinigte) Payload
+    // noch einen Wert dafür enthält, analog zu Prismas `@updatedAt`.
+    const merged = { ...(current ?? {}), ...payload, updatedAt: new Date() };
     this.table(store).set(id, this.normalizeDates(merged));
   }
 
@@ -146,11 +162,11 @@ export class InMemorySyncGateway implements SyncGateway {
     return changes.slice(0, limit);
   }
 
-  async isEventProcessed(eventId: string): Promise<boolean> {
-    return this.processedEvents.has(eventId);
+  async isEventProcessed(eventId: string, clubId: string): Promise<boolean> {
+    return this.processedEvents.get(eventId) === clubId;
   }
 
-  async markEventProcessed(eventId: string): Promise<void> {
-    this.processedEvents.add(eventId);
+  async markEventProcessed(eventId: string, clubId: string): Promise<void> {
+    this.processedEvents.set(eventId, clubId);
   }
 }

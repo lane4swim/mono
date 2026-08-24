@@ -81,8 +81,12 @@ export class PrismaUserRepository implements UserRepository {
   async findByEmail(email: string): Promise<UserRecord | null> {
     return this.prisma.user.findFirst({ where: { email, deletedAt: null } });
   }
+  // Liefert wie findByEmail() bewusst NUR aktive (nicht gelöschte) Konten —
+  // sonst funktionieren refresh()/getMe()/updateMe() (siehe auth.service.ts)
+  // für ein bereits zur Löschung vorgemerktes Konto weiter, solange noch
+  // ein gültiges Access/Refresh Token existiert.
   async findById(id: string): Promise<UserRecord | null> {
-    return this.prisma.user.findUnique({ where: { id } });
+    return this.prisma.user.findFirst({ where: { id, deletedAt: null } });
   }
   async create(input: CreateUserInput): Promise<UserRecord> {
     return this.prisma.user.create({ data: { ...input, athleteId: input.athleteId ?? null } });

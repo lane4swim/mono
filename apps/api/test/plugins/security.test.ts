@@ -6,6 +6,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../../src/app.js';
+import { parseCorsOrigin } from '../../src/plugins/security.js';
 import { loadEnv } from '../../src/config/env.js';
 import { createAuthService } from '../../src/modules/auth/auth.service.js';
 import { InMemoryUserRepository, InMemoryRefreshTokenRepository } from '../../src/modules/auth/auth.repository.memory.js';
@@ -21,7 +22,6 @@ const testEnv = loadEnv({
   NODE_ENV: 'test',
   PORT: '3000',
   DATABASE_URL: 'postgresql://test:test@localhost:5432/test',
-  JWT_SIGNING_KEY: 'a'.repeat(32),
   CORS_ORIGIN: 'http://localhost:5173',
 });
 
@@ -88,8 +88,7 @@ describe('Security-Header (Helmet) — Produktionsmodus', () => {
       NODE_ENV: 'production',
       PORT: '3000',
       DATABASE_URL: 'postgresql://test:test@localhost:5432/test',
-      JWT_SIGNING_KEY: 'a'.repeat(32),
-      JWT_PRIVATE_KEY: 'dummy-private-key', // wird wegen keyPair-Override unten nie tatsächlich geparst
+          JWT_PRIVATE_KEY: 'dummy-private-key', // wird wegen keyPair-Override unten nie tatsächlich geparst
       JWT_PUBLIC_KEY: 'dummy-public-key',
       CORS_ORIGIN: 'https://app.lane1.example.org',
     });
@@ -123,5 +122,87 @@ describe('Security-Header (Helmet) — Produktionsmodus', () => {
     const response = await prodApp.inject({ method: 'GET', url: '/health' });
     const csp = response.headers['content-security-policy'] as string;
     expect(csp).toContain('upgrade-insecure-requests');
+  });
+});
+
+// Regressionstests für die Code-Review-Korrektur: CORS_ORIGIN wurde
+// unverändert als roher String an @fastify/cors weitergereicht — bei
+// mehreren, kommagetrennt eingetragenen Origins (die Fehlermeldung in
+// env.ts sprach bereits von "Origin(s)", ohne dass mehrere tatsächlich
+// funktionierten) matchte @fastify/cors dadurch KEINE davon, da ein
+// einzelner String als exakter Vergleichswert behandelt wird, nicht als
+// Liste.
+describe('parseCorsOrigin()', () => {
+  it('gibt eine einzelne Origin unverändert als 1-elementiges Array zurück', () => {
+    expect(parseCorsOrigin('https://training.example.org')).toEqual(['https://training.example.org']);
+  });
+
+  it('teilt mehrere kommagetrennte Origins auf und entfernt umgebende Leerzeichen', () => {
+    expect(parseCorsOrigin('https://a.example.org, https://b.example.org,https://c.example.org')).toEqual([
+      'https://a.example.org',
+      'https://b.example.org',
+      'https://c.example.org',
+    ]);
+  });
+
+  // "*" bleibt ein Sonderfall: als roher String an @fastify/cors
+  // weitergereicht aktiviert er dessen eingebaute Wildcard-Behandlung; ein
+  // Array mit nur dem String "*" würde dagegen als (nie zutreffender)
+  // exakter Vergleichswert behandelt.
+  it('behandelt "*" als Sonderfall (Wildcard), nicht als Array mit einem Element', () => {
+    expect(parseCorsOrigin('*')).toBe('*');
+    expect(parseCorsOrigin(' * ')).toBe('*');
+  });
+});
+
+describe('CORS — mehrere kommagetrennte Origins (End-to-End)', () => {
+  let multiOriginApp: FastifyInstance;
+
+  beforeAll(async () => {
+    const env = loadEnv({
+      NODE_ENV: 'test',
+      PORT: '3000',
+      DATABASE_URL: 'postgresql://test:test@localhost:5432/test',
+      CORS_ORIGIN: 'https://a.example.org,https://b.example.org',
+    });
+    const keyPair = generateFreshKeyPair();
+    const invitations = new InMemoryInvitationRepository();
+    const invitationsService = createInvitationsService({
+      clubs: new InMemoryClubRepository(),
+      invitations,
+      athletes: new InMemoryAthleteRepository(),
+      mailer: new InMemoryMailSender(),
+      frontendBaseUrl: 'https://app.example.org',
+      clubInvitationTtlDays: 14,
+      memberInvitationTtlDays: 7,
+    });
+    const authService = createAuthService({
+      users: new InMemoryUserRepository(),
+      refreshTokens: new InMemoryRefreshTokenRepository(),
+      invitations: invitationsService,
+      profileGateway: new InMemoryProfileDataGateway({ users: [], athletes: [], results: [], entries: [], actionItems: [], sessions: [] }),
+      dataErasureRetentionDays: 30,
+      keyPair,
+      accessTtlSeconds: 900,
+      refreshTtlDays: 30,
+    });
+    const syncService = createSyncService({ gateway: new InMemorySyncGateway() });
+    multiOriginApp = await buildApp(env, { authService, invitationsService, syncService, keyPair });
+  });
+  afterAll(async () => { await multiOriginApp.close(); });
+
+  it('erlaubt die ERSTE konfigurierte Origin', async () => {
+    const response = await multiOriginApp.inject({ method: 'GET', url: '/health', headers: { origin: 'https://a.example.org' } });
+    expect(response.headers['access-control-allow-origin']).toBe('https://a.example.org');
+  });
+
+  it('erlaubt auch die ZWEITE konfigurierte Origin (vormals nicht möglich)', async () => {
+    const response = await multiOriginApp.inject({ method: 'GET', url: '/health', headers: { origin: 'https://b.example.org' } });
+    expect(response.headers['access-control-allow-origin']).toBe('https://b.example.org');
+  });
+
+  it('lehnt eine NICHT konfigurierte Origin ab', async () => {
+    const response = await multiOriginApp.inject({ method: 'GET', url: '/health', headers: { origin: 'https://fremd.example.org' } });
+    expect(response.headers['access-control-allow-origin']).toBeUndefined();
   });
 });

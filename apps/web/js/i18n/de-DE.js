@@ -36,6 +36,9 @@ export default {
     settings: 'Einstellungen', language: 'Sprache', logout: 'Abmelden', help: 'Hilfe',
     demoBadge: 'Demo · nur lokal gespeichert', demoAccountLabel: 'Demo-Konto',
     exitDemo: 'Zur echten App',
+    logoutPendingSyncTitle: 'Nicht synchronisierte Änderungen',
+    logoutPendingSyncConfirm: '{count} Änderungen wurden noch nicht mit dem Server synchronisiert und gehen beim Abmelden verloren. Trotzdem abmelden?',
+    logoutAnyway: 'Trotzdem abmelden',
   },
   nav: {
     dashboard: 'Dashboard', athletes: 'Athleten & Team', competitions: 'Wettkämpfe',

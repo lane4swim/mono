@@ -74,7 +74,20 @@ export class PrismaErasureJobGateway implements ErasureJobGateway {
         // Trainingseinheit (kein eigenes Tabellen-Feld) — daher: alle
         // Einheiten des Vereins laden, den Eintrag dieser Person
         // herausfiltern, nur geänderte Zeilen zurückschreiben.
-        const sessions = await tx.trainingSession.findMany({ where: { clubId: user.clubId ?? undefined } });
+        //
+        // Sicherheitskorrektur (Code-Review): `clubId ?? undefined` bedeutet
+        // in Prisma "kein Filter", NICHT "clubId ist null" — anders als bei
+        // den Tombstones oben (Zeile 62-65), die bereits `user.clubId!`
+        // (nicht-null erzwungen) verwenden, wurde hier bislang stillschweigend
+        // auf einen ungescoped Fallback ausgewichen. Fehlte user.clubId
+        // einmal (Invariantenverletzung — athleteId ist nur für Vereins-
+        // mitglieder gesetzt, nie für superadmin), wären die
+        // Trainingseinheiten ALLER Vereine geladen UND — schwerwiegender,
+        // da dies ein Schreibpfad ist — potenziell per update() unten
+        // verändert worden. Ohne clubId werden stattdessen explizit KEINE
+        // Einheiten geladen/verändert, statt eine ungescoped Abfrage
+        // auszuführen.
+        const sessions = user.clubId ? await tx.trainingSession.findMany({ where: { clubId: user.clubId } }) : [];
         for (const session of sessions) {
           const attendance = session.attendance as Array<{ athleteId?: string }>;
           const filtered = attendance.filter((a) => a.athleteId !== user.athleteId);

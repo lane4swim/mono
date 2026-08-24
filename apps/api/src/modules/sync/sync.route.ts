@@ -6,7 +6,7 @@
 // synchronisieren — Superadmin hat keinen eigenen Verein und wird über
 // requireRole ausgeschlossen.
 import type { FastifyInstance } from 'fastify';
-import { SyncPushRequestSchema } from '@lane1/shared-types';
+import { SyncPushRequestSchema, SyncPullQuerySchema } from '@lane1/shared-types';
 import type { SyncService, SyncRequester } from './sync.service.js';
 import { requireRole } from '../../plugins/authorize.js';
 
@@ -43,7 +43,16 @@ export async function syncRoutes(app: FastifyInstance, opts: SyncRoutesOptions) 
     '/api/sync/pull',
     { preHandler: syncGuard },
     async (request, reply) => {
-      const result = await syncService.pull(request.query, requesterFrom(request));
+      // Bislang die einzige Route ohne Eingabevalidierung (siehe
+      // Code-Review) — ein ungültiger "cursor"/"since"-Wert (z. B.
+      // "?cursor=abc") erzeugte in syncService.pull() ein `Invalid Date`,
+      // das die Datenbankabfrage mit einem ungefangenen Fehler statt einer
+      // regulären 400-Antwort quittierte.
+      const parsed = SyncPullQuerySchema.safeParse(request.query);
+      if (!parsed.success) {
+        return reply.code(400).send({ error: 'validation_failed', issues: parsed.error.issues });
+      }
+      const result = await syncService.pull(parsed.data, requesterFrom(request));
       return reply.code(200).send(result);
     },
   );

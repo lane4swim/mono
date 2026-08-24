@@ -29,8 +29,14 @@ export class InMemoryClubRepository implements ClubRepository {
   private clubsById = new Map<string, ClubRecord>();
 
   // Wird von Tests gesetzt, um countMembersForClubs() mit Nutzerdaten zu
-  // füttern — Standard: keine Nutzer, alle Zählungen sind 0.
-  constructor(private readonly getUsers: () => CountableUser[] = () => []) {}
+  // füttern — Standard: keine Nutzer, alle Zählungen sind 0. `invitations`
+  // ist nur nötig, wenn ein Test tatsächlich createWithAdminInvitation()
+  // (also createClub()) durchläuft — siehe dortiger Fehlertext bei
+  // fehlender Injektion.
+  constructor(
+    private readonly getUsers: () => CountableUser[] = () => [],
+    private readonly invitations?: InvitationRepository,
+  ) {}
 
   async create(input: CreateClubInput): Promise<ClubRecord> {
     const now = new Date();
@@ -38,6 +44,24 @@ export class InMemoryClubRepository implements ClubRepository {
     this.clubsById.set(club.id, club);
     return { ...club };
   }
+
+  // Simuliert die Atomarität von PrismaClubRepository.createWithAdminInvitation()
+  // nicht wörtlich (kein echtes Rollback-Verhalten nötig — dieses Double
+  // ist synchron und wirft hier nie mitten zwischen beiden Schritten) —
+  // die tatsächliche Transaktions-Garantie wird stattdessen in
+  // test-integration/ gegen eine echte Datenbank geprüft.
+  async createWithAdminInvitation(
+    clubInput: CreateClubInput,
+    buildInvitation: (club: ClubRecord) => CreateInvitationInput,
+  ): Promise<{ club: ClubRecord; invitation: InvitationRecord }> {
+    if (!this.invitations) {
+      throw new Error('InMemoryClubRepository.createWithAdminInvitation() benötigt eine injizierte InvitationRepository-Instanz (siehe Test-Setup: new InMemoryClubRepository(getUsers, invitations)).');
+    }
+    const club = await this.create(clubInput);
+    const invitation = await this.invitations.create(buildInvitation(club));
+    return { club, invitation };
+  }
+
   async findById(id: string): Promise<ClubRecord | null> {
     const club = this.clubsById.get(id);
     return club ? { ...club } : null;

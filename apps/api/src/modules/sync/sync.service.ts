@@ -21,7 +21,7 @@ import {
   type Role,
 } from '@lane1/shared-types';
 import { resolveConflict } from '@lane1/sync-protocol';
-import type { SyncGateway } from './sync.gateway.js';
+import type { SyncGateway, ChangedRecord } from './sync.gateway.js';
 
 export interface SyncRequester {
   clubId: string; // Superadmin (clubId: null) darf nicht synchronisieren — siehe sync.route.ts (requireRole).
@@ -35,6 +35,14 @@ export interface SyncRequester {
 }
 
 const PULL_PAGE_SIZE = 200;
+
+// Sicherheitsnetz für den in splitAtSafeTimestampBoundary() beschriebenen
+// Extremfall (das GESAMTE Blickfenster von PULL_PAGE_SIZE+1 Zeilen teilt
+// sich einen einzigen Zeitstempel): eine gezielte Nachfrage GENAU dieses
+// Zeitstempels darf nicht unbegrenzt viele Zeilen laden — dieser Wert
+// deckelt sie. Deutlich größer als PULL_PAGE_SIZE, da er einen praktisch
+// nie erreichten Rand abdeckt, nicht den Normalfall.
+const PULL_TIE_SAFETY_LIMIT = 5000;
 
 // ---- Rollen-/Store-Berechtigungsmatrix ------------------------------------
 //
@@ -335,6 +343,37 @@ function scopeChangeForAthlete(change: SyncChange, athleteId: string | null): Sy
   return change;
 }
 
+// Sicherheitskorrektur (Code-Review, kritischer Befund 3 — Pagination):
+// listChangedSince() liefert Zeilen aufsteigend nach `updatedAt` sortiert,
+// über alle zehn fachlichen Stores UND Tombstones hinweg zusammengeführt.
+// Teilen sich zwei Zeilen exakt denselben Zeitstempel (z. B. weil mehrere
+// Events desselben Push-Batches innerhalb derselben Millisekunde
+// angewendet wurden — auf schnellem lokalem Postgres realistisch) und
+// läge die Seitengrenze GENAU zwischen ihnen, würde die zweite Zeile beim
+// nächsten Pull übersprungen: der neue Cursor ist exakt dieser Zeitstempel,
+// die Folgeabfrage filtert mit `updatedAt > cursor` (strikt) — eine Zeile
+// mit GLEICHEM Zeitstempel, die "hinter" dieser Grenze lag, erscheint
+// darin nie wieder (stiller Datenverlust für andere Geräte).
+//
+// Diese Funktion verschiebt die Seitengrenze deshalb NIE mitten in eine
+// Gruppe gleicher Zeitstempel: sie kürzt die übergebenen (bereits sortierten)
+// Zeilen so weit, bis entweder eine echte Zeitstempel-Grenze erreicht ist,
+// oder — im Extremfall, dass ALLE `pageSize + 1` gepufferten Zeilen
+// denselben Zeitstempel tragen — nichts übrig bleibt. Dieser Randfall wird
+// von pull() gesondert über eine gezielte Nachfrage aufgelöst (siehe dort);
+// ansonsten werden die abgeschnittenen Zeilen einfach NICHT ausgeliefert —
+// sie kommen vollständig (nie aufgeteilt) auf der nächsten Seite an, sobald
+// der Cursor noch auf der letzten sicheren Zeitstempel-Grenze steht.
+//
+// Bewusst als eigenständige, exportierte, reine Funktion — direkt testbar
+// ohne Gateway/Datenbank.
+export function splitAtSafeTimestampBoundary(rows: ChangedRecord[], pageSize: number): ChangedRecord[] {
+  if (rows.length <= pageSize) return rows;
+  let cut = pageSize;
+  while (cut > 0 && rows[cut]!.updatedAt.getTime() === rows[cut - 1]!.updatedAt.getTime()) cut--;
+  return rows.slice(0, cut);
+}
+
 export function createSyncService(deps: { gateway: SyncGateway }) {
   return {
     async push(events: SyncEvent[], requester: SyncRequester): Promise<SyncEventResult[]> {
@@ -383,8 +422,11 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
         // Idempotenz: bereits verarbeitete Events werden als "applied"
         // gemeldet (nicht als Fehler), damit ein Client, der wegen eines
         // Verbindungsabbruchs dieselbe Antwort nicht sah, beim erneuten
-        // Senden ein konsistentes Ergebnis bekommt.
-        if (await deps.gateway.isEventProcessed(event.id)) {
+        // Senden ein konsistentes Ergebnis bekommt. clubId-gescoped (siehe
+        // SyncGateway.isEventProcessed()-Kommentar) — ein fremdes,
+        // erratenes Event-ID bekommt dadurch die korrekte, ungescopte
+        // Antwort statt eines wirkungslosen "applied".
+        if (await deps.gateway.isEventProcessed(event.id, requester.clubId)) {
           results.push({ eventId: event.id, status: 'applied' });
           continue;
         }
@@ -410,7 +452,24 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
             results.push({ eventId: event.id, status: 'error', message: `Payload entspricht nicht dem Schema für "${store}".` });
             continue;
           }
-          validatedPayload = parsedPayload.data as Record<string, unknown>;
+          // Sicherheitskorrektur (Code-Review): "createdAt"/"updatedAt" sind
+          // im Entity-Schema Pflichtfelder (siehe packages/shared-types/src/
+          // entities.ts) — der CLIENT setzt sie beim lokalen Anlegen/Ändern
+          // (apps/web/js/db.js: put()) und schickt sie mit. Würden sie
+          // unverändert an create()/update() weitergereicht, bestimmte die
+          // lokale Client-Uhr (nicht der Server) den Zeitpunkt, der
+          // gleichzeitig als PULL-Sync-Cursor dient (siehe pull() unten,
+          // listChangedSince()) — eine vor- oder zurückgestellte Client-Uhr
+          // ließe einen Datensatz entweder permanent als "neuester Stand"
+          // erscheinen oder ihn für andere Geräte, deren Cursor bereits
+          // dahinter liegt, dauerhaft unsichtbar bleiben (stiller
+          // Datenverlust). Beide Felder werden daher entfernt, BEVOR der
+          // Payload für irgendetwas (clubId-Prüfung, Fremdschlüssel-Prüfung,
+          // create()/update()) verwendet wird — Prismas `@default(now())`
+          // bzw. `@updatedAt` (siehe schema.prisma) setzen sie serverseitig
+          // sowohl bei create() als auch bei update() automatisch.
+          const { createdAt: _createdAt, updatedAt: _updatedAt, ...rest } = parsedPayload.data as Record<string, unknown>;
+          validatedPayload = rest;
         }
 
         // Vereins-Scoping: ein Event darf nur Daten des eigenen Vereins
@@ -499,8 +558,28 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
     ): Promise<{ changes: SyncChange[]; nextCursor: string | null; hasMore: boolean }> {
       const since = query.cursor ? new Date(query.cursor) : query.since ? new Date(query.since) : null;
       const rows = await deps.gateway.listChangedSince(requester.clubId, since, PULL_PAGE_SIZE + 1);
+      // Bleibt für den Rest der Funktion unverändert — auch im
+      // Extremfall-Zweig unten (siehe dortiger Kommentar: dort wird
+      // absichtlich weiterhin `true` angenommen, nicht neu berechnet).
       const hasMore = rows.length > PULL_PAGE_SIZE;
-      const page = rows.slice(0, PULL_PAGE_SIZE);
+      let page = splitAtSafeTimestampBoundary(rows, PULL_PAGE_SIZE);
+
+      // Extremfall von splitAtSafeTimestampBoundary(): das GESAMTE
+      // Blickfenster (PULL_PAGE_SIZE + 1 Zeilen) trägt denselben
+      // Zeitstempel — innerhalb des bereits geladenen Fensters gibt es
+      // keine sichere Schnittstelle. Eine gezielte Nachfrage GENAU dieses
+      // Zeitstempels (mit einem deutlich höheren, aber endlichen Limit)
+      // löst ihn vollständig auf, BEVOR der Cursor darauf gesetzt wird —
+      // sonst träte beim nächsten Pull exakt derselbe Sprung erneut auf.
+      // `hasMore` bleibt danach vorsorglich `true`: ob darüber hinaus noch
+      // mehr wartet, ist nicht sicher bekannt (der Sicherheits-Deckel
+      // könnte selbst schon ausgeschöpft sein) — ein harmloser zusätzlicher
+      // Pull-Zyklus klärt das.
+      if (hasMore && page.length === 0) {
+        const tiedAt = rows[0]!.updatedAt;
+        const widened = await deps.gateway.listChangedSince(requester.clubId, new Date(tiedAt.getTime() - 1), PULL_TIE_SAFETY_LIMIT);
+        page = widened.filter((row) => row.updatedAt.getTime() === tiedAt.getTime());
+      }
 
       let changes: SyncChange[] = page.map((row) => ({
         store: row.store,
@@ -537,14 +616,31 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
           .filter((change): change is SyncChange => change !== null);
       }
 
+      // Sicherheitskorrektur (Code-Review, kritischer Befund 1): `nextCursor`
+      // wird jetzt IMMER zurückgegeben, sobald diese Seite Zeilen enthält —
+      // nicht mehr nur, wenn `hasMore` gesetzt ist. Vormals blieb der Cursor
+      // auf der jeweils LETZTEN Seite eines Sync-Zyklus `null`, und der
+      // Client (syncClient.js: pull()) persistiert einen Cursor nur, wenn er
+      // nicht `null` ist — passen alle Änderungen eines Vereins in eine
+      // einzige Seite (der Normalfall bei ≤ PULL_PAGE_SIZE Änderungen seit
+      // dem letzten Sync), wurde dadurch NIE ein Cursor gespeichert: jeder
+      // automatische Hintergrund-Sync (alle 60 s, siehe app.js) zog seither
+      // dauerhaft den kompletten Vereinsbestand erneut. `page` ist nach der
+      // Grenzbehandlung oben (splitAtSafeTimestampBoundary()) niemals leer,
+      // solange `rows` selbst nicht leer war — der Cursor zeigt also immer
+      // auf die tatsächlich zuletzt ausgelieferte Zeile.
       const lastRow = page.at(-1);
       const nextCursor = lastRow ? lastRow.updatedAt.toISOString() : null;
-      return { changes, nextCursor: hasMore ? nextCursor : null, hasMore };
+      return { changes, nextCursor, hasMore };
     },
   };
 }
 
 export type SyncService = ReturnType<typeof createSyncService>;
+
+// Generische Meldung für jeden Fehler, der KEINEM der unten explizit
+// behandelten Prisma-Fehlercodes entspricht (siehe describeSyncError()).
+const GENERIC_SYNC_ERROR_MESSAGE = 'Der Vorgang konnte nicht angewendet werden (interner Fehler).';
 
 // Verbesserung: Prismas Fremdschlüssel-Verletzung (Fehlercode "P2003")
 // tritt konkret dann auf, wenn ein Event auf eine Person verweist, die
@@ -557,9 +653,28 @@ export type SyncService = ReturnType<typeof createSyncService>;
 // so lässt sie sich direkt testen, ohne einen echten generierten Prisma-
 // Client zu brauchen, und funktioniert unabhängig davon, welche konkrete
 // Fehlerklasse eine Gateway-Implementierung tatsächlich wirft.
+//
+// Sicherheitskorrektur (Code-Review): vormals wurde für jeden Fehler ohne
+// erkannten Code `err.message` UNVERÄNDERT an den Client zurückgegeben.
+// Prismas rohe Fehlertexte (z. B. "Unique constraint failed on the
+// fields: (`tokenHash`)" bei P2002, oder die Meldung zu "P2025" — Record
+// not found, tritt z. B. bei einem clubId-fremden update()/softDelete()
+// auf, siehe sync.gateway.ts) nennen Spalten-/Tabellen-/Constraint-Namen
+// aus dem internen Datenbankschema — ein Informationsleck, das der Rest
+// dieses Moduls bewusst vermeidet (siehe InvalidCredentialsError,
+// FOREIGN_ENTITY_ERROR oben, beide absichtlich generisch formuliert).
+// Jeder nicht explizit behandelte Fehler wird daher stattdessen
+// serverseitig geloggt und nur generisch beantwortet.
 export function describeSyncError(err: unknown): string {
-  if (err && typeof err === 'object' && 'code' in err && (err as { code?: string }).code === 'P2003') {
+  const code = err && typeof err === 'object' && 'code' in err ? (err as { code?: unknown }).code : undefined;
+
+  if (code === 'P2003') {
     return 'Die referenzierte Person oder der referenzierte Datensatz existiert nicht mehr (wurde vermutlich zwischenzeitlich endgültig gelöscht).';
   }
-  return err instanceof Error ? err.message : 'Unbekannter Fehler.';
+
+  if (err !== undefined) {
+    // eslint-disable-next-line no-console
+    console.error('[sync] Fehler beim Anwenden eines Sync-Events:', err);
+  }
+  return GENERIC_SYNC_ERROR_MESSAGE;
 }

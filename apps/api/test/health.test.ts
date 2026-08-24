@@ -17,7 +17,6 @@ const testEnv = loadEnv({
   NODE_ENV: 'test',
   PORT: '3000',
   DATABASE_URL: 'postgresql://test:test@localhost:5432/test',
-  JWT_SIGNING_KEY: 'a'.repeat(32),
   CORS_ORIGIN: 'http://localhost:5173',
 });
 

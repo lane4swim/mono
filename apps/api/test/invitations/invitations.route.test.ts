@@ -17,7 +17,6 @@ const testEnv = loadEnv({
   NODE_ENV: 'test',
   PORT: '3000',
   DATABASE_URL: 'postgresql://test:test@localhost:5432/test',
-  JWT_SIGNING_KEY: 'a'.repeat(32),
   CORS_ORIGIN: 'http://localhost:5173',
 });
 
@@ -25,8 +24,10 @@ async function buildTestApp() {
   const keyPair = generateFreshKeyPair();
   const users = new InMemoryUserRepository();
   const refreshTokens = new InMemoryRefreshTokenRepository();
-  const clubs = new InMemoryClubRepository();
   const invitations = new InMemoryInvitationRepository();
+  // invitations wird injiziert, damit POST /api/clubs (createClub(), siehe
+  // ClubRepository.createWithAdminInvitation()) funktioniert.
+  const clubs = new InMemoryClubRepository(undefined, invitations);
   const athletes = new InMemoryAthleteRepository();
   const mailer = new InMemoryMailSender();
 

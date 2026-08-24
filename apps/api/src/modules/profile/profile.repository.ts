@@ -71,7 +71,16 @@ export class PrismaProfileDataGateway implements ProfileDataGateway {
         this.prisma.result.findMany({ where: { athleteId: user.athleteId } }),
         this.prisma.startlistEntry.findMany({ where: { athleteId: user.athleteId } }),
         this.prisma.actionItem.findMany({ where: { athleteId: user.athleteId } }),
-        this.prisma.trainingSession.findMany({ where: { clubId: user.clubId ?? undefined } }),
+        // Sicherheitskorrektur (Code-Review): `clubId ?? undefined` bedeutet
+        // in Prisma "kein Filter", NICHT "clubId ist null" — fehlte
+        // user.clubId hier einmal (Verletzung der Invariante "athleteId
+        // gesetzt -> clubId gesetzt", gilt für jede Rolle außer superadmin,
+        // die aber nie eine athleteId hat), wären die Trainingseinheiten
+        // ALLER Vereine geladen worden statt nur des eigenen. Statt dem
+        // stillschweigend zu vertrauen: ohne clubId werden explizit KEINE
+        // Anwesenheitsdaten geladen, statt eine ungescoped Abfrage
+        // auszuführen.
+        user.clubId ? this.prisma.trainingSession.findMany({ where: { clubId: user.clubId } }) : Promise.resolve([]),
       ]);
       athlete = athleteRow;
       results = resultRows;
@@ -107,8 +116,17 @@ export class PrismaProfileDataGateway implements ProfileDataGateway {
     const now = new Date();
     const purgeAfter = new Date(now.getTime() + retentionDays * 24 * 60 * 60 * 1000);
 
+    // Der DataDeletionRequest wird bewusst in DERSELBEN Transaktion wie der
+    // Soft-Delete angelegt (vormals ein separater Aufruf danach): schlug
+    // dieser fehl, blieb ein Konto dauerhaft deaktiviert (Login verweigert,
+    // siehe UserRepository.findByEmail), ohne dass je ein Hard-Purge
+    // eingeplant wurde — die betroffene Person hätte die Löschanfrage nicht
+    // einmal wiederholen können, da requestErasure() selbst einen aktiven
+    // Login voraussetzt (siehe auth.route.ts). Ein Fehlschlag jetzt macht
+    // stattdessen die gesamte Löschanfrage rückgängig (Transaktion), das
+    // Konto bleibt nutzbar und ein erneuter Versuch ist möglich.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await this.prisma.$transaction(async (tx: any) => {
+    const created = await this.prisma.$transaction(async (tx: any) => {
       await tx.user.update({ where: { id: userId }, data: { deletedAt: now } });
       if (user.athleteId) {
         await tx.athlete.update({ where: { id: user.athleteId }, data: { deletedAt: now } });
@@ -116,10 +134,9 @@ export class PrismaProfileDataGateway implements ProfileDataGateway {
         await tx.startlistEntry.updateMany({ where: { athleteId: user.athleteId }, data: { deletedAt: now } });
         await tx.actionItem.updateMany({ where: { athleteId: user.athleteId }, data: { deletedAt: now } });
       }
-    });
-
-    const created = await this.prisma.dataDeletionRequest.create({
-      data: { userId, requestedAt: now, purgeAfter, status: 'pending' },
+      return tx.dataDeletionRequest.create({
+        data: { userId, requestedAt: now, purgeAfter, status: 'pending' },
+      });
     });
     // 'status' ist im Schema eine einfache String-Spalte (kein Prisma-
     // Enum), Prisma leitet ihren Typ daher als generisches 'string' ab —

@@ -151,17 +151,28 @@ export function createInvitationsService(deps: InvitationsServiceDeps) {
   return {
     async createClub(input: { name: string; adminEmail: string; adminName: string }, requester: RequesterContext) {
       requireActionRole(requester, ACTION_ROLES.createClub, 'Nur Superadministrator:innen dürfen Vereine anlegen.');
-      const club = await deps.clubs.create({ name: input.name });
       const { plainToken, tokenHash, expiresAt } = generateInvitationToken(deps.clubInvitationTtlDays);
-      const invitation = await deps.invitations.create({
-        tokenHash,
-        email: input.adminEmail,
-        role: 'admin',
-        clubId: club.id,
-        athleteId: null,
-        invitedById: requester.id,
-        expiresAt,
-      });
+      // Atomar (Code-Review): Verein + erste Admin-Einladung entstehen in
+      // EINER Transaktion (siehe ClubRepository.createWithAdminInvitation()
+      // für die Begründung) — vormals zwei unabhängige Aufrufe, bei denen
+      // ein Fehlschlag der Einladung einen für niemanden erreichbaren,
+      // nicht über die API reparierbaren Verein hinterlassen konnte. Der
+      // E-Mail-Versand bleibt bewusst AUSSERHALB dieser Transaktion (siehe
+      // unten) — ein Fehlschlag dort soll den bereits erfolgreich
+      // angelegten, gültigen Einladungs-Datensatz nicht rückgängig machen;
+      // die Einladung bleibt über die Nutzerverwaltung erneut versendbar.
+      const { club, invitation } = await deps.clubs.createWithAdminInvitation(
+        { name: input.name },
+        (createdClub) => ({
+          tokenHash,
+          email: input.adminEmail,
+          role: 'admin',
+          clubId: createdClub.id,
+          athleteId: null,
+          invitedById: requester.id,
+          expiresAt,
+        }),
+      );
 
       await deps.mailer.sendInvitationEmail({
         to: input.adminEmail,

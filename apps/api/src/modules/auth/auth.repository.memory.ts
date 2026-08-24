@@ -26,9 +26,11 @@ export class InMemoryUserRepository implements UserRepository {
     return null;
   }
 
+  // Wie findByEmail(): liefert nur aktive (nicht gelöschte) Konten (siehe
+  // PrismaUserRepository.findById() für die Begründung).
   async findById(id: string): Promise<UserRecord | null> {
     const user = this.usersById.get(id);
-    return user ? { ...user } : null;
+    return user && !user.deletedAt ? { ...user } : null;
   }
 
   async create(input: CreateUserInput): Promise<UserRecord> {

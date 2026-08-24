@@ -8,6 +8,27 @@ import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import type { Env } from '../config/env.js';
 
+// CORS_ORIGIN trägt bislang IMMER genau eine Origin, obwohl die
+// Fehlermeldung von loadEnv() (siehe env.ts) bereits von "Origin(s)"
+// spricht — @fastify/cors erhielt den rohen String unverändert, was bei
+// mehreren, kommagetrennt eingetragenen Origins (z. B. Produktions- und
+// Staging-Frontend desselben Vereins) NICHTS davon tatsächlich matchte, da
+// @fastify/cors einen einzelnen String als exakten Vergleichswert
+// behandelt, nicht als Liste. "*" bleibt bewusst ein Sonderfall: als
+// rohe Zeichenkette an @fastify/cors weitergereicht aktiviert sie dessen
+// eingebaute Wildcard-Behandlung (Access-Control-Allow-Origin: *); ein
+// Array, das nur den String "*" enthält, würde @fastify/cors dagegen als
+// (nie zutreffenden) exakten Origin-Vergleichswert behandeln, nicht als
+// Wildcard — dieser Sonderfall wird daher vor dem Aufteilen abgefangen.
+export function parseCorsOrigin(raw: string): string | string[] {
+  const trimmed = raw.trim();
+  if (trimmed === '*') return '*';
+  return trimmed
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter((origin) => origin.length > 0);
+}
+
 export async function registerSecurityPlugins(app: FastifyInstance, env: Env) {
   await app.register(helmet, {
     // Explizite CSP statt Helmets Default-Policy (siehe Sicherheitsreview,
@@ -53,7 +74,7 @@ export async function registerSecurityPlugins(app: FastifyInstance, env: Env) {
     frameguard: { action: 'deny' },
   });
   await app.register(cors, {
-    origin: env.CORS_ORIGIN,
+    origin: parseCorsOrigin(env.CORS_ORIGIN),
     credentials: true,
   });
   await app.register(rateLimit, {

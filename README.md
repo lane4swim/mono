@@ -84,20 +84,40 @@ npm run docker:up
 npm test          # führt die Tests aller Workspaces aus (Vitest)
 ```
 
-Enthaltene automatisierte Tests (Phase 0 + Phase 1 + Phase 2, 187 insgesamt):
+Enthaltene automatisierte Tests:
 
 | Workspace | Tests |
 |---|---|
 | `packages/shared-types` | Validierung der User-, SyncEvent-, Auth- und **Entities-Schemas** (gültige/ungültige Payloads je fachlichem Modell, inkl. Sets/Wiederholungsblöcke, Registry-Vollständigkeit) |
 | `packages/sync-protocol` | Konfliktregeln je Store-Kategorie (last-write-wins, never-overwrite) |
-| `apps/api` | Health-Check, Env-Validierung, Passwort-Hashing (argon2id), JWT-Signierung/-Verifikation (RS256), komplette Auth-Business-Logik (einladungsbasierte Registrierung/Login/Refresh-Rotation/Logout/Profil) sowie die komplette Autorisierungsmatrix für Vereine/Einladungen — alles mit In-Memory-Repositories, HTTP-Ebene inkl. Rate-Limiting auf `/auth/login`, geschütztes `/api/me`, **Entity-Registry-Vollständigkeit (SyncStore → Prisma-Delegate) sowie referenzielle Integrität der Seed-Demodaten** |
+| `apps/api` | Health-Check, Env-Validierung, Passwort-Hashing (argon2id), JWT-Signierung/-Verifikation (RS256), komplette Auth-Business-Logik (einladungsbasierte Registrierung/Login/Refresh-Rotation/Logout/Profil), die generische Sync-API (Push/Pull, Pagination, Konfliktlogik, Rollen-Scopierung) sowie die komplette Autorisierungsmatrix für Vereine/Einladungen — alles mit In-Memory-Repositories, HTTP-Ebene inkl. Rate-Limiting auf `/auth/login`, geschütztes `/api/me`, Entity-Registry-Vollständigkeit (SyncStore → Prisma-Delegate) sowie referenzielle Integrität der Seed-Demodaten |
+| `apps/web` | `db.js` (IndexedDB-Wrapper, Sync-Warteschlange/Outbox-Pattern) und `syncClient.js` (Push/Pull-Zyklus, Cursor-Persistenz, "insert-as-new"-Übernahme neuer Server-ids) gegen eine In-Memory-IndexedDB (`fake-indexeddb`) und eine gemockte `apiClient.js` |
 
 **Hinweis zur Testarchitektur:** `apps/api` nutzt ein Repository-Pattern
-(`modules/auth/auth.repository.ts`, `modules/invitations/invitations.repository.ts`)
-— die Business-Logik hängt von Interfaces ab, nicht direkt von Prisma. Tests
-laufen daher komplett ohne Datenbank gegen die `*.repository.memory.ts`-
-Implementierungen; Prisma wird produktiv verwendet, sobald kein
-Test-Override übergeben wird.
+(`modules/auth/auth.repository.ts`, `modules/invitations/invitations.repository.ts`,
+`modules/sync/sync.gateway.ts`, …) — die Business-Logik hängt von
+Interfaces ab, nicht direkt von Prisma. Die Suite oben (`npm test`) läuft
+daher komplett ohne Datenbank gegen die `*.repository.memory.ts`- bzw.
+`sync.gateway.memory.ts`-Implementierungen; Prisma wird produktiv
+verwendet, sobald kein Test-Override übergeben wird.
+
+Zusätzlich gibt es eine **separate, opt-in Integrationstestsuite** für
+`apps/api`, die genau diese Prisma-Implementierungen (`PrismaSyncGateway`,
+`PrismaUserRepository`, `PrismaProfileDataGateway`,
+`PrismaErasureJobGateway`) gegen eine echte PostgreSQL-Datenbank prüft —
+dort sitzt das sicherheitskritische Vereins-Scoping (`where: { id, clubId }`),
+das ein In-Memory-Double nicht verlässlich abbilden kann. Läuft NICHT als
+Teil von `npm test` (kein Test-Override nötig, aber eine echte, leere
+Datenbank), sondern eigenständig:
+
+```bash
+cd apps/api
+npx prisma db push                # Schema in die Zieldatenbank pushen (siehe DATABASE_URL in .env)
+npm run test:integration
+```
+
+CI führt diese Suite bei jedem Push/PR gegen den ohnehin laufenden
+Postgres-Service-Container aus (siehe `.github/workflows/ci.yml`).
 
 ## Einladungsbasierte Registrierung (Phase 1, überarbeitet)
 
@@ -269,6 +289,16 @@ Verbesserungen:**
    `sync.service.ts`s `describeSyncError()` erkennt das gezielt und liefert
    eine klare Meldung („… existiert nicht mehr …") statt der rohen
    Postgres-Fehlermeldung.
+
+**Sync-Bookkeeping-Bereinigung:** derselbe tägliche Cron-Lauf (`npm run
+purge-deleted-data`) entfernt zusätzlich veraltete Zeilen aus zwei intern
+buchführenden Tabellen, die sonst unbegrenzt wachsen würden — `SyncedEvent`
+(Idempotenz-Ledger für `POST /api/sync/push`, Standard 90 Tage, über
+`SYNC_EVENT_RETENTION_DAYS` konfigurierbar) und `SyncTombstone` (siehe
+oben, Standard 180 Tage, über `SYNC_TOMBSTONE_RETENTION_DAYS`
+konfigurierbar — deutlich großzügiger, da eine Löschmarkierung erst
+verschwinden darf, sobald jedes Gerät seinen Sync-Cursor darüber hinaus
+vorangetrieben hat).
 
 **Frontend:** „Mein Profil" ruft beide Endpunkte direkt auf. Der
 Export-Button fällt bei nicht erreichbarem Server auf einen Export der

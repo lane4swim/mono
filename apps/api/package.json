@@ -18,6 +18,8 @@
     "pretest": "cd ../../packages/sync-protocol && npm run build",
     "test": "vitest run",
     "test:watch": "vitest",
+    "pretest:integration": "cd ../../packages/sync-protocol && npm run build",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
     "lint": "eslint . --ext .ts",
     "prisma:generate": "prisma generate",
     "prisma:validate": "prisma validate",

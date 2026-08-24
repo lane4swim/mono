@@ -31,6 +31,17 @@ describe('GroupSchema', () => {
     const group = { id: ATHLETE_ID, clubId: CLUB_ID, name: '', description: '', createdAt: now, updatedAt: now };
     expect(GroupSchema.safeParse(group).success).toBe(false);
   });
+
+  // Regressionstest für die Code-Review-Korrektur: freie Textfelder waren
+  // vormals unbegrenzt lang.
+  it('lehnt einen Namen über 200 Zeichen ab', () => {
+    const group = { id: ATHLETE_ID, clubId: CLUB_ID, name: 'x'.repeat(201), description: '', createdAt: now, updatedAt: now };
+    expect(GroupSchema.safeParse(group).success).toBe(false);
+  });
+  it('akzeptiert einen Namen mit genau 200 Zeichen', () => {
+    const group = { id: ATHLETE_ID, clubId: CLUB_ID, name: 'x'.repeat(200), description: '', createdAt: now, updatedAt: now };
+    expect(GroupSchema.safeParse(group).success).toBe(true);
+  });
 });
 
 describe('AthleteSchema', () => {
@@ -51,6 +62,17 @@ describe('AthleteSchema', () => {
   });
   it('lehnt einen leeren Nachnamen ab', () => {
     expect(AthleteSchema.safeParse({ ...valid, lastName: '' }).success).toBe(false);
+  });
+
+  // Regressionstest für die Code-Review-Korrektur: "notes" ist das Feld
+  // mit dem größten dokumentierten Bedarf (laufende Trainer:innen-Notizen
+  // über die gesamte Karriere) und trägt deshalb ein deutlich höheres
+  // Limit als die übrigen Freitextfelder — aber eben nicht "unbegrenzt".
+  it('lehnt "notes" über 10000 Zeichen ab', () => {
+    expect(AthleteSchema.safeParse({ ...valid, notes: 'x'.repeat(10001) }).success).toBe(false);
+  });
+  it('akzeptiert "notes" mit genau 10000 Zeichen', () => {
+    expect(AthleteSchema.safeParse({ ...valid, notes: 'x'.repeat(10000) }).success).toBe(true);
   });
 });
 
@@ -121,7 +143,7 @@ describe('ExerciseSchema', () => {
     expect(ExerciseSchema.safeParse({ ...valid, stroke: null }).success).toBe(true);
   });
   it('fehlt "comments" ganz, wird ein leeres Array angenommen (Rückwärtskompatibilität mit älteren Datensätzen)', () => {
-    const { comments, ...withoutComments } = valid;
+    const { comments: _comments, ...withoutComments } = valid;
     const parsed = ExerciseSchema.safeParse(withoutComments);
     expect(parsed.success).toBe(true);
     if (parsed.success) expect(parsed.data.comments).toEqual([]);

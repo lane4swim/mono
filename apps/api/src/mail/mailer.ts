@@ -45,13 +45,16 @@ function buildTextBody(payload: InvitationMailPayload): string {
   ].join('\n');
 }
 
-function buildHtmlBody(payload: InvitationMailPayload): string {
+// Exportiert (statt modul-intern), damit escapeHtml()-Regressionen (siehe
+// mailer.test.ts) direkt gegen die tatsächliche HTML-Ausgabe testbar sind,
+// ohne einen echten SMTP-Versand nachzustellen.
+export function buildHtmlBody(payload: InvitationMailPayload): string {
   const expires = payload.expiresAt.toLocaleDateString('de-DE', { year: 'numeric', month: 'long', day: 'numeric' });
   return `
     <p>${payload.recipientName ? `Hallo ${escapeHtml(payload.recipientName)},` : 'Hallo,'}</p>
     <p>Sie wurden als <strong>${escapeHtml(ROLE_LABEL_DE[payload.role])}</strong> für
        „${escapeHtml(payload.clubName)}" bei Lane 1 eingeladen.</p>
-    <p><a href="${payload.inviteUrl}">Konto aktivieren</a></p>
+    <p><a href="${escapeHtml(payload.inviteUrl)}">Konto aktivieren</a></p>
     <p style="color:#5B7A85;font-size:13px">Dieser Link ist gültig bis zum ${expires}.</p>
     <p>Sportliche Grüße,<br>Ihr Lane-1-Team</p>
   `.trim();

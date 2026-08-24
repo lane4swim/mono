@@ -20,6 +20,28 @@ async function setCursor(cursor) {
   await put('meta', { id: META_CURSOR_KEY, cursor });
 }
 
+// Übernimmt eine vom Server bei "insert-as-new" vergebene neue id in die
+// lokale Ablage: liest den Datensatz unter der alten (client-generierten)
+// id, speichert ihn unter der neuen id — OHNE ein neues Sync-Event zu
+// erzeugen, der Server hat ihn ja bereits unter dieser id angelegt (siehe
+// putWithoutSync()) —, entfernt danach die alte Kopie lokal (ebenfalls
+// ohne Sync-Event, siehe removeWithoutSync()). Siehe push() unten für den
+// Hintergrund (Code-Review, Befund 12).
+//
+// Bekannte Grenze: ein weiteres, zum Zeitpunkt DIESES Push-Zyklus bereits
+// in der Warteschlange stehendes Event für dieselbe alte entityId (z. B.
+// ein unmittelbar danach offline erfasstes zweites Update desselben
+// Datensatzes) liefe anschließend ins Leere, da der lokale Datensatz nicht
+// mehr unter der alten id existiert. In der Praxis wird "results" — der
+// einzige Store mit dieser Konfliktstrategie — nach dem Anlegen so gut wie
+// nie noch einmal offline bearbeitet.
+async function renameLocalRecord(store, oldId, newId) {
+  const existing = await get(store, oldId);
+  if (!existing) return;
+  await putWithoutSync(store, { ...existing, id: newId });
+  await removeWithoutSync(store, oldId);
+}
+
 // Sendet alle ausstehenden/fehlerhaften Events aus der lokalen
 // Sync-Warteschlange. Aktualisiert jedes Event anhand der Server-Antwort
 // (siehe apps/api SyncEventResult: "applied" | "conflict" | "error").
@@ -37,9 +59,22 @@ export async function push() {
   let applied = 0, conflicts = 0, errors = 0;
 
   for (const result of results) {
+    const sourceEvent = toSend.find(e => e.id === result.eventId);
     if (result.status === 'applied') {
       applied++;
-      await updateSyncEvent(result.eventId, { status: 'synced', syncedAt: new Date().toISOString(), attempts: (queue.find(e => e.id === result.eventId)?.attempts || 0) + 1, lastError: null });
+      // "insert-as-new" (siehe apps/api sync.service.ts: resolveConflict()
+      // -> "results" nutzt die Konfliktstrategie "never-overwrite") vergibt
+      // bei einem Konflikt serverseitig eine NEUE id statt zu
+      // überschreiben und meldet sie über serverVersion.id zurück. Ohne
+      // dieses Nachziehen bliebe der lokale Datensatz unter der ALTEN
+      // (client-generierten) id gespeichert; der nächste pull() würde
+      // denselben Datensatz zusätzlich unter der NEUEN id importieren —
+      // er erschiene lokal doppelt (siehe renameLocalRecord() oben).
+      const newId = result.serverVersion?.id;
+      if (sourceEvent && typeof newId === 'string' && newId !== sourceEvent.entityId) {
+        await renameLocalRecord(sourceEvent.store, sourceEvent.entityId, newId);
+      }
+      await updateSyncEvent(result.eventId, { status: 'synced', syncedAt: new Date().toISOString(), attempts: (sourceEvent?.attempts || 0) + 1, lastError: null });
     } else if (result.status === 'conflict') {
       conflicts++;
       // Server-Stand ist neuer — das lokale Event wird verworfen (nicht
@@ -49,7 +84,7 @@ export async function push() {
       await updateSyncEvent(result.eventId, { status: 'synced', syncedAt: new Date().toISOString(), lastError: null });
     } else {
       errors++;
-      await updateSyncEvent(result.eventId, { status: 'error', attempts: (queue.find(e => e.id === result.eventId)?.attempts || 0) + 1, lastError: result.message || 'Unbekannter Fehler.' });
+      await updateSyncEvent(result.eventId, { status: 'error', attempts: (sourceEvent?.attempts || 0) + 1, lastError: result.message || 'Unbekannter Fehler.' });
     }
   }
 

@@ -17,7 +17,6 @@ const testEnv = loadEnv({
   NODE_ENV: 'test',
   PORT: '3000',
   DATABASE_URL: 'postgresql://test:test@localhost:5432/test',
-  JWT_SIGNING_KEY: 'a'.repeat(32),
   CORS_ORIGIN: 'http://localhost:5173',
 });
 
@@ -179,6 +178,34 @@ describe('GET /api/sync/pull', () => {
     const token = await tokenFor(keyPair, 'superadmin', null);
     const response = await app.inject({ method: 'GET', url: '/api/sync/pull', headers: { authorization: `Bearer ${token}` } });
     expect(response.statusCode).toBe(403);
+    await app.close();
+  });
+
+  // Sicherheitskorrektur (Code-Review, Befund 9): vormals die einzige Route
+  // ohne Eingabevalidierung — ein ungültiger "cursor"-Wert erzeugte in
+  // syncService.pull() ein `Invalid Date`, das die anschließende
+  // Datenbankabfrage mit einem ungefangenen Fehler (500) statt einer
+  // regulären 400-Antwort quittierte.
+  it('liefert 400 bei einem ungültigen "cursor"-Query-Parameter statt eines ungefangenen Fehlers', async () => {
+    const { app, keyPair } = await buildTestApp();
+    const token = await tokenFor(keyPair, 'trainer', CLUB_ID);
+    const response = await app.inject({
+      method: 'GET', url: '/api/sync/pull?cursor=abc',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error).toBe('validation_failed');
+    await app.close();
+  });
+
+  it('liefert 400 bei einem ungültigen "since"-Query-Parameter statt eines ungefangenen Fehlers', async () => {
+    const { app, keyPair } = await buildTestApp();
+    const token = await tokenFor(keyPair, 'trainer', CLUB_ID);
+    const response = await app.inject({
+      method: 'GET', url: '/api/sync/pull?since=nicht-datumsförmig',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(response.statusCode).toBe(400);
     await app.close();
   });
 

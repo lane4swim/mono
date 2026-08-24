@@ -21,8 +21,10 @@ const TRAINER = { id: 'trainer-1', role: 'trainer', clubId: 'club-a' };
 const ATHLETE = { id: 'athlete-1', role: 'athlete', clubId: 'club-a' };
 
 function makeService() {
-  const clubs = new InMemoryClubRepository();
   const invitations = new InMemoryInvitationRepository();
+  // invitations wird injiziert, damit createClub() (siehe
+  // ClubRepository.createWithAdminInvitation()) funktioniert.
+  const clubs = new InMemoryClubRepository(undefined, invitations);
   const athletes = new InMemoryAthleteRepository();
   const mailer = new InMemoryMailSender();
   const service = createInvitationsService({

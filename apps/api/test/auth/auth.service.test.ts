@@ -218,6 +218,28 @@ describe('authService.login', () => {
     expect(unknownEmailMessage).toBe(wrongPasswordMessage);
     expect(unknownEmailMessage).not.toBe('');
   });
+
+  // Sicherheitskorrektur (Code-Review): vormals kehrte login() bei einer
+  // unbekannten E-Mail-Adresse SOFORT zurück, ohne den teuren
+  // argon2id-Passwortvergleich zu durchlaufen — ein klar messbarer
+  // Zeitunterschied zu einem bekannten Konto (falsches Passwort), der den
+  // oben getesteten generischen Fehlertext per Timing-Seitenkanal
+  // trotzdem aushebeln konnte (User-Enumeration).
+  it('lässt bei einer unbekannten E-Mail-Adresse denselben teuren Passwort-Vergleich durchlaufen (Timing-Sicherheit)', async () => {
+    const { service, invitations } = makeService();
+    await registerViaInvitation(service, invitations, { email: 'sabine.reuter@example.org' });
+
+    const start = Date.now();
+    await service.login({ email: 'unbekannt@example.org', password: 'irgendwas', consent: true }).catch(() => {});
+    const elapsedMs = Date.now() - start;
+
+    // argon2id mit den hier konfigurierten Kostenparametern (64 MiB
+    // Speicher, 3 Iterationen, siehe auth/password.ts) braucht auf jeder
+    // realistischen Maschine deutlich mehr als wenige Millisekunden — ein
+    // sofortiges Zurückkehren (die vormalige, unsichere Implementierung)
+    // läge weit darunter.
+    expect(elapsedMs).toBeGreaterThan(15);
+  });
 });
 
 describe('authService.refresh', () => {
