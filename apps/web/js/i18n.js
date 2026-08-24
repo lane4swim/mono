@@ -69,7 +69,12 @@ export function t(key, vars) {
   if (str === undefined) str = lookup(LOCALES[FALLBACK_LOCALE]?.dict, key);
   if (str === undefined) return key;
   if (vars) {
-    Object.entries(vars).forEach(([k, v]) => { str = str.replace(new RegExp(`\\{${k}\\}`, 'g'), v); });
+    // Ersetzungs-Funktion statt -String (Code-Review, Befund C6): bei
+    // einem String als zweitem replace()-Argument sind "$&", "$`", "$'"
+    // und "$<n>" Sonderzeichen — ein eingesetzter Wert mit "$&" (z. B.
+    // ein Athleten- oder Vereinsname) würde sonst falsch gerendert
+    // (verdoppelt den gesamten Treffer statt ihn zu ersetzen).
+    Object.entries(vars).forEach(([k, v]) => { str = str.replace(new RegExp(`\\{${k}\\}`, 'g'), () => v); });
   }
   return str;
 }

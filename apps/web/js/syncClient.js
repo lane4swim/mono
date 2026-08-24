@@ -31,6 +31,15 @@ const PUSH_BATCH_SIZE = 200;
 // manuellen Reset auf 'pending'.
 const MAX_SYNC_ATTEMPTS = 5;
 
+// Code-Review, Befund C5: pull() verlässt sich darauf, dass der Server
+// niemals hasMore: true zusammen mit nextCursor: null liefert (heute
+// serverseitig ausgeschlossen, siehe sync.service.ts) — bricht diese
+// Invariante künftig durch einen Server-Fehler, würde die Schleife sonst
+// mit cursor: null endlos dieselbe (erste) Seite erneut abfragen. Eine
+// harte Iterationsobergrenze dient als zweites, vom Server unabhängiges
+// Sicherheitsnetz.
+const MAX_PULL_ITERATIONS = 1000;
+
 async function getCursor() {
   const meta = await get('meta', META_CURSOR_KEY);
   return meta?.cursor ?? null;
@@ -139,8 +148,14 @@ export async function pull() {
   let cursor = await getCursor();
   let totalChanges = 0;
   let hasMore = true;
+  let iterations = 0;
 
   while (hasMore) {
+    if (iterations >= MAX_PULL_ITERATIONS) {
+      throw new Error(`pull(): Abbruch nach ${MAX_PULL_ITERATIONS} Seiten ohne hasMore: false — vermutlich ein Server-Fehler.`);
+    }
+    iterations++;
+
     const response = await api.syncPull(cursor);
     for (const change of response.changes) {
       if (change.action === 'delete') {
@@ -166,7 +181,11 @@ export async function pull() {
     }
     cursor = response.nextCursor;
     hasMore = response.hasMore;
-    if (cursor) await setCursor(cursor);
+    // Sicherheitsnetz (Befund C5): hasMore: true ohne nextCursor dürfte
+    // laut Server-Invariante nie vorkommen — Abbruch statt Endlosschleife
+    // mit cursor: null.
+    if (!cursor) break;
+    await setCursor(cursor);
   }
 
   return { received: totalChanges };

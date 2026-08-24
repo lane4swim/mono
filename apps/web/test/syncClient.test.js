@@ -252,6 +252,38 @@ describe('pull()', () => {
     expect(await db.get('groups', 'g1')).not.toBeNull();
     expect(await db.get('groups', 'g2')).not.toBeNull();
   });
+
+  // Regressionstests für Befund C5 (Code-Review): pull() vertraute bislang
+  // uneingeschränkt der Server-Invariante, dass hasMore: true niemals
+  // zusammen mit nextCursor: null geliefert wird. Verletzt eine
+  // (fehlerhafte) Server-Antwort diese Invariante, zog die Schleife zuvor
+  // mit cursor: null endlos dieselbe Seite erneut.
+  it('bricht ab, wenn der Server hasMore: true ohne nextCursor liefert, statt endlos dieselbe Seite erneut abzufragen', async () => {
+    api.syncPull.mockResolvedValue({
+      changes: [{ store: 'groups', entityId: 'g1', action: 'update', payload: { id: 'g1', name: 'A' }, updatedAt: '2026-01-01T00:00:00.000Z' }],
+      nextCursor: null,
+      hasMore: true,
+    });
+
+    const result = await pull();
+    expect(result).toEqual({ received: 1 });
+    expect(api.syncPull).toHaveBeenCalledTimes(1);
+  });
+
+  it('wirft nach MAX_PULL_ITERATIONS Seiten ohne hasMore: false statt endlos weiterzuziehen', async () => {
+    let call = 0;
+    api.syncPull.mockImplementation(async () => {
+      call++;
+      return {
+        changes: [{ store: 'groups', entityId: `g${call}`, action: 'update', payload: { id: `g${call}`, name: 'X' }, updatedAt: `2026-01-01T00:00:${String(call).padStart(2, '0')}.000Z` }],
+        nextCursor: `2026-01-01T00:00:${String(call).padStart(2, '0')}.000Z`,
+        hasMore: true,
+      };
+    });
+
+    await expect(pull()).rejects.toThrow(/Abbruch nach 1000 Seiten/);
+    expect(api.syncPull).toHaveBeenCalledTimes(1000);
+  });
 });
 
 describe('runSync()', () => {
