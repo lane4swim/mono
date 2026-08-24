@@ -39,6 +39,33 @@ export interface TombstoneRecord {
   deletedAt: Date;
 }
 
+// Sicherheitskorrektur (Code-Review, Befund C3): die im SyncGateway-
+// Interface einzeln aufgeführten create()/update()/softDelete() sowie
+// isEventProcessed()/markEventProcessed() blieben als PRIMITIVE bestehen
+// (weiterhin direkt getestet, siehe test-integration/syncGateway.
+// integration.test.ts) — sync.service.ts' push() ruft für den
+// eigentlichen Schreibvorgang nun aber applyAndMarkProcessed() unten auf,
+// das die Datenänderung UND den Idempotenz-Vermerk atomar in EINER
+// Transaktion zusammenfasst. Als diskriminierte Union statt dreier
+// getrennter Methoden, damit die Prisma-Implementierung sie in EINER
+// gemeinsamen $transaction()-Closure anhand von `operation.kind`
+// unterscheiden kann, ohne drei separate Transaktions-Wrapper zu brauchen.
+export type SyncWriteOperation =
+  | { kind: 'create'; store: EntityStoreName; payload: Record<string, unknown> }
+  | { kind: 'update'; store: EntityStoreName; id: string; clubId: string; payload: Record<string, unknown> }
+  | { kind: 'softDelete'; store: EntityStoreName; id: string; clubId: string };
+
+// 'applied': DIESER Aufruf hat die Datenänderung und den Ledger-Eintrag
+// geschrieben. 'already-processed': ein GLEICHZEITIGER Aufruf mit
+// demselben Event (z. B. ein Client-Retry nach einem Verbindungsabbruch,
+// dessen vorherige — serverseitig bereits erfolgreiche — Antwort nie
+// ankam) hat den Ledger-Eintrag zuerst geschrieben; die Datenänderung
+// dieses Aufrufs wurde dadurch gar nicht erst versucht. Der Aufrufer
+// (sync.service.ts: push()) behandelt Letzteres identisch zum
+// vorgelagerten isEventProcessed()-Fast-Path: als "applied" ohne
+// serverVersion.
+export type ApplyOutcome = 'applied' | 'already-processed';
+
 export interface SyncGateway {
   // `clubId` ist optional, damit interne/administrative Aufrufe (z. B.
   // Tests, die den rohen Serverstand unabhängig vom anfragenden Verein
@@ -71,6 +98,11 @@ export interface SyncGateway {
   // sonst überall konsequenten Vereins-Scoping dieses Gateways.
   isEventProcessed(eventId: string, clubId: string): Promise<boolean>;
   markEventProcessed(eventId: string, clubId: string, store: EntityStoreName, action: string): Promise<void>;
+  // Siehe ausführlicher Kommentar bei SyncWriteOperation/ApplyOutcome oben.
+  applyAndMarkProcessed(
+    operation: SyncWriteOperation,
+    event: { id: string; clubId: string; store: EntityStoreName; action: string },
+  ): Promise<ApplyOutcome>;
   // Ermittelt die clubId eines Users — für die Eigentümerprüfung von
   // ActionItem.assignedTrainerId (siehe sync.service.ts:
   // assertForeignKeysWithinClub()). Eigene Methode statt findById(), da
@@ -183,6 +215,50 @@ export class PrismaSyncGateway implements SyncGateway {
 
   async markEventProcessed(eventId: string, clubId: string, store: EntityStoreName, action: string): Promise<void> {
     await this.prisma.syncedEvent.create({ data: { id: eventId, clubId, store, action } });
+  }
+
+  // Sicherheitskorrektur (Code-Review, Befund C3): siehe ausführlichen
+  // Kommentar bei SyncWriteOperation/ApplyOutcome oben für den Hintergrund.
+  //
+  // Der Ledger-Eintrag wird bewusst per `createMany({ skipDuplicates:
+  // true })` statt per `create()` geschrieben: bei einem bereits
+  // vorhandenen Eintrag liefert das `count: 0` zurück, statt eine
+  // Unique-Constraint-Exception (P2002) zu werfen. Das ist der
+  // entscheidende Unterschied zu einem naheliegenderen Ansatz
+  // ("versuche create(), fange P2002 als 'already-processed'") — DER
+  // wäre nicht zuverlässig unterscheidbar gewesen: bricht die
+  // nachfolgende, in DERSELBEN Transaktion versuchte Datenänderung
+  // ihrerseits mit einem (davon völlig unabhängigen) P2002 ab — z. B.
+  // eine astronomisch unwahrscheinliche, aber nicht auszuschließende
+  // UUID-Kollision auf der fachlichen Tabelle selbst —, trägt Prismas
+  // Fehlerobjekt (`meta.target`) für BEIDE Fälle typischerweise dieselbe
+  // Spalte ("id"), ohne die betroffene TABELLE zu benennen. Mit
+  // `skipDuplicates` entfällt diese Unterscheidung komplett: nur die
+  // Ledger-Zeile selbst kann je `count: 0` liefern, jeder andere Fehler
+  // (inkl. P2002 auf der fachlichen Tabelle) bleibt eine echte Exception,
+  // die die gesamte Transaktion regulär zurückrollt und im Service als
+  // "error" beantwortet wird (siehe describeSyncError()).
+  async applyAndMarkProcessed(operation: SyncWriteOperation, event: { id: string; clubId: string; store: EntityStoreName; action: string }): Promise<ApplyOutcome> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return this.prisma.$transaction(async (tx: any) => {
+      const ledgerResult = await tx.syncedEvent.createMany({
+        data: [{ id: event.id, clubId: event.clubId, store: event.store, action: event.action }],
+        skipDuplicates: true,
+      });
+      if (ledgerResult.count === 0) return 'already-processed' as const;
+
+      const delegate = getEntityDelegate(tx, operation.store);
+      if (operation.kind === 'create') {
+        await delegate.create({ data: operation.payload });
+      } else if (operation.kind === 'update') {
+        // clubId in der where-Klausel: siehe update() oben (Sicherheitsreview,
+        // Punkt 1) — dieselbe Begründung gilt hier unverändert.
+        await delegate.update({ where: { id: operation.id, clubId: operation.clubId }, data: operation.payload });
+      } else {
+        await delegate.update({ where: { id: operation.id, clubId: operation.clubId }, data: { deletedAt: new Date() } });
+      }
+      return 'applied' as const;
+    });
   }
 
   async findClubIdForUser(userId: string): Promise<string | null> {

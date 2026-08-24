@@ -246,6 +246,52 @@ describe('syncService.push — Konfliktlogik ("results": never-overwrite)', () =
   });
 });
 
+// Code-Review, Befund C3: create()/update()/softDelete() und
+// markEventProcessed() liefen bislang als zwei getrennte Aufrufe statt
+// atomar in einer Transaktion — siehe applyAndMarkProcessed() in
+// sync.gateway.ts für die eigentliche Korrektur sowie
+// test-integration/syncGateway.integration.test.ts für den daraus
+// resultierenden Race-Condition-Schutz gegen ECHTES Postgres (ein
+// In-Memory-Double kann das mangels echter Nebenläufigkeit nicht
+// abbilden). Dieser Block prüft ausschließlich, dass sync.service.ts den
+// 'already-processed'-Ausgang von applyAndMarkProcessed() korrekt in eine
+// Antwort ohne Phantom-serverVersion übersetzt.
+describe('syncService.push — Umgang mit einem gleichzeitig gewonnenen Ledger-Eintrag (Code-Review, Befund C3)', () => {
+  it('insert-as-new: meldet "applied" OHNE serverVersion, wenn applyAndMarkProcessed() "already-processed" liefert', async () => {
+    // Erzwingt genau den Ausgang, den ein ECHTER gleichzeitiger Versuch
+    // liefern würde (siehe Integrationstest oben) — InMemorySyncGateway
+    // selbst kann diese Nebenläufigkeit nicht herstellen (Node ist
+    // single-threaded), daher hier direkt überschrieben, um ausschließlich
+    // sync.service.ts' EIGENE Behandlung dieses Ausgangs zu prüfen.
+    class ForcedAlreadyProcessedGateway extends InMemorySyncGateway {
+      async applyAndMarkProcessed(): Promise<'applied' | 'already-processed'> {
+        return 'already-processed';
+      }
+    }
+    const gateway = new ForcedAlreadyProcessedGateway();
+    const service = createSyncService({ gateway });
+
+    const athlete = makeAthletePayload();
+    gateway.seed('athletes', { ...athlete, birthdate: new Date(athlete.birthdate), joinDate: new Date(athlete.joinDate), updatedAt: new Date(athlete.updatedAt), createdAt: new Date(athlete.createdAt), deletedAt: null });
+    const serverResult = makeResultPayload({ time: 60.1, updatedAt: '2026-06-10T00:00:00.000Z' });
+    gateway.seed('results', { ...serverResult, updatedAt: new Date(serverResult.updatedAt), deletedAt: null });
+
+    const staleClientResult = makeResultPayload({ time: 61.5, updatedAt: '2026-06-01T00:00:00.000Z' });
+    const results = await service.push(
+      [{ id: 'evt-race', store: 'results', entityId: staleClientResult.id, action: 'update', payload: staleClientResult, clientUpdatedAt: staleClientResult.updatedAt }],
+      asTrainer(CLUB_A),
+    );
+
+    // Weiterhin "applied" (aus Client-Sicht ist das Event längst
+    // angewendet — nur eben von der anderen, gewinnenden Anfrage) — aber
+    // OHNE serverVersion: die von DIESEM Aufruf lokal erzeugte newId
+    // wurde nie tatsächlich geschrieben, sie in serverVersion zu melden
+    // wäre eine Phantom-id.
+    expect(results[0]!.status).toBe('applied');
+    expect(results[0]!.serverVersion).toBeUndefined();
+  });
+});
+
 describe('syncService.push — Validierung', () => {
   it('lehnt ein Event mit ungültigem Payload ab (entspricht nicht dem Schema für den Store)', async () => {
     const { service } = makeService();

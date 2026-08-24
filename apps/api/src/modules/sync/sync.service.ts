@@ -419,13 +419,25 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
           continue;
         }
 
-        // Idempotenz: bereits verarbeitete Events werden als "applied"
-        // gemeldet (nicht als Fehler), damit ein Client, der wegen eines
-        // Verbindungsabbruchs dieselbe Antwort nicht sah, beim erneuten
-        // Senden ein konsistentes Ergebnis bekommt. clubId-gescoped (siehe
-        // SyncGateway.isEventProcessed()-Kommentar) — ein fremdes,
+        // Idempotenz-FAST-PATH: bereits verarbeitete Events werden als
+        // "applied" gemeldet (nicht als Fehler), damit ein Client, der
+        // wegen eines Verbindungsabbruchs dieselbe Antwort nicht sah, beim
+        // erneuten Senden ein konsistentes Ergebnis bekommt. clubId-gescoped
+        // (siehe SyncGateway.isEventProcessed()-Kommentar) — ein fremdes,
         // erratenes Event-ID bekommt dadurch die korrekte, ungescopte
         // Antwort statt eines wirkungslosen "applied".
+        //
+        // Bewusst nur ein FAST-PATH, keine alleinige Korrektheitsgarantie
+        // mehr (Code-Review, Befund C3): dieser Check ist ein reines
+        // Check-then-Act ohne Sperre — zwei praktisch gleichzeitige Pushes
+        // desselben Events könnten diese Prüfung beide passieren, bevor
+        // eine von beiden den Ledger-Eintrag geschrieben hat. Er spart in
+        // diesem (Normal-)Fall lediglich die nachfolgende Schema-/
+        // Fremdschlüssel-Prüfung sowie den Transaktionsversuch für ein
+        // Event, dessen Ergebnis ohnehin feststeht. Die tatsächliche,
+        // nebenläufigkeitssichere Garantie liefert erst
+        // applyAndMarkProcessed() weiter unten, das die Datenänderung UND
+        // den Ledger-Eintrag atomar in einer Transaktion zusammenfasst.
         if (await deps.gateway.isEventProcessed(event.id, requester.clubId)) {
           results.push({ eventId: event.id, status: 'applied' });
           continue;
@@ -520,9 +532,25 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
           continue;
         }
 
+        // Ledger-Eintrag für applyAndMarkProcessed() unten — identisch für
+        // alle vier Zweige, daher hier einmal statt viermal aufgebaut.
+        const ledgerEvent = { id: event.id, clubId: requester.clubId, store, action: event.action };
+
         try {
           if (event.action === 'delete') {
-            await deps.gateway.softDelete(store, event.entityId, requester.clubId);
+            // Sicherheitskorrektur (Code-Review, Befund C3): Datenänderung
+            // UND Ledger-Eintrag werden jetzt ATOMAR in einer Transaktion
+            // geschrieben (siehe applyAndMarkProcessed()) statt in zwei
+            // getrennten Schritten — brach der Prozess vormals zwischen
+            // beiden ab (Deploy, OOM, DB-Verbindungsabbruch), wurde ein
+            // erneut gesendetes Event beim Retry ein zweites Mal
+            // angewendet. Der Rückgabewert ('applied' vs.
+            // 'already-processed') ändert die Antwort für delete/update/
+            // reguläres create NICHT (siehe unten) — nur der
+            // insert-as-new-Zweig braucht ihn, um zu wissen, ob die HIER
+            // erzeugte serverVersion.id tatsächlich geschrieben wurde.
+            await deps.gateway.applyAndMarkProcessed({ kind: 'softDelete', store, id: event.entityId, clubId: requester.clubId }, ledgerEvent);
+            results.push({ eventId: event.id, status: 'applied' });
           } else if (decision.outcome === 'insert-as-new') {
             // "results": nie überschreiben. Die eingehende Payload trägt
             // dieselbe (client-generierte) id wie der bereits bestehende,
@@ -533,17 +561,35 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
             // serverVersion und muss seinen lokalen Datensatz entsprechend
             // nachziehen (z. B. die alte id durch die neue ersetzen).
             const newId = randomUUID();
-            await deps.gateway.create(store, { ...(validatedPayload as Record<string, unknown>), id: newId });
-            await deps.gateway.markEventProcessed(event.id, requester.clubId, store, event.action);
-            results.push({ eventId: event.id, status: 'applied', serverVersion: { id: newId } });
+            const outcome = await deps.gateway.applyAndMarkProcessed(
+              { kind: 'create', store, payload: { ...(validatedPayload as Record<string, unknown>), id: newId } },
+              ledgerEvent,
+            );
+            // 'already-processed': ein GLEICHZEITIGER Versuch hat den
+            // Ledger-Eintrag zuerst geschrieben — DIESER Aufruf hat seine
+            // eigene, hier lokal erzeugte newId dadurch NIE tatsächlich
+            // gespeichert. Sie in serverVersion zu melden wäre eine
+            // Phantom-id, die es in der Datenbank nicht gibt. serverVersion
+            // bleibt in diesem Fall daher bewusst weg — identisch zum
+            // Verhalten des isEventProcessed()-Fast-Pfads oben, der für
+            // exakt denselben "das ist längst passiert"-Fall ebenfalls
+            // ohne serverVersion antwortet.
+            results.push(
+              outcome === 'applied'
+                ? { eventId: event.id, status: 'applied', serverVersion: { id: newId } }
+                : { eventId: event.id, status: 'applied' },
+            );
             continue;
           } else if (existing) {
-            await deps.gateway.update(store, event.entityId, requester.clubId, validatedPayload as Record<string, unknown>);
+            await deps.gateway.applyAndMarkProcessed(
+              { kind: 'update', store, id: event.entityId, clubId: requester.clubId, payload: validatedPayload as Record<string, unknown> },
+              ledgerEvent,
+            );
+            results.push({ eventId: event.id, status: 'applied' });
           } else {
-            await deps.gateway.create(store, validatedPayload as Record<string, unknown>);
+            await deps.gateway.applyAndMarkProcessed({ kind: 'create', store, payload: validatedPayload as Record<string, unknown> }, ledgerEvent);
+            results.push({ eventId: event.id, status: 'applied' });
           }
-          await deps.gateway.markEventProcessed(event.id, requester.clubId, store, event.action);
-          results.push({ eventId: event.id, status: 'applied' });
         } catch (err) {
           results.push({ eventId: event.id, status: 'error', message: describeSyncError(err) });
         }

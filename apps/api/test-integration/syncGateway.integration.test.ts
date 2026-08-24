@@ -196,3 +196,95 @@ describe('PrismaSyncGateway.isEventProcessed()/markEventProcessed()', () => {
     expect(await gateway.isEventProcessed(eventId, clubB.id)).toBe(false);
   });
 });
+
+// Code-Review, Befund C3: create()/update()/softDelete() und
+// markEventProcessed() waren bislang ZWEI getrennte Schreibvorgänge ohne
+// gemeinsame Transaktion — dieser Block prüft applyAndMarkProcessed()
+// gegen ECHTES Postgres, insbesondere die beiden Eigenschaften, die kein
+// In-Memory-Double verlässlich abbilden kann (Node ist single-threaded,
+// ein In-Memory-Double kennt keine echte Nebenläufigkeit/kein echtes
+// Transaktions-Rollback): (1) zwei WIRKLICH gleichzeitige Versuche
+// desselben Events wenden es trotzdem nur einmal an, (2) ein
+// fehlschlagender Schreibversuch hinterlässt keinen Ledger-Eintrag.
+describe('PrismaSyncGateway.applyAndMarkProcessed() (Code-Review, Befund C3)', () => {
+  it('schreibt Datenänderung und Ledger-Eintrag gemeinsam bei erfolgreicher Anwendung', async () => {
+    const club = await createTestClub();
+    const payload = groupPayload(club.id);
+    const eventId = randomUUID();
+
+    const outcome = await gateway.applyAndMarkProcessed(
+      { kind: 'create', store: 'groups', payload },
+      { id: eventId, clubId: club.id, store: 'groups', action: 'create' },
+    );
+
+    expect(outcome).toBe('applied');
+    expect(await gateway.findById('groups', payload.id, club.id)).not.toBeNull();
+    expect(await gateway.isEventProcessed(eventId, club.id)).toBe(true);
+  });
+
+  // Der eigentliche Regressionstest: zwei ECHT GLEICHZEITIGE Versuche mit
+  // demselben Event-Id — genau der Fall, den weder ein In-Memory-Double
+  // noch ein rein sequenzieller Test abbilden kann, der aber vor dieser
+  // Korrektur zu einem doppelt angewendeten Event führen konnte (der
+  // frühere Ablauf: isEventProcessed()-Prüfung, DANN — getrennt — die
+  // eigentliche Schreibaktion plus markEventProcessed(); zwei Anfragen
+  // konnten die Prüfung beide passieren, bevor eine von beiden geschrieben
+  // hatte).
+  it('wendet ein Event bei zwei ECHT gleichzeitigen Versuchen nur EINMAL an (Race-Condition-Schutz)', async () => {
+    const club = await createTestClub();
+    const eventId = randomUUID();
+    const idA = randomUUID();
+    const idB = randomUUID();
+
+    const [outcomeA, outcomeB] = await Promise.all([
+      gateway.applyAndMarkProcessed(
+        { kind: 'create', store: 'groups', payload: groupPayload(club.id, { id: idA, name: 'Von Versuch A' }) },
+        { id: eventId, clubId: club.id, store: 'groups', action: 'create' },
+      ),
+      gateway.applyAndMarkProcessed(
+        { kind: 'create', store: 'groups', payload: groupPayload(club.id, { id: idB, name: 'Von Versuch B' }) },
+        { id: eventId, clubId: club.id, store: 'groups', action: 'create' },
+      ),
+    ]);
+
+    expect([outcomeA, outcomeB].sort()).toEqual(['already-processed', 'applied']);
+
+    // Nur EINER der beiden Datensätze wurde tatsächlich angelegt — nicht
+    // etwa beide (was bei einem ungeschützten Check-then-Act passieren
+    // könnte).
+    const created = (await Promise.all([
+      gateway.findById('groups', idA, club.id),
+      gateway.findById('groups', idB, club.id),
+    ])).filter((r) => r !== null);
+    expect(created).toHaveLength(1);
+  });
+
+  // Atomizität in die andere Richtung: schlägt die eigentliche
+  // Datenänderung fehl, darf KEIN Ledger-Eintrag zurückbleiben — sonst
+  // würde ein späterer, korrigierter Retry desselben Events fälschlich
+  // als "bereits verarbeitet" abgewiesen, obwohl nie etwas geschrieben
+  // wurde.
+  it('hinterlässt KEINEN Ledger-Eintrag, wenn die Datenänderung selbst fehlschlägt', async () => {
+    const club = await createTestClub();
+    const eventId = randomUUID();
+
+    // update() auf eine nicht existierende id -> Prismas "P2025".
+    await expect(
+      gateway.applyAndMarkProcessed(
+        { kind: 'update', store: 'groups', id: randomUUID(), clubId: club.id, payload: { name: 'X' } },
+        { id: eventId, clubId: club.id, store: 'groups', action: 'update' },
+      ),
+    ).rejects.toMatchObject({ code: 'P2025' });
+
+    expect(await gateway.isEventProcessed(eventId, club.id)).toBe(false);
+
+    // Ein späterer, korrigierter Versuch DESSELBEN Events funktioniert
+    // danach normal — kein hängengebliebener Ledger-Eintrag blockiert ihn.
+    const payload = groupPayload(club.id);
+    const outcome = await gateway.applyAndMarkProcessed(
+      { kind: 'create', store: 'groups', payload },
+      { id: eventId, clubId: club.id, store: 'groups', action: 'create' },
+    );
+    expect(outcome).toBe('applied');
+  });
+});
