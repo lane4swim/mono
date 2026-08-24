@@ -87,6 +87,29 @@ describe('push()', () => {
     expect(thirdQueue.find((e) => e.id === event.id).attempts).toBe(2);
   });
 
+  // Regressionstest für Befund C2 (Code-Review): ein dauerhaft
+  // scheiterndes Event wurde zuvor unbegrenzt oft erneut gesendet, weil
+  // "attempts" gezählt, aber nie ausgewertet wurde. Nach MAX_SYNC_ATTEMPTS
+  // (5) Fehlversuchen muss push() das Event auf 'failed' setzen — ein
+  // Status, der aus dem eigenen toSend-Filter herausfällt, also von einem
+  // weiteren push()-Aufruf nicht mehr automatisch erneut gesendet wird.
+  it('setzt ein dauerhaft scheiterndes Event nach 5 Fehlversuchen auf "failed" und sendet es danach nicht mehr automatisch', async () => {
+    await db.put('groups', { name: 'X' });
+    const [event] = await db.getSyncQueue();
+    api.syncPush.mockResolvedValue({ results: [{ eventId: event.id, status: 'error', message: 'Store unbekannt.' }] });
+
+    for (let i = 0; i < 5; i++) await push();
+
+    const afterFive = (await db.getSyncQueue()).find((e) => e.id === event.id);
+    expect(afterFive.status).toBe('failed');
+    expect(afterFive.attempts).toBe(5);
+
+    api.syncPush.mockClear();
+    const result = await push();
+    expect(result).toEqual({ sent: 0, applied: 0, conflicts: 0, errors: 0 });
+    expect(api.syncPush).not.toHaveBeenCalled();
+  });
+
   // Regressionstest für Befund 12: "results" ist der einzige Store mit der
   // Konfliktstrategie "never-overwrite" (siehe packages/sync-protocol) —
   // der Server vergibt bei einem Konflikt eine NEUE id (serverVersion.id)
@@ -130,6 +153,32 @@ describe('push()', () => {
       await push();
       expect(await db.get('groups', saved.id)).not.toBeNull();
     });
+  });
+});
+
+// Regressionstest für Befund C1 (Code-Review): die Warteschlange wurde
+// zuvor als EIN Request gesendet — eine Offline-Phase mit mehr als 500
+// Events (server-seitiges Limit, siehe
+// packages/shared-types/src/syncEvent.ts: SyncPushRequestSchema) ließ
+// push() dadurch dauerhaft mit einer 400 scheitern, ohne sich je
+// abzubauen. push() muss die Warteschlange stattdessen in Blöcken senden.
+describe('push() — Chunking bei großen Warteschlangen', () => {
+  it('sendet mehr als PUSH_BATCH_SIZE (200) ausstehende Events in mehreren api.syncPush()-Aufrufen', async () => {
+    const EVENT_COUNT = 210;
+    for (let i = 0; i < EVENT_COUNT; i++) await db.put('groups', { name: `Gruppe ${i}` });
+
+    api.syncPush.mockImplementation(async (events) => ({
+      results: events.map((e) => ({ eventId: e.id, status: 'applied' })),
+    }));
+
+    const result = await push();
+    expect(result).toEqual({ sent: EVENT_COUNT, applied: EVENT_COUNT, conflicts: 0, errors: 0 });
+    expect(api.syncPush).toHaveBeenCalledTimes(2);
+    expect(api.syncPush.mock.calls[0][0]).toHaveLength(200);
+    expect(api.syncPush.mock.calls[1][0]).toHaveLength(10);
+
+    const queue = await db.getSyncQueue();
+    expect(queue.every((e) => e.status === 'synced')).toBe(true);
   });
 });
 

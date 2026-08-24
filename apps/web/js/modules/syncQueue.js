@@ -41,7 +41,12 @@ export const syncQueueModule = {
 function renderView(container, queue) {
   const wrap = el('div');
   const pending = queue.filter(e => e.status === 'pending').length;
-  const errored = queue.filter(e => e.status === 'error').length;
+  // 'failed' (siehe syncClient.js: push() — nach MAX_SYNC_ATTEMPTS
+  // Fehlschlägen) zählt hier mit zu "Fehlerhaft": beide brauchen
+  // Aufmerksamkeit, unterscheiden sich nur darin, ob der nächste
+  // automatische Sync-Zyklus es erneut versucht ('error') oder nicht
+  // mehr ('failed', siehe statusBadge unten für die Row-Unterscheidung).
+  const errored = queue.filter(e => e.status === 'error' || e.status === 'failed').length;
   const synced = queue.filter(e => e.status === 'synced').length;
 
   wrap.appendChild(el('div', { class: 'page-head' }, [
@@ -85,6 +90,7 @@ function renderView(container, queue) {
     queue.slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt)).forEach(evt => {
       const label = t(`syncqueue.${ENTITY_KEYS[evt.store] || ''}`) !== `syncqueue.${ENTITY_KEYS[evt.store] || ''}` ? t(`syncqueue.${ENTITY_KEYS[evt.store]}`) : evt.store;
       const statusEl = evt.status === 'synced' ? badge(t('syncqueue.statusSynced'), 'done')
+        : evt.status === 'failed' ? badge(t('syncqueue.statusFailed'), 'open')
         : evt.status === 'error' ? badge(t('syncqueue.statusError'), 'open')
         : badge(t('syncqueue.statusPending'), 'progress');
       const dt = new Date(evt.createdAt);
@@ -93,7 +99,7 @@ function renderView(container, queue) {
         el('td', { class: 'data text-sm' }, timeLabel),
         el('td', {}, label),
         el('td', {}, t(`syncqueue.${ACTION_KEYS[evt.action] || ''}`) !== `syncqueue.${ACTION_KEYS[evt.action] || ''}` ? t(`syncqueue.${ACTION_KEYS[evt.action]}`) : evt.action),
-        el('td', {}, [statusEl, evt.status === 'error' && evt.lastError ? el('div', { class: 'hint', style: 'margin-top:3px' }, evt.lastError) : null]),
+        el('td', {}, [statusEl, (evt.status === 'error' || evt.status === 'failed') && evt.lastError ? el('div', { class: 'hint', style: 'margin-top:3px' }, evt.lastError) : null]),
         el('td', {}, String(evt.attempts || 0)),
         el('td', {}, evt.status !== 'synced' ? el('button', { class: 'btn btn-ghost btn-sm', onclick: async () => { await updateSyncEvent(evt.id, { status: 'pending', lastError: null }); toast(t('syncqueue.retryQueued')); refresh(); } }, t('common.retry')) : el('button', { class: 'btn btn-danger btn-sm', onclick: async () => { await remove('syncQueue', evt.id); toast(t('syncqueue.entryRemoved')); refresh(); } }, t('common.remove'))),
       ]);

@@ -80,5 +80,20 @@ export async function registerSecurityPlugins(app: FastifyInstance, env: Env) {
   await app.register(rateLimit, {
     max: 100,
     timeWindow: '1 minute',
+    // Bewusst 'preHandler' statt des Standards 'onRequest' (Code-Review):
+    // @fastify/rate-limit hängt seinen Zähl-Hook an die HIER angegebene
+    // Lifecycle-Stufe — global für alle Routen, pro Route nicht
+    // überschreibbar (siehe @fastify/rate-limit-Doku, Abschnitt "hook").
+    // Zum Zeitpunkt von 'onRequest' ist der Request-Body noch nicht
+    // geparst; auth.route.ts' Login-`keyGenerator` (IP + E-Mail) las dort
+    // also IMMER `request.body === undefined` und limitierte de facto nur
+    // nach IP — ein Verein hinter NAT (Vereinsheim-WLAN o. Ä.) hätte sich
+    // dadurch nach 5 Anmeldungen/Minute selbst ausgesperrt, unabhängig
+    // davon, wie viele unterschiedliche Konten dahinter stehen. 'preHandler'
+    // läuft nach der Body-Parsing-Stufe, aber weiterhin VOR jedem
+    // route-eigenen preHandler (z. B. app.authenticate) — der Body steht
+    // dem keyGenerator damit zur Verfügung, ohne dass Rate-Limiting später
+    // greift als bisher.
+    hook: 'preHandler',
   });
 }

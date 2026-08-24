@@ -370,7 +370,7 @@ export default {
     statSynced: 'Synchronisiert', statSyncedSub: 'erfolgreich übertragen',
     emptyTitle: 'Warteschlange leer', emptyMsg: 'Sobald Daten angelegt, bearbeitet oder gelöscht werden, erscheinen hier die entsprechenden Sync-Events.',
     colTime: 'Zeitpunkt', colEntity: 'Bereich', colAction: 'Vorgang', colStatus: 'Status', colAttempts: 'Versuche',
-    statusSynced: 'Synchronisiert', statusError: 'Fehler', statusPending: 'Ausstehend',
+    statusSynced: 'Synchronisiert', statusError: 'Fehler', statusPending: 'Ausstehend', statusFailed: 'Dauerhaft fehlgeschlagen',
     entityUsers: 'Nutzer:in', entityAthletes: 'Athlet:in', entityGroups: 'Gruppe', entityCompetitions: 'Wettkampf',
     entityEntries: 'Meldung', entityResults: 'Zeit/Ergebnis', entityExercises: 'Übung', entityTemplates: 'Vorlage',
     entityPlans: 'Trainingsplan', entitySessions: 'Einheit', entityActionItems: 'Handlungsfeld',
