@@ -270,6 +270,32 @@ describe('authService.refresh', () => {
     const { service } = makeService();
     await expect(service.refresh('kein-echtes-token')).rejects.toThrow(InvalidRefreshTokenError);
   });
+
+  // Regressionstest für Befund S2 (Code-Review): die Wiederverwendung
+  // eines bereits ROTIERTEN Refresh Tokens ist das einzige verlässliche
+  // Signal für einen Token-Diebstahl (siehe Kommentar in auth.service.ts:
+  // refresh()). Ein solcher Versuch muss daher ALLE Sitzungen des Kontos
+  // widerrufen — nicht nur den einen Wiederverwendungsversuch ablehnen —,
+  // sonst behielte ein Angreifer, der ein gestohlenes Token zuerst einlöst,
+  // über die Rotationskette dauerhaften Zugriff, während das rechtmäßige
+  // Gerät irgendwann scheinbar grundlos ausgeloggt wird.
+  it('widerruft bei Wiederverwendung eines bereits rotierten Refresh Tokens ALLE Sitzungen des Kontos (Reuse-Detection)', async () => {
+    const { service, invitations } = makeService();
+    const first = await registerViaInvitation(service, invitations);
+    // Legitime Rotation: das neue Token (second.refreshToken) ist an
+    // dieser Stelle gültig und noch nicht benutzt.
+    const second = await service.refresh(first.refreshToken);
+
+    // Ein Angreifer (oder ein Client-Bug ohne Single-Flight-Bündelung,
+    // siehe apiClient.js: Befund S4) verwendet das bereits rotierte,
+    // ALTE Token erneut.
+    await expect(service.refresh(first.refreshToken)).rejects.toThrow(InvalidRefreshTokenError);
+
+    // Das eigentlich noch gültige, NEUE Token muss durch die
+    // Reuse-Detection ebenfalls widerrufen worden sein — nicht nur der
+    // Wiederverwendungsversuch selbst wurde abgelehnt.
+    await expect(service.refresh(second.refreshToken)).rejects.toThrow(InvalidRefreshTokenError);
+  });
 });
 
 describe('authService.logout', () => {
