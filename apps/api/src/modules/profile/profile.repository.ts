@@ -71,7 +71,16 @@ export class PrismaProfileDataGateway implements ProfileDataGateway {
         this.prisma.result.findMany({ where: { athleteId: user.athleteId } }),
         this.prisma.startlistEntry.findMany({ where: { athleteId: user.athleteId } }),
         this.prisma.actionItem.findMany({ where: { athleteId: user.athleteId } }),
-        this.prisma.trainingSession.findMany({ where: { clubId: user.clubId ?? undefined } }),
+        // Sicherheitskorrektur (Code-Review): `clubId ?? undefined` bedeutet
+        // in Prisma "kein Filter", NICHT "clubId ist null" — fehlte
+        // user.clubId hier einmal (Verletzung der Invariante "athleteId
+        // gesetzt -> clubId gesetzt", gilt für jede Rolle außer superadmin,
+        // die aber nie eine athleteId hat), wären die Trainingseinheiten
+        // ALLER Vereine geladen worden statt nur des eigenen. Statt dem
+        // stillschweigend zu vertrauen: ohne clubId werden explizit KEINE
+        // Anwesenheitsdaten geladen, statt eine ungescoped Abfrage
+        // auszuführen.
+        user.clubId ? this.prisma.trainingSession.findMany({ where: { clubId: user.clubId } }) : Promise.resolve([]),
       ]);
       athlete = athleteRow;
       results = resultRows;

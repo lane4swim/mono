@@ -158,7 +158,17 @@ model Group {
   plans    Plan[]
   sessions TrainingSession[]
 
-  @@index([clubId])
+  // [clubId, updatedAt] statt nur [clubId]: bedient GENAU das Zugriffsmuster
+  // von sync.gateway.ts: listChangedSince() — `WHERE clubId = ? [AND
+  // updatedAt > ?] ORDER BY updatedAt` über jeden der zehn fachlichen
+  // Stores, bei jedem Sync-Pull. Ein reiner [clubId]-Index deckt zwar die
+  // Filterung ab, erzwingt für die Sortierung aber einen zusätzlichen
+  // Sortierschritt; der zusammengesetzte Index bedient beides direkt und
+  // macht den bisherigen [clubId]-Index überflüssig (ein Präfix-Scan auf
+  // seiner ersten Spalte bedient auch reine "WHERE clubId = ?"-Abfragen
+  // ohne updatedAt-Bedingung genauso gut, siehe Postgres-Doku zu
+  // Mehrspalten-Indizes).
+  @@index([clubId, updatedAt])
   @@map("groups")
 }
 
@@ -183,7 +193,9 @@ model Athlete {
   results     Result[]
   actionItems ActionItem[]
 
-  @@index([clubId])
+  // [clubId, updatedAt] statt [clubId] — siehe Begründung bei Group oben
+  // (Sync-Pull-Zugriffsmuster).
+  @@index([clubId, updatedAt])
   @@index([groupId])
   @@map("athletes")
 }
@@ -204,7 +216,9 @@ model Competition {
   entries StartlistEntry[]
   results Result[]
 
-  @@index([clubId])
+  // [clubId, updatedAt] statt [clubId] — siehe Begründung bei Group oben
+  // (Sync-Pull-Zugriffsmuster).
+  @@index([clubId, updatedAt])
   @@map("competitions")
 }
 
@@ -227,7 +241,9 @@ model StartlistEntry {
   updatedAt     DateTime     @updatedAt
   deletedAt     DateTime?
 
-  @@index([clubId])
+  // [clubId, updatedAt] statt [clubId] — siehe Begründung bei Group oben
+  // (Sync-Pull-Zugriffsmuster).
+  @@index([clubId, updatedAt])
   @@index([competitionId])
   @@index([athleteId])
   @@map("startlist_entries")
@@ -254,7 +270,9 @@ model Result {
   updatedAt     DateTime     @updatedAt
   deletedAt     DateTime?
 
-  @@index([clubId])
+  // [clubId, updatedAt] statt [clubId] — siehe Begründung bei Group oben
+  // (Sync-Pull-Zugriffsmuster).
+  @@index([clubId, updatedAt])
   @@index([athleteId])
   @@index([competitionId])
   @@map("results")
@@ -280,7 +298,9 @@ model Exercise {
   updatedAt       DateTime  @updatedAt
   deletedAt       DateTime?
 
-  @@index([clubId])
+  // [clubId, updatedAt] statt [clubId] — siehe Begründung bei Group oben
+  // (Sync-Pull-Zugriffsmuster).
+  @@index([clubId, updatedAt])
   @@map("exercises")
 }
 
@@ -300,7 +320,9 @@ model Template {
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
 
-  @@index([clubId])
+  // [clubId, updatedAt] statt [clubId] — siehe Begründung bei Group oben
+  // (Sync-Pull-Zugriffsmuster).
+  @@index([clubId, updatedAt])
   @@map("templates")
 }
 
@@ -326,7 +348,9 @@ model Plan {
 
   sessions TrainingSession[]
 
-  @@index([clubId])
+  // [clubId, updatedAt] statt [clubId] — siehe Begründung bei Group oben
+  // (Sync-Pull-Zugriffsmuster).
+  @@index([clubId, updatedAt])
   @@index([groupId])
   @@map("plans")
 }
@@ -349,7 +373,9 @@ model TrainingSession {
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
 
-  @@index([clubId])
+  // [clubId, updatedAt] statt [clubId] — siehe Begründung bei Group oben
+  // (Sync-Pull-Zugriffsmuster).
+  @@index([clubId, updatedAt])
   @@index([groupId])
   @@index([planId])
   @@map("sessions")
@@ -380,7 +406,9 @@ model ActionItem {
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
 
-  @@index([clubId])
+  // [clubId, updatedAt] statt [clubId] — siehe Begründung bei Group oben
+  // (Sync-Pull-Zugriffsmuster).
+  @@index([clubId, updatedAt])
   @@index([athleteId])
   @@index([assignedTrainerId])
   @@map("action_items")

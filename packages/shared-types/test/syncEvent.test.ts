@@ -1,6 +1,6 @@
 // packages/shared-types/test/syncEvent.test.ts
 import { describe, it, expect } from 'vitest';
-import { SyncEventSchema, SyncPushRequestSchema, SyncPullResponseSchema } from '../src/syncEvent.js';
+import { SyncEventSchema, SyncPushRequestSchema, SyncPullQuerySchema, SyncPullResponseSchema } from '../src/syncEvent.js';
 
 describe('SyncEventSchema', () => {
   it('akzeptiert ein gültiges create-Event', () => {
@@ -90,6 +90,30 @@ describe('SyncPushRequestSchema', () => {
       clientUpdatedAt: new Date().toISOString(),
     }));
     expect(SyncPushRequestSchema.safeParse({ events }).success).toBe(false);
+  });
+});
+
+describe('SyncPullQuerySchema', () => {
+  it('akzeptiert eine leere Anfrage (weder "since" noch "cursor")', () => {
+    expect(SyncPullQuerySchema.safeParse({}).success).toBe(true);
+  });
+
+  it('akzeptiert gültige ISO-Zeitstempel für "since" und "cursor"', () => {
+    const now = new Date().toISOString();
+    expect(SyncPullQuerySchema.safeParse({ since: now }).success).toBe(true);
+    expect(SyncPullQuerySchema.safeParse({ cursor: now }).success).toBe(true);
+  });
+
+  // Sicherheitskorrektur (Code-Review, Befund 9): "cursor" wurde vormals als
+  // beliebiger String akzeptiert — ein Wert wie "abc" erzeugte im Sync-
+  // Service ein `Invalid Date`, das erst dort (mit einem ungefangenen
+  // Fehler statt einer regulären 400-Antwort) auffiel.
+  it('lehnt einen nicht-datumsförmigen "cursor"-Wert ab', () => {
+    expect(SyncPullQuerySchema.safeParse({ cursor: 'abc' }).success).toBe(false);
+  });
+
+  it('lehnt einen nicht-datumsförmigen "since"-Wert ab', () => {
+    expect(SyncPullQuerySchema.safeParse({ since: 'abc' }).success).toBe(false);
   });
 });
 

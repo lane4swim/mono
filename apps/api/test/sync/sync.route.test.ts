@@ -182,6 +182,34 @@ describe('GET /api/sync/pull', () => {
     await app.close();
   });
 
+  // Sicherheitskorrektur (Code-Review, Befund 9): vormals die einzige Route
+  // ohne Eingabevalidierung — ein ungültiger "cursor"-Wert erzeugte in
+  // syncService.pull() ein `Invalid Date`, das die anschließende
+  // Datenbankabfrage mit einem ungefangenen Fehler (500) statt einer
+  // regulären 400-Antwort quittierte.
+  it('liefert 400 bei einem ungültigen "cursor"-Query-Parameter statt eines ungefangenen Fehlers', async () => {
+    const { app, keyPair } = await buildTestApp();
+    const token = await tokenFor(keyPair, 'trainer', CLUB_ID);
+    const response = await app.inject({
+      method: 'GET', url: '/api/sync/pull?cursor=abc',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error).toBe('validation_failed');
+    await app.close();
+  });
+
+  it('liefert 400 bei einem ungültigen "since"-Query-Parameter statt eines ungefangenen Fehlers', async () => {
+    const { app, keyPair } = await buildTestApp();
+    const token = await tokenFor(keyPair, 'trainer', CLUB_ID);
+    const response = await app.inject({
+      method: 'GET', url: '/api/sync/pull?since=nicht-datumsförmig',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(response.statusCode).toBe(400);
+    await app.close();
+  });
+
   it('athlete-Rolle sieht per Pull nur eigene "actionItems" (Rollen-Scopierung, Patch #6, End-to-End über HTTP)', async () => {
     const { app, keyPair, gateway } = await buildTestApp();
     const athleteId = '55555555-5555-5555-5555-555555555555';
