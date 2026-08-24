@@ -85,16 +85,22 @@ jobs:
         # diese Fehlerklasse ("No workspaces found").
         run: cd apps/api && npm run prisma:generate
 
-      - name: Prisma-Schema in die Test-Datenbank pushen
+      - name: Prisma-Migrationen in die Test-Datenbank anwenden
         # Der oben gestartete Postgres-Service-Container ist leer — ohne
         # diesen Schritt existieren die Anwendungstabellen dort nicht.
-        # `db push` statt `migrate deploy` aus demselben Grund wie im
-        # Produktions-Deployment (siehe docs/deployment.md, Abschnitt 7.3):
-        # es gibt (noch) keine committete Migrationshistorie im Repository.
-        # Nötig für die Prisma-Integrationstests unten (Code-Review,
-        # Befund 14) — der Service-Container lief zuvor bereits mit, wurde
-        # aber nie tatsächlich mit dem Anwendungsschema befüllt.
-        run: cd apps/api && npx prisma db push --skip-generate
+        # `migrate deploy` statt `db push` (Code-Review, Befund W5): wendet
+        # exakt die committeten, reviewbaren Migrationsdateien aus
+        # prisma/migrations/ an (dieselben, die auch das Produktions-
+        # Deployment ausführt, siehe docs/deployment.md, Abschnitt 7.3) —
+        # nicht-interaktiv, ohne Rückfrage bei potenziell datenverlierenden
+        # Änderungen, und schlägt bei einer von der Historie abweichenden
+        # schema.prisma fehl statt sie stillschweigend zu übernehmen. Damit
+        # prüft dieser CI-Lauf zugleich, dass die Migrationshistorie
+        # tatsächlich zum aktuellen Schema passt. Nötig für die Prisma-
+        # Integrationstests unten (Code-Review, Befund 14) — der Service-
+        # Container lief zuvor bereits mit, wurde aber nie tatsächlich mit
+        # dem Anwendungsschema befüllt.
+        run: cd apps/api && npx prisma migrate deploy
 
       - name: Typecheck apps/api (inkl. test/, test-integration/, scripts/, prisma/)
         # WICHTIG: "Build apps/api" (unten) prüft per tsconfig.json NUR

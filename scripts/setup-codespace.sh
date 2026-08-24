@@ -146,8 +146,10 @@ EOF
 fi
 
 # --- Schritt 7: Datenbank-Schema anlegen -------------------------------------
-log "Schritt 7: Datenbank-Schema anlegen (prisma db push)"
-(cd apps/api && npx prisma db push)
+# `migrate deploy` statt `db push` (Code-Review, Befund W5): wendet die
+# committete Migrationshistorie unter apps/api/prisma/migrations/ an.
+log "Schritt 7: Datenbank-Schema anlegen (prisma migrate deploy)"
+(cd apps/api && npx prisma migrate deploy)
 
 # --- Schritt 8: Backend bauen -------------------------------------------------
 log "Schritt 8: Backend bauen (inkl. packages/shared-types, packages/sync-protocol über prebuild-Skripte)"

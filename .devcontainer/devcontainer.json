@@ -13,7 +13,9 @@
 
   // Läuft NICHT während des Prebuilds, sondern bei jeder tatsächlichen
   // Codespace-Erstellung (danach steht die Postgres-Datenbank bereit).
-  "postCreateCommand": "cd apps/api && npm run prisma:generate && npx prisma db push --skip-generate && cd ../..",
+  // `migrate deploy` statt `db push` (Code-Review, Befund W5): wendet die
+  // committete Migrationshistorie unter apps/api/prisma/migrations/ an.
+  "postCreateCommand": "cd apps/api && npm run prisma:generate && npx prisma migrate deploy && cd ../..",
 
   "forwardPorts": [3000, 5173, 5432],
   "portsAttributes": {

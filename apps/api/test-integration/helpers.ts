@@ -3,7 +3,7 @@
 // Gemeinsame Hilfsfunktionen für die Prisma-Integrationstests (siehe
 // vitest.integration.config.ts für den Hintergrund). Diese Tests brauchen
 // eine echte, leere PostgreSQL-Datenbank mit bereits angewendetem Schema
-// (siehe README/CI: `prisma db push`).
+// (siehe README/CI: `prisma migrate deploy`).
 import { PrismaClient } from '@prisma/client';
 
 let prisma: PrismaClient | null = null;

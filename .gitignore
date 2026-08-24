@@ -4,4 +4,3 @@ coverage/
 .env
 *.log
 .DS_Store
-/apps/api/prisma/migrations/

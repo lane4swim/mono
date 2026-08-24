@@ -28,7 +28,7 @@ Am Ende dieser Anleitung ist unter `https://lane1.test` (rein lokal, nur auf dem
 | Domain/DNS | echte Domain, öffentlicher A-Record | **`lane1.test`** über einen lokalen `/etc/hosts`-Eintrag — keine echte Domain, kein DNS nötig |
 | HTTPS-Zertifikat | Let's Encrypt (öffentlich vertrauenswürdig) | **`mkcert`** (lokal vertrauenswürdig, gleicher Effekt — kein Browser-Warnhinweis) |
 | Firewall/Portfreigabe | `ufw` + Cloud-Firewall | **nicht nötig** — nichts wird nach außen exponiert |
-| Backend/Nginx/PostgreSQL/PM2 | — | **identisch**, inkl. aller in `deployment.md` bereits gefundenen Bugfixes (Nginx-`/api/`+`/auth/`-Weiterleitung, PostgreSQL-15-Schema-Rechte, `prisma db push`) |
+| Backend/Nginx/PostgreSQL/PM2 | — | **identisch**, inkl. aller in `deployment.md` bereits gefundenen Bugfixes (Nginx-`/api/`+`/auth/`-Weiterleitung, PostgreSQL-15-Schema-Rechte, `prisma migrate deploy`) |
 | Dienste starten/verwalten | `systemctl`/`sudo apt install` | `brew services` (nutzt intern `launchd`, das macOS-Gegenstück zu systemd) |
 
 ---
@@ -192,13 +192,13 @@ Das Passwort muss zum in Schritt 5 eingetragenen `DATABASE_URL` passen.
 Schema anlegen:
 ```bash
 cd apps/api
-npx prisma db push
+npx prisma migrate deploy
 cd ../..
 ```
-> **Warum `db push` statt `migrate deploy`?** Siehe ausführliche Begründung
-> in `deployment.md`, Abschnitt 7.3 — kurz: `apps/api/prisma/migrations/`
-> existiert im Repo (noch) nicht, `migrate deploy` hätte hier nichts
-> anzuwenden und die Datenbank bliebe leer, ohne dass ein Fehler auftritt.
+> Siehe `deployment.md`, Abschnitt 7.3 für die ausführliche Begründung
+> (`migrate deploy` statt `db push` — Code-Review, Befund W5): das Projekt
+> führt eine committete, reviewbare Migrationshistorie unter
+> `apps/api/prisma/migrations/`.
 
 ---
 
@@ -372,7 +372,7 @@ Für eine reine Testumgebung ist ein vollwertiges Backup-Konzept wie in `deploym
 mkdir -p ~/lane1-backups
 "$(brew --prefix postgresql@16)/bin/pg_dump" -h 127.0.0.1 -U lane1_app lane1 > ~/lane1-backups/lane1-$(date +%F).sql
 ```
-Wiederherstellen (z. B. nach einem `prisma db push`, das versehentlich Testdaten gelöscht hat):
+Wiederherstellen (z. B. nach einem `prisma migrate reset`, das versehentlich Testdaten gelöscht hat):
 ```bash
 "$(brew --prefix postgresql@16)/bin/psql" -h 127.0.0.1 -U lane1_app lane1 < ~/lane1-backups/lane1-2026-08-17.sql
 ```
@@ -390,7 +390,7 @@ Identisch zu `deployment.md`, Abschnitt 13:
 cd ~/lane1
 git pull
 npm install
-cd apps/api && npx prisma db push && cd ../..
+cd apps/api && npx prisma migrate deploy && cd ../..
 npm run build --workspace=apps/api
 pm2 restart lane1-api
 sudo nginx -s reload
@@ -412,10 +412,14 @@ sudo nginx -s reload
 Praktisch für eine Testumgebung, die es bei einer echten Server-Anleitung so nicht braucht — die Datenbank zurücksetzen, ohne App/Konfiguration anzufassen (z. B. um wieder bei einem leeren Verein anzufangen):
 ```bash
 cd ~/lane1/apps/api
-npx prisma db push --force-reset
+npx prisma migrate reset --force --skip-seed
 cd ../..
 ```
-Löscht den gesamten Datenbankinhalt und legt das leere Schema neu an — Schritt 8.1 (Superadmin anlegen) muss danach wiederholt werden.
+Löscht den gesamten Datenbankinhalt, legt die Datenbank neu an und wendet die
+committete Migrationshistorie erneut vollständig an (`--force` unterdrückt die
+interaktive Sicherheitsabfrage, `--skip-seed` lässt die Datenbank wie zuvor
+leer statt automatisch Demo-Daten einzufügen) — Schritt 8.1 (Superadmin
+anlegen) muss danach wiederholt werden.
 
 Soll die Testumgebung nicht nur zurückgesetzt, sondern komplett entfernt werden, siehe Abschnitt 17.
 

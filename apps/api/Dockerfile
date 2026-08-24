@@ -26,4 +26,11 @@ COPY --from=build /repo/apps/api/node_modules ./node_modules
 COPY --from=build /repo/apps/api/prisma ./prisma
 COPY --from=build /repo/node_modules ./node_modules_root
 EXPOSE 3000
-CMD ["node", "dist/index.js"]
+# `migrate deploy` wendet die committete Migrationshistorie (apps/api/
+# prisma/migrations/, oben mitkopiert) nicht-interaktiv an, BEVOR der
+# Server startet (Code-Review, Befund W5) — ersetzt den früher nötigen,
+# manuell auszuführenden `prisma db push`-Schritt. Ein leerer Container
+# (frischer docker-compose-Postgres) bekommt sein Schema dadurch
+# automatisch beim ersten Start; ein Neustart mit bereits vollständig
+# migrierter Datenbank ist ein No-op.
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/index.js"]
