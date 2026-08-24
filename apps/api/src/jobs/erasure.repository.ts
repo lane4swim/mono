@@ -39,6 +39,15 @@ export class PrismaErasureJobGateway implements ErasureJobGateway {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) return; // bereits gelöscht (z. B. durch einen vorherigen, abgebrochenen Lauf)
 
+    // Sicherheitskorrektur (Code-Review, Befund C4): `timeout`/`maxWait`
+    // explizit über Prismas Standardwerte (5 s bzw. 2 s) hinaus angehoben —
+    // zusätzliche Sicherheitsmarge zu der unten beschriebenen strukturellen
+    // Korrektur (ein einzelnes UPDATE-Statement statt einer Schleife), rein
+    // defensiv für einen selten laufenden Hintergrund-Job ohne
+    // Nutzer:innen-Wartezeit-Anforderung. `maxWait` deckt die Wartezeit auf
+    // einen freien Connection-Pool-Slot ab (relevant, wenn der Cron-Lauf
+    // mehrere fällige Löschanfragen nacheinander abarbeitet), `timeout` die
+    // eigentliche Transaktionslaufzeit.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await this.prisma.$transaction(async (tx: any) => {
       await tx.refreshToken.deleteMany({ where: { userId } });
@@ -71,29 +80,58 @@ export class PrismaErasureJobGateway implements ErasureJobGateway {
         await tx.actionItem.deleteMany({ where: { athleteId: user.athleteId } });
 
         // Anwesenheits-Einträge sind Teil eines JSON-Arrays je
-        // Trainingseinheit (kein eigenes Tabellen-Feld) — daher: alle
-        // Einheiten des Vereins laden, den Eintrag dieser Person
-        // herausfiltern, nur geänderte Zeilen zurückschreiben.
+        // Trainingseinheit (kein eigenes Tabellen-Feld), daher kein
+        // schlichtes `deleteMany`/`updateMany` mit einer Feld-Bedingung.
         //
-        // Sicherheitskorrektur (Code-Review): `clubId ?? undefined` bedeutet
-        // in Prisma "kein Filter", NICHT "clubId ist null" — anders als bei
-        // den Tombstones oben (Zeile 62-65), die bereits `user.clubId!`
-        // (nicht-null erzwungen) verwenden, wurde hier bislang stillschweigend
-        // auf einen ungescoped Fallback ausgewichen. Fehlte user.clubId
-        // einmal (Invariantenverletzung — athleteId ist nur für Vereins-
-        // mitglieder gesetzt, nie für superadmin), wären die
-        // Trainingseinheiten ALLER Vereine geladen UND — schwerwiegender,
-        // da dies ein Schreibpfad ist — potenziell per update() unten
-        // verändert worden. Ohne clubId werden stattdessen explizit KEINE
-        // Einheiten geladen/verändert, statt eine ungescoped Abfrage
-        // auszuführen.
-        const sessions = user.clubId ? await tx.trainingSession.findMany({ where: { clubId: user.clubId } }) : [];
-        for (const session of sessions) {
-          const attendance = session.attendance as Array<{ athleteId?: string }>;
-          const filtered = attendance.filter((a) => a.athleteId !== user.athleteId);
-          if (filtered.length !== attendance.length) {
-            await tx.trainingSession.update({ where: { id: session.id }, data: { attendance: filtered } });
-          }
+        // Sicherheitskorrektur (Code-Review, Befund C4): vormals wurden
+        // ALLE Trainingseinheiten des VEREINS geladen (nicht nur die, an
+        // denen diese Person überhaupt teilnahm) und einzeln per
+        // JS-Schleife gefiltert + zurückgeschrieben — bei einem Verein mit
+        // mehrjähriger Trainingshistorie (Tausende Zeilen) konnte allein
+        // das die Laufzeit dieser interaktiven Transaktion über Prismas
+        // Standard-Timeout (5 s) treiben. Da eine fehlgeschlagene
+        // Transaktion die Löschanfrage unverändert "pending" belässt (siehe
+        // purgeExpiredDeletions.ts), hätte ein einmal zu großer Verein
+        // NIEMALS erfolgreich purgen können — bei jedem Cron-Lauf erneut
+        // derselbe Timeout, obwohl der Anwendung bereits ein konkretes
+        // Löschdatum zugesagt wurde (DSGVO-Konformitätsrisiko).
+        //
+        // Ersetzt durch EIN einzelnes SQL-UPDATE, das per JSONB-
+        // Containment (`@>`) direkt nur die Zeilen trifft, die den Eintrag
+        // dieser Person tatsächlich enthalten — alle anderen Einheiten des
+        // Vereins werden weder gelesen noch geschrieben, unabhängig von der
+        // Gesamtgröße des Vereins. `elem->>'athleteId' IS DISTINCT FROM`
+        // statt `!=` behandelt einen (im Schema nicht vorgesehenen, aber
+        // defensiv abgedeckten) fehlenden `athleteId`-Schlüssel NULL-sicher.
+        // `COALESCE(..., '[]'::jsonb)`: entfernt das Filtern den EINZIGEN
+        // Eintrag einer Zeile, liefert `jsonb_agg` über eine leere
+        // Ergebnismenge `NULL` statt eines leeren Arrays — ohne COALESCE
+        // würde die Spalte fälschlich auf SQL NULL gesetzt, obwohl
+        // `attendance` laut Schema stets ein (ggf. leeres) Array ist.
+        // `"updatedAt" = now()` von Hand gesetzt, weil ein rohes SQL-UPDATE
+        // (anders als Prismas eigene update()-Methoden) das `@updatedAt`-
+        // Verhalten aus schema.prisma NICHT automatisch auslöst — ohne
+        // diese Zeile bliebe der Sync-Pull-Cursor (sync.gateway.ts:
+        // listChangedSince() sortiert/filtert exakt nach diesem Feld) auf
+        // dem alten Stand, und Geräte, die die Einheit bereits vor dem
+        // Purge gepullt hatten, bekämen die bereinigte Fassung nie
+        // zugestellt — die gelöschte Person bliebe für sie sichtbar.
+        if (user.clubId) {
+          await tx.$executeRaw`
+            UPDATE "sessions"
+            SET
+              "attendance" = COALESCE(
+                (
+                  SELECT jsonb_agg(elem)
+                  FROM jsonb_array_elements("attendance") AS elem
+                  WHERE elem->>'athleteId' IS DISTINCT FROM ${user.athleteId}
+                ),
+                '[]'::jsonb
+              ),
+              "updatedAt" = now()
+            WHERE "clubId" = ${user.clubId}
+              AND "attendance" @> ${JSON.stringify([{ athleteId: user.athleteId }])}::jsonb
+          `;
         }
 
         await tx.athlete.delete({ where: { id: user.athleteId } });
@@ -102,6 +140,6 @@ export class PrismaErasureJobGateway implements ErasureJobGateway {
       // Löscht in derselben Transaktion auch den zugehörigen
       // DataDeletionRequest-Datensatz (onDelete: Cascade im Schema).
       await tx.user.delete({ where: { id: userId } });
-    });
+    }, { timeout: 30_000, maxWait: 10_000 });
   }
 }

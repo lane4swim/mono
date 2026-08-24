@@ -14,6 +14,7 @@
 //     verändert werden.
 import { describe, it, expect, afterEach, afterAll } from 'vitest';
 import { randomUUID } from 'node:crypto';
+import { PrismaClient } from '@prisma/client';
 import { PrismaProfileDataGateway, ErasureAlreadyRequestedError } from '../src/modules/profile/profile.repository.js';
 import { PrismaErasureJobGateway } from '../src/jobs/erasure.repository.js';
 import { getTestPrisma, closeTestPrisma, truncateAll, createTestClub } from './helpers.js';
@@ -125,6 +126,107 @@ describe('PrismaErasureJobGateway.purgeUserAndDependents()', () => {
     const { user } = await seedAthleteUser(club.id);
     await erasureGateway.purgeUserAndDependents(user.id);
     await expect(erasureGateway.purgeUserAndDependents(user.id)).resolves.toBeUndefined();
+  });
+
+  // Code-Review, Befund C4: die Anwesenheits-Bereinigung lief vormals über
+  // eine JS-Schleife, die ALLE Trainingseinheiten des Vereins lud und
+  // einzeln per update() zurückschrieb — bei einer mehrjährigen
+  // Trainingshistorie konnte allein das Laden aller Zeilen die interaktive
+  // Transaktion über Prismas Standard-Timeout (5 s) treiben, und eine
+  // fehlgeschlagene Transaktion lässt die Löschanfrage unverändert
+  // "pending" (nächster Cron-Lauf scheitert am selben Timeout erneut —
+  // niemals erfolgreicher Purge für einen einmal zu großen Verein). Ersetzt
+  // durch ein einzelnes, per JSONB-Containment (`@>`) gescoptes SQL-UPDATE.
+  // Diese drei Tests prüfen genau diese Korrektur, nicht nur das bereits
+  // oben abgedeckte funktionale Verhalten (Anwesenheit wird entfernt,
+  // andere Person bleibt erhalten).
+  describe('Anwesenheits-Bereinigung ohne club-weiten Scan (Code-Review, Befund C4)', () => {
+    it('bumpt "updatedAt" der geänderten Einheit, lässt eine UNBETROFFENE Einheit im selben Verein content- UND zeitstempelgleich unangetastet', async () => {
+      const club = await createTestClub();
+      const { user, athlete } = await seedAthleteUser(club.id);
+      const affected = await prisma.trainingSession.create({
+        data: { clubId: club.id, date: new Date(), attendance: [{ athleteId: athlete!.id, present: true }] },
+      });
+      const unrelated = await prisma.trainingSession.create({
+        data: { clubId: club.id, date: new Date(), attendance: [{ athleteId: 'andere-person', present: true }] },
+      });
+      // Künstlich in die Vergangenheit gesetzt, damit ein späteres "hat sich
+      // updatedAt verändert?" nicht durch Zeitablauf allein zufällig
+      // zutrifft (beide Zeilen wurden ja gerade erst angelegt).
+      await prisma.$executeRaw`UPDATE "sessions" SET "updatedAt" = ${new Date(Date.now() - 60_000)} WHERE id IN (${affected.id}, ${unrelated.id})`;
+      const beforeUnrelated = await prisma.trainingSession.findUnique({ where: { id: unrelated.id } });
+
+      await erasureGateway.purgeUserAndDependents(user.id);
+
+      const afterAffected = await prisma.trainingSession.findUnique({ where: { id: affected.id } });
+      expect(afterAffected?.attendance).toEqual([]);
+      expect(afterAffected!.updatedAt.getTime()).toBeGreaterThan(beforeUnrelated!.updatedAt.getTime());
+
+      const afterUnrelated = await prisma.trainingSession.findUnique({ where: { id: unrelated.id } });
+      expect(afterUnrelated?.attendance).toEqual(beforeUnrelated?.attendance);
+      expect(afterUnrelated?.updatedAt.getTime()).toBe(beforeUnrelated?.updatedAt.getTime());
+    });
+
+    it('setzt "attendance" auf ein leeres Array statt NULL, wenn die gelöschte Person der einzige Eintrag war', async () => {
+      const club = await createTestClub();
+      const { user, athlete } = await seedAthleteUser(club.id);
+      const session = await prisma.trainingSession.create({
+        data: { clubId: club.id, date: new Date(), attendance: [{ athleteId: athlete!.id, present: true }] },
+      });
+
+      await erasureGateway.purgeUserAndDependents(user.id);
+
+      const updated = await prisma.trainingSession.findUnique({ where: { id: session.id } });
+      expect(updated?.attendance).toEqual([]);
+      expect(updated?.attendance).not.toBeNull();
+    });
+
+    // Der eigentliche Regressionstest: beweist, dass die Bereinigung NICHT
+    // mehr club-weit skaliert. Statt einer laufzeitbasierten Prüfung (in
+    // CI je nach Auslastung unzuverlässig) wird die Anzahl der
+    // tatsächlich gegen "sessions" ausgeführten SQL-Anweisungen gezählt —
+    // unabhängig von der Zahl unbeteiligter Einheiten darf es dafür
+    // GENAU EINE geben (das gescopte UPDATE), nicht "eine Abfrage aller
+    // Zeilen plus eine Aktualisierung je betroffener Zeile" wie zuvor.
+    it('löst für die Anwesenheits-Bereinigung GENAU EINE SQL-Anweisung aus, unabhängig von der Zahl unbeteiligter Einheiten im Verein', async () => {
+      const club = await createTestClub();
+      const { user, athlete } = await seedAthleteUser(club.id);
+
+      // 50 Einheiten, die mit der zu löschenden Person NICHTS zu tun haben.
+      for (let i = 0; i < 50; i++) {
+        await prisma.trainingSession.create({
+          data: { clubId: club.id, date: new Date(), attendance: [{ athleteId: randomUUID(), present: true }] },
+        });
+      }
+      // 3 tatsächlich betroffene Einheiten.
+      for (let i = 0; i < 3; i++) {
+        await prisma.trainingSession.create({
+          data: { clubId: club.id, date: new Date(), attendance: [{ athleteId: athlete!.id, present: true }] },
+        });
+      }
+
+      const instrumented = new PrismaClient({ log: [{ emit: 'event', level: 'query' }] });
+      const queries: string[] = [];
+      instrumented.$on('query' as never, (e: { query: string }) => queries.push(e.query));
+      try {
+        const instrumentedGateway = new PrismaErasureJobGateway(instrumented);
+        await instrumentedGateway.purgeUserAndDependents(user.id);
+      } finally {
+        await instrumented.$disconnect();
+      }
+
+      const sessionQueries = queries.filter((q) => q.includes('"sessions"'));
+      expect(sessionQueries).toHaveLength(1);
+      expect(sessionQueries[0]).toMatch(/^\s*UPDATE "sessions"/);
+
+      // Funktional weiterhin korrekt: alle drei betroffenen Einheiten sind
+      // tatsächlich bereinigt.
+      const remaining = await prisma.trainingSession.findMany({ where: { clubId: club.id } });
+      for (const session of remaining) {
+        const attendance = session.attendance as Array<{ athleteId?: string }>;
+        expect(attendance.some((a) => a.athleteId === athlete!.id)).toBe(false);
+      }
+    });
   });
 });
 
