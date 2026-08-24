@@ -9,7 +9,10 @@ import type { SyncGateway, SyncRecord, ChangedRecord, TombstoneRecord } from './
 export class InMemorySyncGateway implements SyncGateway {
   // store -> (id -> record)
   private data = new Map<EntityStoreName, Map<string, SyncRecord>>();
-  private processedEvents = new Set<string>();
+  // eventId -> clubId, die das Event verarbeitet hat (siehe
+  // isEventProcessed()/markEventProcessed() unten — clubId-gescoped,
+  // spiegelt PrismaSyncGateway).
+  private processedEvents = new Map<string, string>();
   // userId -> clubId, für findClubIdForUser() (Eigentümerprüfung von
   // ActionItem.assignedTrainerId, siehe sync.service.ts).
   private users = new Map<string, string | null>();
@@ -159,11 +162,11 @@ export class InMemorySyncGateway implements SyncGateway {
     return changes.slice(0, limit);
   }
 
-  async isEventProcessed(eventId: string): Promise<boolean> {
-    return this.processedEvents.has(eventId);
+  async isEventProcessed(eventId: string, clubId: string): Promise<boolean> {
+    return this.processedEvents.get(eventId) === clubId;
   }
 
-  async markEventProcessed(eventId: string): Promise<void> {
-    this.processedEvents.add(eventId);
+  async markEventProcessed(eventId: string, clubId: string): Promise<void> {
+    this.processedEvents.set(eventId, clubId);
   }
 }

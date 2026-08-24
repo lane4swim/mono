@@ -315,7 +315,6 @@ Für einen Produktivserver mindestens folgende Werte setzen bzw. anpassen:
 NODE_ENV=production
 PORT=3000
 DATABASE_URL="postgresql://lane1_app:EIN-SICHERES-PASSWORT-HIER@localhost:5432/lane1"
-JWT_SIGNING_KEY="<mit openssl erzeugen, siehe unten>"
 JWT_PRIVATE_KEY="<mit openssl erzeugen, siehe unten>"
 JWT_PUBLIC_KEY="<mit openssl erzeugen, siehe unten>"
 CORS_ORIGIN="https://training.mein-verein.de"
@@ -332,16 +331,7 @@ SMTP_PASSWORD="EIN-SICHERES-SMTP-PASSWORT-HIER"
 SMTP_FROM_EMAIL="postversand@mein-verein.de"
 SMTP_FROM_NAME="Lane 1"
 ```
-**`SMTP_SECURE` absichtlich nicht gesetzt lassen** — siehe Warnhinweis am
-Ende dieses Abschnitts.
-
-**1. Signierschlüssel erzeugen** (mind. 32 Zeichen, zufällig):
-```bash
-openssl rand -base64 48
-```
-Die Ausgabe als `JWT_SIGNING_KEY` einsetzen.
-
-**2. RS256-Schlüsselpaar erzeugen** (signiert die Zugriffs-Tokens; in
+**RS256-Schlüsselpaar erzeugen** (signiert die Zugriffs-Tokens; in
 Produktion PFLICHT — ohne diese beiden Werte bricht der Serverstart mit
 `NODE_ENV=production` sofort ab):
 ```bash
@@ -363,15 +353,10 @@ Schlüssel nicht zusätzlich unverschlüsselt auf der Platte liegt:
 rm /tmp/jwt_private.pem /tmp/jwt_public.pem
 ```
 
-> **Warnhinweis SMTP_SECURE:** Die Variable in der `.env` **nicht**
-> explizit auf `false` setzen, obwohl das für Port 587 (STARTTLS) korrekt
-> wäre. Die Validierung (`z.coerce.boolean()` in `env.ts`) wandelt jeden
-> nicht-leeren Text unabhängig vom Inhalt in `true` um — auch den Text
-> `"false"` (eine bekannte Eigenheit von `Boolean("false") === true` in
-> JavaScript). Der korrekte Wert `false` gilt nur, wenn die Zeile
-> **komplett fehlt** (dann greift der Standardwert). `SMTP_SECURE=true`
-> explizit setzen ist dagegen unproblematisch — nur bei Port 465
-> (implizites TLS) nötig.
+> **Hinweis SMTP_SECURE:** `SMTP_SECURE=false` (Port 587/STARTTLS) oder
+> `SMTP_SECURE=true` (Port 465/implizites TLS) explizit setzen — beide
+> werden korrekt ausgewertet. Bleibt die Zeile ganz weg, gilt ebenfalls
+> `false` (Standardwert).
 >
 > **Hinweis SMTP-Anbieter:** Für die Zugangsdaten reicht in der Regel das
 > E-Mail-Postfach des Vereins bzw. ein vom E-Mail-Anbieter bereitgestelltes
@@ -728,7 +713,7 @@ Anders als bei Hetzner gibt es keine monatliche Servermiete — dafür Anschaffu
 | „502 Bad Gateway" | Backend läuft nicht | `pm2 status`, `pm2 logs lane1-api` |
 | Backend startet gar nicht (`pm2 status` zeigt „errored") | Pflicht-Umgebungsvariable fehlt/ungültig, z. B. `JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY` in Produktion nicht gesetzt | `pm2 logs lane1-api` — `env.ts` gibt die genaue fehlende/ungültige Variable aus |
 | Login/Registrierung liefert die HTML-Startseite statt einer Fehlermeldung/eines Tokens | `/auth/`-Location-Block in nginx fehlt oder `proxy_pass` mit abschließendem `/` (siehe Warnhinweis Abschnitt 9) | `curl -i .../auth/login -X POST -d '{}'`, Antwort auf `<!DOCTYPE html>` prüfen |
-| Einladungs-E-Mails kommen nicht an | `SMTP_HOST` nicht gesetzt (nur Server-Log) oder `SMTP_SECURE=false` explizit gesetzt (siehe Warnhinweis Abschnitt 7.2) | `pm2 logs lane1-api` auf SMTP-Fehler prüfen, `.env` kontrollieren |
+| Einladungs-E-Mails kommen nicht an | `SMTP_HOST` nicht gesetzt (nur Server-Log) | `pm2 logs lane1-api` auf SMTP-Fehler prüfen, `.env` kontrollieren |
 | Kein Schloss-Symbol/HTTPS-Fehler | Zertifikat nicht erneuert, DNS falsch bei Erstanfrage, oder Portweiterleitung 80 fehlt(e) bei der Zertifikatsausstellung | `sudo certbot renew --dry-run`, Abschnitt 10 |
 | Seite erreichbar, funktioniert aber nach ein paar Tagen plötzlich nicht mehr | Öffentliche IP hat sich geändert, Dynamic-DNS-Update fehlgeschlagen | in 5.1 beschriebenen IP-Vergleich wiederholen, DDNS-Client-Logs prüfen |
 | Änderungen erscheinen nicht | Browser-/Service-Worker-Cache | Hard-Reload (`Strg+Shift+R`), `CACHE_VERSION` in `sw.js` prüfen |

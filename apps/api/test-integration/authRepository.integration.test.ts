@@ -107,3 +107,44 @@ describe('PrismaUserRepository.create()/update()', () => {
     expect(updated.name).toBe('Geänderter Name');
   });
 });
+
+// Regressionstest für die Code-Review-Korrektur: User.athleteId war
+// vormals ein nackter String ohne Fremdschlüssel/Unique-Constraint — zwei
+// Konten hätten unbemerkt auf dasselbe Athletenprofil zeigen können. Nur
+// gegen eine echte Datenbank prüfbar (ein In-Memory-Double kennt keine
+// DB-Constraints).
+describe('User.athleteId — Unique-Constraint (Schema-Integrität)', () => {
+  it('lehnt ein zweites Konto mit derselben athleteId ab', async () => {
+    const club = await createTestClub();
+    const athlete = await prisma.athlete.create({ data: { clubId: club.id, firstName: 'Mara', lastName: 'Vogel' } });
+
+    await repo.create({
+      clubId: club.id, name: 'Erstes Konto', email: `erste-${randomUUID()}@example.org`,
+      passwordHash: 'hash', role: 'athlete', athleteId: athlete.id,
+      consentGivenAt: new Date(), consentVersion: '2026-01-01',
+    });
+
+    await expect(
+      repo.create({
+        clubId: club.id, name: 'Zweites Konto', email: `zweite-${randomUUID()}@example.org`,
+        passwordHash: 'hash', role: 'athlete', athleteId: athlete.id,
+        consentGivenAt: new Date(), consentVersion: '2026-01-01',
+      }),
+    ).rejects.toMatchObject({ code: 'P2002' });
+  });
+
+  it('setzt athleteId auf null (statt die Löschung zu blockieren), wenn das referenzierte Athletenprofil gelöscht wird', async () => {
+    const club = await createTestClub();
+    const athlete = await prisma.athlete.create({ data: { clubId: club.id, firstName: 'Mara', lastName: 'Vogel' } });
+    const user = await repo.create({
+      clubId: club.id, name: 'Konto', email: `konto-${randomUUID()}@example.org`,
+      passwordHash: 'hash', role: 'athlete', athleteId: athlete.id,
+      consentGivenAt: new Date(), consentVersion: '2026-01-01',
+    });
+
+    await prisma.athlete.delete({ where: { id: athlete.id } });
+
+    const reloaded = await repo.findById(user.id);
+    expect(reloaded?.athleteId).toBeNull();
+  });
+});

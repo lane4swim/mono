@@ -13,6 +13,7 @@ import {
 import type { AuthService } from './auth.service.js';
 import {
   EmailAlreadyRegisteredError,
+  AthleteAlreadyLinkedError,
   InvalidCredentialsError,
   InvalidRefreshTokenError,
   InvalidInvitationError,
@@ -42,6 +43,9 @@ export async function authRoutes(app: FastifyInstance, opts: { authService: Auth
       } catch (err) {
         if (err instanceof EmailAlreadyRegisteredError) {
           return reply.code(409).send({ error: 'email_taken', message: err.message });
+        }
+        if (err instanceof AthleteAlreadyLinkedError) {
+          return reply.code(409).send({ error: 'athlete_already_linked', message: err.message });
         }
         if (err instanceof InvalidInvitationError) {
           return reply.code(410).send({ error: 'invalid_invitation', message: err.message });

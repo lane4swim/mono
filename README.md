@@ -290,6 +290,16 @@ Verbesserungen:**
    eine klare Meldung („… existiert nicht mehr …") statt der rohen
    Postgres-Fehlermeldung.
 
+**Sync-Bookkeeping-Bereinigung:** derselbe tägliche Cron-Lauf (`npm run
+purge-deleted-data`) entfernt zusätzlich veraltete Zeilen aus zwei intern
+buchführenden Tabellen, die sonst unbegrenzt wachsen würden — `SyncedEvent`
+(Idempotenz-Ledger für `POST /api/sync/push`, Standard 90 Tage, über
+`SYNC_EVENT_RETENTION_DAYS` konfigurierbar) und `SyncTombstone` (siehe
+oben, Standard 180 Tage, über `SYNC_TOMBSTONE_RETENTION_DAYS`
+konfigurierbar — deutlich großzügiger, da eine Löschmarkierung erst
+verschwinden darf, sobald jedes Gerät seinen Sync-Cursor darüber hinaus
+vorangetrieben hat).
+
 **Frontend:** „Mein Profil" ruft beide Endpunkte direkt auf. Der
 Export-Button fällt bei nicht erreichbarem Server auf einen Export der
 lokal zwischengespeicherten Daten zurück (mit entsprechendem Hinweis); der

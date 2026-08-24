@@ -422,8 +422,11 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
         // Idempotenz: bereits verarbeitete Events werden als "applied"
         // gemeldet (nicht als Fehler), damit ein Client, der wegen eines
         // Verbindungsabbruchs dieselbe Antwort nicht sah, beim erneuten
-        // Senden ein konsistentes Ergebnis bekommt.
-        if (await deps.gateway.isEventProcessed(event.id)) {
+        // Senden ein konsistentes Ergebnis bekommt. clubId-gescoped (siehe
+        // SyncGateway.isEventProcessed()-Kommentar) — ein fremdes,
+        // erratenes Event-ID bekommt dadurch die korrekte, ungescopte
+        // Antwort statt eines wirkungslosen "applied".
+        if (await deps.gateway.isEventProcessed(event.id, requester.clubId)) {
           results.push({ eventId: event.id, status: 'applied' });
           continue;
         }

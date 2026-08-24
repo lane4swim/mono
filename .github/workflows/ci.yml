@@ -25,7 +25,6 @@ jobs:
     env:
       NODE_ENV: test
       DATABASE_URL: postgresql://lane1_app:lane1_test_password@localhost:5432/lane1_test
-      JWT_SIGNING_KEY: ci-only-test-signing-key-not-for-production-0000
       CORS_ORIGIN: http://localhost:5173
 
     steps:

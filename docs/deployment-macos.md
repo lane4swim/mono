@@ -135,7 +135,6 @@ Werte setzen bzw. anpassen:
 NODE_ENV=production
 PORT=3000
 DATABASE_URL="postgresql://lane1_app:EIN-TESTPASSWORT-HIER@localhost:5432/lane1"
-JWT_SIGNING_KEY="<mit openssl erzeugen, siehe unten>"
 JWT_PRIVATE_KEY="<mit openssl erzeugen, siehe unten>"
 JWT_PUBLIC_KEY="<mit openssl erzeugen, siehe unten>"
 CORS_ORIGIN="https://lane1.test"
@@ -144,15 +143,9 @@ FRONTEND_BASE_URL="https://lane1.test"
 
 > **`NODE_ENV=production` auch hier?** Ja, bewusst — nur so entspricht die Testumgebung wirklich dem späteren Produktivbetrieb (u. a. sind `JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY` dann PFLICHT, siehe unten, statt automatisch generierter Wegwerf-Schlüssel wie bei `NODE_ENV=development`). Genau das ist der Sinn dieser Anleitung.
 
-**SMTP (optional für eine reine Testumgebung):** Ohne `SMTP_HOST` wird eine Einladung nur ins Server-Log geschrieben statt tatsächlich per E-Mail versendet — für lokale Tests meist völlig ausreichend (der Einladungslink lässt sich trotzdem im Log bzw. direkt in der Nutzerverwaltungs-Oberfläche kopieren, siehe `apps/web/help/admin.html`). Soll der komplette Versandweg mitgetestet werden, denselben SMTP-Block wie in `deployment.md`, Abschnitt 7.2 eintragen — inklusive des dortigen Warnhinweises zu `SMTP_SECURE` (**nicht** explizit auf `false` setzen, siehe dort für die genaue Begründung).
+**SMTP (optional für eine reine Testumgebung):** Ohne `SMTP_HOST` wird eine Einladung nur ins Server-Log geschrieben statt tatsächlich per E-Mail versendet — für lokale Tests meist völlig ausreichend (der Einladungslink lässt sich trotzdem im Log bzw. direkt in der Nutzerverwaltungs-Oberfläche kopieren, siehe `apps/web/help/admin.html`). Soll der komplette Versandweg mitgetestet werden, denselben SMTP-Block wie in `deployment.md`, Abschnitt 7.2 eintragen.
 
-**1. Signierschlüssel erzeugen** (mind. 32 Zeichen, zufällig):
-```bash
-openssl rand -base64 48
-```
-Die Ausgabe als `JWT_SIGNING_KEY` einsetzen. Das auf macOS vorinstallierte `openssl`-Kommando (LibreSSL-basiert) unterstützt die hier verwendeten Befehle vollständig — falls in einer künftigen macOS-Version doch einmal nicht, ersatzweise `brew install openssl@3` und `$(brew --prefix openssl@3)/bin/openssl` statt `openssl` verwenden.
-
-**2. RS256-Schlüsselpaar erzeugen** (in Produktion — und damit auch hier, siehe Hinweis oben — PFLICHT):
+**RS256-Schlüsselpaar erzeugen** (in Produktion — und damit auch hier, siehe Hinweis oben — PFLICHT). Das auf macOS vorinstallierte `openssl`-Kommando (LibreSSL-basiert) unterstützt die hier verwendeten Befehle vollständig — falls in einer künftigen macOS-Version doch einmal nicht, ersatzweise `brew install openssl@3` und `$(brew --prefix openssl@3)/bin/openssl` statt `openssl` verwenden:
 ```bash
 openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out /tmp/jwt_private.pem
 openssl pkey -in /tmp/jwt_private.pem -pubout -out /tmp/jwt_public.pem

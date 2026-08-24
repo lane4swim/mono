@@ -5,6 +5,17 @@
 // in der apps/web die Daten bereits in IndexedDB hält (js/db.js, js/seed.js)
 // — dadurch entsteht beim künftigen Sync (Phase 3) kein verlustbehaftetes
 // Mapping zwischen Client und Server.
+//
+// Aufräumarbeit (Code-Review): jedes freie Textfeld trägt jetzt ein
+// `.max(...)` — vormals unbegrenzt (Fastifys 1-MB-Bodylimit auf
+// POST /api/sync/push begrenzte den Schaden zwar auf HTTP-Ebene, aber ein
+// einzelnes, absichtlich riesiges Feld hätte trotzdem unbemerkt
+// akzeptiert und dauerhaft gespeichert werden können). Die Werte
+// orientieren sich grob an der Rolle des Feldes: kurze Label/Namen
+// ~200 Zeichen, längere Freitexte (Notizen/Beschreibungen)
+// 2000-5000 Zeichen, Athlete.notes als einziges Feld mit erkennbar
+// höherem Bedarf (laufende Trainer:innen-Notizen über die gesamte
+// Karriere hinweg) 10000 Zeichen.
 import { z } from 'zod';
 import { SyncStoreSchema } from './syncEvent.js';
 
@@ -23,8 +34,8 @@ const nullableIsoDate = z.string().datetime().nullable();
 // dieses Datenmodells (z. B. Athlete.notes, TrainingSession.trainerNote).
 export const CommentSchema = z.object({
   id: z.string().min(1),
-  authorName: z.string().min(1),
-  text: z.string().min(1),
+  authorName: z.string().min(1).max(200),
+  text: z.string().min(1).max(5000),
   createdAt: isoDate,
 }).strict();
 export type Comment = z.infer<typeof CommentSchema>;
@@ -32,8 +43,8 @@ export type Comment = z.infer<typeof CommentSchema>;
 export const GroupSchema = z.object({
   id: z.string().uuid(),
   clubId: z.string().uuid(),
-  name: z.string().min(1),
-  description: z.string().default(''),
+  name: z.string().min(1).max(200),
+  description: z.string().max(2000).default(''),
   createdAt: isoDate,
   updatedAt: isoDate,
 }).strict();
@@ -44,14 +55,14 @@ export const AthleteGenderSchema = z.enum(['w', 'm', 'd']);
 export const AthleteSchema = z.object({
   id: z.string().uuid(),
   clubId: z.string().uuid(),
-  firstName: z.string().min(1),
-  lastName: z.string().min(1),
+  firstName: z.string().min(1).max(200),
+  lastName: z.string().min(1).max(200),
   birthdate: nullableIsoDate,
   gender: AthleteGenderSchema,
   groupId: z.string().uuid().nullable(),
   joinDate: nullableIsoDate,
   active: z.boolean(),
-  notes: z.string().default(''),
+  notes: z.string().max(10000).default(''),
   createdAt: isoDate,
   updatedAt: isoDate,
 }).strict();
@@ -62,11 +73,11 @@ export const CourseSchema = z.enum(['LCM', 'SCM']);
 export const CompetitionSchema = z.object({
   id: z.string().uuid(),
   clubId: z.string().uuid(),
-  name: z.string().min(1),
+  name: z.string().min(1).max(200),
   date: isoDate,
-  location: z.string().default(''),
+  location: z.string().max(300).default(''),
   course: CourseSchema,
-  notes: z.string().default(''),
+  notes: z.string().max(5000).default(''),
   createdAt: isoDate,
   updatedAt: isoDate,
 }).strict();
@@ -77,8 +88,8 @@ export const StartlistEntrySchema = z.object({
   clubId: z.string().uuid(),
   competitionId: z.string().uuid(),
   athleteId: z.string().uuid(),
-  event: z.string().min(1),
-  eventNumber: z.string().default(''),
+  event: z.string().min(1).max(200),
+  eventNumber: z.string().max(50).default(''),
   heat: z.number().int().positive().nullable(),
   lane: z.number().int().positive().nullable(),
   seedTime: z.number().nullable(),
@@ -91,7 +102,7 @@ export const ResultSchema = z.object({
   id: z.string().uuid(),
   clubId: z.string().uuid(),
   athleteId: z.string().uuid(),
-  event: z.string().min(1),
+  event: z.string().min(1).max(200),
   time: z.number().positive(),
   date: isoDate,
   course: CourseSchema,
@@ -108,13 +119,13 @@ export type Result = z.infer<typeof ResultSchema>;
 export const ExerciseSchema = z.object({
   id: z.string().uuid(),
   clubId: z.string().uuid(),
-  name: z.string().min(1),
-  category: z.string().min(1),
-  stroke: z.string().nullable(),
-  description: z.string().default(''),
+  name: z.string().min(1).max(200),
+  category: z.string().min(1).max(100),
+  stroke: z.string().max(100).nullable(),
+  description: z.string().max(5000).default(''),
   defaultDistance: z.number().int().positive().nullable(),
-  tags: z.array(z.string()).default([]),
-  equipment: z.array(z.string()).default([]),
+  tags: z.array(z.string().max(100)).default([]),
+  equipment: z.array(z.string().max(100)).default([]),
   // Diskussions-/Hinweiskommentare im Übungskatalog (z. B. Technikhinweise
   // mehrerer Trainer:innen zu derselben Übung).
   comments: z.array(CommentSchema).default([]),
@@ -130,10 +141,10 @@ export type Exercise = z.infer<typeof ExerciseSchema>;
 export const PlainSetSchema = z.object({
   kind: z.literal('set'),
   id: z.string(),
-  description: z.string().default(''),
+  description: z.string().max(2000).default(''),
   distance: z.number().int().nonnegative().nullable(),
   reps: z.number().int().positive(),
-  intensity: z.string(),
+  intensity: z.string().max(200),
   restSec: z.number().int().nonnegative(),
   exerciseId: z.string().uuid().nullable().optional(),
   // Kommentare zu genau diesem Satz/dieser Übung innerhalb eines
@@ -146,7 +157,7 @@ export type PlainSet = z.infer<typeof PlainSetSchema>;
 export const RepeatBlockSchema = z.object({
   kind: z.literal('block'),
   id: z.string(),
-  label: z.string().default(''),
+  label: z.string().max(200).default(''),
   repeatCount: z.number().int().positive(),
   sets: z.array(PlainSetSchema),
 }).strict();
@@ -158,9 +169,9 @@ export type SetEntry = z.infer<typeof SetEntrySchema>;
 export const TemplateSchema = z.object({
   id: z.string().uuid(),
   clubId: z.string().uuid(),
-  name: z.string().min(1),
-  description: z.string().default(''),
-  tags: z.array(z.string()).default([]),
+  name: z.string().min(1).max(200),
+  description: z.string().max(5000).default(''),
+  tags: z.array(z.string().max(100)).default([]),
   sets: z.array(SetEntrySchema),
   createdAt: isoDate,
   updatedAt: isoDate,
@@ -178,7 +189,7 @@ export const PlanStatusSchema = z.enum(['aktiv', 'archiv']);
 export const PlanSchema = z.object({
   id: z.string().uuid(),
   clubId: z.string().uuid(),
-  name: z.string().min(1),
+  name: z.string().min(1).max(200),
   weekStart: isoDate,
   groupId: z.string().uuid().nullable(),
   status: PlanStatusSchema,
@@ -195,7 +206,7 @@ export const AttendanceRecordSchema = z.object({
   athleteId: z.string().uuid(),
   present: z.boolean(),
   rpe: z.number().int().min(1).max(10).nullable(),
-  note: z.string().default(''),
+  note: z.string().max(2000).default(''),
 }).strict();
 export type AttendanceRecord = z.infer<typeof AttendanceRecordSchema>;
 
@@ -205,7 +216,7 @@ export const TrainingSessionSchema = z.object({
   date: isoDate,
   groupId: z.string().uuid().nullable(),
   planId: z.string().uuid().nullable(),
-  trainerNote: z.string().default(''),
+  trainerNote: z.string().max(5000).default(''),
   attendance: z.array(AttendanceRecordSchema),
   createdAt: isoDate,
   updatedAt: isoDate,
@@ -218,9 +229,9 @@ export const ActionItemSchema = z.object({
   id: z.string().uuid(),
   clubId: z.string().uuid(),
   athleteId: z.string().uuid(),
-  title: z.string().min(1),
-  description: z.string().default(''),
-  category: z.string().min(1),
+  title: z.string().min(1).max(300),
+  description: z.string().max(5000).default(''),
+  category: z.string().min(1).max(100),
   status: ActionItemStatusSchema,
   // Zuständige Person (Trainer:in oder Admin) für dieses Handlungsfeld.
   // Wird beim Anlegen clientseitig standardmäßig auf den/die Erfasser:in

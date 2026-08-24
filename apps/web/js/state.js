@@ -49,7 +49,16 @@ export async function restoreSession() {
 }
 
 export function getCurrentUser() { return current; }
-export function getRole() { return current?.role || 'trainer'; }
+// Fällt bei fehlender Sitzung auf `null` zurück, NICHT auf eine konkrete
+// Rolle (vormals 'trainer') — ein Default-Wert sollte im Zweifel
+// zusperren, nicht öffnen. 'trainer' hätte defensiv aufgerufenen
+// Rollenprüfungen (isTrainerOrAdmin(), visibleModules(role) in router.js)
+// stillschweigend Zugriff auf trainer-restringierte Module gewährt, statt
+// ihn korrekt zu verweigern. `visibleModules(null)` zeigt weiterhin alle
+// Module OHNE Rollenbeschränkung (siehe router.js) — nur die
+// rollenbeschränkten werden nun korrekt ausgeblendet statt fälschlich
+// gezeigt.
+export function getRole() { return current?.role ?? null; }
 export function isLoggedIn() { return !!current; }
 
 export async function login(email, password, consent) {

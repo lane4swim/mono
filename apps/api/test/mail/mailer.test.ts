@@ -1,6 +1,7 @@
 // apps/api/test/mail/mailer.test.ts
 import { describe, it, expect } from 'vitest';
 import { InMemoryMailSender } from '../../src/mail/mailer.memory.js';
+import { buildHtmlBody } from '../../src/mail/mailer.js';
 
 describe('InMemoryMailSender', () => {
   it('zeichnet eine gesendete Einladungs-E-Mail mit allen Feldern auf', async () => {
@@ -28,5 +29,49 @@ describe('InMemoryMailSender', () => {
     await mailer.sendInvitationEmail({ to: 'a@x.de', role: 'admin', clubName: 'A', inviteUrl: 'u1', expiresAt: new Date() });
     await mailer.sendInvitationEmail({ to: 'b@x.de', role: 'athlete', clubName: 'B', inviteUrl: 'u2', expiresAt: new Date() });
     expect(mailer.sentEmails.map((m) => m.to)).toEqual(['a@x.de', 'b@x.de']);
+  });
+});
+
+describe('buildHtmlBody() — HTML-Escaping', () => {
+  it('escaped recipientName, clubName und Rollen-Label', () => {
+    const html = buildHtmlBody({
+      to: 'x@example.org',
+      recipientName: '<script>alert(1)</script>',
+      role: 'trainer',
+      clubName: 'SV "Wasserfreunde" & <Freunde>',
+      inviteUrl: 'https://app.example.org/#/accept-invite/abc123',
+      expiresAt: new Date('2026-08-01T00:00:00.000Z'),
+    });
+    expect(html).not.toContain('<script>alert(1)</script>');
+    expect(html).toContain('&lt;script&gt;');
+    expect(html).not.toContain('SV "Wasserfreunde" & <Freunde>');
+  });
+
+  // Regressionstest für die Code-Review-Korrektur: inviteUrl war die
+  // einzige interpolierte Stelle in buildHtmlBody(), die NICHT durch
+  // escapeHtml() lief — bei einem Wert mit HTML-Sonderzeichen (z. B. über
+  // eine kompromittierte/fehlkonfigurierte FRONTEND_BASE_URL) hätte das
+  // href-Attribut aufgebrochen werden können.
+  it('escaped inviteUrl (vormals die einzige Ausnahme von der sonst konsequenten Regel)', () => {
+    const html = buildHtmlBody({
+      to: 'x@example.org',
+      role: 'trainer',
+      clubName: 'SV Wasserfreunde',
+      inviteUrl: 'https://boese.example.org/"><script>alert(1)</script>',
+      expiresAt: new Date('2026-08-01T00:00:00.000Z'),
+    });
+    expect(html).not.toContain('"><script>alert(1)</script>');
+    expect(html).toContain('&quot;&gt;&lt;script&gt;');
+  });
+
+  it('behält einen normalen inviteUrl unverändert nutzbar als href', () => {
+    const html = buildHtmlBody({
+      to: 'x@example.org',
+      role: 'trainer',
+      clubName: 'SV Wasserfreunde',
+      inviteUrl: 'https://app.example.org/#/accept-invite/abc123',
+      expiresAt: new Date('2026-08-01T00:00:00.000Z'),
+    });
+    expect(html).toContain('href="https://app.example.org/#/accept-invite/abc123"');
   });
 });

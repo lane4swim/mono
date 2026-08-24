@@ -61,7 +61,15 @@ export interface SyncGateway {
   // Änderungen eines Vereins seit einem Zeitpunkt, über alle Stores hinweg,
   // absteigend nach updatedAt limitiert (Pagination via `limit`).
   listChangedSince(clubId: string, since: Date | null, limit: number): Promise<ChangedRecord[]>;
-  isEventProcessed(eventId: string): Promise<boolean>;
+  // clubId-gescoped (Aufräumarbeit, Code-Review): eine Event-id ist zwar
+  // client-generiert und praktisch garantiert global eindeutig (UUID), ein
+  // Abgleich ohne clubId erlaubte aber ein fremdes Event-ID-Ratespiel, das
+  // konsequenzlos mit "applied" beantwortet wurde (siehe push()'
+  // Idempotenz-Kommentar), statt korrekt mit dem eigentlichen Ergebnis
+  // (i. d. R. "nicht gefunden"/regulärer Ablauf) — harmlos (keine
+  // Wirkung, kein Zugriff auf fremde Daten), aber inkonsistent mit dem
+  // sonst überall konsequenten Vereins-Scoping dieses Gateways.
+  isEventProcessed(eventId: string, clubId: string): Promise<boolean>;
   markEventProcessed(eventId: string, clubId: string, store: EntityStoreName, action: string): Promise<void>;
   // Ermittelt die clubId eines Users — für die Eigentümerprüfung von
   // ActionItem.assignedTrainerId (siehe sync.service.ts:
@@ -132,7 +140,17 @@ export class PrismaSyncGateway implements SyncGateway {
           return rows.map((row): ChangedRecord => ({
             store,
             entityId: row.id,
-            action: row.deletedAt ? 'delete' : (since ? 'update' : 'create'),
+            // Aufräumarbeit (Code-Review): vormals `since ? 'update' :
+            // 'create'` — das unterstellte fälschlich, jede Zeile eines
+            // ERSTEN Pulls (since === null) sei eine Neuanlage. Tatsächlich
+            // weiß der Server an dieser Stelle gar nicht, ob die
+            // anfragende Person diese Zeile schon einmal gesehen hat —
+            // auch beim allerersten Pull kann eine Zeile längst mehrfach
+            // aktualisiert worden sein. syncClient.js (pull()) behandelt
+            // ohnehin jede nicht gelöschte Zeile identisch (putWithoutSync,
+            // ein Upsert) — der Unterschied zwischen "create" und "update"
+            // hat für den Aufrufer keine Bedeutung, nur "delete" zählt.
+            action: row.deletedAt ? 'delete' : 'update',
             payload: row.deletedAt ? null : row,
             updatedAt: row.updatedAt,
           }));
@@ -158,8 +176,8 @@ export class PrismaSyncGateway implements SyncGateway {
       .slice(0, limit);
   }
 
-  async isEventProcessed(eventId: string): Promise<boolean> {
-    const existing = await this.prisma.syncedEvent.findUnique({ where: { id: eventId } });
+  async isEventProcessed(eventId: string, clubId: string): Promise<boolean> {
+    const existing = await this.prisma.syncedEvent.findFirst({ where: { id: eventId, clubId } });
     return existing !== null;
   }
 

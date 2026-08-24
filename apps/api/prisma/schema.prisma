@@ -58,7 +58,21 @@ model User {
   email             String    @unique
   passwordHash      String
   role              String
-  athleteId         String?
+  // Aufräumarbeit (Code-Review): vormals ein nackter String ohne
+  // Fremdschlüssel/Unique-Constraint, obwohl jede andere Referenz in
+  // diesem Schema sauber modelliert ist — zwei Konten hätten unbemerkt auf
+  // dasselbe Athletenprofil zeigen können, und ein Hard-Purge (siehe
+  // jobs/erasure.repository.ts) hätte hängende Referenzen hinterlassen
+  // können. `@unique` erzwingt "höchstens ein Konto je Athletenprofil"
+  // (die tatsächliche fachliche Regel — ein Athletenkonto IST diese
+  // Person). `onDelete: SetNull` statt Cascade/Restrict: analog zu
+  // Invitation.invitedById/ActionItem.assignedTrainerId oben — der
+  // Purge-Job löscht das Athletenprofil INNERHALB derselben Transaktion,
+  // in der direkt danach auch dieser User-Datensatz gelöscht wird; SetNull
+  // verhindert, dass die Fremdschlüssel-Constraint diese Reihenfolge
+  // blockiert, ohne den Purge-Ablauf selbst ändern zu müssen.
+  athleteId         String?   @unique
+  athlete           Athlete?  @relation(fields: [athleteId], references: [id], onDelete: SetNull)
   locale            String    @default("de-DE")
   // DSGVO: Zeitpunkt/Version der zuletzt bestätigten Einwilligung zur
   // Datenverarbeitung — wird bei jedem Login/jeder Registrierung erneut
@@ -192,6 +206,9 @@ model Athlete {
   entries     StartlistEntry[]
   results     Result[]
   actionItems ActionItem[]
+  // Rückreferenz zu User.athleteId (siehe dort) — höchstens EIN Konto pro
+  // Athletenprofil, daher singulär statt eines Arrays.
+  user        User?
 
   // [clubId, updatedAt] statt [clubId] — siehe Begründung bei Group oben
   // (Sync-Pull-Zugriffsmuster).

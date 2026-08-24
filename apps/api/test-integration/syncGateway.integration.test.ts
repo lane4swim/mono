@@ -176,9 +176,23 @@ describe('PrismaSyncGateway.isEventProcessed()/markEventProcessed()', () => {
   it('meldet ein noch nicht verarbeitetes Event als nicht verarbeitet, danach als verarbeitet', async () => {
     const club = await createTestClub();
     const eventId = randomUUID();
-    expect(await gateway.isEventProcessed(eventId)).toBe(false);
+    expect(await gateway.isEventProcessed(eventId, club.id)).toBe(false);
 
     await gateway.markEventProcessed(eventId, club.id, 'groups', 'create');
-    expect(await gateway.isEventProcessed(eventId)).toBe(true);
+    expect(await gateway.isEventProcessed(eventId, club.id)).toBe(true);
+  });
+
+  // Aufräumarbeit (Code-Review): isEventProcessed() ist clubId-gescoped —
+  // ein fremdes Event-ID-Ratespiel darf nicht als "bereits verarbeitet"
+  // erkannt werden, nur weil irgendein ANDERER Verein diese id bereits
+  // verwendet hat.
+  it('ist clubId-gescoped — ein anderer Verein sieht dasselbe Event nicht als verarbeitet', async () => {
+    const clubA = await createTestClub(prisma, 'Verein A');
+    const clubB = await createTestClub(prisma, 'Verein B');
+    const eventId = randomUUID();
+
+    await gateway.markEventProcessed(eventId, clubA.id, 'groups', 'create');
+    expect(await gateway.isEventProcessed(eventId, clubA.id)).toBe(true);
+    expect(await gateway.isEventProcessed(eventId, clubB.id)).toBe(false);
   });
 });

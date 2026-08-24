@@ -186,7 +186,6 @@ Erklärung (vollständiges, verbindliches Schema samt Validierung:
 NODE_ENV=production
 PORT=3000
 DATABASE_URL="postgresql://lane1_app:EIN-TESTPASSWORT-HIER@localhost:5432/lane1"
-JWT_SIGNING_KEY="<mit openssl erzeugen, siehe unten>"
 JWT_PRIVATE_KEY="<mit openssl erzeugen, siehe unten>"
 JWT_PUBLIC_KEY="<mit openssl erzeugen, siehe unten>"
 CORS_ORIGIN="https://DEIN-CODESPACE-NAME-8080.app.github.dev"
@@ -194,15 +193,9 @@ FRONTEND_BASE_URL="https://DEIN-CODESPACE-NAME-8080.app.github.dev"
 ```
 (`CORS_ORIGIN`/`FRONTEND_BASE_URL`: die oben berechnete Adresse einsetzen, **ohne** abschließenden Schrägstrich.)
 
-**SMTP (optional für einen reinen Test):** Ohne `SMTP_HOST` wird eine Einladung nur ins Server-Log geschrieben statt tatsächlich per E-Mail versendet — für einen Testlauf meist ausreichend (der Einladungslink lässt sich trotzdem direkt in der Nutzerverwaltungs-Oberfläche kopieren, siehe `apps/web/help/admin.html`). Soll der komplette Versandweg mitgetestet werden, denselben SMTP-Block wie in `deployment.md`, Abschnitt 7.2 eintragen — inklusive des dortigen Warnhinweises zu `SMTP_SECURE` (**nicht** explizit auf `false` setzen). Ein Hinweis speziell für Cloud-Umgebungen wie Codespaces: Manche Cloud-Anbieter sperren ausgehende Verbindungen auf klassischen Mail-Ports (25/465) zur Spam-Prävention — Port 587 (wie im SMTP-Block vorgesehen) ist davon in aller Regel nicht betroffen; schlägt der Versand dennoch fehl, ist eine anbieterseitige Sperre eine mögliche Ursache.
+**SMTP (optional für einen reinen Test):** Ohne `SMTP_HOST` wird eine Einladung nur ins Server-Log geschrieben statt tatsächlich per E-Mail versendet — für einen Testlauf meist ausreichend (der Einladungslink lässt sich trotzdem direkt in der Nutzerverwaltungs-Oberfläche kopieren, siehe `apps/web/help/admin.html`). Soll der komplette Versandweg mitgetestet werden, denselben SMTP-Block wie in `deployment.md`, Abschnitt 7.2 eintragen. Ein Hinweis speziell für Cloud-Umgebungen wie Codespaces: Manche Cloud-Anbieter sperren ausgehende Verbindungen auf klassischen Mail-Ports (25/465) zur Spam-Prävention — Port 587 (wie im SMTP-Block vorgesehen) ist davon in aller Regel nicht betroffen; schlägt der Versand dennoch fehl, ist eine anbieterseitige Sperre eine mögliche Ursache.
 
-**1. Signierschlüssel erzeugen** (mind. 32 Zeichen, zufällig):
-```bash
-openssl rand -base64 48
-```
-Die Ausgabe als `JWT_SIGNING_KEY` einsetzen.
-
-**2. RS256-Schlüsselpaar erzeugen** (in Produktion — und damit auch hier, da `NODE_ENV=production` gesetzt ist — PFLICHT):
+**RS256-Schlüsselpaar erzeugen** (in Produktion — und damit auch hier, da `NODE_ENV=production` gesetzt ist — PFLICHT):
 ```bash
 openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out /tmp/jwt_private.pem
 openssl pkey -in /tmp/jwt_private.pem -pubout -out /tmp/jwt_public.pem
