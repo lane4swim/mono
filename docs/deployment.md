@@ -401,13 +401,48 @@ server {
     root /home/deploy/lane1/apps/web;
     index index.html;
 
+    # Content-Security-Policy für das Frontend (Code-Review, Befund S3):
+    # apps/api setzt bereits eine eigene, maximal restriktive CSP für seine
+    # JSON-Antworten (siehe apps/api/src/plugins/security.ts) — die
+    # eigentliche HTML-Anwendung (dieses Nginx-`root`-Verzeichnis) lief
+    # bislang OHNE jede CSP. Das Refresh Token liegt aus praktischen Gründen
+    # in `localStorage` (siehe apps/web/js/apiClient.js, dort ausführlich
+    # begründet), nicht in einem httpOnly-Cookie — bei einem XSS wäre der
+    # Schaden ohne CSP maximal (dauerhafte Sitzungsübernahme statt eines nur
+    # flüchtigen Zugriffs). Als `set`-Variable definiert statt den String
+    # zweimal auszuschreiben (siehe `location = /sw.js` unten, die einen
+    # eigenen `add_header` hat und dadurch die Vererbung aus `server`
+    # bricht — Nginx-Eigenheit: eine Location mit eigenem `add_header`
+    # erbt KEINE `add_header`-Direktiven des umschließenden Blocks mehr,
+    # auch nicht andere als die dort neu gesetzte).
+    #   - style-src erlaubt bewusst 'unsafe-inline': apps/web ist bewusst
+    #     ohne Build-Schritt (siehe apps/web/package.json) und setzt an
+    #     vielen Stellen `style="..."` direkt per JavaScript (`el()` in
+    #     js/utils.js) statt über CSS-Klassen — ein vollständiger Umbau
+    #     wäre eine eigene, große Refactoring-Aufgabe. Style-basierte
+    #     CSS-Injection ist ein deutlich kleineres Risiko als
+    #     Script-Injection, daher hier als bewusster, dokumentierter
+    #     Kompromiss vertretbar; script-src bleibt ohne 'unsafe-inline'
+    #     (die App verwendet ohnehin keine Inline-Skripte/-Handler).
+    #   - connect-src 'self' reicht aus, da diese Konfiguration Frontend
+    #     UND Backend (`location /api/`/`/auth/` unten) unter derselben
+    #     Origin ausliefert — ein eigener API-Origin ist hier nicht nötig.
+    #   - Ausführlich in einem echten Browser gegen genau diese Nginx-
+    #     Konfiguration getestet (Login, Navigation durch alle Module,
+    #     Modals, SVG-Diagramme, Service-Worker-Registrierung,
+    #     Superadmin-/Demo-/Hilfe-Seiten) — keine CSP-Verstöße in der
+    #     Konsole.
+    set $csp "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; worker-src 'self'; manifest-src 'self'";
+
     location / {
         try_files $uri $uri/ /index.html;
+        add_header Content-Security-Policy $csp always;
     }
 
     # Service Worker & Manifest müssen exakt korrekt ausgeliefert werden
     location = /sw.js {
         add_header Cache-Control "no-cache";
+        add_header Content-Security-Policy $csp always;
     }
 
     # API-Anfragen an das Node.js-Backend weiterleiten (sobald vorhanden)

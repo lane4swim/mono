@@ -194,13 +194,19 @@ server {
     root ${REPO_ROOT}/apps/web;
     index index.html;
 
+    # Content-Security-Policy für das Frontend (Code-Review, Befund S3) —
+    # siehe docs/deployment.md, Abschnitt 9 für die ausführliche Begründung.
+    set \$csp "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; worker-src 'self'; manifest-src 'self'";
+
     location / {
         try_files \$uri \$uri/ /index.html;
+        add_header Content-Security-Policy \$csp always;
     }
 
     # Service Worker & Manifest müssen exakt korrekt ausgeliefert werden
     location = /sw.js {
         add_header Cache-Control "no-cache";
+        add_header Content-Security-Policy \$csp always;
     }
 
     # API-Anfragen an das Node.js-Backend weiterleiten
