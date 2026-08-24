@@ -985,17 +985,21 @@ describe('describeSyncError()', () => {
     );
   });
 
-  it('gibt die Original-Fehlermeldung für einen normalen Error unverändert zurück', () => {
-    expect(describeSyncError(new Error('Etwas anderes ist schiefgelaufen'))).toBe('Etwas anderes ist schiefgelaufen');
+  it('gibt für einen normalen Error NICHT dessen Original-Nachricht zurück (kein Leak interner Fehlerdetails)', () => {
+    // Sicherheitskorrektur: die rohe err.message darf den Client nicht
+    // erreichen (siehe Kommentar bei describeSyncError() — Prismas Texte
+    // nennen z. B. Spalten-/Constraint-Namen aus dem internen Schema).
+    expect(describeSyncError(new Error('Unique constraint failed on the fields: (`tokenHash`)')))
+      .toBe('Der Vorgang konnte nicht angewendet werden (interner Fehler).');
   });
 
   it('liefert einen generischen Text für Fehler ohne erkennbare Form', () => {
-    expect(describeSyncError('nur ein String')).toBe('Unbekannter Fehler.');
-    expect(describeSyncError(undefined)).toBe('Unbekannter Fehler.');
+    expect(describeSyncError('nur ein String')).toBe('Der Vorgang konnte nicht angewendet werden (interner Fehler).');
+    expect(describeSyncError(undefined)).toBe('Der Vorgang konnte nicht angewendet werden (interner Fehler).');
   });
 
   it('behandelt einen Fehler mit anderem Code nicht als Fremdschlüssel-Verletzung', () => {
     const fakeError = { code: 'P2002', message: 'Unique constraint failed' };
-    expect(describeSyncError(fakeError)).toBe('Unbekannter Fehler.');
+    expect(describeSyncError(fakeError)).toBe('Der Vorgang konnte nicht angewendet werden (interner Fehler).');
   });
 });

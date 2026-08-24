@@ -546,6 +546,10 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
 
 export type SyncService = ReturnType<typeof createSyncService>;
 
+// Generische Meldung für jeden Fehler, der KEINEM der unten explizit
+// behandelten Prisma-Fehlercodes entspricht (siehe describeSyncError()).
+const GENERIC_SYNC_ERROR_MESSAGE = 'Der Vorgang konnte nicht angewendet werden (interner Fehler).';
+
 // Verbesserung: Prismas Fremdschlüssel-Verletzung (Fehlercode "P2003")
 // tritt konkret dann auf, wenn ein Event auf eine Person verweist, die
 // zwischenzeitlich endgültig gelöscht wurde (siehe
@@ -557,9 +561,28 @@ export type SyncService = ReturnType<typeof createSyncService>;
 // so lässt sie sich direkt testen, ohne einen echten generierten Prisma-
 // Client zu brauchen, und funktioniert unabhängig davon, welche konkrete
 // Fehlerklasse eine Gateway-Implementierung tatsächlich wirft.
+//
+// Sicherheitskorrektur (Code-Review): vormals wurde für jeden Fehler ohne
+// erkannten Code `err.message` UNVERÄNDERT an den Client zurückgegeben.
+// Prismas rohe Fehlertexte (z. B. "Unique constraint failed on the
+// fields: (`tokenHash`)" bei P2002, oder die Meldung zu "P2025" — Record
+// not found, tritt z. B. bei einem clubId-fremden update()/softDelete()
+// auf, siehe sync.gateway.ts) nennen Spalten-/Tabellen-/Constraint-Namen
+// aus dem internen Datenbankschema — ein Informationsleck, das der Rest
+// dieses Moduls bewusst vermeidet (siehe InvalidCredentialsError,
+// FOREIGN_ENTITY_ERROR oben, beide absichtlich generisch formuliert).
+// Jeder nicht explizit behandelte Fehler wird daher stattdessen
+// serverseitig geloggt und nur generisch beantwortet.
 export function describeSyncError(err: unknown): string {
-  if (err && typeof err === 'object' && 'code' in err && (err as { code?: string }).code === 'P2003') {
+  const code = err && typeof err === 'object' && 'code' in err ? (err as { code?: unknown }).code : undefined;
+
+  if (code === 'P2003') {
     return 'Die referenzierte Person oder der referenzierte Datensatz existiert nicht mehr (wurde vermutlich zwischenzeitlich endgültig gelöscht).';
   }
-  return err instanceof Error ? err.message : 'Unbekannter Fehler.';
+
+  if (err !== undefined) {
+    // eslint-disable-next-line no-console
+    console.error('[sync] Fehler beim Anwenden eines Sync-Events:', err);
+  }
+  return GENERIC_SYNC_ERROR_MESSAGE;
 }

@@ -142,20 +142,39 @@ export function createAuthService(deps: AuthServiceDeps) {
       if (existingUser) throw new EmailAlreadyRegisteredError();
 
       const passwordHash = await hashPassword(input.password);
-      const user = await deps.users.create({
-        clubId: invitation.clubId,
-        name: input.name,
-        email: invitation.email,
-        passwordHash,
-        role: invitation.role,
-        athleteId: invitation.athleteId,
-        // input.consent ist an dieser Stelle bereits durch
-        // AcceptInvitationRequestSchema (consent: z.literal(true)) erzwungen —
-        // wird hier dennoch nicht blind angenommen, sondern explizit als
-        // Zeitpunkt/Version dokumentiert (DSGVO-Nachweispflicht).
-        consentGivenAt: new Date(),
-        consentVersion: CURRENT_CONSENT_VERSION,
-      });
+      let user: UserRecord;
+      try {
+        user = await deps.users.create({
+          clubId: invitation.clubId,
+          name: input.name,
+          email: invitation.email,
+          passwordHash,
+          role: invitation.role,
+          athleteId: invitation.athleteId,
+          // input.consent ist an dieser Stelle bereits durch
+          // AcceptInvitationRequestSchema (consent: z.literal(true)) erzwungen —
+          // wird hier dennoch nicht blind angenommen, sondern explizit als
+          // Zeitpunkt/Version dokumentiert (DSGVO-Nachweispflicht).
+          consentGivenAt: new Date(),
+          consentVersion: CURRENT_CONSENT_VERSION,
+        });
+      } catch (err) {
+        // findByEmail() oben liefert bewusst NUR aktive Konten (siehe dessen
+        // Kommentar in auth.repository.ts) — für eine E-Mail, die einem
+        // bereits SOFT-gelöschten Konto gehört (Recht auf Löschung, Art. 17
+        // DSGVO, noch vor dem endgültigen Hard-Purge), liefert findByEmail()
+        // fälschlich `null`, obwohl `email` in der Datenbank weiterhin
+        // `@unique` ist (siehe schema.prisma) — genau dieser Fall tritt ein,
+        // wenn eine gelöschte Person erneut eingeladen wird und die
+        // Einladung annimmt. Ohne diesen Fang würde Prismas "P2002"
+        // (Unique-Constraint-Verletzung) hier als ungefangener 500 durch-
+        // schlagen, statt als derselbe, bereits vorhandene 409, den
+        // findByEmail() für ein aktives Konto liefert.
+        if (err && typeof err === 'object' && 'code' in err && (err as { code?: string }).code === 'P2002') {
+          throw new EmailAlreadyRegisteredError();
+        }
+        throw err;
+      }
       await deps.invitations.markUsed(invitation.id);
 
       const tokens = await issueTokens(user);
