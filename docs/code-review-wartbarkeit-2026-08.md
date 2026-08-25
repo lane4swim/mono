@@ -19,6 +19,19 @@ ist stattdessen durch einen eigens geschriebenen, ausgeführten Test belegt.
 Schweregrade: **Hoch** = jetzt beheben · **Mittel** = einplanen · **Niedrig** = bei nächster
 Berührung mitnehmen.
 
+**Stand der Behebung (25.08.2026):** W1–W5 sind behoben (Commits „Behebt W1–W3
+[…]" und „Behebt W4–W5 […]" auf diesem Branch — bei W3 nur auf den vier am
+dichtesten betroffenen Dateien, siehe dortiger Status). Verifiziert über
+`npm run lint/test/build/typecheck --workspaces` (grün: 309 API- + 63 Web- +
+102 Shared-Types- + 9 Sync-Protocol-Tests, 483 insgesamt). Wie bei der
+ursprünglichen Verifikation oben stand auch in dieser Folgesession kein
+Postgres-Container zur Verfügung — die 309 API-Tests sind weiterhin die
+Vitest-Suite gegen die `*.repository.memory.ts`-Doubles
+(`npm run test`), nicht die Prisma-Integrationssuite
+(`npm run test:integration`), die dementsprechend erneut ungeprüft blieb.
+Alle übrigen Befunde (W6/W7, Redundanzen, lange Methoden) sind unverändert
+offen.
+
 ---
 
 ## Zusammenfassung
@@ -55,7 +68,15 @@ Berührung).
 
 ### W1 — Zwei Funktionen namens `uid()`, eine davon erzeugt ungültige IDs (Hoch)
 
-`apps/web/js/utils.js:6` und `apps/web/js/db.js:62` exportieren beide eine Funktion `uid()`
+**Status: behoben.** `libraryTransfer.js` importiert `uid()` jetzt aus `db.js` (UUID) für
+`exercises.id`/`templates.id`; die Namenskollision ist aufgelöst, indem `utils.js`' Variante in
+`localId()` umbenannt wurde (alle drei Aufrufstellen — `setEditor.js`, `comments.js`, die
+eingebetteten Set-/Block-IDs in `libraryTransfer.js` selbst — entsprechend angepasst).
+`test/libraryTransfer.test.js` prüft jetzt zusätzlich direkt gegen
+`ExerciseSchema`/`TemplateSchema`, wie unten vorgeschlagen.
+
+`apps/web/js/utils.js:6` und `apps/web/js/db.js:62` exportierten (Stand des Befunds) beide eine
+Funktion `uid()`
 mit **unterschiedlichem Ausgabeformat**:
 
 ```js
@@ -107,6 +128,22 @@ ebenfalls `z.string()`, kein UUID. Der Verweis führt in die Irre.
 
 ### W2 — Die Liste der zehn fachlichen Stores steht sechsmal im Code (Hoch)
 
+**Status: behoben** (mit einer Einschränkung). `ENTITY_STORE_NAMES` wird jetzt in
+`packages/shared-types/src/entities.ts` per `Object.keys(ENTITY_SCHEMAS)` abgeleitet;
+`entityRegistry.ts` und `sync.gateway.ts` (`ALL_STORES`) importieren diese eine Liste, statt sie
+eigenständig zu pflegen. Für `apps/web/js/db.js` (`CLUB_SCOPED_STORES`) — strukturell weiterhin
+nicht importierbar, siehe W6 — wurde stattdessen der vorgeschlagene Test ergänzt
+(`test/db.test.js`), der die Liste gegen `ENTITY_STORE_NAMES` prüft.
+
+**Abweichung vom ursprünglichen Fix-Vorschlag:** `SyncStoreSchema` (`syncEvent.ts`) wurde
+NICHT ebenfalls aus `ENTITY_SCHEMAS` abgeleitet, wie unten vorgeschlagen — `entities.ts`
+importiert bereits `SyncStoreSchema` von `syncEvent.ts` (für den `satisfies`-Constraint bei
+`ENTITY_SCHEMAS`); eine Ableitung in die Gegenrichtung hätte einen Modul-Zyklus zwischen beiden
+Dateien erzeugt. `SyncStoreSchema` bleibt daher die einzige weiterhin von Hand gepflegte Kopie —
+mit compilerseitiger Absicherung über den bereits vorhandenen Test in
+`packages/shared-types/test/entities.test.ts` (`ENTITY_SCHEMAS registry`), der prüft, dass
+`ENTITY_SCHEMAS` für jeden fachlichen `SyncStoreSchema`-Wert einen Eintrag hat.
+
 | Ort | Form | Compiler-Absicherung |
 |---|---|---|
 | `packages/shared-types/src/entities.ts:267` | `ENTITY_SCHEMAS` (Quelle von `EntityStoreName`) | — (kanonisch) |
@@ -143,6 +180,18 @@ Test, der die Liste gegen `ENTITY_SCHEMAS` prüft.
 
 ### W3 — Kommentare sind zum Änderungsprotokoll geworden (Mittel)
 
+**Status: teilweise behoben, wie unten empfohlen fortlaufend.** Auf den vier in der Tabelle
+unten am dichtesten betroffenen Dateien (`sync.service.ts`, `security.ts`,
+`sync.gateway.ts`, `syncClient.js`) sowie punktuell in `utils.js`, `shell.js`,
+`invitations.service.ts` und `setEditor.js` sind die „Code-Review"/„Sicherheitsreview"/
+„Befund X"/„vormals"-Formulierungen durch Kommentare ersetzt, die den AKTUELLEN Code
+erklären, ohne die zugrunde liegende Begründung zu verlieren — `sync.service.ts` (das
+Beispiel unten) ist jetzt vollständig frei davon. Repo-weit sank die Zahl der Fundstellen
+(dieselbe Suche wie unten) von 239 auf 206. Die übrigen ~200, insbesondere in
+`jobs/erasure.repository.ts` und `config/env.ts` (beide unten in der Tabelle, noch nicht
+angefasst), bleiben bewusst offen — wie hier empfohlen, als fortlaufende Aufgabe bei
+nächster Berührung, kein Big-Bang.
+
 Der Vorgänger-Review hat das als **W1** benannt; es ist der einzige Befund von dort, zu dem
 sich kein Behebungs-Commit findet — und der Umfang ist seither gewachsen.
 
@@ -166,16 +215,21 @@ aus `sync.gateway.ts:255`:
 > „Aufräumarbeit (Code-Review): vormals `since ? 'update' : 'create'` — das unterstellte
 > fälschlich, jede Zeile eines ERSTEN Pulls (since === null) sei eine Neuanlage. …"
 
+*(Stand des Befunds — dieses konkrete Beispiel gehört inzwischen zu den behobenen Stellen;
+der Kommentar an dieser Position erklärt jetzt nur noch, warum `action` nicht zwischen
+"create" und "update" unterscheidet, ohne den früheren Zustand zu erwähnen.)*
+
 Neun Zeilen über eine Codezeile, die es nicht mehr gibt. Wer `listChangedSince()` ändern will,
 muss diesen Absatz lesen, um festzustellen, dass er nichts über das aktuelle Verhalten sagt.
 Bei 239 solchen Stellen summiert sich das zur eigentlichen Einstiegshürde des Projekts.
 
-Dazu kommt: Diese Kommentare veralten unbemerkt. `sync.gateway.ts:44` erklärt, dass
-`create()`/`update()`/`softDelete()`/`markEventProcessed()` „als PRIMITIVE bestehen blieben" —
-tatsächlich ruft sie inzwischen **kein Produktivcode mehr auf**, nur noch
+Dazu kommt: Diese Kommentare veralten unbemerkt. `sync.gateway.ts:44` erklärte (Stand des
+Befunds), dass `create()`/`update()`/`softDelete()`/`markEventProcessed()` „als PRIMITIVE
+bestehen blieben" — tatsächlich ruft sie inzwischen **kein Produktivcode mehr auf**, nur noch
 `test-integration/syncGateway.integration.test.ts`. Das Interface trägt fünf Methoden, die
 jede Implementierung (Prisma *und* In-Memory) erfüllen muss, obwohl nur die Tests sie brauchen
-(siehe L5).
+(siehe L5 — dieser strukturelle Befund selbst ist unverändert offen, nur der veraltete
+Kommentar dazu wurde korrigiert).
 
 **Fix:** Die Faustregel des Projekts umdrehen — ein Kommentar erklärt, *warum der Code so
 ist*, nie *wie er vorher war*. Die Historie steht in `git log` und in
@@ -194,8 +248,20 @@ Als Ankerpunkt für die Größenordnung: `sync.service.ts` schrumpft dadurch von
 
 ### W4 — Zirkuläre Abhängigkeit `db.js` ↔ `state.js` (Mittel)
 
-`apps/web/js/db.js:5` importiert `getCurrentUser` aus `state.js`; `state.js:19` importiert
-`wipeAll` aus `db.js`. Das ist der einzige Zyklus im Frontend-Importgraph (162 Kanten geprüft).
+**Status: behoben**, über die zweite der beiden vorgeschlagenen Optionen: `db.js` exportiert
+jetzt `setClubIdProvider(fn)` (Default: liefert `undefined`) statt `getCurrentUser` direkt zu
+importieren; `state.js` registriert beim Laden `setClubIdProvider(() => getCurrentUser()?.clubId)`.
+Der Zyklus ist damit vollständig aufgelöst (erneut per Skript geprüft: 0 Zyklen im
+Frontend-Importgraph). `test/db.test.js` mockt `state.js` jetzt nicht mehr — es registriert
+stattdessen direkt einen Test-Provider, wie unten durch den Fix versprochen; das einzig
+verbliebene `state.js`-Mock in `test/libraryTransfer.test.js` betrifft eine andere,
+unveränderte Abhängigkeit (`libraryTransfer.js` importiert `getCurrentUser` selbst, für
+`bulkPut()`-Aufrufe, die nicht über `db.js`' automatische clubId-Ergänzung laufen — kein Teil
+dieses Zyklus).
+
+`apps/web/js/db.js:5` importierte (Stand des Befunds) `getCurrentUser` aus `state.js`;
+`state.js:19` importierte `wipeAll` aus `db.js`. Das war der einzige Zyklus im
+Frontend-Importgraph (162 Kanten geprüft).
 
 Er funktioniert heute, weil beide Seiten die Gegenimporte erst zur Aufrufzeit auswerten, nicht
 beim Modulladen. Er ist trotzdem aus zwei Gründen zu beheben:
@@ -213,6 +279,13 @@ beim Modulladen. Er ist trotzdem aus zwei Gründen zu beheben:
 ohne Mock testbar.
 
 ### W5 — Kein Test auf Schlüsselgleichheit der Sprachdateien (Niedrig)
+
+**Status: behoben.** `test/i18n.test.js` enthält jetzt einen `describe('Vollständigkeit der
+Sprachdateien')`-Block, der jedes registrierte `LOCALES`-Wörterbuch (nicht nur `en-US`
+hartcodiert) gegen die abgeflachten Schlüssel von `de-DE` prüft — eine künftige dritte
+Sprache ist damit automatisch mit abgedeckt, wie unten vorgeschlagen. Verifiziert, dass der
+Test tatsächlich greift: ein testweise in `en-US.js` eingefügter zusätzlicher Schlüssel ließ
+den Test mit einer klaren Diff-Ausgabe fehlschlagen, bevor die Änderung wieder verworfen wurde.
 
 `js/i18n/de-DE.js` und `js/i18n/en-US.js` haben je 837 Schlüssel und sind aktuell **exakt
 deckungsgleich** (geprüft). Es gibt aber nichts, das das erhält: `t()` fällt bei fehlendem
@@ -662,19 +735,21 @@ Damit die Befunde nicht den Blick verstellen — diese Entscheidungen sollten er
 
 ## 6. Vorgeschlagene Reihenfolge
 
-| # | Befund | Aufwand | Wirkung |
-|---|---|---|---|
-| 1 | **W1** — `uid()`-Fehlgriff in `libraryTransfer.js` | 1 Zeile + Test | Behebt einen aktiven Datenverlust-Pfad |
-| 2 | **W2** — Store-Listen aus `ENTITY_SCHEMAS` ableiten | ~10 Zeilen | Schließt eine stille Fehlerklasse |
-| 3 | **W5** — Test auf i18n-Schlüsselgleichheit | ~5 Zeilen | Verhindert Sprachdrift |
-| 4 | **R2** — Fehler-Registry + `setErrorHandler` | ~1 Tag | −120 Zeilen, Status-Mapping wieder überblickbar |
-| 5 | **R1** — `openEntityForm()`-Helfer | ~1–2 Tage | −250 Zeilen, Modal-Verhalten an einer Stelle |
-| 6 | **L1** — `push()` in Guard-Kette zerlegen | ~1 Tag | Regeln einzeln testbar, Reihenfolge explizit |
-| 7 | **W4** — Zyklus `db.js` ↔ `state.js` | ~2 Std. | `db.js` ohne Mock testbar |
-| 8 | **L2/L3/L4** — Dateien aufteilen | ~2 Tage | Rein mechanisch, kein Verhaltensrisiko |
-| 9 | **R3/R4/R5/R6/R7/R8** — kleine Duplikate | je < 2 Std. | −150 Zeilen |
-| 10 | **W3** — Kommentar-Diät | fortlaufend | −1.200 bis −1.500 Zeilen; senkt die Einstiegshürde am stärksten |
-| 11 | **W7** — `no-bitwise` in ESLint aufnehmen | 1 Zeile | Fängt beide `&`-Stellen und alle künftigen |
+| # | Befund | Aufwand | Wirkung | Status |
+|---|---|---|---|---|
+| 1 | **W1** — `uid()`-Fehlgriff in `libraryTransfer.js` | 1 Zeile + Test | Behebt einen aktiven Datenverlust-Pfad | ✅ behoben |
+| 2 | **W2** — Store-Listen aus `ENTITY_SCHEMAS` ableiten | ~10 Zeilen | Schließt eine stille Fehlerklasse | ✅ behoben |
+| 3 | **W5** — Test auf i18n-Schlüsselgleichheit | ~5 Zeilen | Verhindert Sprachdrift | ✅ behoben |
+| 4 | **R2** — Fehler-Registry + `setErrorHandler` | ~1 Tag | −120 Zeilen, Status-Mapping wieder überblickbar | offen |
+| 5 | **R1** — `openEntityForm()`-Helfer | ~1–2 Tage | −250 Zeilen, Modal-Verhalten an einer Stelle | offen |
+| 6 | **L1** — `push()` in Guard-Kette zerlegen | ~1 Tag | Regeln einzeln testbar, Reihenfolge explizit | offen |
+| 7 | **W4** — Zyklus `db.js` ↔ `state.js` | ~2 Std. | `db.js` ohne Mock testbar | ✅ behoben |
+| 8 | **L2/L3/L4** — Dateien aufteilen | ~2 Tage | Rein mechanisch, kein Verhaltensrisiko | offen |
+| 9 | **R3/R4/R5/R6/R7/R8** — kleine Duplikate | je < 2 Std. | −150 Zeilen | offen |
+| 10 | **W3** — Kommentar-Diät | fortlaufend | −1.200 bis −1.500 Zeilen; senkt die Einstiegshürde am stärksten | 🟡 begonnen (4 Dateien, 239→206 Fundstellen) |
+| 11 | **W7** — `no-bitwise` in ESLint aufnehmen | 1 Zeile | Fängt beide `&`-Stellen und alle künftigen | offen |
 
-Die Positionen 1–3 sind zusammen unter einer Stunde Arbeit und beheben die einzigen Befunde
-mit unmittelbarer Auswirkung auf Nutzerdaten.
+Positionen 1, 2, 3 und 7 sind erledigt; Position 10 ist als fortlaufende Aufgabe angelegt und
+auf den dichtesten Dateien begonnen. Offen sind noch die beiden großen Duplikatsmuster (R1/R2),
+`push()`s Zerlegung in eine Guard-Kette (L1), die übrigen Datei-Aufteilungen (L2–L4, L7) und die
+kleinen Einzelbefunde (R3–R9, W6, W7).

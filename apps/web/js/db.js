@@ -2,7 +2,16 @@
 // Eine Datenbank, ein Object Store je Entität. Generisches CRUD, damit
 // neue Module nur einen Store-Namen ergänzen müssen und get/getAll/
 // put/remove kostenlos dazubekommen.
-import { getCurrentUser } from './state.js';
+//
+// Bewusst OHNE Import aus state.js: state.js importiert seinerseits
+// wipeAll() von hier (Sitzungsende räumt die lokale Ablage auf) — ein
+// Import in Gegenrichtung erzeugte einen Zyklus zwischen den beiden
+// Modulen. put() unten braucht dennoch die clubId der aktuell
+// eingeloggten Person (siehe CLUB_SCOPED_STORES-Kommentar dort); dafür
+// registriert state.js beim Laden per setClubIdProvider() eine Callback-
+// Funktion, statt dass db.js sich die Persistenzschicht selbst holt. Der
+// Cycle verschwindet dadurch vollständig: db.js kennt state.js gar nicht
+// mehr, nur noch dessen Ergebnis über diesen einen, injizierten Callback.
 import { IS_DEMO } from './demoMode.js';
 
 // demo.html läuft mit einer eigenen, vollständig getrennten IndexedDB-
@@ -101,6 +110,18 @@ export const CLUB_SCOPED_STORES = new Set([
   'exercises', 'templates', 'plans', 'sessions', 'actionItems',
 ]);
 
+// Liefert die clubId der aktuell eingeloggten Person, für put() unten —
+// standardmäßig ein No-op (liefert `undefined`), bis state.js beim Laden
+// per setClubIdProvider() die echte Quelle einträgt. Bleibt der Provider
+// unregistriert (z. B. in einem Test, der db.js isoliert lädt), verhält
+// sich put() dann einfach so, als gäbe es keine eingeloggte Person —
+// dasselbe Verhalten wie zuvor bei einem `getCurrentUser()`, das `null`
+// liefert.
+let clubIdProvider = () => undefined;
+export function setClubIdProvider(fn) {
+  clubIdProvider = fn;
+}
+
 export async function put(store, obj){
   const isNew = !obj.id;
   if (!obj.id) obj.id = uid();
@@ -115,7 +136,7 @@ export async function put(store, obj){
   // einer Bearbeitung, wo sie schon aus dem ursprünglichen Datensatz
   // stammt).
   if (obj.clubId === undefined && CLUB_SCOPED_STORES.has(store)) {
-    const clubId = getCurrentUser()?.clubId;
+    const clubId = clubIdProvider();
     if (clubId) obj.clubId = clubId;
   }
   obj.updatedAt = new Date().toISOString();
