@@ -19,16 +19,18 @@ ist stattdessen durch einen eigens geschriebenen, ausgeführten Test belegt.
 Schweregrade: **Hoch** = jetzt beheben · **Mittel** = einplanen · **Niedrig** = bei nächster
 Berührung mitnehmen.
 
-**Stand der Behebung (25.08.2026):** W1–W5 sind behoben (Commits „Behebt W1–W3
-[…]" und „Behebt W4–W5 […]" auf diesem Branch — bei W3 nur auf den vier am
-dichtesten betroffenen Dateien, siehe dortiger Status). Verifiziert über
-`npm run lint/test/build/typecheck --workspaces` (grün: 309 API- + 63 Web- +
-102 Shared-Types- + 9 Sync-Protocol-Tests, 483 insgesamt). Wie bei der
-ursprünglichen Verifikation oben stand auch in dieser Folgesession kein
-Postgres-Container zur Verfügung — die 309 API-Tests sind weiterhin die
-Vitest-Suite gegen die `*.repository.memory.ts`-Doubles
-(`npm run test`), nicht die Prisma-Integrationssuite
-(`npm run test:integration`), die dementsprechend erneut ungeprüft blieb.
+**Stand der Behebung (25.08.2026):** W1–W7 sind behoben (Commits „Behebt W1–W3 […]",
+„Behebt W4–W5 […]" und „Behebt W6–W7 […]" auf diesem Branch — bei W3 nur auf den
+vier am dichtesten betroffenen Dateien, siehe dortiger Status; W6 als Nebeneffekt der
+W2-Behebung, siehe dort). Verifiziert über `npm run lint/test/build/typecheck --workspaces`
+(grün: 309 API- + 63 Web- + 102 Shared-Types- + 9 Sync-Protocol-Tests, 483 insgesamt) sowie
+für W7 zusätzlich gezielt: die neue `no-bitwise`-Regel wurde testweise gegen einen
+absichtlich eingefügten `1 & 2`-Ausdruck ausgelöst, dann verifiziert, dass sie sauber wieder
+verschwindet. Wie bei der ursprünglichen Verifikation oben stand auch in dieser Folgesession
+kein Postgres-Container zur Verfügung — die 309 API-Tests sind weiterhin die Vitest-Suite
+gegen die `*.repository.memory.ts`-Doubles (`npm run test`), nicht die
+Prisma-Integrationssuite (`npm run test:integration`), die dementsprechend erneut ungeprüft
+blieb. Alle Befunde ab Abschnitt 2 (Redundanzen, lange Methoden) sind unverändert offen.
 Alle übrigen Befunde (W6/W7, Redundanzen, lange Methoden) sind unverändert
 offen.
 
@@ -305,6 +307,17 @@ Das gilt automatisch auch für jede künftige dritte Sprache, wenn man über `LO
 
 ### W6 — `apps/web` kann `packages/shared-types` nicht nutzen (Niedrig, strukturell)
 
+**Status: behoben** — als Nebeneffekt der W2-Behebung. Der dort ergänzte Test
+(`apps/web/test/db.test.js`, `describe('CLUB_SCOPED_STORES')`) importiert `ENTITY_STORE_NAMES`
+direkt aus `packages/shared-types/src/entities.ts` und prüft `CLUB_SCOPED_STORES` dagegen — das
+ist exakt die unten skizzierte Minimalvariante. `STORES` (die volle Store-Liste inkl. rein
+lokaler Stores wie `meta`/`syncQueue`/`users`/`clubs`/`invitations`) bleibt bewusst ungeprüft:
+dafür gibt es keine vergleichbare serverseitige Referenzliste — nur `CLUB_SCOPED_STORES` (die
+zehn mandantenfähigen Stores) hat ein server-seitiges Gegenstück (`ENTITY_STORE_NAMES`), gegen
+das sich Drift überhaupt feststellen ließe. Die aufwendigere erste Option (vorgebautes
+ESM-Bundle nach `apps/web/vendor/`) wurde nicht umgesetzt — nicht nötig, seit die
+Minimalvariante die eigentliche Lücke bereits schließt.
+
 `apps/web` ist bewusst build-frei (Vanilla-ESM, direkt vom Webserver ausgeliefert) und kann
 deshalb weder die Zod-Schemas noch die Store-Namen aus `packages/shared-types` importieren —
 beides ist TypeScript. Die Folge ist die Frontend-Hälfte von W2: `STORES` und
@@ -325,10 +338,31 @@ Die zweite Variante kostet zehn Zeilen und schließt die Lücke dort, wo sie weh
 
 ### W7 — `&` statt `;` in zwei Callback-Ausdrücken (Niedrig)
 
+**Status: behoben.**
+
+- `competitions.js:85` nutzt jetzt `refreshDetail` — einen bereits vorhandenen, in derselben
+  `renderDetail()`-Funktion definierten Helfer (`async function refreshDetail() {
+  clear(container); renderDetail(container, compId); }`, schon von drei anderen
+  Callbacks in derselben Datei genutzt: Ergebnis hinzufügen/löschen, Startlisten-Eintrag
+  hinzufügen). Sauberer als der ursprünglich vorgeschlagene `void`-Wrapper, da er dieselbe,
+  bereits existierende und bereits an vier Stellen bewährte Refresh-Logik wiederverwendet,
+  statt sie ein fünftes Mal zu schreiben.
+- `athletes.js:116` — hier gab es (anders als in `competitions.js`) keinen entsprechenden
+  Helfer; `navigate('athletes', athleteId)` und `location.reload()` sind beide synchron, ein
+  `await`-bedingtes Timing-Risiko wie beim ersten Fall bestand hier nicht. Ersetzt durch
+  `() => { navigate('athletes', athleteId); location.reload(); }` — funktional unverändert
+  (beide Aufrufe liefen wegen der Kurzschluss-freien Auswertung von `&` ohnehin bereits in
+  dieser Reihenfolge), aber ohne den irreführenden bitweisen Operator.
+- `no-bitwise: 'error'` in `packages/shared-config/eslint-preset.cjs` ergänzt (gilt für ALLE
+  Workspaces über die gemeinsame Basis) — TypeScripts `|`/`&` in Typausdrücken (Union/
+  Intersection Types) sind ein eigener Syntaxknoten und lösen die Regel nicht aus, geprüft
+  über `npm run lint --workspaces` (weiterhin grün) sowie einen gezielten Test: ein testweise
+  eingefügter `1 & 2`-Ausdruck wurde zuverlässig als `no-bitwise`-Fehler gemeldet.
+
 ```js
-// modules/competitions.js:85
+// modules/competitions.js:85 (Stand des Befunds)
 onclick: () => openCompModal(comp, () => renderDetail(container, compId) & clear(container))
-// modules/athletes.js:116
+// modules/athletes.js:116 (Stand des Befunds)
 onclick: () => openAthleteModal(athlete, groups, () => navigate('athletes', athleteId) & location.reload())
 ```
 
@@ -747,9 +781,10 @@ Damit die Befunde nicht den Blick verstellen — diese Entscheidungen sollten er
 | 8 | **L2/L3/L4** — Dateien aufteilen | ~2 Tage | Rein mechanisch, kein Verhaltensrisiko | offen |
 | 9 | **R3/R4/R5/R6/R7/R8** — kleine Duplikate | je < 2 Std. | −150 Zeilen | offen |
 | 10 | **W3** — Kommentar-Diät | fortlaufend | −1.200 bis −1.500 Zeilen; senkt die Einstiegshürde am stärksten | 🟡 begonnen (4 Dateien, 239→206 Fundstellen) |
-| 11 | **W7** — `no-bitwise` in ESLint aufnehmen | 1 Zeile | Fängt beide `&`-Stellen und alle künftigen | offen |
+| 11 | **W7** — `no-bitwise` in ESLint aufnehmen | 1 Zeile | Fängt beide `&`-Stellen und alle künftigen | ✅ behoben |
 
-Positionen 1, 2, 3 und 7 sind erledigt; Position 10 ist als fortlaufende Aufgabe angelegt und
-auf den dichtesten Dateien begonnen. Offen sind noch die beiden großen Duplikatsmuster (R1/R2),
-`push()`s Zerlegung in eine Guard-Kette (L1), die übrigen Datei-Aufteilungen (L2–L4, L7) und die
-kleinen Einzelbefunde (R3–R9, W6, W7).
+Positionen 1, 2, 3, 7 und 11 sind erledigt; W6 (kein eigener Tabelleneintrag, siehe dortiger
+Abschnitt) ist als Nebeneffekt von Position 2 ebenfalls erledigt. Position 10 ist als
+fortlaufende Aufgabe angelegt und auf den dichtesten Dateien begonnen. Offen sind noch die
+beiden großen Duplikatsmuster (R1/R2), `push()`s Zerlegung in eine Guard-Kette (L1), die
+übrigen Datei-Aufteilungen (L2–L4, L7) und die kleinen Einzelbefunde (R3–R9).

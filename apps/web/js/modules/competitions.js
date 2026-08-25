@@ -82,7 +82,7 @@ async function renderDetail(container, compId) {
     el('div', {}, [el('div', { class: 'page-eyebrow' }, fmtDateLong(comp.date)), el('h1', { class: 'mt-0' }, comp.name)]),
     el('div', { class: 'page-actions' }, [
       el('button', { class: 'btn btn-primary', onclick: () => navigate('competitions', compId, 'live', '0') }, t('competitions.liveModeStart')),
-      el('button', { class: 'btn btn-ghost', onclick: () => openCompModal(comp, () => renderDetail(container, compId) & clear(container)) }, t('common.edit')),
+      el('button', { class: 'btn btn-ghost', onclick: () => openCompModal(comp, refreshDetail) }, t('common.edit')),
       el('button', { class: 'btn btn-danger', onclick: () => confirmAction(t('competitions.deleteCompConfirm'), async () => { await remove('competitions', compId); for (const r of compResults) await remove('results', r.id); for (const en of compEntries) await remove('entries', en.id); toast(t('competitions.deleted')); navigate('competitions'); }) }, t('common.delete')),
     ]),
   ]));

@@ -113,7 +113,7 @@ async function renderDetail(container, athleteId, athletes, groups) {
       el('h1', { class: 'mt-0' }, fullName(athlete)),
     ]),
     el('div', { class: 'page-actions' }, isAdminOrSuperAdmin() ? [
-      el('button', { class: 'btn btn-ghost', onclick: () => openAthleteModal(athlete, groups, () => navigate('athletes', athleteId) & location.reload()) }, t('common.edit')),
+      el('button', { class: 'btn btn-ghost', onclick: () => openAthleteModal(athlete, groups, () => { navigate('athletes', athleteId); location.reload(); }) }, t('common.edit')),
       el('button', { class: 'btn btn-danger', onclick: () => confirmAction(t('athletes.deleteConfirm', { name: fullName(athlete) }), async () => { await remove('athletes', athleteId); toast(t('athletes.deleted')); navigate('athletes'); }) }, t('common.delete')),
     ] : []),
   ]));
