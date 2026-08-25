@@ -34,6 +34,7 @@ function makeService() {
     clubs: new InMemoryClubRepository(),
     invitations,
     athletes: new InMemoryAthleteRepository(),
+    users,
     mailer: new InMemoryMailSender(),
     frontendBaseUrl: 'https://app.example.org',
     clubInvitationTtlDays: 14,

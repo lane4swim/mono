@@ -30,11 +30,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        # Version wie in ci.yml (Code-Review, Befund W12): beide Workflows
+        # dieses Repos sollen dieselbe actions/checkout-Version nutzen statt
+        # unabhängig voneinander zu veralten.
+        uses: actions/checkout@v7
       - name: Setup Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           # Upload only web app
           path: './apps/web'

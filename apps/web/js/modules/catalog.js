@@ -2,7 +2,7 @@
 // modules/catalog.js — Übungskatalog
 // ============================================================
 import { getAll, put, remove } from '../db.js';
-import { el, clear, field, textInput, selectInput, openModal, confirmAction, toast, badge, emptyState, laneWave, beginRender } from '../utils.js';
+import { el, clear, field, textInput, selectInput, openModal, confirmAction, toast, badge, emptyState, laneWave, beginRender, icon } from '../utils.js';
 import { EXERCISE_CATEGORIES, STROKES, EQUIPMENT_ITEMS } from '../refdata.js';
 import { t, trLabel, trCode, trOptions } from '../i18n.js';
 import { renderCommentThread } from './comments.js';
@@ -40,13 +40,13 @@ function renderList(container, exercises) {
   const gridBtn = el('button', {
     type: 'button', class: `view-toggle-btn ${viewMode === 'grid' ? 'active' : ''}`,
     title: t('catalog.viewGrid'), 'aria-label': t('catalog.viewGrid'), 'aria-pressed': viewMode === 'grid',
-    html: ICON_VIEW_GRID, onclick: () => setView('grid'),
-  });
+    onclick: () => setView('grid'),
+  }, icon(ICON_VIEW_GRID));
   const listBtn = el('button', {
     type: 'button', class: `view-toggle-btn ${viewMode === 'list' ? 'active' : ''}`,
     title: t('catalog.viewList'), 'aria-label': t('catalog.viewList'), 'aria-pressed': viewMode === 'list',
-    html: ICON_VIEW_LIST, onclick: () => setView('list'),
-  });
+    onclick: () => setView('list'),
+  }, icon(ICON_VIEW_LIST));
   const viewToggle = el('div', { class: 'view-toggle' }, [gridBtn, listBtn]);
 
   wrap.appendChild(el('div', { class: 'page-head' }, [

@@ -14,7 +14,7 @@
 import { pendingSyncCount } from './db.js';
 import { getRole } from './state.js';
 import { visibleModules, navigate, getModule, currentRoute } from './router.js';
-import { el, clear, toast, openModal, beginRender } from './utils.js';
+import { el, clear, toast, openModal, beginRender, icon } from './utils.js';
 import { t, getLocale, getAvailableLocales } from './i18n.js';
 
 const GROUP_ICON_TRAINING = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 7c1.4 1.3 2.8 1.3 4.2 0s2.8-1.3 4.2 0 2.8 1.3 4.2 0 2.8-1.3 4.2 0"/><path d="M2 12.5c1.4 1.3 2.8 1.3 4.2 0s2.8-1.3 4.2 0 2.8 1.3 4.2 0 2.8-1.3 4.2 0"/><path d="M2 18c1.4 1.3 2.8 1.3 4.2 0s2.8-1.3 4.2 0 2.8 1.3 4.2 0 2.8-1.3 4.2 0"/></svg>';
@@ -74,7 +74,7 @@ export function buildNav() {
   const overflowRouteIds = overflow.flatMap(g => g.mods.map(m => m.id));
   if (overflowRouteIds.length > 0) {
     bottomNav.appendChild(el('button', { 'data-route-group': overflowRouteIds.join(' '), style: 'position:relative', onclick: () => openMoreNav(overflow) }, [
-      el('span', { class: 'ic', html: MORE_ICON }), el('span', {}, t('common.more')),
+      icon(MORE_ICON, { class: 'ic' }), el('span', {}, t('common.more')),
     ]));
   }
 
@@ -85,7 +85,7 @@ export function buildNav() {
 function sideNavItem(m) {
   const navBadge = m.id === 'syncqueue' ? el('span', { class: 'nav-badge', hidden: true }) : null;
   return el('li', {}, el('button', { class: 'nav-link', 'data-route': m.id, onclick: () => navigate(m.id) }, [
-    el('span', { class: 'ic', html: m.icon }), el('span', { style: 'flex:1' }, t(`nav.${m.id}`)), navBadge,
+    icon(m.icon, { class: 'ic' }), el('span', { style: 'flex:1' }, t(`nav.${m.id}`)), navBadge,
   ].filter(Boolean)));
 }
 
@@ -100,7 +100,7 @@ function bottomNavItem(m, groupLabel, groupRouteIds, groupIcon) {
   const bottomBadge = m.id === 'syncqueue' ? el('span', { class: 'nav-badge nav-badge-mobile', hidden: true }) : null;
   const label = groupLabel || t(`nav.${m.id}`);
   return el('button', { 'data-route': m.id, 'data-route-group': (groupRouteIds || [m.id]).join(' '), onclick: () => navigate(m.id), style: 'position:relative' }, [
-    el('span', { class: 'ic', html: groupIcon || m.icon }), el('span', {}, label.split(' ')[0]), bottomBadge,
+    icon(groupIcon || m.icon, { class: 'ic' }), el('span', {}, label.split(' ')[0]), bottomBadge,
   ].filter(Boolean));
 }
 
@@ -112,14 +112,14 @@ function openMoreNav(groups) {
   groups.forEach(g => {
     if (g.labelKey) {
       body.appendChild(el('div', { class: 'nav-group-label' }, [
-        g.icon ? el('span', { class: 'ic', html: g.icon }) : null,
+        g.icon ? icon(g.icon, { class: 'ic' }) : null,
         el('span', {}, t(g.labelKey)),
       ].filter(Boolean)));
     }
     g.mods.forEach(m => {
       const badge = m.id === 'syncqueue' ? el('span', { class: 'nav-badge', hidden: true }) : null;
       body.appendChild(el('button', { class: 'nav-link', onclick: () => { close(); navigate(m.id); } }, [
-        el('span', { class: 'ic', html: m.icon }), el('span', { style: 'flex:1' }, t(`nav.${m.id}`)), badge,
+        icon(m.icon, { class: 'ic' }), el('span', { style: 'flex:1' }, t(`nav.${m.id}`)), badge,
       ].filter(Boolean)));
     });
   });
@@ -172,13 +172,20 @@ export async function renderRoute(viewEl, route) {
   let mod = getModule(route.routeId);
   if (!mod || (mod.roles && !mod.roles.includes(role))) mod = defaultModuleFor(role);
   markActive(mod.id);
-  viewEl.innerHTML = `<div class="empty-state">${t('common.loading')}</div>`;
+  // Code-Review, Befund W11: zuvor per Template-Literal direkt auf
+  // viewEl.innerHTML geschrieben — ein unauffälliger, unbenannter HTML-
+  // Sink neben dem sonst in dieser Datei konsequent verwendeten
+  // el()/clear()-Baukasten (der aktuelle Inhalt, t('common.loading'), ist
+  // zwar unkritisch, aber genau diese Sonderstellung sollte bei jedem
+  // künftigen Audit nicht erneut geprüft werden müssen).
+  clear(viewEl);
+  viewEl.appendChild(el('div', { class: 'empty-state' }, t('common.loading')));
   try {
     await mod.render(viewEl, route.params || []);
   } catch (err) {
     if (!isCurrent()) return; // a newer render superseded this one; don't show a stale error
     console.error(err);
-    viewEl.innerHTML = '';
+    clear(viewEl);
     viewEl.appendChild(el('div', { class: 'empty-state' }, [
       el('h3', {}, t('common.somethingWentWrong')),
       el('p', {}, String(err?.message || err)),

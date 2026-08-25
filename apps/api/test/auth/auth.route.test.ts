@@ -47,6 +47,7 @@ async function buildTestApp() {
     clubs,
     invitations,
     athletes: new InMemoryAthleteRepository(),
+    users,
     mailer: new InMemoryMailSender(),
     frontendBaseUrl: 'https://app.example.org',
     clubInvitationTtlDays: 14,

@@ -12,7 +12,6 @@ export function el(tag, attrs = {}, children = []) {
   const node = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs || {})) {
     if (k === 'class') node.className = v;
-    else if (k === 'html') node.innerHTML = v;
     else if (k.startsWith('on') && typeof v === 'function') node.addEventListener(k.slice(2), v);
     else if (v !== null && v !== undefined && v !== false) node.setAttribute(k, v === true ? '' : v);
   }
@@ -24,6 +23,21 @@ export function el(tag, attrs = {}, children = []) {
   return node;
 }
 export const h = el;
+
+// Code-Review, Befund W11: el() erlaubte bislang ein generisches
+// `html`-Attribut (schrieb direkt auf node.innerHTML) — unauffällig
+// zwischen den übrigen, textContent-basierten Attributen versteckt und
+// bei jedem künftigen Audit erneut als potenzieller XSS-Sink zu prüfen,
+// obwohl der einzige tatsächliche Verwendungszweck feste, intern
+// definierte SVG-Icon-Konstanten (ICON_*) sind. icon() macht diesen
+// einen legitimen Fall stattdessen explizit benannt und isoliert — NUR
+// für solche fest im Code stehenden SVG-Strings gedacht, NIEMALS für
+// Nutzereingaben oder Serverdaten.
+export function icon(svgMarkup, attrs = {}) {
+  const node = el('span', attrs);
+  node.innerHTML = svgMarkup;
+  return node;
+}
 
 // Code-Review, Befund S8: nur für ELEMENT-INHALTE gedacht (Text zwischen
 // zwei Tags, z. B. `<title>${esc(x)}</title>` in den SVG-Chart-Buildern

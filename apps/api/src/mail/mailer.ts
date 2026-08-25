@@ -12,28 +12,71 @@ export interface InvitationMailPayload {
   clubName: string;
   inviteUrl: string;
   expiresAt: Date;
+  // Sprache der einladenden Person (User.locale) — die eingeladene Person
+  // hat zu diesem Zeitpunkt noch kein Konto und damit keine eigene
+  // Locale; die Sprache der/des Einladenden ist die einzige zu diesem
+  // Zeitpunkt bekannte, plausible Wahl (Code-Review, Befund W9). Optional
+  // mit Fallback auf Deutsch, analog FALLBACK_LOCALE in js/i18n.js.
+  locale?: string;
 }
 
 export interface MailSender {
   sendInvitationEmail(payload: InvitationMailPayload): Promise<void>;
 }
 
-const ROLE_LABEL_DE: Record<InvitationMailPayload['role'], string> = {
-  admin: 'Administrator:in',
-  trainer: 'Trainer:in',
-  athlete: 'Athlet:in',
-};
+type SupportedLocale = 'de-DE' | 'en-US';
+const FALLBACK_LOCALE: SupportedLocale = 'de-DE';
 
-function buildSubject(payload: InvitationMailPayload): string {
-  return `Einladung zu ${payload.clubName} bei Lane 1`;
+function resolveLocale(locale: string | undefined): SupportedLocale {
+  return locale === 'en-US' ? 'en-US' : FALLBACK_LOCALE;
 }
 
-function buildTextBody(payload: InvitationMailPayload): string {
-  const expires = payload.expiresAt.toLocaleDateString('de-DE', { year: 'numeric', month: 'long', day: 'numeric' });
+const ROLE_LABEL: Record<SupportedLocale, Record<InvitationMailPayload['role'], string>> = {
+  'de-DE': {
+    admin: 'Administrator:in',
+    trainer: 'Trainer:in',
+    athlete: 'Athlet:in',
+  },
+  'en-US': {
+    admin: 'administrator',
+    trainer: 'coach',
+    athlete: 'athlete',
+  },
+};
+
+// Exportiert (wie buildHtmlBody() unten), damit die Lokalisierung
+// (Code-Review, Befund W9) direkt gegen die tatsächliche Text-/Betreff-
+// Ausgabe testbar ist.
+export function buildSubject(payload: InvitationMailPayload): string {
+  const locale = resolveLocale(payload.locale);
+  return locale === 'en-US'
+    ? `Invitation to ${payload.clubName} on Lane 1`
+    : `Einladung zu ${payload.clubName} bei Lane 1`;
+}
+
+export function buildTextBody(payload: InvitationMailPayload): string {
+  const locale = resolveLocale(payload.locale);
+  const expires = payload.expiresAt.toLocaleDateString(locale, { year: 'numeric', month: 'long', day: 'numeric' });
+  const roleLabel = ROLE_LABEL[locale][payload.role];
+  if (locale === 'en-US') {
+    return [
+      payload.recipientName ? `Hi ${payload.recipientName},` : 'Hi,',
+      '',
+      `You have been invited as ${roleLabel} for "${payload.clubName}" on Lane 1.`,
+      '',
+      'Please open the following link to activate your account:',
+      payload.inviteUrl,
+      '',
+      `This link is valid until ${expires}.`,
+      '',
+      'Best regards,',
+      'The Lane 1 team',
+    ].join('\n');
+  }
   return [
     payload.recipientName ? `Hallo ${payload.recipientName},` : 'Hallo,',
     '',
-    `Sie wurden als ${ROLE_LABEL_DE[payload.role]} für "${payload.clubName}" bei Lane 1 eingeladen.`,
+    `Sie wurden als ${roleLabel} für "${payload.clubName}" bei Lane 1 eingeladen.`,
     '',
     `Bitte öffnen Sie den folgenden Link, um Ihr Konto zu aktivieren:`,
     payload.inviteUrl,
@@ -49,10 +92,22 @@ function buildTextBody(payload: InvitationMailPayload): string {
 // mailer.test.ts) direkt gegen die tatsächliche HTML-Ausgabe testbar sind,
 // ohne einen echten SMTP-Versand nachzustellen.
 export function buildHtmlBody(payload: InvitationMailPayload): string {
-  const expires = payload.expiresAt.toLocaleDateString('de-DE', { year: 'numeric', month: 'long', day: 'numeric' });
+  const locale = resolveLocale(payload.locale);
+  const expires = payload.expiresAt.toLocaleDateString(locale, { year: 'numeric', month: 'long', day: 'numeric' });
+  const roleLabel = ROLE_LABEL[locale][payload.role];
+  if (locale === 'en-US') {
+    return `
+      <p>${payload.recipientName ? `Hi ${escapeHtml(payload.recipientName)},` : 'Hi,'}</p>
+      <p>You have been invited as <strong>${escapeHtml(roleLabel)}</strong> for
+         "${escapeHtml(payload.clubName)}" on Lane 1.</p>
+      <p><a href="${escapeHtml(payload.inviteUrl)}">Activate account</a></p>
+      <p style="color:#5B7A85;font-size:13px">This link is valid until ${expires}.</p>
+      <p>Best regards,<br>The Lane 1 team</p>
+    `.trim();
+  }
   return `
     <p>${payload.recipientName ? `Hallo ${escapeHtml(payload.recipientName)},` : 'Hallo,'}</p>
-    <p>Sie wurden als <strong>${escapeHtml(ROLE_LABEL_DE[payload.role])}</strong> für
+    <p>Sie wurden als <strong>${escapeHtml(roleLabel)}</strong> für
        „${escapeHtml(payload.clubName)}" bei Lane 1 eingeladen.</p>
     <p><a href="${escapeHtml(payload.inviteUrl)}">Konto aktivieren</a></p>
     <p style="color:#5B7A85;font-size:13px">Dieser Link ist gültig bis zum ${expires}.</p>

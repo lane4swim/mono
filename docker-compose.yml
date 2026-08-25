@@ -34,8 +34,23 @@ services:
       NODE_ENV: development
       PORT: 3000
       DATABASE_URL: "postgresql://lane1_app:lane1_dev_password@postgres:5432/lane1"
-      JWT_SIGNING_KEY: "local-dev-only-key-not-for-production-use-12345"
+      # Kein JWT_*-Schlüsselpaar gesetzt: config/env.ts kennt in
+      # development/test ohnehin nur JWT_PRIVATE_KEY/JWT_PUBLIC_KEY (RS256,
+      # PEM) — ein Wegwerf-Schlüsselpaar wird dann automatisch erzeugt
+      # (siehe auth/keys.ts). Für Produktion siehe docs/deployment.md,
+      # Abschnitt 7.2.
       CORS_ORIGIN: "http://localhost:5173"
+      # Basis-URL des Frontends — für den Einladungslink in der
+      # Versand-E-Mail (siehe invitations.service.ts). Explizit statt dem
+      # (zufällig identischen) Standardwert aus env.ts überlassen: dieser
+      # Docker-Compose-Aufbau startet nur API + Postgres, das Frontend läuft
+      # separat auf dem Host über `npm run dev:web` (Port 5173, siehe
+      # CORS_ORIGIN oben).
+      FRONTEND_BASE_URL: "http://localhost:5173"
+      # SMTP_HOST bewusst nicht gesetzt: ohne eigenen lokalen Mailserver
+      # greift ConsoleMailSender als Ausweichlösung (protokolliert die
+      # Einladung statt sie zu versenden, siehe mailer.ts) — genau richtig
+      # für diesen lokalen Entwicklungsaufbau.
     ports:
       - "3000:3000"
 

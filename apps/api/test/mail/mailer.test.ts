@@ -1,7 +1,7 @@
 // apps/api/test/mail/mailer.test.ts
 import { describe, it, expect, vi } from 'vitest';
 import { InMemoryMailSender } from '../../src/mail/mailer.memory.js';
-import { buildHtmlBody, SmtpMailSender } from '../../src/mail/mailer.js';
+import { buildHtmlBody, buildTextBody, buildSubject, SmtpMailSender } from '../../src/mail/mailer.js';
 
 // Fake statt echtem SMTP-Handshake: sendMail() als Spy, createTransport()
 // ebenfalls, damit die Tests zu Befund P4 unten prüfen können, WIE OFT der
@@ -100,6 +100,50 @@ describe('buildHtmlBody() — HTML-Escaping', () => {
     expect(html).not.toContain("Verein 'X'");
     expect(html).toContain('O&#39;Brien');
     expect(html).toContain('Verein &#39;X&#39;');
+  });
+});
+
+// Regressionstests für Befund W9 (Code-Review): mailer.ts formatierte
+// Einladungs-E-Mails bislang unabhängig von payload.locale IMMER auf
+// Deutsch (Datum via .toLocaleDateString('de-DE') fest verdrahtet, nur ein
+// deutsches Rollen-Label).
+describe('Lokalisierung (Befund W9)', () => {
+  const basePayload = {
+    to: 'x@example.org',
+    role: 'trainer' as const,
+    clubName: 'SV Wasserfreunde',
+    inviteUrl: 'https://app.example.org/#/accept-invite/abc123',
+    expiresAt: new Date('2026-08-01T00:00:00.000Z'),
+  };
+
+  it('baut Betreff/Text/HTML auf Deutsch, wenn locale fehlt (Fallback)', () => {
+    expect(buildSubject(basePayload)).toContain('Einladung zu');
+    expect(buildTextBody(basePayload)).toContain('Trainer:in');
+    expect(buildHtmlBody(basePayload)).toContain('Trainer:in');
+  });
+
+  it('baut Betreff/Text/HTML auf Deutsch für eine unbekannte Locale (Fallback)', () => {
+    const payload = { ...basePayload, locale: 'fr-FR' };
+    expect(buildSubject(payload)).toContain('Einladung zu');
+    expect(buildTextBody(payload)).toContain('Trainer:in');
+  });
+
+  it('baut Betreff/Text/HTML auf Englisch für locale "en-US"', () => {
+    const payload = { ...basePayload, locale: 'en-US' };
+    expect(buildSubject(payload)).toBe('Invitation to SV Wasserfreunde on Lane 1');
+    const text = buildTextBody(payload);
+    expect(text).toContain('coach');
+    expect(text).not.toContain('Trainer:in');
+    const html = buildHtmlBody(payload);
+    expect(html).toContain('coach');
+    expect(html).not.toContain('Trainer:in');
+  });
+
+  it('formatiert das Ablaufdatum passend zur Locale', () => {
+    const de = buildTextBody(basePayload);
+    const en = buildTextBody({ ...basePayload, locale: 'en-US' });
+    expect(de).toContain('1. August 2026');
+    expect(en).toContain('August 1, 2026');
   });
 });
 

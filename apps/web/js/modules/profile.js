@@ -202,7 +202,7 @@ function openDeleteAccountModal() {
     confirmDeleteBtn.disabled = true;
     try {
       const result = await api.deleteMyAccount();
-      toast(t('profileData.deleted', { date: new Date(result.purgeAfter).toLocaleDateString('de-DE') }));
+      toast(t('profileData.deleted', { date: new Date(result.purgeAfter).toLocaleDateString(getLocale()) }));
       close();
       // Code-Review, Befund R2: räumte den lokalen Cache zuvor Datensatz
       // für Datensatz per eigener eraseMyAccountAndData()-Funktion auf —
