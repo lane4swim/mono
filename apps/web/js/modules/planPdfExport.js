@@ -18,7 +18,8 @@
 // Einzeltag bekommt die volle Seitenbreite statt der Mehrspalten-Ansicht,
 // dadurch bleiben Übungsname/Distanz/Wiederholungen noch größer.
 // ============================================================
-import { el, clear, fmtDateLong } from '../utils.js';
+import { el, clear } from '../dom.js';
+import { fmtDateLong } from '../dates.js';
 import { totalDistance } from './setEditor.js';
 import { t } from '../i18n.js';
 

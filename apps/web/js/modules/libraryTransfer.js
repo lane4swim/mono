@@ -18,17 +18,19 @@
 // Vereine, die dieselbe Datei importieren, in Konflikt geraten — `id` ist
 // in der Datenbank global eindeutig (Primärschlüssel), nicht je Verein.
 // `uid()` kommt hier bewusst aus db.js (crypto.randomUUID()), NICHT aus
-// utils.js: exercises.id/templates.id sind fachliche Primärschlüssel, für
+// dom.js: exercises.id/templates.id sind fachliche Primärschlüssel, für
 // die ExerciseSchema/TemplateSchema (packages/shared-types/src/entities.ts)
 // `z.string().uuid()` verlangen — ein per Sync-Push importierter Datensatz
 // mit einer Nicht-UUID-id scheitert sonst dauerhaft an der Server-Validierung.
 // Für die EINGEBETTETEN Set-/Block-ids in remapSetEntry() unten gilt das
 // nicht (PlainSetSchema.id/RepeatBlockSchema.id sind nur `z.string()`) —
-// dort kommt weiterhin localId() aus utils.js zum Einsatz.
+// dort kommt weiterhin localId() aus dom.js zum Einsatz.
 // ============================================================
 import { getAll, bulkPut, bulkEnqueueSyncEvents, uid } from '../db.js';
 import { getCurrentUser } from '../state.js';
-import { el, localId, toast, openModal } from '../utils.js';
+import { el, localId } from '../dom.js';
+import { toast } from '../ui.js';
+import { openModal } from '../modal.js';
 import { t } from '../i18n.js';
 
 export const LIBRARY_EXPORT_FORMAT = 'lane1-library-export-v1';

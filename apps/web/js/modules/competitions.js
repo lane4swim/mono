@@ -1,16 +1,24 @@
 // ============================================================
-// modules/competitions.js — Wettkampfmanagement
+// modules/competitions.js — Wettkampfmanagement (CRUD: Liste, Detail,
+// Start-/Ergebnisliste, drei Formular-Modals).
+//
+// Code-Review, Befund L3: war 675 Zeilen mit drei kaum verwandten
+// Zuständigkeiten (CRUD hier; Wettkampfmodus jetzt in
+// competitionLive.js; die Stoppuhr-Widgets jetzt in stopwatch.js). Diese
+// Datei behält nur noch die Vereinsverwaltung der Wettkämpfe selbst.
 // ============================================================
 import { getAll, put, remove } from '../db.js';
-import {
-  el, clear, fullName, fmtDateLong, todayISO, toIsoDateTime, field, textInput, selectInput, dateInput,
-  openModal, confirmAction, toast, badge, emptyState, laneWave, secToTime, timeToSec, formActions,
-} from '../utils.js';
+import { el, clear, beginRender } from '../dom.js';
+import { fmtDateLong, todayISO, toIsoDateTime } from '../dates.js';
+import { secToTime, timeToSec } from '../swimTime.js';
+import { fullName, toast, badge, emptyState, laneWave } from '../ui.js';
+import { openModal, confirmAction } from '../modal.js';
+import { field, textInput, selectInput, dateInput, formActions } from '../forms.js';
 import { EVENTS, COURSES } from '../refdata.js';
 import { navigate } from '../router.js';
 import { t, trCode, trOptions, trOptionsFlat } from '../i18n.js';
-import { beginRender } from '../utils.js';
-import { openItemModal, fetchAssignableTrainers } from './actionItems.js';
+import { buildLiveGroups, renderLiveMode, findResultForEntry } from './competitionLive.js';
+import { buildStopwatchPanel } from './stopwatch.js';
 
 export const competitionsModule = {
   id: 'competitions',
@@ -164,261 +172,6 @@ function groupByHeat(entries) {
   return groups;
 }
 
-function findResultForEntry(results, entry) {
-  return results.find(r => r.competitionId === entry.competitionId && r.athleteId === entry.athleteId && r.event === entry.event) || null;
-}
-
-// ============================================================
-// Wettkampfmodus ("live mode") — a dedicated, full-screen timekeeping
-// flow for running an actual meet: starts at the first seeded event/heat
-// (lowest Wettkampfnummer, then lowest Lauf), shows one shared stopwatch
-// for the whole heat plus one capture card per athlete in that heat, and
-// a button to advance to the next event/heat. Position is encoded in the
-// URL (params[2]) rather than kept in a JS closure, consistent with the
-// rest of this app's hash-router-driven state — reloading/bookmarking
-// mid-meet resumes at the same heat instead of losing progress.
-// ============================================================
-
-// Groups a competition's start-list entries by (Wettkampfnummer, Lauf) and
-// sorts the groups in running order. Entries missing either value can't be
-// placed unambiguously in that order and are excluded (see renderLiveMode's
-// empty state) — Wettkampfnummer is free text (per the start-list form), so
-// numeric values sort numerically and any non-numeric ones sort after,
-// alphabetically, rather than silently coercing to NaN/0.
-function buildLiveGroups(compEntries) {
-  const map = new Map();
-  compEntries.forEach(e => {
-    if (!e.eventNumber || e.heat == null || e.heat === '') return;
-    const key = `${e.eventNumber}__${e.heat}`;
-    if (!map.has(key)) map.set(key, { eventNumber: e.eventNumber, heat: e.heat, event: e.event, entries: [] });
-    map.get(key).entries.push(e);
-  });
-  const groups = [...map.values()];
-  groups.forEach(g => g.entries.sort((a, b) => (a.lane ?? 99) - (b.lane ?? 99)));
-  groups.sort((a, b) => {
-    const an = parseFloat(a.eventNumber), bn = parseFloat(b.eventNumber);
-    const aNum = isNaN(an) ? Infinity : an, bNum = isNaN(bn) ? Infinity : bn;
-    if (aNum !== bNum) return aNum - bNum;
-    if (aNum === Infinity) { const c = String(a.eventNumber).localeCompare(String(b.eventNumber)); if (c) return c; }
-    return (a.heat ?? 0) - (b.heat ?? 0);
-  });
-  return groups;
-}
-
-async function renderLiveMode(container, compId, groupIndex) {
-  const [competitions, athletes, entries, results, trainers] = await Promise.all([
-    getAll('competitions'), getAll('athletes'), getAll('entries'), getAll('results'), fetchAssignableTrainers(),
-  ]);
-  const comp = competitions.find(c => c.id === compId);
-  const wrap = el('div');
-  wrap.appendChild(el('button', { class: 'btn btn-ghost btn-sm mb-16', onclick: () => navigate('competitions', compId) }, t('competitions.backToComp')));
-
-  if (!comp) {
-    wrap.appendChild(emptyState(t('common.notFoundTitle'), t('competitions.notFoundMsg'), el('button', { class: 'btn btn-primary', onclick: () => navigate('competitions') }, t('common.back'))));
-    container.appendChild(wrap);
-    return;
-  }
-
-  const compEntries = entries.filter(e => e.competitionId === compId);
-  const groups = buildLiveGroups(compEntries);
-
-  wrap.appendChild(el('div', { class: 'page-head' }, [
-    el('div', {}, [el('div', { class: 'page-eyebrow' }, comp.name), el('h1', { class: 'mt-0' }, t('competitions.liveModeTitle'))]),
-  ]));
-  wrap.appendChild(laneWave());
-
-  if (groups.length === 0) {
-    wrap.appendChild(emptyState(t('common.nothingHereTitle'), t('competitions.liveModeNoEntries'), null));
-    container.appendChild(wrap);
-    return;
-  }
-
-  const idx = Math.min(Math.max(groupIndex, 0), groups.length - 1);
-  const group = groups[idx];
-  const isLast = idx >= groups.length - 1;
-
-  const headerCard = el('div', { class: 'card mb-16' }, [
-    el('div', { class: 'flex justify-between items-center', style: 'flex-wrap:wrap;gap:12px' }, [
-      el('div', {}, [
-        el('div', { class: 'page-eyebrow' }, t('competitions.liveModePosition', { current: idx + 1, total: groups.length })),
-        el('h2', { class: 'mt-0', style: 'margin-bottom:0' }, t('competitions.liveModeHeatTitle', { nr: group.eventNumber, event: trCode(group.event, 'events'), heat: group.heat })),
-      ]),
-      isLast
-        ? badge(t('competitions.liveModeLastHeat'), 'done')
-        : el('button', { class: 'btn btn-primary', onclick: () => navigate('competitions', compId, 'live', String(idx + 1)) }, t('competitions.liveModeNext')),
-    ]),
-  ]);
-  wrap.appendChild(headerCard);
-
-  const timerCard = el('div', { class: 'card mb-16' });
-  wrap.appendChild(timerCard);
-  const sharedClock = buildSharedStopwatch(timerCard);
-
-  const cardsGrid = el('div', { class: 'grid grid-3' });
-  group.entries.forEach(entry => cardsGrid.appendChild(buildAthleteCard(entry, comp, athletes, results, sharedClock, trainers)));
-  wrap.appendChild(cardsGrid);
-
-  container.appendChild(wrap);
-}
-
-// Single shared clock for the whole heat — Start/Stop/Reset only (no Lap,
-// no Apply): individual athlete cards below each capture their own splits/
-// finish time by reading this clock's current elapsed() when their own
-// buttons are pressed, exactly like several lanes each having their own
-// stopwatch hand-synced to the same starting gun. `canCapture()` gates the
-// per-athlete buttons so a stray click before the heat has actually been
-// started can't record a meaningless ~0.00s time.
-function buildSharedStopwatch(container) {
-  let running = false, startTs = null, stoppedAt = null, intervalId = null, everStarted = false;
-  const listeners = [];
-  const notify = () => listeners.forEach(fn => fn());
-
-  const display = el('div', { class: 'data', style: 'font-size:3rem;font-weight:700;text-align:center;margin-bottom:12px' }, secToTime(0));
-  const startBtn = el('button', { type: 'button', class: 'btn btn-primary' }, t('competitions.stopwatchStart'));
-  const stopBtn = el('button', { type: 'button', class: 'btn btn-danger', disabled: true }, t('competitions.stopwatchStop'));
-  const resetBtn = el('button', { type: 'button', class: 'btn btn-ghost', disabled: true }, t('competitions.stopwatchReset'));
-
-  function elapsed() {
-    if (running) return (performance.now() - startTs) / 1000;
-    return stoppedAt ?? 0;
-  }
-  function updateDisplay() { display.textContent = secToTime(elapsed()); }
-
-  startBtn.addEventListener('click', () => {
-    running = true; everStarted = true; startTs = performance.now(); stoppedAt = null;
-    startBtn.disabled = true; stopBtn.disabled = false; resetBtn.disabled = true;
-    updateDisplay();
-    intervalId = setInterval(updateDisplay, 30);
-    notify();
-  });
-  stopBtn.addEventListener('click', () => {
-    if (!running) return;
-    stoppedAt = elapsed(); running = false; clearInterval(intervalId);
-    startBtn.disabled = true; stopBtn.disabled = true; resetBtn.disabled = false;
-    updateDisplay();
-    notify();
-  });
-  resetBtn.addEventListener('click', () => {
-    running = false; everStarted = false; clearInterval(intervalId); startTs = null; stoppedAt = null;
-    startBtn.disabled = false; stopBtn.disabled = true; resetBtn.disabled = true;
-    updateDisplay();
-    notify();
-  });
-
-  container.appendChild(el('div', {}, [
-    display,
-    el('div', { class: 'flex gap-8 justify-center' }, [startBtn, stopBtn, resetBtn]),
-  ]));
-
-  return { elapsed, isRunning: () => running, canCapture: () => everStarted, onChange: (fn) => listeners.push(fn) };
-}
-
-// One card per athlete in the current heat: shows lane/name/seed time,
-// captured lap splits, the finish time once set, a "Runde" (lap) button
-// that only records a split, a "Ziel" (finish) button that records the
-// final time AND persists the result immediately (no separate "Speichern"
-// step — during a live heat there's no time to remember one), a small
-// reset for mis-clicks, and a shortcut to log a Handlungsfeld for that
-// athlete without leaving the screen.
-function buildAthleteCard(entry, comp, athletes, allResults, sharedClock, trainers) {
-  const athlete = athletes.find(a => a.id === entry.athleteId);
-  // Mutable, not the initial findResultForEntry() snapshot: reassigned to
-  // the freshly saved record after each "Ziel" press so a later save (e.g.
-  // after a mis-click + Zurücksetzen) UPDATEs that same row instead of
-  // creating a duplicate result, and so "Zurücksetzen" reverts to the
-  // actually-persisted state rather than the pre-render one.
-  let savedResult = findResultForEntry(allResults, entry);
-  let laps = savedResult?.laps ? [...savedResult.laps] : [];
-  let done = savedResult?.time != null;
-
-  const timeDisplay = el('span', { class: 'data', style: 'font-size:1.3rem;font-weight:700' }, done ? secToTime(savedResult.time) : '—');
-  const pbHost = el('span');
-  const lapsHost = el('div', { class: 'flex gap-6', style: 'flex-wrap:wrap;margin:10px 0;min-height:24px' });
-
-  function drawLaps() {
-    clear(lapsHost);
-    if (laps.length === 0) { lapsHost.appendChild(el('span', { class: 'hint' }, t('competitions.stopwatchNoLaps'))); return; }
-    laps.forEach((cum, i) => lapsHost.appendChild(badge(`${i + 1}. ${secToTime(cum)}`, 'neutral')));
-  }
-  drawLaps();
-  if (savedResult?.isPB) pbHost.appendChild(badge('PB', 'pb'));
-
-  function upsertLocal(saved) {
-    const i = allResults.findIndex(r => r.id === saved.id);
-    if (i >= 0) allResults[i] = saved; else allResults.push(saved);
-  }
-
-  const lapBtn = el('button', { type: 'button', class: 'btn btn-ghost btn-sm', onclick: () => {
-    laps.push(sharedClock.elapsed());
-    drawLaps();
-  } }, t('competitions.stopwatchLap'));
-
-  const finishBtn = el('button', { type: 'button', class: 'btn btn-accent btn-sm', onclick: async () => {
-    const finalTime = sharedClock.elapsed();
-    if (laps.length === 0 || Math.abs(laps[laps.length - 1] - finalTime) > 0.01) laps.push(finalTime);
-    const others = allResults.filter(r => r.athleteId === entry.athleteId && r.event === entry.event && r.id !== savedResult?.id);
-    const isPB = others.length === 0 || others.every(r => finalTime < r.time);
-    const saved = await put('results', {
-      ...(savedResult || {}), athleteId: entry.athleteId, event: entry.event, time: finalTime,
-      date: comp.date, course: comp.course, competitionId: comp.id, isPB,
-      place: savedResult?.place ?? null, laps: laps.slice(),
-    });
-    upsertLocal(saved); // keeps later isPB comparisons (this card's own re-save, or other cards in this heat) aware of the save
-    savedResult = saved;
-    done = true;
-    timeDisplay.textContent = secToTime(finalTime);
-    drawLaps();
-    clear(pbHost);
-    if (isPB) pbHost.appendChild(badge('PB', 'pb'));
-    refreshEnabled();
-    resetBtn.disabled = false;
-    card.classList.add('live-card-done');
-    toast(isPB ? t('competitions.resultSavedPB') : t('competitions.resultSaved'));
-  } }, t('competitions.liveModeFinish'));
-
-  const resetBtn = el('button', { type: 'button', class: 'btn btn-ghost btn-sm', disabled: !done, title: t('competitions.liveModeResetCard') }, '↺');
-  resetBtn.addEventListener('click', () => {
-    laps = savedResult?.laps ? [...savedResult.laps] : [];
-    done = savedResult?.time != null;
-    timeDisplay.textContent = done ? secToTime(savedResult.time) : '—';
-    clear(pbHost);
-    if (savedResult?.isPB) pbHost.appendChild(badge('PB', 'pb'));
-    drawLaps();
-    resetBtn.disabled = !done;
-    refreshEnabled();
-    card.classList.toggle('live-card-done', done);
-  });
-
-  function refreshEnabled() {
-    const enabled = !done && sharedClock.canCapture();
-    lapBtn.disabled = !enabled;
-    finishBtn.disabled = !enabled;
-  }
-  refreshEnabled();
-  sharedClock.onChange(refreshEnabled);
-
-  const actionBtn = el('button', {
-    type: 'button', class: 'btn btn-ghost btn-sm',
-    onclick: () => openItemModal(null, athletes, trainers, () => toast(t('actionitems.savedCreate')), entry.athleteId),
-  }, '+ ' + t('competitions.liveModeAddActionItem'));
-
-  const card = el('div', { class: `card live-athlete-card ${done ? 'live-card-done' : ''}` }, [
-    el('div', { class: 'flex justify-between items-center' }, [
-      el('div', { class: 'flex items-center gap-8' }, [
-        badge(entry.lane != null ? t('competitions.liveModeLaneShort', { n: entry.lane }) : '—', 'neutral'),
-        el('strong', {}, fullName(athlete)),
-      ]),
-      pbHost,
-    ]),
-    el('p', { class: 'text-sm hint', style: 'margin:4px 0 10px' }, entry.seedTime ? t('competitions.liveModeSeed', { time: secToTime(entry.seedTime) }) : t('competitions.liveModeNoSeed')),
-    timeDisplay,
-    lapsHost,
-    el('div', { class: 'flex gap-8', style: 'margin-top:10px;flex-wrap:wrap' }, [lapBtn, finishBtn, resetBtn]),
-    el('div', { style: 'margin-top:8px' }, actionBtn),
-  ]);
-  return card;
-}
-
 // Appends two <tr> per start-list entry: the main row (lane/number/athlete/
 // event/seed time/quick result capture), and a companion, initially hidden
 // row holding an inline stopwatch panel with lap ("Runde") splits — toggled
@@ -428,7 +181,7 @@ function buildAthleteCard(entry, comp, athletes, allResults, sharedClock, traine
 // optionally with its splits. `liveIndex` (from renderDetail's
 // liveIndexByKey lookup) is the entry's position in the Wettkampfmodus
 // sequence, undefined if it's missing eventNumber/heat and therefore isn't
-// part of that sequence at all (see buildLiveGroups).
+// part of that sequence at all (see buildLiveGroups in competitionLive.js).
 function appendEntryRows(tbody, entry, comp, athletes, results, onChanged, liveIndex) {
   const athlete = athletes.find(a => a.id === entry.athleteId);
   const existingResult = findResultForEntry(results, entry);
@@ -503,83 +256,6 @@ function appendEntryRows(tbody, entry, comp, athletes, results, onChanged, liveI
 
   tbody.appendChild(mainRow);
   tbody.appendChild(detailRow);
-}
-
-// Self-contained stopwatch widget: Start / Runde (lap) / Stopp / Zurücksetzen,
-// live-updating elapsed-time display, and a table of recorded lap splits.
-// `initialLaps` (seconds, cumulative) lets a previously documented set of
-// splits be shown when the panel is reopened, without starting a new run.
-// `onApply(totalSeconds, laps)` is called when "Zeit übernehmen" is clicked.
-function buildStopwatchPanel(container, { initialLaps = [], onApply }) {
-  let running = false;
-  let startTs = null;
-  let laps = [...initialLaps];
-  let intervalId = null;
-
-  const display = el('div', { class: 'data', style: 'font-size:1.7rem;font-weight:700;margin-bottom:10px' }, secToTime(laps.length ? laps[laps.length - 1] : 0));
-  const lapsHost = el('div');
-
-  const startBtn = el('button', { type: 'button', class: 'btn btn-primary btn-sm' }, t('competitions.stopwatchStart'));
-  const lapBtn = el('button', { type: 'button', class: 'btn btn-ghost btn-sm', disabled: true }, t('competitions.stopwatchLap'));
-  const stopBtn = el('button', { type: 'button', class: 'btn btn-danger btn-sm', disabled: true }, t('competitions.stopwatchStop'));
-  const resetBtn = el('button', { type: 'button', class: 'btn btn-ghost btn-sm' }, t('competitions.stopwatchReset'));
-  const applyBtn = el('button', { type: 'button', class: 'btn btn-accent btn-sm', disabled: laps.length === 0 }, t('competitions.stopwatchApply'));
-
-  function currentElapsed() {
-    if (running) return (performance.now() - startTs) / 1000;
-    return laps.length ? laps[laps.length - 1] : 0;
-  }
-  function updateDisplay() { display.textContent = secToTime(currentElapsed()); }
-
-  function drawLaps() {
-    clear(lapsHost);
-    if (laps.length === 0) { lapsHost.appendChild(el('p', { class: 'hint' }, t('competitions.stopwatchNoLaps'))); return; }
-    const table = el('table');
-    table.appendChild(el('thead', {}, el('tr', {}, [
-      el('th', {}, t('competitions.stopwatchLapNr')), el('th', {}, t('competitions.stopwatchLapSplit')), el('th', {}, t('competitions.stopwatchLapTotal')),
-    ])));
-    const tbody = el('tbody');
-    laps.forEach((cum, i) => {
-      const prev = i === 0 ? 0 : laps[i - 1];
-      tbody.appendChild(el('tr', {}, [el('td', {}, String(i + 1)), el('td', { class: 'data' }, secToTime(cum - prev)), el('td', { class: 'data' }, secToTime(cum))]));
-    });
-    table.appendChild(tbody);
-    lapsHost.appendChild(el('div', { class: 'table-wrap' }, table));
-  }
-
-  startBtn.addEventListener('click', () => {
-    running = true; startTs = performance.now(); laps = [];
-    startBtn.disabled = true; lapBtn.disabled = false; stopBtn.disabled = false; applyBtn.disabled = true;
-    drawLaps(); updateDisplay();
-    intervalId = setInterval(updateDisplay, 30);
-  });
-  lapBtn.addEventListener('click', () => {
-    if (!running) return;
-    laps.push(currentElapsed());
-    drawLaps();
-  });
-  stopBtn.addEventListener('click', () => {
-    if (!running) return;
-    const final = currentElapsed();
-    if (laps.length === 0 || Math.abs(laps[laps.length - 1] - final) > 0.01) laps.push(final);
-    running = false;
-    clearInterval(intervalId);
-    startBtn.disabled = false; lapBtn.disabled = true; stopBtn.disabled = true; applyBtn.disabled = false;
-    updateDisplay(); drawLaps();
-  });
-  resetBtn.addEventListener('click', () => {
-    running = false; clearInterval(intervalId); laps = []; startTs = null;
-    startBtn.disabled = false; lapBtn.disabled = true; stopBtn.disabled = true; applyBtn.disabled = true;
-    updateDisplay(); drawLaps();
-  });
-  applyBtn.addEventListener('click', () => { onApply(currentElapsed(), laps); });
-
-  container.appendChild(el('div', { style: 'padding:12px 4px' }, [
-    display,
-    el('div', { class: 'flex gap-8 mb-8', style: 'flex-wrap:wrap' }, [startBtn, lapBtn, stopBtn, resetBtn, applyBtn]),
-    lapsHost,
-  ]));
-  drawLaps();
 }
 
 function openCompModal(comp, onSaved) {

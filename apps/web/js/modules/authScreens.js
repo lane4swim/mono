@@ -6,7 +6,10 @@
 // Ansichten müssen funktionieren, BEVOR eine Sitzung besteht, und werden
 // daher direkt von app.js gerendert, je nach Sitzungs-/URL-Zustand.
 // ============================================================
-import { el, field, textInput, toast, openModal } from '../utils.js';
+import { el } from '../dom.js';
+import { toast } from '../ui.js';
+import { openModal } from '../modal.js';
+import { field, textInput } from '../forms.js';
 import { login as loginRequest, acceptInvitation as acceptInvitationRequest, CURRENT_CONSENT_VERSION } from '../state.js';
 import * as api from '../apiClient.js';
 import { t } from '../i18n.js';

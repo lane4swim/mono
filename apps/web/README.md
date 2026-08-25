@@ -158,9 +158,15 @@ eigener Verlinkung ergänzen, ohne das bestehende Muster zu ändern.
   außer über `navigate()`).
 - **`js/modules/setEditor.js`** — gemeinsame UI-Komponente für
   Sets/Serien, genutzt von Vorlagen und Trainingsplänen.
-- **`js/utils.js`** — DOM-Helfer, Datumsfunktionen, Zeitformatierung,
-  eigene, abhängigkeitsfreie SVG-Mini-Chart-Funktionen (kein CDN nötig
-  → funktioniert offline).
+- **`js/dom.js`**, **`js/dates.js`**, **`js/swimTime.js`**, **`js/ui.js`**,
+  **`js/modal.js`**, **`js/forms.js`**, **`js/charts.js`** — gemeinsam
+  genutzte Hilfsfunktionen, thematisch aufgeteilt (DOM-Baukasten,
+  Datumsrechnung, Schwimmzeit-Formatierung, kleine UI-Bausteine/Toast,
+  Modal-Dialog, Formularfelder, eigene abhängigkeitsfreie
+  SVG-Mini-Chart-Funktionen — kein CDN nötig → funktioniert offline).
+  Ursprünglich ein einziges `utils.js` (Code-Review, Befund L4) — ein
+  Modul, das nur `fmtDateLong()` braucht, zog dadurch z. B. die
+  Diagramm-Generatoren nicht mehr mit.
 - **`sw.js`** — Service Worker mit versioniertem Cache; beim Ändern
   von Dateien `CACHE_VERSION` erhöhen, damit Clients die neue Version
   laden.
@@ -219,7 +225,7 @@ Deutsch zurückgefallen (`i18n.js: detectInitialLocale()`). Ein
 Sprachwechsel löst dabei genau **einen** Re-Render aus (`setUserLocale()`
 benachrichtigt nur die Sprach-Listener, nicht zusätzlich die
 Konto-Listener) — jedes Fachmodul sichert seinen Render zusätzlich per
-`beginRender()`/`isCurrent()` ab (`js/utils.js`), damit überlappende
+`beginRender()`/`isCurrent()` ab (`js/dom.js`), damit überlappende
 Render-Aufrufe (gleich aus welchem Grund) nie zu doppelt angezeigtem
 Inhalt führen können.
 
@@ -242,7 +248,7 @@ Inhalt führen können.
   Codes just-in-time in die aktive Sprache. Ein Wechsel der
   Anzeigesprache verändert also nie gespeicherte Daten, nur deren
   Darstellung.
-- **`js/utils.js`** — `fmtDateLong()`/`fmtDateShort()` nutzen
+- **`js/dates.js`** — `fmtDateLong()`/`fmtDateShort()` nutzen
   `getLocale()` für `toLocaleDateString()`, Datumsformate passen sich
   also ebenfalls an (z. B. `Mo., 12. Jan. 2026` vs. `Mon, Jan 12, 2026`).
 

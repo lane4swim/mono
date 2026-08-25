@@ -12,7 +12,8 @@
 // reachable independent of login state (§5 TMG), and duplicating the
 // text in two places would be a maintenance trap.
 // ============================================================
-import { el, clear, laneWave, beginRender } from '../utils.js';
+import { el, clear, beginRender } from '../dom.js';
+import { laneWave } from '../ui.js';
 import { t } from '../i18n.js';
 
 export const infoModule = {

@@ -19,26 +19,32 @@ ist stattdessen durch einen eigens geschriebenen, ausgeführten Test belegt.
 Schweregrade: **Hoch** = jetzt beheben · **Mittel** = einplanen · **Niedrig** = bei nächster
 Berührung mitnehmen.
 
-**Stand der Behebung (25.08.2026):** Sämtliche Befunde in Abschnitt 1 (W1–W7) sowie R1–R9 aus
-Abschnitt 2 sind behoben (Commits „Behebt W1–W3 […]", „Behebt W4–W5 […]", „Behebt W6–W7 […]",
-„Behebt R1–R2 […]" und „Behebt R3–R9 […]" auf diesem Branch) — mit vier dokumentierten
-Abweichungen vom ursprünglichen Befund-/Fix-Text: W3 nur auf den vier am dichtesten
-betroffenen Dateien (siehe dortiger Status), W2s `SyncStoreSchema` bewusst nicht mit
-abgeleitet (siehe dortiger Status), R1s Fix grundlegend überarbeitet, nachdem sich der
-ursprünglich vorgeschlagene `openEntityForm()`-Mega-Helfer beim tatsächlichen Implementieren
-als nicht tragfähig erwies (siehe dortiger Status für die Begründung und was stattdessen
-umgesetzt wurde), und R4s gemeinsamer `clubForm.js`-Helfer verzichtet in `admin.js`s
-Anlegen-Formular auf dessen ursprüngliche 401-Sonderbehandlung (siehe dortiger Status).
-Verifiziert über `npm run lint/test/build/typecheck --workspaces` (grün: 309 API- + 63 Web- +
-102 Shared-Types- + 9 Sync-Protocol-Tests, 483 insgesamt), für R1 und R3–R5/R8 zusätzlich im
-echten Browser gegen `demo.html`/`admin/index.html`/`index.html` (Playwright: Formulare und
-Einstellungsdialog geöffnet/geschlossen, Sprache umgeschaltet, Wettkampf-Ansicht neu geladen,
-keine Konsolenfehler beim Laden eines der drei Einstiegspunkte) und für W7 gezielt gegen die
-neue `no-bitwise`-Regel. Wie bei der ursprünglichen Verifikation oben stand auch in diesen
+**Stand der Behebung (25.08.2026):** Sämtliche Befunde in Abschnitt 1 (W1–W7), Abschnitt 2
+(R1–R9) und Abschnitt 3 (L1–L7) sind behoben bzw. geprüft (Commits „Behebt W1–W3 […]",
+„Behebt W4–W5 […]", „Behebt W6–W7 […]", „Behebt R1–R2 […]", „Behebt R3–R9 […]" und „Behebt
+L1–L7 […]" auf diesem Branch) — mit sechs dokumentierten Abweichungen vom ursprünglichen
+Befund-/Fix-Text: W3 nur auf den vier am dichtesten betroffenen Dateien (siehe dortiger
+Status), W2s `SyncStoreSchema` bewusst nicht mit abgeleitet (siehe dortiger Status), R1s Fix
+grundlegend überarbeitet, nachdem sich der ursprünglich vorgeschlagene
+`openEntityForm()`-Mega-Helfer beim tatsächlichen Implementieren als nicht tragfähig erwies
+(siehe dortiger Status für die Begründung und was stattdessen umgesetzt wurde), R4s
+gemeinsamer `clubForm.js`-Helfer verzichtet in `admin.js`s Anlegen-Formular auf dessen
+ursprüngliche 401-Sonderbehandlung (siehe dortiger Status), L1/L2s Zeilenschätzungen wurden
+überschritten, weil die Sicherheitskommentare bewusst erhalten blieben statt sie im selben
+Zug zu kürzen (siehe dortige Status), und L5 korrigiert den Befund selbst — `isEventProcessed()`
+ist entgegen der ursprünglichen Analyse KEINE tote Testmethode, sondern der Idempotenz-Fast-Path
+von `push()` (siehe dortiger Status). Verifiziert über `npm run lint/test/build/typecheck
+--workspaces` (grün: 309 API- + 63 Web- + 102 Shared-Types- + 9 Sync-Protocol-Tests, 483
+insgesamt), für R1, R3–R5/R8 und L3/L4/L6 zusätzlich im echten Browser gegen
+`demo.html`/`admin/index.html`/`index.html` (Playwright: Formulare, Einstellungsdialog,
+Ausrüstungs-Editor und Wettkampfmodus geöffnet/bedient, alle 14 Modul-Routen sowie alle drei
+Einstiegspunkte ohne Konsolenfehler geladen) und für W7 gezielt gegen die neue
+`no-bitwise`-Regel. Wie bei der ursprünglichen Verifikation oben stand auch in diesen
 Folgesessions kein Postgres-Container zur Verfügung — die 309 API-Tests sind weiterhin die
 Vitest-Suite gegen die `*.repository.memory.ts`-Doubles (`npm run test`), nicht die
 Prisma-Integrationssuite (`npm run test:integration`), die dementsprechend erneut ungeprüft
-blieb. Offen ist noch L1–L7 (Abschnitt 3, lange Methoden/Klassen).
+blieb. Damit sind alle Befunde dieses Reviews mit Ausnahme der fortlaufenden Kommentar-Diät
+(W3, Position 10 in Abschnitt 6) bearbeitet.
 
 ---
 
@@ -748,6 +754,26 @@ const PUSH_GUARDS = [parseEvent, requireKnownStore, requireWritePermission,
 Reihenfolge wird explizit und dokumentierbar, jede Regel einzeln testbar — und das
 1.226-Zeilen-Testfile lässt sich entlang derselben Struktur aufteilen.
 
+**Status: behoben, wie vorgeschlagen — mit einer Zahlenkorrektur.** `sync.service.ts` enthält
+jetzt genau das vorgeschlagene `PUSH_GUARDS`-Array (`parseEvent`, `requireKnownStore`,
+`requireWritePermission`, `shortCircuitIfProcessed`, `validatePayload`, `requireOwnClub`,
+`requireForeignKeysWithinClub`) mit der Signatur `(ctx) => SyncEventResult | null` — `ctx` ist
+ein je Event neu angelegtes, mutierbares Objekt, in das jede Stufe ihr Zwischenergebnis (das
+geparste Event, den Store, den validierten Payload) einträgt, damit spätere Stufen und der
+Rumpf von `push()` danach darauf zugreifen können; die sicherheitsrelevante Reihenfolge steht
+jetzt als Array-Position statt als Zeilenreihenfolge in einer Schleife. `push()` selbst
+schrumpfte auf 110 Zeilen — mehr als die geschätzten ~40, weil die ausführlichen
+Sicherheits-Begründungskommentare (Reihenfolge-Zwang, Mass-Assignment, Ledger-Atomizität)
+bewusst erhalten blieben und teils zu den neuen Guard-Funktionen wanderten, statt sie im
+Zuge dieser Änderung zu kürzen (das wäre W3, nicht L1); ohne Kommentare sind es 59 Zeilen
+Code. `test/sync/sync.service.test.ts` wurde NICHT wie im letzten Satz des Fix-Vorschlags
+skizziert aufgeteilt — die 1.226 Zeilen bleiben eine Datei, nur die beiden Importe
+(`describeSyncError`, `splitAtSafeTimestampBoundary`) zeigen jetzt auf ihre neuen Dateien
+(siehe L2). Das Testfile prüft weiterhin ausschließlich über `push()`/`pull()` als Black Box
+und lief nach der Umstellung unverändert grün (309 Tests) — der stärkste Beleg, dass die
+Umstellung auf die Guard-Kette das beobachtbare Verhalten nicht verändert hat. Verifiziert
+über `typecheck`/`lint`/die volle API-Testsuite.
+
 ### L2 — `sync.service.ts` als Modul: 737 Zeilen, fünf Zuständigkeiten (Mittel)
 
 Rechte-Matrix (`STORE_PERMISSIONS`, `canRead`, `canWrite`) · Fremdschlüsselprüfung
@@ -770,6 +796,26 @@ trägt aber **ebenfalls** ein `store`-Feld. Die Unterscheidung hängt allein an 
 der beiden `if`s. Ein durchgängiger Diskriminator (`kind: 'entity' | 'user' | 'nested'` auf
 allen drei Varianten) macht die Union selbsterklärend und den Compiler zum Wächter.
 
+**Status: behoben, wie vorgeschlagen (inkl. „Nebenbei").** Alle fünf Dateien wurden exakt
+unter den vorgeschlagenen Namen angelegt: `sync.permissions.ts` (115 Zeilen —
+`STORE_PERMISSIONS`/`canRead`/`canWrite`/`isKnownStore`), `sync.foreignKeys.ts` (144 —
+`FOREIGN_KEY_REFS`/`assertForeignKeysWithinClub`/`FOREIGN_ENTITY_ERROR`, jetzt auch von
+sync.errors.ts referenziert, siehe R7), `sync.athleteScope.ts` (69 —
+`scopeChangeForAthlete`), `sync.pagination.ts` (46 — `splitAtSafeTimestampBoundary`),
+`sync.errors.ts` (46 — `describeSyncError`); `sync.service.ts` behält `push()`/`pull()`.
+`ForeignKeyRef` trägt jetzt den vorgeschlagenen durchgängigen `kind`-Diskriminator
+(`'entity' | 'user' | 'nested'`); `assertForeignKeysWithinClub()` unterscheidet über
+`ref.kind === 'entity'` statt über die Reihenfolge zweier `in`-Prüfungen.
+
+Eine Zahlenkorrektur gegenüber der Schätzung „60–120 Zeilen je Datei zusammen mit W3": die
+vier reinen Auslagerungsdateien liegen mit 46–144 Zeilen in diesem Rahmen, `sync.service.ts`
+selbst landet aber bei 433 Zeilen (737 vorher) — mehr als geschätzt, weil W3 (Kommentar-Diät)
+hier bewusst NICHT mit angewendet wurde (das ist ein eigener, nur teilweise erledigter Befund,
+siehe dortiger Status) und die neuen `PUSH_GUARDS`-Funktionen (L1) ihre eigenen, ausführlichen
+Sicherheitskommentare tragen. Verifiziert über `typecheck`/`lint`/`build`/die volle
+API-Testsuite (309 Tests, unverändert grün — bestätigt, dass die Aufteilung selbst keine
+Verhaltensänderung ist).
+
 ### L3 — `competitions.js`: 675 Zeilen, drei Features (Mittel)
 
 Die mit Abstand größte Frontend-Datei vereint:
@@ -784,6 +830,33 @@ Die mit Abstand größte Frontend-Datei vereint:
 **Fix:** `modules/competitions.js` (CRUD) und `modules/competitionLive.js` (Wettkampfmodus);
 `buildStopwatchPanel`/`buildSharedStopwatch` weiter nach `modules/stopwatch.js`, da sie
 nichts über Wettkämpfe wissen. Ohne eine Zeile Logikänderung.
+
+**Status: behoben, wie vorgeschlagen — mit zwei Präzisierungen.** `modules/stopwatch.js` (neu)
+trägt `buildSharedStopwatch`/`buildStopwatchPanel`; `modules/competitionLive.js` (neu) trägt
+`buildLiveGroups`/`renderLiveMode`/`buildAthleteCard`; `modules/competitions.js` behält CRUD
+(`renderList`/`renderCompTable`/`renderDetail`/`groupByHeat`) und die drei Formular-Modals
+(siehe R1). Wortgleiche Übernahme, keine Logikänderung — bestätigt durch die weiterhin grüne
+Testsuite und einen Playwright-Lauf, der u. a. in den Wettkampfmodus navigiert.
+
+Zwei Stellen, an denen die tatsächliche Umsetzung von der (informell formulierten)
+Themen-Zuordnung im Befund abweicht:
+- `appendEntryRows` (Startlisten-Zeilen, von der Beschreibung oben unter „Wettkampfmodus"
+  aufgezählt) blieb in `competitions.js`: es wird ausschließlich von `renderDetail()` (CRUD)
+  aufgerufen, nicht vom Wettkampfmodus selbst, und leiht sich von dort nur
+  `buildStopwatchPanel()`. Es nach `competitionLive.js` zu ziehen hätte `competitions.js` dazu
+  gezwungen, es von dort wieder zurückzuimportieren — ohne echten Vorteil.
+- `findResultForEntry` (ein Zweizeiler) wird von BEIDEN Dateien gebraucht
+  (`appendEntryRows` in competitions.js, `buildAthleteCard` in competitionLive.js). Er lebt
+  jetzt in `competitionLive.js`, nicht in `competitions.js` — einzig, damit der Importpfad
+  einseitig bleibt (`competitions.js` → `competitionLive.js`, dieselbe Richtung wie bei
+  `buildLiveGroups`/`renderLiveMode`) statt einen Zyklus zwischen beiden neuen Dateien zu
+  erzeugen, der genau der Art von Kopplung entspräche, die dieses Review an anderer Stelle
+  (W4: `db.js` ↔ `state.js`) ausdrücklich vermeiden wollte.
+
+Verifiziert über Lint (workspace-weit sauber — deckt nicht aufgelöste Importe zuverlässig
+auf), die volle Web-Testsuite (63 Tests) und einen ausführlichen Playwright-Lauf gegen
+`demo.html` (alle 14 Modul-Routen, Wettkampf-Detailansicht, Einstieg in den Wettkampfmodus —
+keine Konsolenfehler).
 
 ### L4 — `utils.js`: das Sammelmodul (Mittel)
 
@@ -804,6 +877,40 @@ zweite `uid()`-Variante entstehen konnte (W1).
 mit einem Suchen-und-Ersetzen zu erledigen. Danach zeigt der Importgraph, was ein Modul
 tatsächlich braucht.
 
+**Status: behoben, wie vorgeschlagen — vollständig, nicht als Re-Export-Fassade.** Alle
+sieben Dateien wurden unter den vorgeschlagenen Namen angelegt (`localId`/`el`/`h`/`icon`/
+`clear`/`beginRender` → `dom.js`; die neun Datumsfunktionen → `dates.js`; `secToTime`/
+`timeToSec` → `swimTime.js`; `badge`/`statCard`/`emptyState`/`laneWave`/`toast`/`fullName`/
+`groupBy`/`average` → `ui.js`, da die „funktionalen Helfer" aus dem Befund für zwei Funktionen
+keine eigene achte Datei rechtfertigen; `openModal`/`confirmAction` → `modal.js`; `field`/
+`formActions`/`textInput`/`dateInput`/`selectInput` → `forms.js`; `svgLineChart`/
+`svgBarChart` (inkl. der privaten `esc()`) → `charts.js`). `utils.js` wurde anschließend
+**gelöscht**, nicht als dünne Re-Export-Fassade belassen — eine Fassade hätte den eigentlichen
+Zweck des Befunds unterlaufen (jedes Modul zieht weiterhin alles mit, importiert es
+weiterhin von "einer Stelle"). Stattdessen wurden alle 27 betroffenen Dateien (die
+tatsächliche, nachgezählte Zahl — mehr als die im Befund geschätzten 23, u. a. weil R3/R4/R5
+und L3 in denselben Sessions neue Dateien hinzufügten) einzeln auf die passenden neuen
+Importpfade umgestellt, je nach tatsächlich genutzten Symbolen (nicht pauschal alle sieben
+Dateien importiert).
+
+Zwei Nebenkorrekturen, die beim Löschen von `utils.js` nötig wurden und ohne die die
+Aufteilung die Offline-Fähigkeit der PWA beschädigt hätte: `sw.js`s Precache-Manifest listete
+`./js/utils.js` als zu cachende Datei — ersetzt durch die sieben Nachfolgedateien, `
+CACHE_VERSION` auf `lane1-v28` erhöht. Dabei fiel zusätzlich auf, dass das Manifest bereits
+vor dieser Session (durch R3/R4, `js/moduleRegistry.js`/`js/shell.js`/`js/modules/
+clubForm.js`) unvollständig war — bei dieser Gelegenheit mit ergänzt, ebenso wie die neuen
+`js/modules/competitionLive.js`/`js/modules/stopwatch.js` aus L3. `README.md`s drei
+Verweise auf `js/utils.js` sowie zwei stale gewordene Code-Kommentare (`libraryTransfer.js`,
+`plans.js`) wurden ebenfalls aktualisiert.
+
+Verifiziert über Lint (workspace-weit sauber — bei 27 geänderten Importpfaden der wichtigste
+Beleg, dass kein Symbol falsch zugeordnet wurde), die volle Web-Testsuite (63 Tests) und einen
+ausführlichen Playwright-Lauf: Boot ohne Konsolenfehler an allen drei Einstiegspunkten
+(`index.html`, `demo.html`, `admin/index.html`), alle 14 Modul-Routen im Demo-Modus, vier
+Anlegen-Modals (Vorlagen/Katalog/Wettkämpfe/Pläne — durchlaufen `forms.js`→`dom.js`/
+`dates.js`/`modal.js`) mit korrekter Feldanzahl geöffnet, sowie der Einstellungsdialog
+(`shell.js`→`dom.js`/`ui.js`/`modal.js`).
+
 ### L5 — `SyncGateway`: fünf Methoden nur für Tests (Niedrig)
 
 `create()`, `update()`, `softDelete()`, `markEventProcessed()` und `isEventProcessed()` (als
@@ -820,6 +927,38 @@ P2002-Verhalten nach. Das ist ein Testgerüst, das als Produktions-Interface auf
 die Integrationstests auf `applyAndMarkProcessed()` umstellen und die Primitiven entfernen.
 Die zweite Variante testet zusätzlich näher an dem, was tatsächlich läuft.
 
+**Status: behoben — mit einer wichtigen Korrektur am Befund selbst.** Ein Repo-weites Grep
+nach `gateway.isEventProcessed(` zeigt: diese Methode wird SEHR WOHL von einem Produktivpfad
+aufgerufen — `push()`s Idempotenz-Fast-Path (`sync.service.ts`) fragt sie direkt ab, VOR jeder
+Schema-/Fremdschlüsselprüfung. Der Befund zählte sie fälschlich zu den toten Methoden; nur
+`create()`, `update()`, `softDelete()` und `markEventProcessed()` sind tatsächlich ohne
+Aufrufer außerhalb der eigenen `applyAndMarkProcessed()`-Implementierung.
+
+Umgesetzt wurde die erste der beiden vorgeschlagenen Varianten (separates
+`SyncGatewayTestSurface`-Interface), nicht die zweite: die Integrationstests nutzen
+`gateway.create()` überwiegend NICHT, um `create()` selbst zu prüfen, sondern um
+Test-Fixtures für andere Prüfungen aufzubauen (`findById()`, `update()`, `softDelete()`,
+`listChangedSince()`) — sie auf `applyAndMarkProcessed()` umzustellen hätte bedeutet, jeden
+dieser Testaufbauten umzuschreiben, mit entsprechendem Risiko für diese sicherheitskritische
+Suite (sie ist die einzige, die das clubId-Scoping gegen eine ECHTE SQL-WHERE-Klausel statt
+eines In-Memory-Doubles prüft). Die schmalere Interface-Trennung erreicht denselben
+Kern-Nutzen (kein künftiges `SyncGateway` muss diese vier Methoden mehr implementieren) ohne
+dieses Risiko: `SyncGatewayTestSurface` (neu, in `sync.gateway.ts`) trägt jetzt `create()`/
+`update()`/`softDelete()`/`markEventProcessed()`; `SyncGateway` selbst behält nur noch
+`findById`/`listChangedSince`/`isEventProcessed`/`applyAndMarkProcessed`/`findClubIdForUser`.
+`PrismaSyncGateway implements SyncGateway, SyncGatewayTestSurface` (unverändertes
+Methodenverhalten); `InMemorySyncGateway` implementiert `SyncGatewayTestSurface` bewusst NICHT
+mehr — ihre vier gleichnamigen Methoden sind jetzt `private`, nur noch für die eigene
+`applyAndMarkProcessed()`-Implementierung sichtbar. `test-integration/
+syncGateway.integration.test.ts` musste dadurch nicht angepasst werden: `const gateway = new
+PrismaSyncGateway(prisma)` (ohne explizite `SyncGateway`-Typannotation) behält strukturell
+weiterhin Zugriff auf alle Methoden der konkreten Klasse.
+
+Verifiziert über `typecheck`/`lint`/die volle API-Testsuite (309 Tests). Die
+Integrationstests selbst liefen wie im gesamten bisherigen Verlauf dieses Reviews NICHT
+(kein Postgres-Container in dieser Umgebung verfügbar) — unverändert gegenüber dem
+eingangs dokumentierten Stand.
+
 ### L6 — Weitere Funktionen über 60 Zeilen (Niedrig)
 
 Nach `push()` (218) und `createAuthService` (264, aber als Sammlung kurzer Methoden
@@ -829,6 +968,19 @@ unproblematisch): `authRoutes` (215 — löst sich weitgehend mit R2 auf), `seed
 `competitions.js:buildAthleteCard` (98), `setEditor.js:buildSetRow` (87). Die
 `render*`-Funktionen sind flache DOM-Aufbauten und damit vertretbar; `buildAthleteCard` und
 `buildSetRow` mischen dagegen Aufbau *und* Ereignislogik und lohnen eine Trennung.
+
+**Status: behoben für die beiden benannten Fälle, `render*`-Funktionen bewusst unangetastet
+(wie im Befund selbst empfohlen).** `buildAthleteCard` (`competitionLive.js`, siehe L3):
+`saveHeatResult()` trägt jetzt die Persistenz-/PB-Ermittlungslogik separat (reine
+Datenoperation, kein DOM-Bezug); der „Ziel"-Klick-Handler orchestriert nur noch (aufrufen,
+dann UI aktualisieren). `setEditor.js:buildSetRow` (87 Zeilen): `appendCatalogInfo()` trägt
+jetzt den eigenständigen Katalog-Hinweis+Ausrüstungs-Editor (eigener `editorOpen`-Zustand,
+eigene Persistenz über `put('exercises', …)`) separat; `buildSetRow` baut nur noch die fünf
+Basisfelder und ruft bei Bedarf `appendCatalogInfo()` auf. Beide Extraktionen sind reine
+Verschiebungen ohne Verhaltensänderung. Verifiziert über Lint, die volle Web-Testsuite und
+zwei gezielte Playwright-Läufe: einmal der Wettkampfmodus-Einstieg (siehe L3/L4-Status),
+einmal der Ausrüstungs-Editor selbst (Editor geöffnet, 10 Ausrüstungs-Pills gerendert, ein
+Pill angeklickt, `put('exercises', …)` erfolgreich — keine Konsolenfehler in beiden Fällen).
 
 ### L7 — `auth.service.ts`: vier Zuständigkeiten (Niedrig)
 
@@ -840,6 +992,12 @@ Mit 383 Zeilen und durchweg kurzen Methoden ist das heute kein Problem — es is
 die als nächste wächst. Die letzten beiden Gruppen (Profil/DSGVO und Verzeichnis) hängen
 jeweils an eigenen Repositories (`profileGateway`, `users.listByClub`) und ließen sich
 schnittfrei herauslösen, sobald die Datei die 500 Zeilen erreicht.
+
+**Status: geprüft, keine Änderung nötig — wie im Befund selbst festgestellt.** Der Befund
+empfiehlt explizit KEINE sofortige Maßnahme („heute kein Problem"), sondern nennt nur den
+Schwellenwert (500 Zeilen), ab dem sich eine Auslagerung lohnt. Nachgezählt: `auth.service.ts`
+liegt nach R9 (gemeinsame `listMembers()`-Hilfsfunktion, siehe Abschnitt 2) bei 396 Zeilen —
+noch unter der genannten Schwelle. Keine Datei-Aufteilung vorgenommen.
 
 ---
 
@@ -923,17 +1081,23 @@ Damit die Befunde nicht den Blick verstellen — diese Entscheidungen sollten er
 | 3 | **W5** — Test auf i18n-Schlüsselgleichheit | ~5 Zeilen | Verhindert Sprachdrift | ✅ behoben |
 | 4 | **R2** — Fehler-Registry + `setErrorHandler` | ~1 Tag | −89 Zeilen an den Routen, Status-Mapping an einer Stelle lesbar | ✅ behoben |
 | 5 | **R1** — gemeinsamer Formular-Knopfblock | ~1–2 Tage | −18 Zeilen netto; Mega-Helfer verworfen, siehe dortiger Status | ✅ teilweise behoben |
-| 6 | **L1** — `push()` in Guard-Kette zerlegen | ~1 Tag | Regeln einzeln testbar, Reihenfolge explizit | offen |
+| 6 | **L1** — `push()` in Guard-Kette zerlegen | ~1 Tag | Regeln einzeln testbar, Reihenfolge explizit | ✅ behoben |
 | 7 | **W4** — Zyklus `db.js` ↔ `state.js` | ~2 Std. | `db.js` ohne Mock testbar | ✅ behoben |
-| 8 | **L2/L3/L4** — Dateien aufteilen | ~2 Tage | Rein mechanisch, kein Verhaltensrisiko | offen |
+| 8 | **L2/L3/L4** — Dateien aufteilen | ~2 Tage | Rein mechanisch, kein Verhaltensrisiko | ✅ behoben |
 | 9 | **R3/R4/R5/R6/R7/R8/R9** — kleine Duplikate | je < 2 Std. | −150 Zeilen | ✅ behoben |
 | 10 | **W3** — Kommentar-Diät | fortlaufend | −1.200 bis −1.500 Zeilen; senkt die Einstiegshürde am stärksten | 🟡 begonnen (4 Dateien, 239→206 Fundstellen) |
 | 11 | **W7** — `no-bitwise` in ESLint aufnehmen | 1 Zeile | Fängt beide `&`-Stellen und alle künftigen | ✅ behoben |
+| 12 | **L5** — `SyncGatewayTestSurface` abspalten | ~2 Std. | `SyncGateway`-Implementierungen müssen vier Test-Primitiven nicht mehr tragen | ✅ behoben |
+| 13 | **L6** — `buildAthleteCard`/`buildSetRow` trennen | ~2 Std. | Persistenz-/Widget-Logik einzeln lesbar von der DOM-Verdrahtung | ✅ behoben |
+| 14 | **L7** — `auth.service.ts` beobachten | — | Kein Handlungsbedarf vor 500 Zeilen (heute 396) | ✅ geprüft, kein Bedarf |
 
-Positionen 1, 2, 3, 4, 7, 9 und 11 sind vollständig erledigt; W6 (kein eigener
-Tabelleneintrag, siehe dortiger Abschnitt) ist als Nebeneffekt von Position 2 ebenfalls
-erledigt. Position 5 (R1) ist im Kern erledigt, aber mit korrigiertem Umfang — 13 von 17
-Formular-Modals konvertiert, kein `openEntityForm()`-Mega-Helfer (siehe dortiger Status für
+Positionen 1, 2, 3, 4, 6, 7, 8, 9, 11, 12, 13 und 14 sind vollständig erledigt (14 als
+bewusste Nicht-Maßnahme, siehe dortiger Status); W6 (kein eigener Tabelleneintrag, siehe
+dortiger Abschnitt) ist als Nebeneffekt von Position 2 ebenfalls erledigt. Position 5 (R1) ist
+im Kern erledigt, aber mit korrigiertem Umfang — 13 von 17 Formular-Modals konvertiert, kein
+`openEntityForm()`-Mega-Helfer (siehe dortiger Status für
 die Begründung). Position 10 ist als fortlaufende Aufgabe angelegt und auf den dichtesten
-Dateien begonnen. Offen sind noch `push()`s Zerlegung in eine Guard-Kette (L1) und die
-übrigen Datei-Aufteilungen (L2–L4, L7).
+Dateien begonnen — bewusst nicht auf `sync.service.ts` erweitert, obwohl dessen L1/L2-Umbau
+in derselben Session lief (siehe L1-Status: die dortigen Sicherheitskommentare blieben
+absichtlich stehen). Position 10 (W3) ist damit der einzige noch offene Punkt dieser Tabelle;
+alle anderen Positionen sind abgeschlossen.

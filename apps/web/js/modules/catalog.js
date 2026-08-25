@@ -2,7 +2,10 @@
 // modules/catalog.js — Übungskatalog
 // ============================================================
 import { getAll, put, remove } from '../db.js';
-import { el, clear, field, textInput, selectInput, openModal, confirmAction, toast, badge, emptyState, laneWave, beginRender, icon, formActions } from '../utils.js';
+import { el, clear, beginRender, icon } from '../dom.js';
+import { badge, emptyState, laneWave, toast } from '../ui.js';
+import { openModal, confirmAction } from '../modal.js';
+import { field, textInput, selectInput, formActions } from '../forms.js';
 import { EXERCISE_CATEGORIES, STROKES, EQUIPMENT_ITEMS } from '../refdata.js';
 import { t, trLabel, trCode, trOptions } from '../i18n.js';
 import { renderCommentThread } from './comments.js';

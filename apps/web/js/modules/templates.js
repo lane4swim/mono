@@ -2,7 +2,10 @@
 // modules/templates.js — wiederverwendbare Trainingsplan-Vorlagen
 // ============================================================
 import { getAll, put, remove } from '../db.js';
-import { el, clear, field, textInput, openModal, confirmAction, toast, badge, emptyState, laneWave, beginRender, formActions } from '../utils.js';
+import { el, clear, beginRender } from '../dom.js';
+import { badge, emptyState, laneWave, toast } from '../ui.js';
+import { openModal, confirmAction } from '../modal.js';
+import { field, textInput, formActions } from '../forms.js';
 import { renderSetEditor, totalDistance, cloneItems, collectEquipment } from './setEditor.js';
 import { EQUIPMENT_ITEMS } from '../refdata.js';
 import { t, trLabel } from '../i18n.js';

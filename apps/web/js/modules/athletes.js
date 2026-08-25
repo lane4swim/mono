@@ -2,15 +2,15 @@
 // modules/athletes.js — Athleten-, Team- und Gruppenverwaltung
 // ============================================================
 import { getAll, put, remove } from '../db.js';
-import {
-  el, clear, fullName, ageFromBirthdate, fmtDateShort, todayISO, toIsoDateTime,
-  field, textInput, selectInput, dateInput, openModal, confirmAction, toast, badge,
-  emptyState, laneWave, groupBy, secToTime, statCard, formActions,
-} from '../utils.js';
+import { el, clear, beginRender } from '../dom.js';
+import { ageFromBirthdate, fmtDateShort, todayISO, toIsoDateTime } from '../dates.js';
+import { secToTime } from '../swimTime.js';
+import { fullName, badge, emptyState, laneWave, groupBy, statCard, toast } from '../ui.js';
+import { openModal, confirmAction } from '../modal.js';
+import { field, textInput, selectInput, dateInput, formActions } from '../forms.js';
 import { isAdminOrSuperAdmin } from '../state.js';
 import { navigate } from '../router.js';
 import { t, trCode } from '../i18n.js';
-import { beginRender } from '../utils.js';
 
 export const athletesModule = {
   id: 'athletes',

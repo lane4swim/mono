@@ -11,7 +11,9 @@
 // Entries without a `kind` (older saved data) are treated as plain sets
 // for backward compatibility — no data migration needed.
 // ============================================================
-import { el, clear, localId, selectInput, badge, toast } from '../utils.js';
+import { el, clear, localId } from '../dom.js';
+import { badge, toast } from '../ui.js';
+import { selectInput } from '../forms.js';
 import { SET_INTENSITIES, EXERCISE_CATEGORIES, EQUIPMENT_ITEMS } from '../refdata.js';
 import { t, trLabel, trOptions } from '../i18n.js';
 import { put } from '../db.js';
@@ -107,6 +109,79 @@ function buildExerciseOptions(exercises) {
     .map(ex => ({ value: ex.id, label: `${trLabel(EXERCISE_CATEGORIES, ex.category, 'exerciseCategories')} · ${ex.name}` }))];
 }
 
+// Code-Review, Befund L6: buildSetRow() mischte den Aufbau der fünf
+// Basisfelder mit dem eigenständigen Katalog-Hinweis+Ausrüstungs-Editor
+// (eigener editorOpen-Zustand, eigene Persistenz über put('exercises', …))
+// als ein einziger, 87-Zeilen-Block. appendCatalogInfo() unten trägt jetzt
+// genau dieses in sich geschlossene Widget separat, sodass buildSetRow()
+// nur noch orchestriert (Basisfelder bauen, bei Bedarf das Widget
+// anhängen).
+//
+// Read-only equipment badges + an inline, persistent editor toggle,
+// appended into `container` when `s` links to a catalog exercise.
+// Equipment lives on the *exercise* (catalog entry), not the set —
+// editing it here updates the same 'exercises' record used by the
+// Übungskatalog module, it's just a faster path while building a
+// plan/template so you don't have to leave the editor. `onEquipmentChange`
+// (optional) is called after a save, so the caller can refresh any
+// aggregate summary that depends on it.
+function appendCatalogInfo(container, s, exercises, onEquipmentChange) {
+  if (!s.exerciseId) return;
+  const ex = exercises.find(x => x.id === s.exerciseId);
+  if (!ex) return;
+
+  container.appendChild(el('span', { class: 'hint' }, t('setEditor.fromCatalogHint', { name: ex.name })));
+
+  const eqDisplay = el('div');
+  const eqEditorHost = el('div');
+  container.appendChild(eqDisplay);
+  container.appendChild(eqEditorHost);
+  let editorOpen = false;
+
+  // Als Funktionsausdrücke statt Funktionsdeklarationen: eine
+  // Funktionsdeklaration innerhalb eines Blocks (hier `if (ex) { … }`)
+  // ist historisch uneinheitlich zwischen JS-Engines spezifiziert —
+  // als Ausdruck zugewiesen ist das Verhalten eindeutig. Gegenseitiger
+  // Aufruf bleibt unproblematisch: `drawDisplay` ruft `drawEditor` nur
+  // aus einem später ausgelösten onclick-Handler auf (nicht bei der
+  // Definition), und `drawEditor` wird selbst erst aufgerufen, nachdem
+  // beide bereits zugewiesen sind.
+  const drawDisplay = () => {
+    clear(eqDisplay);
+    const badges = (ex.equipment || []).map(eq => badge(trLabel(EQUIPMENT_ITEMS, eq, 'equipment'), 'pb'));
+    const editBtn = el('button', {
+      type: 'button', class: 'btn btn-ghost btn-sm',
+      onclick: () => { editorOpen = !editorOpen; drawEditor(); },
+    }, editorOpen ? t('common.close') : t('setEditor.editEquipment'));
+    eqDisplay.appendChild(el('div', { class: 'pill-group', style: 'margin-top:4px' }, [...badges, editBtn]));
+  };
+
+  const drawEditor = () => {
+    clear(eqEditorHost);
+    if (!editorOpen) { drawDisplay(); return; }
+    const selected = new Set(ex.equipment || []);
+    const pills = el('div', { class: 'pill-group', style: 'margin-top:4px' });
+    EQUIPMENT_ITEMS.forEach(eq => {
+      const pill = el('button', {
+        type: 'button', class: `pill ${selected.has(eq.value) ? 'active' : ''}`,
+        onclick: async () => {
+          if (selected.has(eq.value)) selected.delete(eq.value); else selected.add(eq.value);
+          pill.classList.toggle('active');
+          ex.equipment = [...selected];
+          await put('exercises', { ...ex });
+          toast(t('setEditor.equipmentSaved'));
+          drawDisplay();
+          onEquipmentChange?.();
+        },
+      }, trLabel(EQUIPMENT_ITEMS, eq.value, 'equipment'));
+      pills.appendChild(pill);
+    });
+    eqEditorHost.appendChild(pills);
+    drawDisplay();
+  };
+  drawDisplay();
+}
+
 // Renders one plain-set row. `onRemove` is called when the row's × is clicked;
 // the caller owns the array and re-draws itself afterwards. `onEquipmentChange`
 // (optional) is called after the linked exercise's equipment is edited inline,
@@ -133,66 +208,7 @@ function buildSetRow(s, exercises, onRemove, onEquipmentChange) {
   });
   extra.appendChild(intensitySel);
 
-  if (s.exerciseId) {
-    const ex = exercises.find(x => x.id === s.exerciseId);
-    if (ex) {
-      extra.appendChild(el('span', { class: 'hint' }, t('setEditor.fromCatalogHint', { name: ex.name })));
-
-      // Read-only equipment badges + an inline, persistent editor toggle.
-      // Equipment lives on the *exercise* (catalog entry), not the set —
-      // editing it here updates the same 'exercises' record used by the
-      // Übungskatalog module, it's just a faster path while building a
-      // plan/template so you don't have to leave the editor.
-      const eqDisplay = el('div');
-      const eqEditorHost = el('div');
-      extra.appendChild(eqDisplay);
-      extra.appendChild(eqEditorHost);
-      let editorOpen = false;
-
-      // Als Funktionsausdrücke statt Funktionsdeklarationen: eine
-      // Funktionsdeklaration innerhalb eines Blocks (hier `if (ex) { … }`)
-      // ist historisch uneinheitlich zwischen JS-Engines spezifiziert —
-      // als Ausdruck zugewiesen ist das Verhalten eindeutig. Gegenseitiger
-      // Aufruf bleibt unproblematisch: `drawDisplay` ruft `drawEditor` nur
-      // aus einem später ausgelösten onclick-Handler auf (nicht bei der
-      // Definition), und `drawEditor` wird selbst erst aufgerufen, nachdem
-      // beide bereits zugewiesen sind.
-      const drawDisplay = () => {
-        clear(eqDisplay);
-        const badges = (ex.equipment || []).map(eq => badge(trLabel(EQUIPMENT_ITEMS, eq, 'equipment'), 'pb'));
-        const editBtn = el('button', {
-          type: 'button', class: 'btn btn-ghost btn-sm',
-          onclick: () => { editorOpen = !editorOpen; drawEditor(); },
-        }, editorOpen ? t('common.close') : t('setEditor.editEquipment'));
-        eqDisplay.appendChild(el('div', { class: 'pill-group', style: 'margin-top:4px' }, [...badges, editBtn]));
-      };
-
-      const drawEditor = () => {
-        clear(eqEditorHost);
-        if (!editorOpen) { drawDisplay(); return; }
-        const selected = new Set(ex.equipment || []);
-        const pills = el('div', { class: 'pill-group', style: 'margin-top:4px' });
-        EQUIPMENT_ITEMS.forEach(eq => {
-          const pill = el('button', {
-            type: 'button', class: `pill ${selected.has(eq.value) ? 'active' : ''}`,
-            onclick: async () => {
-              if (selected.has(eq.value)) selected.delete(eq.value); else selected.add(eq.value);
-              pill.classList.toggle('active');
-              ex.equipment = [...selected];
-              await put('exercises', { ...ex });
-              toast(t('setEditor.equipmentSaved'));
-              drawDisplay();
-              onEquipmentChange?.();
-            },
-          }, trLabel(EQUIPMENT_ITEMS, eq.value, 'equipment'));
-          pills.appendChild(pill);
-        });
-        eqEditorHost.appendChild(pills);
-        drawDisplay();
-      };
-      drawDisplay();
-    }
-  }
+  appendCatalogInfo(extra, s, exercises, onEquipmentChange);
 
   row.appendChild(extra);
   return row;

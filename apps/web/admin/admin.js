@@ -6,10 +6,12 @@
 // ausschließlich dem Anlegen neuer Vereine samt deren erster Admin-
 // Einladung — eine reine Backend-Verwaltungsaufgabe ohne jeden Offline-
 // Bezug. Wiederverwendet aus dem Hauptsystem nur, was KEINE IndexedDB-
-// Abhängigkeit hat: apiClient.js, utils.js, i18n.js.
+// Abhängigkeit hat: apiClient.js, dom.js/ui.js/modal.js/forms.js, i18n.js.
 import * as api from '../js/apiClient.js';
 import { describeError } from '../js/apiClient.js';
-import { el, clear, field, textInput, toast } from '../js/utils.js';
+import { el, clear } from '../js/dom.js';
+import { toast } from '../js/ui.js';
+import { field, textInput } from '../js/forms.js';
 import { t, getLocale, setLocale, detectInitialLocale } from '../js/i18n.js';
 import { CURRENT_CONSENT_VERSION } from '../js/state.js';
 import { openCreateClubModal } from '../js/modules/clubForm.js';

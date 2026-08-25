@@ -2,10 +2,11 @@
 // modules/plans.js — Trainingspläne (Sets, Serien, Wochenpläne, Kalender)
 // ============================================================
 import { getAll, put, remove } from '../db.js';
-import {
-  el, clear, field, textInput, selectInput, dateInput, openModal, confirmAction, toast, badge,
-  emptyState, laneWave, fmtDateLong, fmtDateShort, todayISO, toIsoDateTime, dateOnly, isoAddDays, startOfWeek, beginRender, formActions,
-} from '../utils.js';
+import { el, clear, beginRender } from '../dom.js';
+import { fmtDateLong, fmtDateShort, todayISO, toIsoDateTime, dateOnly, isoAddDays, startOfWeek } from '../dates.js';
+import { badge, emptyState, laneWave, toast } from '../ui.js';
+import { openModal, confirmAction } from '../modal.js';
+import { field, textInput, selectInput, dateInput, formActions } from '../forms.js';
 import { EQUIPMENT_ITEMS } from '../refdata.js';
 import { renderSetEditor, totalDistance, cloneItems, collectEquipment } from './setEditor.js';
 import { renderCommentThread, commentsButton } from './comments.js';
@@ -201,7 +202,7 @@ function renderBlockBox(block, exercises, plan) {
 function openPlanModal(plan, groups, templates, exercises, onSaved) {
   const isEdit = !!plan;
   // data.days[].date wird intern durchgehend als reines "YYYY-MM-DD"
-  // geführt (siehe dateOnly() in utils.js) — sowohl für die Anzeige im
+  // geführt (siehe dateOnly() in dates.js) — sowohl für die Anzeige im
   // <input type="date"> als auch für die Tagesarithmetik (isoAddDays)
   // unten. Erst beim Speichern (siehe submit-Handler) wird daraus wieder
   // das vom Backend erwartete vollständige ISO-Datum.

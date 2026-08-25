@@ -46,11 +46,7 @@ export interface TombstoneRecord {
 // diskriminierte Union statt dreier getrennter Methoden, damit die
 // Prisma-Implementierung sie in EINER gemeinsamen $transaction()-Closure
 // anhand von `operation.kind` unterscheiden kann, ohne drei separate
-// Transaktions-Wrapper zu brauchen. Die einzeln aufgeführten create()/
-// update()/softDelete() sowie isEventProcessed()/markEventProcessed()
-// bleiben als eigenständige Methoden im Interface bestehen — genutzt von
-// test-integration/syncGateway.integration.test.ts, das die zugrunde
-// liegenden Primitiven unabhängig von applyAndMarkProcessed() prüft.
+// Transaktions-Wrapper zu brauchen.
 export type SyncWriteOperation =
   | { kind: 'create'; store: EntityStoreName; payload: Record<string, unknown> }
   | { kind: 'update'; store: EntityStoreName; id: string; clubId: string; payload: Record<string, unknown> }
@@ -76,16 +72,6 @@ export interface SyncGateway {
   // Vereins gefunden und über den Umweg des Konfliktergebnisses ausgelesen
   // werden.
   findById(store: EntityStoreName, id: string, clubId?: string): Promise<SyncRecord | null>;
-  create(store: EntityStoreName, payload: Record<string, unknown>): Promise<void>;
-  // clubId ist PFLICHT (nicht optional wie bei findById): update() darf
-  // niemals versehentlich ungescoped aufgerufen werden, da es — anders als
-  // findById — tatsächlich Daten verändert. Die where-Klausel muss daher
-  // immer sowohl id als auch clubId enthalten (analog zu softDelete()),
-  // sonst könnte ein manipuliertes Event mit einer fremden entityId, aber
-  // der eigenen clubId im Payload, den Datensatz eines fremden Vereins
-  // überschreiben.
-  update(store: EntityStoreName, id: string, clubId: string, payload: Record<string, unknown>): Promise<void>;
-  softDelete(store: EntityStoreName, id: string, clubId: string): Promise<void>;
   // Änderungen eines Vereins seit einem Zeitpunkt, über alle Stores hinweg,
   // absteigend nach updatedAt limitiert (Pagination via `limit`).
   listChangedSince(clubId: string, since: Date | null, limit: number): Promise<ChangedRecord[]>;
@@ -96,16 +82,18 @@ export interface SyncGateway {
   // eigentlichen Ergebnis (i. d. R. "nicht gefunden"/regulärer Ablauf) —
   // harmlos (keine Wirkung, kein Zugriff auf fremde Daten), aber
   // inkonsistent mit dem sonst überall konsequenten Vereins-Scoping dieses
-  // Gateways.
+  // Gateways. Anders als create()/update()/softDelete()/markEventProcessed()
+  // (siehe SyncGatewayTestSurface unten) ist dies eine ECHTE Produktions-
+  // methode: push() fragt sie als Idempotenz-Fast-Path direkt ab, VOR jedem
+  // Schema-/Fremdschlüssel-Check (siehe sync.service.ts).
   isEventProcessed(eventId: string, clubId: string): Promise<boolean>;
-  markEventProcessed(eventId: string, clubId: string, store: EntityStoreName, action: string): Promise<void>;
   // Siehe ausführlicher Kommentar bei SyncWriteOperation/ApplyOutcome oben.
   applyAndMarkProcessed(
     operation: SyncWriteOperation,
     event: { id: string; clubId: string; store: EntityStoreName; action: string },
   ): Promise<ApplyOutcome>;
   // Ermittelt die clubId eines Users — für die Eigentümerprüfung von
-  // ActionItem.assignedTrainerId (siehe sync.service.ts:
+  // ActionItem.assignedTrainerId (siehe sync.foreignKeys.ts:
   // assertForeignKeysWithinClub()). Eigene Methode statt findById(), da
   // "users" keine der zehn fachlichen Sync-Tabellen ist (kein
   // EntityDelegate über db/entityRegistry.ts verfügbar). Liefert null
@@ -113,6 +101,36 @@ export interface SyncGateway {
   // Verein gehört (z. B. superadmin) — ausreichend, da der Aufrufer die ID
   // ohnehin nur gegen eine konkrete erwartete clubId vergleicht.
   findClubIdForUser(userId: string): Promise<string | null>;
+}
+
+// Code-Review, Befund L5: create()/update()/softDelete()/markEventProcessed()
+// standen bislang direkt in SyncGateway, obwohl push() (sync.service.ts)
+// AUSSCHLIESSLICH applyAndMarkProcessed() für Schreibzugriffe nutzt (Repo-
+// weit bestätigt: kein Aufrufer ruft sie einzeln auf — anders als
+// isEventProcessed() oben, das TATSÄCHLICH als Fast-Path in push() steht;
+// der ursprüngliche Befund zählte es fälschlich mit zu den toten Methoden).
+// Beide Gateway-Implementierungen mussten sie trotzdem als Teil von
+// SyncGateway tragen und konsistent halten — ein Testgerüst, das als
+// Produktions-Interface auftrat. Jetzt ein eigenes, schmaleres Interface,
+// das NUR PrismaSyncGateway zusätzlich implementiert: einzig
+// test-integration/syncGateway.integration.test.ts prüft diese Primitiven
+// unabhängig von applyAndMarkProcessed() (u. a. das clubId-Scoping über
+// eine ECHTE SQL-WHERE-Klausel, das ein In-Memory-Double nicht verlässlich
+// abbilden kann). InMemorySyncGateway braucht sie nur noch als PRIVATE
+// Implementierungsdetail des eigenen applyAndMarkProcessed() und
+// implementiert dieses Interface bewusst nicht mehr.
+export interface SyncGatewayTestSurface {
+  create(store: EntityStoreName, payload: Record<string, unknown>): Promise<void>;
+  // clubId ist PFLICHT (nicht optional wie bei findById): update() darf
+  // niemals versehentlich ungescoped aufgerufen werden, da es — anders als
+  // findById — tatsächlich Daten verändert. Die where-Klausel muss daher
+  // immer sowohl id als auch clubId enthalten (analog zu softDelete()),
+  // sonst könnte ein manipuliertes Event mit einer fremden entityId, aber
+  // der eigenen clubId im Payload, den Datensatz eines fremden Vereins
+  // überschreiben.
+  update(store: EntityStoreName, id: string, clubId: string, payload: Record<string, unknown>): Promise<void>;
+  softDelete(store: EntityStoreName, id: string, clubId: string): Promise<void>;
+  markEventProcessed(eventId: string, clubId: string, store: EntityStoreName, action: string): Promise<void>;
 }
 
 // Genau diese Liste entscheidet in listChangedSince() unten, welche
@@ -124,7 +142,7 @@ export interface SyncGateway {
 // sync.service.ts über den Record<EntityStoreName, …>-Typ absichert.
 const ALL_STORES: EntityStoreName[] = ENTITY_STORE_NAMES;
 
-export class PrismaSyncGateway implements SyncGateway {
+export class PrismaSyncGateway implements SyncGateway, SyncGatewayTestSurface {
   constructor(private readonly prisma: PrismaClient) {}
 
   async findById(store: EntityStoreName, id: string, clubId?: string): Promise<SyncRecord | null> {

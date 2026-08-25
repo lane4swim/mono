@@ -3,10 +3,11 @@
 // Handlungsfeldern (Entwicklungsschwerpunkte pro Athlet:in)
 // ============================================================
 import { getAll, put, remove } from '../db.js';
-import {
-  el, clear, field, textInput, selectInput, dateInput, openModal, confirmAction, toast, badge,
-  emptyState, laneWave, fmtDateShort, todayISO, toIsoDateTime, fullName, beginRender, formActions,
-} from '../utils.js';
+import { el, clear, beginRender } from '../dom.js';
+import { fmtDateShort, todayISO, toIsoDateTime } from '../dates.js';
+import { badge, emptyState, laneWave, fullName, toast } from '../ui.js';
+import { openModal, confirmAction } from '../modal.js';
+import { field, textInput, selectInput, dateInput, formActions } from '../forms.js';
 import { ACTION_CATEGORIES, ACTION_STATUS } from '../refdata.js';
 import { getRole, getCurrentUser } from '../state.js';
 import { navigate } from '../router.js';

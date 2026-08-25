@@ -8,7 +8,10 @@
 // stattdessen einen Toast mit der Ziel-E-Mail und wartet auf ein Refresh
 // der Vereinsliste). Dieser Unterschied bleibt beim jeweiligen Aufrufer —
 // hier nur der onSuccess(result)-Callback dafür.
-import { el, field, textInput, toast, openModal, formActions } from '../utils.js';
+import { el } from '../dom.js';
+import { toast } from '../ui.js';
+import { openModal } from '../modal.js';
+import { field, textInput, formActions } from '../forms.js';
 import { describeError } from '../apiClient.js';
 import * as api from '../apiClient.js';
 import { t } from '../i18n.js';

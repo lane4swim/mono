@@ -13,7 +13,10 @@
 // reflects team/roster decisions rather than personal account info.
 // ============================================================
 import { getAll } from '../db.js';
-import { el, clear, field, textInput, toast, laneWave, badge, fullName, beginRender, openModal } from '../utils.js';
+import { el, clear, beginRender } from '../dom.js';
+import { laneWave, badge, fullName, toast } from '../ui.js';
+import { openModal } from '../modal.js';
+import { field, textInput } from '../forms.js';
 import { getCurrentUser, updateProfile, setUserLocale, logout } from '../state.js';
 import * as api from '../apiClient.js';
 import { NetworkError, describeError } from '../apiClient.js';

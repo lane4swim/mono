@@ -2,10 +2,13 @@
 // modules/times.js — Zeiten- und Leistungserfassung
 // ============================================================
 import { getAll, put, remove } from '../db.js';
-import { el, clear, fullName, fmtDateShort, todayISO, toIsoDateTime, field, textInput, selectInput, dateInput,
-  openModal, confirmAction, toast, badge, emptyState, laneWave, secToTime, timeToSec,
-  svgLineChart, beginRender, formActions,
-} from '../utils.js';
+import { el, clear, beginRender } from '../dom.js';
+import { fmtDateShort, todayISO, toIsoDateTime } from '../dates.js';
+import { secToTime, timeToSec } from '../swimTime.js';
+import { fullName, toast, badge, emptyState, laneWave } from '../ui.js';
+import { openModal, confirmAction } from '../modal.js';
+import { field, textInput, selectInput, dateInput, formActions } from '../forms.js';
+import { svgLineChart } from '../charts.js';
 import { EVENTS, COURSES } from '../refdata.js';
 import { t, trCode, trOptions, trOptionsFlat } from '../i18n.js';
 

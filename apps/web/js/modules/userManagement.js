@@ -5,10 +5,11 @@
 // POST/GET/DELETE /api/invitations, GET /api/users), statt den Ablauf nur
 // lokal in IndexedDB zu simulieren.
 // ============================================================
-import {
-  el, clear, field, textInput, selectInput, openModal, confirmAction, toast, badge,
-  emptyState, laneWave, beginRender, fmtDateShort, formActions,
-} from '../utils.js';
+import { el, clear, beginRender } from '../dom.js';
+import { fmtDateShort } from '../dates.js';
+import { badge, emptyState, laneWave, toast } from '../ui.js';
+import { openModal, confirmAction } from '../modal.js';
+import { field, textInput, selectInput, formActions } from '../forms.js';
 import { isSuperAdmin } from '../state.js';
 import * as api from '../apiClient.js';
 import { describeError } from '../apiClient.js';

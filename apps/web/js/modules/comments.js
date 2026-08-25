@@ -16,7 +16,10 @@
 // across very different "where does this array actually live" contexts
 // without needing to know about plans/exercises/db.js itself.
 // ============================================================
-import { el, clear, localId, toast, openModal, fmtDateTime } from '../utils.js';
+import { el, clear, localId } from '../dom.js';
+import { fmtDateTime } from '../dates.js';
+import { toast } from '../ui.js';
+import { openModal } from '../modal.js';
 import { getCurrentUser } from '../state.js';
 import { t } from '../i18n.js';
 

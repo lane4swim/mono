@@ -1,6 +1,8 @@
 // apps/api/test/sync/sync.service.test.ts
 import { describe, it, expect } from 'vitest';
-import { createSyncService, describeSyncError, splitAtSafeTimestampBoundary } from '../../src/modules/sync/sync.service.js';
+import { createSyncService } from '../../src/modules/sync/sync.service.js';
+import { describeSyncError } from '../../src/modules/sync/sync.errors.js';
+import { splitAtSafeTimestampBoundary } from '../../src/modules/sync/sync.pagination.js';
 import { InMemorySyncGateway } from '../../src/modules/sync/sync.gateway.memory.js';
 import type { ChangedRecord } from '../../src/modules/sync/sync.gateway.js';
 

@@ -2,10 +2,11 @@
 // modules/sessions.js — Nachverfolgung der Trainingseinheiten & Feedback
 // ============================================================
 import { getAll, put, remove } from '../db.js';
-import {
-  el, clear, field, selectInput, dateInput, openModal, confirmAction, toast, badge,
-  emptyState, laneWave, fmtDateLong, todayISO, toIsoDateTime, average, fullName, beginRender, formActions,
-} from '../utils.js';
+import { el, clear, beginRender } from '../dom.js';
+import { fmtDateLong, todayISO, toIsoDateTime } from '../dates.js';
+import { badge, emptyState, laneWave, average, fullName, toast } from '../ui.js';
+import { openModal, confirmAction } from '../modal.js';
+import { field, selectInput, dateInput, formActions } from '../forms.js';
 import { getRole, getCurrentUser } from '../state.js';
 import { navigate } from '../router.js';
 import { t } from '../i18n.js';
