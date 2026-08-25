@@ -14,6 +14,7 @@ import type { CreateInvitationRequest, InvitationRole } from '@lane1/shared-type
 import type { ClubRepository, InvitationRepository, InvitationRecord, ClubRecord, ClubMemberCounts, AthleteRepository } from './invitations.repository.js';
 import { generateInvitationToken, hashInvitationToken } from '../../auth/tokens.js';
 import type { MailSender } from '../../mail/mailer.js';
+import type { UserRepository } from '../auth/auth.repository.js';
 
 export class ForbiddenError extends Error {
   constructor(message = 'Für diese Aktion fehlt die Berechtigung.') {
@@ -70,6 +71,10 @@ export interface InvitationsServiceDeps {
   // Admin ein neues Konto an das Athletenprofil eines FREMDEN Vereins
   // koppelt.
   athletes: AthleteRepository;
+  // Nur für den Blick auf die Locale der einladenden Person (siehe
+  // resolveRequesterLocale() unten) — keine sonstige Nutzerverwaltung
+  // gehört in diesen Service.
+  users: UserRepository;
   mailer: MailSender;
   // Basis-URL des Frontends, um den Einladungslink zu bauen (z. B.
   // "https://training.mein-verein.de") — die eigentliche Annahme-Seite
@@ -82,6 +87,38 @@ export interface InvitationsServiceDeps {
 
 function buildInviteUrl(frontendBaseUrl: string, token: string): string {
   return `${frontendBaseUrl.replace(/\/+$/, '')}/#/accept-invite/${token}`;
+}
+
+// Die eingeladene Person hat noch kein Konto und damit keine eigene
+// Locale — die Sprache der einladenden Person (User.locale) ist die
+// einzige zu diesem Zeitpunkt bekannte, plausible Wahl für die
+// Einladungs-E-Mail (Code-Review, Befund W9). mailer.ts fällt bei einer
+// unbekannten/fehlenden Locale ohnehin auf Deutsch zurück, daher hier
+// bewusst kein weiterer Fallback nötig.
+async function resolveRequesterLocale(users: UserRepository, requesterId: string): Promise<string | undefined> {
+  const requesterUser = await users.findById(requesterId);
+  return requesterUser?.locale;
+}
+
+// Zentrale Gültigkeitsprüfung — von preview() UND von authService beim
+// tatsächlichen Registrieren (acceptInvitation) genutzt, damit beide
+// Stellen exakt dieselbe Definition von "gültig" verwenden. Als
+// eigenständige Funktion (statt Methode auf dem von
+// createInvitationsService() zurückgegebenen Objekt) definiert: preview()
+// unten rief sie zuvor als `this.findValidByToken(...)` auf — die einzige
+// Stelle im ganzen Service, an der eine Methode von einer korrekten
+// `this`-Bindung abhing, während jede andere Stelle ausschließlich über
+// `deps` auf Abhängigkeiten zugreift. Das bricht lautlos bei
+// Destrukturierung (`const { preview } = service`) oder Weitergabe als
+// Callback (Code-Review, Befund W10).
+async function findValidByToken(deps: InvitationsServiceDeps, plainToken: string): Promise<InvitationRecord> {
+  const tokenHash = hashInvitationToken(plainToken);
+  const invitation = await deps.invitations.findByTokenHash(tokenHash);
+  if (!invitation) throw new InvitationNotFoundError();
+  if (invitation.revokedAt) throw new InvitationRevokedError();
+  if (invitation.usedAt) throw new InvitationAlreadyUsedError();
+  if (invitation.expiresAt.getTime() < Date.now()) throw new InvitationExpiredError();
+  return invitation;
 }
 
 // Entfernt tokenHash aus der Antwort von list() — der Hash des
@@ -181,6 +218,7 @@ export function createInvitationsService(deps: InvitationsServiceDeps) {
         clubName: club.name,
         inviteUrl: buildInviteUrl(deps.frontendBaseUrl, plainToken),
         expiresAt,
+        locale: await resolveRequesterLocale(deps.users, requester.id),
       });
 
       return {
@@ -238,6 +276,7 @@ export function createInvitationsService(deps: InvitationsServiceDeps) {
         clubName: club?.name ?? '(neuer Verein)',
         inviteUrl: buildInviteUrl(deps.frontendBaseUrl, plainToken),
         expiresAt,
+        locale: await resolveRequesterLocale(deps.users, requester.id),
       });
 
       return {
@@ -251,7 +290,7 @@ export function createInvitationsService(deps: InvitationsServiceDeps) {
     },
 
     async preview(plainToken: string) {
-      const invitation = await this.findValidByToken(plainToken);
+      const invitation = await findValidByToken(deps, plainToken);
       const club = invitation.clubId ? await deps.clubs.findById(invitation.clubId) : null;
       return {
         email: invitation.email,
@@ -261,18 +300,7 @@ export function createInvitationsService(deps: InvitationsServiceDeps) {
       };
     },
 
-    // Zentrale Gültigkeitsprüfung — von preview() UND von authService beim
-    // tatsächlichen Registrieren (acceptInvitation) genutzt, damit beide
-    // Stellen exakt dieselbe Definition von "gültig" verwenden.
-    async findValidByToken(plainToken: string): Promise<InvitationRecord> {
-      const tokenHash = hashInvitationToken(plainToken);
-      const invitation = await deps.invitations.findByTokenHash(tokenHash);
-      if (!invitation) throw new InvitationNotFoundError();
-      if (invitation.revokedAt) throw new InvitationRevokedError();
-      if (invitation.usedAt) throw new InvitationAlreadyUsedError();
-      if (invitation.expiresAt.getTime() < Date.now()) throw new InvitationExpiredError();
-      return invitation;
-    },
+    findValidByToken: (plainToken: string) => findValidByToken(deps, plainToken),
 
     async markUsed(id: string): Promise<void> {
       await deps.invitations.markUsed(id);

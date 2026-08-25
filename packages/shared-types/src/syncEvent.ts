@@ -34,8 +34,20 @@ export const SyncEventSchema = z.object({
 });
 export type SyncEvent = z.infer<typeof SyncEventSchema>;
 
+// Code-Review, Befund R3: `events` prüfte hier zuvor JEDES Element bereits
+// vollständig gegen SyncEventSchema — ein einzelnes strukturell ungültiges
+// Event ließ POST /api/sync/push dadurch mit einer 400 für den GESAMTEN
+// Batch scheitern (bis zu 500 Events, siehe PUSH_BATCH_SIZE in
+// syncClient.js), inklusive aller übrigen, gültigen Events. sync.service.ts:
+// push() validiert jedes Event ohnehin ZUSÄTZLICH einzeln (siehe dort,
+// SyncEventSchema.safeParse(rawEvent)) und meldet ein ungültiges Event als
+// eigenes "error"-Ergebnis statt den ganzen Request abzulehnen — dieser
+// Codepfad war über HTTP bislang aber unerreichbar, da die Route bereits
+// vorher blockierte. `z.unknown()` statt SyncEventSchema lässt genau diese
+// robustere Pro-Event-Behandlung erstmals greifen; die Route selbst prüft
+// weiterhin die Batch-Größe (min/max), das eigentliche DoS-relevante Limit.
 export const SyncPushRequestSchema = z.object({
-  events: z.array(SyncEventSchema).min(1).max(500),
+  events: z.array(z.unknown()).min(1).max(500),
 });
 export type SyncPushRequest = z.infer<typeof SyncPushRequestSchema>;
 

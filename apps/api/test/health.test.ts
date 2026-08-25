@@ -31,6 +31,7 @@ async function buildTestApp(): Promise<FastifyInstance> {
     clubs: new InMemoryClubRepository(),
     invitations,
     athletes: new InMemoryAthleteRepository(),
+    users: new InMemoryUserRepository(),
     mailer: new InMemoryMailSender(),
     frontendBaseUrl: 'https://app.example.org',
     clubInvitationTtlDays: 14,

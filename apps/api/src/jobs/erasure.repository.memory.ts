@@ -10,7 +10,11 @@ export interface InMemoryErasureDatabase {
   actionItems: Array<{ id: string; athleteId: string; [key: string]: unknown }>;
   sessions: Array<{ id: string; clubId: string; attendance: Array<{ athleteId?: string; [key: string]: unknown }> }>;
   refreshTokens: Array<{ id: string; userId: string }>;
-  deletionRequests: Array<{ id: string; userId: string; purgeAfter: Date; status: 'pending' | 'purged'; purgedAt: Date | null }>;
+  // Kein `status`/`purgedAt` mehr (Code-Review, Befund R8) — analog zur
+  // Prisma-Implementierung ist jede noch VORHANDENE Zeile implizit
+  // "pending"; eine abgearbeitete wird unten (wie onDelete: Cascade)
+  // schlicht aus dem Array entfernt.
+  deletionRequests: Array<{ id: string; userId: string; purgeAfter: Date }>;
   // Dieselbe Array-Referenz kann in Tests auch an InMemorySyncGateway
   // übergeben werden — so lässt sich end-to-end nachstellen, dass eine
   // vom Purge-Job geschriebene Löschmarkierung anschließend über
@@ -24,7 +28,7 @@ export class InMemoryErasureJobGateway implements ErasureJobGateway {
 
   async findDuePendingRequests(now: Date): Promise<DueErasureRequest[]> {
     return this.db.deletionRequests
-      .filter((r) => r.status === 'pending' && r.purgeAfter.getTime() <= now.getTime())
+      .filter((r) => r.purgeAfter.getTime() <= now.getTime())
       .map((r) => ({ id: r.id, userId: r.userId }));
   }
 

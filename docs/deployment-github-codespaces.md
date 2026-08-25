@@ -28,7 +28,7 @@ Am Ende dieser Anleitung ist unter einer von GitHub bereitgestellten, temporäre
 | Projekt auf den Server bringen | `git clone` als eigener Schritt | Repository liegt beim Öffnen des Codespace bereits vollständig im Arbeitsverzeichnis |
 | Domain/DNS/Zertifikat | echte Domain, A-Record, Let's-Encrypt-Zertifikat | **entfällt komplett** — GitHub stellt automatisch eine `*.app.github.dev`-Adresse mit gültigem HTTPS-Zertifikat bereit |
 | „Firewall"/Portfreigabe | `ufw` + Cloud-Firewall | Sichtbarkeit des weitergeleiteten Ports (Privat/Organisation/Öffentlich) im Ports-Tab — GitHub regelt den Zugriff, kein eigenes Netzwerk zu härten |
-| Backend/Nginx/PostgreSQL | — | **identisch**, inkl. aller in `deployment.md` bereits gefundenen Bugfixes (Nginx-`/api/`+`/auth/`-Weiterleitung, PostgreSQL-15-Schema-Rechte, `prisma db push`) |
+| Backend/Nginx/PostgreSQL | — | **identisch**, inkl. aller in `deployment.md` bereits gefundenen Bugfixes (Nginx-`/api/`+`/auth/`-Weiterleitung, PostgreSQL-15-Schema-Rechte, `prisma migrate deploy`) |
 | Autostart nach Neustart | `pm2 startup` (systemd) | **entfällt** — Codespaces-Container laufen ohne `systemd`; nach jedem Anhalten/Fortsetzen des Codespace werden PostgreSQL/Backend/Nginx stattdessen mit ein paar Befehlen neu gestartet (siehe Abschnitt 13) |
 | Backups/DSGVO-Löschfristen | eingerichtet | **entfällt bewusst** — reine Testdaten in einer temporären Umgebung, kein echter Nutzerbetrieb |
 | Laufende Kosten | ca. 5–6 €/Monat + Domain | nutzungsabhängiges Kontingent (Core-Stunden/Speicher), oft im kostenlosen Kontingent des GitHub-Kontos enthalten (siehe Abschnitt 15) |
@@ -41,7 +41,7 @@ Wer die Befehle aus den Abschnitten 4–10 nicht Schritt für Schritt von Hand e
 bash scripts/setup-codespace.sh
 ```
 
-Vorausgesetzt sind die Abschnitte 1–3 (Codespace erstellen, Terminal öffnen) — das Script erwartet ein bereits geöffnetes Terminal im Projektordner. Es deckt dann genau ab: Abschnitt 4 (Node.js/PostgreSQL/Nginx/PM2 installieren), 5 (npm-Abhängigkeiten), 6 (`apps/api/.env` inkl. JWT-Schlüsseln, berechnet aus `$CODESPACE_NAME`), 7 (`prisma db push`), 8 (Backend bauen), 9 samt 9.1 (PM2 starten, ersten Superadmin anlegen) und 10 (Nginx konfigurieren) — mit denselben Befehlen und Begründungen (z. B. PostgreSQL-15-Schema-Grant, `/auth/`-Location-Sonderfall), die in den jeweiligen Abschnitten unten ausführlich erklärt sind.
+Vorausgesetzt sind die Abschnitte 1–3 (Codespace erstellen, Terminal öffnen) — das Script erwartet ein bereits geöffnetes Terminal im Projektordner. Es deckt dann genau ab: Abschnitt 4 (Node.js/PostgreSQL/Nginx/PM2 installieren), 5 (npm-Abhängigkeiten), 6 (`apps/api/.env` inkl. JWT-Schlüsseln, berechnet aus `$CODESPACE_NAME`), 7 (`prisma migrate deploy`), 8 (Backend bauen), 9 samt 9.1 (PM2 starten, ersten Superadmin anlegen) und 10 (Nginx konfigurieren) — mit denselben Befehlen und Begründungen (z. B. PostgreSQL-15-Schema-Grant, `/auth/`-Location-Sonderfall), die in den jeweiligen Abschnitten unten ausführlich erklärt sind.
 
 Der erste Superadmin wird dabei automatisch mit `admin@test.de` / `pwd12345` angelegt — überschreibbar über Umgebungsvariablen (Passwort muss mindestens 8 Zeichen haben):
 
@@ -136,7 +136,7 @@ GRANT ALL ON SCHEMA public TO lane1_app;
 ```
 **Das Passwort notieren** — es wird gleich in der `.env`-Datei gebraucht.
 
-> **Wichtig (PostgreSQL 15+):** Seit PostgreSQL 15 hat nur noch der Datenbank-Eigentümer automatisch das Recht, im Schema `public` Tabellen anzulegen — `GRANT ALL PRIVILEGES ON DATABASE` allein reicht dafür **nicht** mehr. Ohne das zusätzliche `\c lane1` + `GRANT ALL ON SCHEMA public` oben bricht Schritt 7 (`prisma db push`) mit `permission denied for schema public` ab.
+> **Wichtig (PostgreSQL 15+):** Seit PostgreSQL 15 hat nur noch der Datenbank-Eigentümer automatisch das Recht, im Schema `public` Tabellen anzulegen — `GRANT ALL PRIVILEGES ON DATABASE` allein reicht dafür **nicht** mehr. Ohne das zusätzliche `\c lane1` + `GRANT ALL ON SCHEMA public` oben bricht Schritt 7 (`prisma migrate deploy`) mit `permission denied for schema public` ab.
 
 ### 4.3 Nginx (liefert die Weboberfläche aus und leitet API-Anfragen weiter)
 ```bash
@@ -219,10 +219,13 @@ rm /tmp/jwt_private.pem /tmp/jwt_public.pem
 
 ```bash
 cd apps/api
-npx prisma db push
+npx prisma migrate deploy
 cd ../..
 ```
-> **Warum `db push` statt `migrate deploy`?** `prisma migrate deploy` wendet vorhandene Migrationsdateien aus `apps/api/prisma/migrations/` an — dieser Ordner existiert im Repo (Stand dieser Anleitung) **noch nicht** (bewusst per `.gitignore` ausgeschlossen). `migrate deploy` hätte hier also nichts zu tun und die Datenbank bliebe leer, ohne dass ein Fehler auftritt. `prisma db push` erzeugt das Schema stattdessen direkt aus `prisma/schema.prisma`, ohne Migrationshistorie — für einen Testlauf ausreichend.
+> Siehe `deployment.md`, Abschnitt 7.3 für die ausführliche Begründung
+> (`migrate deploy` statt `db push` — Code-Review, Befund W5): das Projekt
+> führt eine committete, reviewbare Migrationshistorie unter
+> `apps/api/prisma/migrations/`.
 
 ---
 
@@ -277,13 +280,21 @@ server {
     root /workspaces/DEIN-REPO-NAME/apps/web;
     index index.html;
 
+    # Content-Security-Policy für das Frontend (Code-Review, Befund S3) —
+    # siehe `deployment.md`, Abschnitt 9 für die ausführliche Begründung
+    # (u. a. warum `style-src 'unsafe-inline'` hier ein bewusster,
+    # dokumentierter Kompromiss ist).
+    set $csp "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; worker-src 'self'; manifest-src 'self'";
+
     location / {
         try_files $uri $uri/ /index.html;
+        add_header Content-Security-Policy $csp always;
     }
 
     # Service Worker & Manifest müssen exakt korrekt ausgeliefert werden
     location = /sw.js {
         add_header Cache-Control "no-cache";
+        add_header Content-Security-Policy $csp always;
     }
 
     # API-Anfragen an das Node.js-Backend weiterleiten

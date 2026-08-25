@@ -246,7 +246,40 @@ export function createAuthService(deps: AuthServiceDeps) {
       const tokenHash = hashRefreshToken(plainRefreshToken);
       const existing = await deps.refreshTokens.findByHash(tokenHash);
       if (!existing) throw new InvalidRefreshTokenError();
-      if (existing.revokedAt) throw new InvalidRefreshTokenError();
+
+      // Sicherheitskorrektur (Code-Review, Befund S2 — Reuse-Detection):
+      // ein bereits widerrufenes Token wurde bislang identisch zu einem
+      // unbekannten/abgelaufenen behandelt (schlicht InvalidRefreshTokenError).
+      // Ein Token wird aber AUSSCHLIESSLICH durch Rotation widerrufen (siehe
+      // deps.refreshTokens.revoke() unten) oder durch Logout — ein Aufruf
+      // mit einem bereits rotierten Token ist damit das einzige verlässliche
+      // Signal für einen Token-Diebstahl: löst ein Angreifer ein gestohlenes
+      // Refresh Token vor dem rechtmäßigen Gerät ein, würde er über die
+      // Rotationskette sonst dauerhaften Zugriff behalten, während der
+      // eigentliche Fehlschlag später beim rechtmäßigen Gerät auftritt und
+      // dort wie ein normaler Sitzungsablauf aussieht. Statt nur diesen
+      // einen Versuch abzulehnen, werden deshalb ALLE Sitzungen dieses
+      // Nutzerkontos sofort widerrufen (revokeAllForUser() existiert
+      // bereits für Logout/Kontolöschung) — sowohl das gestohlene als auch
+      // das eigentlich rechtmäßige Gerät müssen sich danach neu anmelden,
+      // was für einen tatsächlichen Diebstahl der einzig sichere Ausgang
+      // ist. `expiresAt` wird hier bewusst NICHT mitgeprüft: ein
+      // wiederverwendetes Token bleibt auch nach seinem eigenen Ablaufdatum
+      // ein Diebstahlsignal, solange der Datensatz noch existiert.
+      //
+      // WICHTIG: dieser Zweig reagiert scharf auf jede Zweit-Verwendung —
+      // ein Client, der ein rotiertes Token versehentlich ein zweites Mal
+      // schickt (z. B. mehrere parallele 401-getriebene Refresh-Versuche
+      // ohne Bündelung), löst denselben Massen-Widerruf aus. apiClient.js
+      // bündelt gleichzeitige refreshTokens()-Aufrufe deshalb serverseitig
+      // wie clientseitig auf GENAU einen In-Flight-Versuch (siehe dort,
+      // Befund S4) — ohne dieses Bündeln wäre dieser Reuse-Schutz gegen
+      // das eigene, harmlose Nebeneinanderherlaufen der App ausgelöst worden.
+      if (existing.revokedAt) {
+        await deps.refreshTokens.revokeAllForUser(existing.userId);
+        throw new InvalidRefreshTokenError();
+      }
+
       if (existing.expiresAt.getTime() < Date.now()) throw new InvalidRefreshTokenError();
 
       const user = await deps.users.findById(existing.userId);
@@ -254,7 +287,8 @@ export function createAuthService(deps: AuthServiceDeps) {
 
       // Rotation: das alte Token wird ungültig, sobald ein neues ausgestellt
       // wurde — ein wiederverwendetes (z. B. gestohlenes) altes Token
-      // funktioniert danach nicht mehr.
+      // funktioniert danach nicht mehr (siehe Reuse-Detection oben, die
+      // genau DIESEN Fall abfängt).
       await deps.refreshTokens.revoke(existing.id);
       const tokens = await issueTokens(user);
       return { ...tokens, user: toPublicUser(user) };

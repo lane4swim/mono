@@ -103,7 +103,7 @@ export class InMemoryProfileDataGateway implements ProfileDataGateway {
       this.db.actionItems.filter((a) => a.athleteId === user.athleteId).forEach((a) => (a.deletedAt = now));
     }
 
-    const request: ErasureRequestRecord = { id: randomUUID(), userId, requestedAt: now, purgeAfter, purgedAt: null, status: 'pending' };
+    const request: ErasureRequestRecord = { id: randomUUID(), userId, requestedAt: now, purgeAfter };
     this.erasureRequests.set(userId, request);
     return request;
   }

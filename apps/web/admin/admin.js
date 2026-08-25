@@ -9,7 +9,7 @@
 // Abhängigkeit hat: apiClient.js, utils.js, i18n.js.
 import * as api from '../js/apiClient.js';
 import { el, clear, field, textInput, toast, openModal } from '../js/utils.js';
-import { t, setLocale, detectInitialLocale } from '../js/i18n.js';
+import { t, getLocale, setLocale, detectInitialLocale } from '../js/i18n.js';
 import { CURRENT_CONSENT_VERSION } from '../js/state.js';
 
 setLocale(detectInitialLocale());
@@ -43,6 +43,16 @@ async function handleAuthenticated(user) {
   if (user.role !== 'superadmin') {
     // Kein Superadmin-Konto — diese Oberfläche ist ausschließlich für
     // diese Rolle gedacht. Sofort wieder abmelden statt Zugriff zu zeigen.
+    //
+    // Sicherheitskorrektur (Code-Review, Befund S6): vormals nur
+    // api.clearTokens() (rein lokal) — das gerade erst ausgestellte
+    // Refresh Token blieb dadurch serverseitig bis zu seinem regulären
+    // Ablauf (Standard: 30 Tage) gültig, obwohl diese Seite den Zugriff
+    // sofort verweigert. api.logoutRemote() (analog zum Logout-Button
+    // unten) widerruft es zusätzlich beim Server — MUSS vor
+    // clearTokens() aufgerufen werden, da logoutRemote() das Token noch
+    // aus dem localStorage lesen muss, das clearTokens() entfernt.
+    await api.logoutRemote();
     api.clearTokens();
     showLogin(t('admin.notSuperadmin'));
     return;
@@ -149,7 +159,7 @@ async function renderClubsView() {
           el('td', { class: 'data' }, String(club.memberCounts.admin)),
           el('td', { class: 'data' }, String(club.memberCounts.trainer)),
           el('td', { class: 'data' }, String(club.memberCounts.athlete)),
-          el('td', {}, new Date(club.createdAt).toLocaleDateString('de-DE')),
+          el('td', {}, new Date(club.createdAt).toLocaleDateString(getLocale())),
         ]));
       });
       table.appendChild(tbody);

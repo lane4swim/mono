@@ -34,6 +34,7 @@ function makeService() {
     clubs: new InMemoryClubRepository(),
     invitations,
     athletes: new InMemoryAthleteRepository(),
+    users,
     mailer: new InMemoryMailSender(),
     frontendBaseUrl: 'https://app.example.org',
     clubInvitationTtlDays: 14,
@@ -172,15 +173,12 @@ describe('authService.acceptInvitation', () => {
 });
 
 async function registerViaInvitation(
-  service: ReturnType<typeof createAuthServiceForFixture>,
+  service: ReturnType<typeof makeService>['service'],
   invitations: InMemoryInvitationRepository,
   overrides: Partial<{ email: string; role: string; clubId: string | null }> = {},
 ) {
   const token = await seedInvitation(invitations, overrides);
   return service.acceptInvitation({ token, name: 'Test Person', password: 'ein-sicheres-passwort', consent: true });
-}
-function createAuthServiceForFixture() {
-  return makeService().service;
 }
 
 describe('authService.login', () => {
@@ -270,6 +268,32 @@ describe('authService.refresh', () => {
     const { service } = makeService();
     await expect(service.refresh('kein-echtes-token')).rejects.toThrow(InvalidRefreshTokenError);
   });
+
+  // Regressionstest für Befund S2 (Code-Review): die Wiederverwendung
+  // eines bereits ROTIERTEN Refresh Tokens ist das einzige verlässliche
+  // Signal für einen Token-Diebstahl (siehe Kommentar in auth.service.ts:
+  // refresh()). Ein solcher Versuch muss daher ALLE Sitzungen des Kontos
+  // widerrufen — nicht nur den einen Wiederverwendungsversuch ablehnen —,
+  // sonst behielte ein Angreifer, der ein gestohlenes Token zuerst einlöst,
+  // über die Rotationskette dauerhaften Zugriff, während das rechtmäßige
+  // Gerät irgendwann scheinbar grundlos ausgeloggt wird.
+  it('widerruft bei Wiederverwendung eines bereits rotierten Refresh Tokens ALLE Sitzungen des Kontos (Reuse-Detection)', async () => {
+    const { service, invitations } = makeService();
+    const first = await registerViaInvitation(service, invitations);
+    // Legitime Rotation: das neue Token (second.refreshToken) ist an
+    // dieser Stelle gültig und noch nicht benutzt.
+    const second = await service.refresh(first.refreshToken);
+
+    // Ein Angreifer (oder ein Client-Bug ohne Single-Flight-Bündelung,
+    // siehe apiClient.js: Befund S4) verwendet das bereits rotierte,
+    // ALTE Token erneut.
+    await expect(service.refresh(first.refreshToken)).rejects.toThrow(InvalidRefreshTokenError);
+
+    // Das eigentlich noch gültige, NEUE Token muss durch die
+    // Reuse-Detection ebenfalls widerrufen worden sein — nicht nur der
+    // Wiederverwendungsversuch selbst wurde abgelehnt.
+    await expect(service.refresh(second.refreshToken)).rejects.toThrow(InvalidRefreshTokenError);
+  });
 });
 
 describe('authService.logout', () => {
@@ -317,6 +341,27 @@ describe('authService.getMe / updateMe', () => {
     const updated = await service.updateMe(user.id, { email: 'gleich@example.org', name: 'Trotzdem geändert' });
     expect(updated.email).toBe('gleich@example.org');
     expect(updated.name).toBe('Trotzdem geändert');
+  });
+
+  // Regressionstest für Befund S5 (Code-Review): UserRepository.update()
+  // filterte bislang — anders als findById()/findByEmail() — NICHT auf
+  // `deletedAt: null`. In der Praxis rufen login()/updateMe() update() nur
+  // nach einem bereits aktiv-gescopten findById()/findByEmail() auf,
+  // weshalb der Fall über den Service-Aufrufpfad nicht beobachtbar ist —
+  // dieser Test prüft daher das Repository direkt (Vertrag: identisch zu
+  // PrismaUserRepository.update(), siehe dessen Integrationstest-Pendant).
+  it('UserRepository.update() lehnt ein bereits soft-gelöschtes Konto ab, statt es stillschweigend zu aktualisieren (Befund S5)', async () => {
+    const { users, invitations, service } = makeService();
+    const { user } = await registerViaInvitation(service, invitations, { email: 'wird-geloescht@example.org' });
+
+    // Simuliert den Soft-Delete-Schritt von requestErasure() (Art. 17
+    // DSGVO) — in Produktion via direktem Prisma-Zugriff in
+    // profile.repository.ts, hier über dieselbe update()-Methode, deren
+    // eigenes Verhalten geprüft wird (an dieser Stelle noch aktiv, greift
+    // also normal).
+    await users.update(user.id, { deletedAt: new Date() });
+
+    await expect(users.update(user.id, { name: 'Sollte nicht ankommen' })).rejects.toMatchObject({ code: 'P2025' });
   });
 });
 

@@ -370,7 +370,7 @@ export default {
     statSynced: 'Synced', statSyncedSub: 'successfully transmitted',
     emptyTitle: 'Queue empty', emptyMsg: 'As soon as data is created, edited, or deleted, the corresponding sync events will appear here.',
     colTime: 'Time', colEntity: 'Area', colAction: 'Action', colStatus: 'Status', colAttempts: 'Attempts',
-    statusSynced: 'Synced', statusError: 'Error', statusPending: 'Pending',
+    statusSynced: 'Synced', statusError: 'Error', statusPending: 'Pending', statusFailed: 'Permanently failed',
     entityUsers: 'User', entityAthletes: 'Athlete', entityGroups: 'Group', entityCompetitions: 'Competition',
     entityEntries: 'Entry', entityResults: 'Time/Result', entityExercises: 'Exercise', entityTemplates: 'Template',
     entityPlans: 'Training Plan', entitySessions: 'Session', entityActionItems: 'Focus Area',

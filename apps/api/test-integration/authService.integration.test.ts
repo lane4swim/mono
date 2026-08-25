@@ -33,6 +33,7 @@ function makeServices() {
     clubs: new PrismaClubRepository(prisma),
     invitations: new PrismaInvitationRepository(prisma),
     athletes: new PrismaAthleteRepository(prisma),
+    users: new PrismaUserRepository(prisma),
     mailer: new InMemoryMailSender(),
     frontendBaseUrl: 'https://app.example.org',
     clubInvitationTtlDays: 14,

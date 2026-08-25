@@ -15,7 +15,6 @@ import type { PrismaClient as PrismaClientType } from '@prisma/client';
 const require = createRequire(import.meta.url);
 
 declare global {
-  // eslint-disable-next-line no-var
   var __prisma: PrismaClientType | undefined;
 }
 
@@ -24,7 +23,6 @@ export function getPrisma(): PrismaClientType {
 
   // Dynamischer require (statt Top-Level-Import) — verhindert, dass allein
   // das *Importieren* dieser Datei bereits `new PrismaClient()` auslöst.
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { PrismaClient } = require('@prisma/client') as typeof import('@prisma/client');
   const instance = new PrismaClient({
     log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],

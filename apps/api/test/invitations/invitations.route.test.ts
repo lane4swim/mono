@@ -32,7 +32,7 @@ async function buildTestApp() {
   const mailer = new InMemoryMailSender();
 
   const invitationsService = createInvitationsService({
-    clubs, invitations, athletes, mailer, frontendBaseUrl: 'https://app.example.org',
+    clubs, invitations, athletes, users, mailer, frontendBaseUrl: 'https://app.example.org',
     clubInvitationTtlDays: 14, memberInvitationTtlDays: 7,
   });
   const authService = createAuthService({

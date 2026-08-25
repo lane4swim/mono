@@ -1,5 +1,5 @@
 // ============================================================
-// utils.js — shared helpers used across all modules
+// utils.js — von allen Modulen gemeinsam genutzte Hilfsfunktionen
 // ============================================================
 import { t, getLocale } from './i18n.js';
 
@@ -7,12 +7,11 @@ export function uid(prefix = 'id') {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-// ---- DOM builder ----
+// ---- DOM-Baukasten ----
 export function el(tag, attrs = {}, children = []) {
   const node = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs || {})) {
     if (k === 'class') node.className = v;
-    else if (k === 'html') node.innerHTML = v;
     else if (k.startsWith('on') && typeof v === 'function') node.addEventListener(k.slice(2), v);
     else if (v !== null && v !== undefined && v !== false) node.setAttribute(k, v === true ? '' : v);
   }
@@ -25,7 +24,37 @@ export function el(tag, attrs = {}, children = []) {
 }
 export const h = el;
 
-export function esc(str) {
+// Code-Review, Befund W11: el() erlaubte bislang ein generisches
+// `html`-Attribut (schrieb direkt auf node.innerHTML) — unauffällig
+// zwischen den übrigen, textContent-basierten Attributen versteckt und
+// bei jedem künftigen Audit erneut als potenzieller XSS-Sink zu prüfen,
+// obwohl der einzige tatsächliche Verwendungszweck feste, intern
+// definierte SVG-Icon-Konstanten (ICON_*) sind. icon() macht diesen
+// einen legitimen Fall stattdessen explizit benannt und isoliert — NUR
+// für solche fest im Code stehenden SVG-Strings gedacht, NIEMALS für
+// Nutzereingaben oder Serverdaten.
+export function icon(svgMarkup, attrs = {}) {
+  const node = el('span', attrs);
+  node.innerHTML = svgMarkup;
+  return node;
+}
+
+// Code-Review, Befund S8: nur für ELEMENT-INHALTE gedacht (Text zwischen
+// zwei Tags, z. B. `<title>${esc(x)}</title>` in den SVG-Chart-Buildern
+// unten) — nicht für Attributwerte (z. B. `title="${esc(x)}"`). Der Browser
+// escaped beim Serialisieren eines Textknotens zurück zu HTML bewusst nur
+// "&"/"<"/">" — Anführungszeichen haben in Element-Inhalten keine
+// syntaktische Bedeutung, dort also korrekt und ausreichend. Für einen
+// Attributwert reicht das NICHT: ein "'"/'"' im Wert könnte das Attribut
+// aufbrechen — dafür müsste der Wert stattdessen als Attribut über el()
+// (siehe oben) gesetzt werden, das per node.setAttribute() geht und damit
+// automatisch korrekt/vollständig escapt, statt esc() für einen
+// String-zusammengebauten Attributwert zu missbrauchen.
+//
+// Nicht exportiert (Code-Review, Befund R5): wird ausschließlich von den
+// beiden SVG-Chart-Buildern in dieser Datei genutzt, nirgendwo sonst im
+// Frontend importiert.
+function esc(str) {
   const d = document.createElement('div');
   d.textContent = str ?? '';
   return d.innerHTML;
@@ -33,15 +62,16 @@ export function esc(str) {
 
 export function clear(node){ while (node.firstChild) node.removeChild(node.firstChild); }
 
-// ---- Render guard ----
-// Modules call `const isCurrent = beginRender(container)` at the very
-// start of their render(). After any `await` (data fetching), a module
-// should check `if (!isCurrent()) return;` before touching the DOM again.
-// This prevents a stale, slower render call — e.g. one superseded by a
-// second render triggered right after it (such as a locale change firing
-// two change events back-to-back) — from appending content after a newer
-// render has already drawn the view, which is what caused duplicated
-// module content on language switch.
+// ---- Render-Absicherung ----
+// Module rufen `const isCurrent = beginRender(container)` ganz zu Beginn
+// ihrer render()-Funktion auf. Nach jedem `await` (Datenabruf) sollte ein
+// Modul `if (!isCurrent()) return;` prüfen, bevor es das DOM erneut
+// anfasst. Das verhindert, dass ein veralteter, langsamerer Render-Aufruf
+// — z. B. einer, der durch einen direkt danach ausgelösten zweiten Render
+// überholt wurde (etwa wenn ein Sprachwechsel zwei Change-Events kurz
+// hintereinander feuert) — Inhalte anhängt, nachdem ein neuerer Render
+// die Ansicht bereits gezeichnet hat; genau das führte zu doppeltem
+// Modulinhalt beim Sprachwechsel.
 const renderTokens = new WeakMap();
 export function beginRender(container) {
   const token = Symbol('render');
@@ -49,7 +79,7 @@ export function beginRender(container) {
   return () => renderTokens.get(container) === token;
 }
 
-// ---- Dates ----
+// ---- Datumsangaben ----
 export function todayISO() { return new Date().toISOString().slice(0, 10); }
 export function nowISO(){ return new Date().toISOString(); }
 // Reine Datumsfelder (birthdate, joinDate, weekStart, dueDate, …) werden
@@ -103,7 +133,7 @@ export function isoAddDays(iso, n) {
 }
 export function startOfWeek(iso) {
   const d = new Date(dateOnly(iso) + 'T00:00:00');
-  const day = (d.getDay() + 6) % 7; // Monday = 0
+  const day = (d.getDay() + 6) % 7; // Montag = 0
   d.setDate(d.getDate() - day);
   return d.toISOString().slice(0, 10);
 }
@@ -118,7 +148,7 @@ export function ageFromBirthdate(iso){
   return age;
 }
 
-// ---- Swim time formatting: seconds (float) <-> "mm:ss.cc" ----
+// ---- Schwimmzeit-Formatierung: Sekunden (Fließkommazahl) <-> "mm:ss.cc" ----
 export function secToTime(sec) {
   if (sec === null || sec === undefined || isNaN(sec)) return '—';
   const m = Math.floor(sec / 60);
@@ -136,7 +166,7 @@ export function timeToSec(str) {
   return parseFloat(str);
 }
 
-// ---- Small UI components (return DOM nodes) ----
+// ---- Kleine UI-Bausteine (liefern DOM-Knoten) ----
 export function avatarInitials(name) {
   const initials = (name || '?').split(' ').map(p => p[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
   return el('span', { class: 'avatar' }, initials || '?');
@@ -171,7 +201,7 @@ export function laneWave(onDark){
   return wrap;
 }
 
-// ---- Toasts ----
+// ---- Toast-Meldungen ----
 export function toast(msg, variant = 'info') {
   const host = document.getElementById('toast-region');
   if (!host) return;
@@ -180,7 +210,7 @@ export function toast(msg, variant = 'info') {
   setTimeout(() => { t.style.transition = 'opacity .25s'; t.style.opacity = '0'; setTimeout(() => t.remove(), 260); }, 3000);
 }
 
-// ---- Modal ----
+// ---- Modal-Dialog ----
 export function openModal({ title, bodyNode, wide }) {
   const root = document.getElementById('modal-root');
   clear(root);
@@ -216,7 +246,7 @@ export function confirmAction(message, onConfirm, opts = {}) {
   const { close } = openModal({ title: opts.title || t('common.confirmTitle'), bodyNode: body });
 }
 
-// ---- Form field helpers ----
+// ---- Formularfeld-Hilfsfunktionen ----
 export function field(labelText, inputNode, opts = {}) {
   return el('div', { class: `field ${opts.span2 ? 'span-2' : ''}` }, [
     el('label', {}, labelText),
@@ -269,12 +299,11 @@ export function fullName(athlete){
   return `${athlete.firstName || ''} ${athlete.lastName || ''}`.trim();
 }
 
-// ---- Minimal SVG line/bar chart (no external dependency, offline-safe) ----
+// ---- Minimales SVG-Linien/Balkendiagramm (ohne externe Abhängigkeit, offlinefähig) ----
 export function svgLineChart({ points, width = 560, height = 200, yFormat, color = 'var(--c-chlorine-d)', invertY = false }) {
   const pad = { l: 46, r: 14, t: 16, b: 26 };
   const w = width - pad.l - pad.r, hgt = height - pad.t - pad.b;
   if (!points.length) return el('div', { class: 'empty-state' }, t('stats.noDataTitle'));
-  const xs = points.map((_, i) => i);
   const ys = points.map(p => p.y);
   let yMin = Math.min(...ys), yMax = Math.max(...ys);
   if (yMin === yMax) { yMin -= 1; yMax += 1; }

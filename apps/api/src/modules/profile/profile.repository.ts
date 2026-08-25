@@ -20,13 +20,14 @@ export interface PersonalDataExport {
   attendance: Array<Record<string, unknown>>;
 }
 
+// Code-Review, Befund R8: `purgedAt`/`status` gestrichen — siehe
+// schema.prisma: DataDeletionRequest für die Begründung (der Zustand
+// "purged" war strukturell unerreichbar).
 export interface ErasureRequestRecord {
   id: string;
   userId: string;
   requestedAt: Date;
   purgeAfter: Date;
-  purgedAt: Date | null;
-  status: 'pending' | 'purged';
 }
 
 export interface ProfileDataGateway {
@@ -80,13 +81,31 @@ export class PrismaProfileDataGateway implements ProfileDataGateway {
         // stillschweigend zu vertrauen: ohne clubId werden explizit KEINE
         // Anwesenheitsdaten geladen, statt eine ungescoped Abfrage
         // auszuführen.
-        user.clubId ? this.prisma.trainingSession.findMany({ where: { clubId: user.clubId } }) : Promise.resolve([]),
+        //
+        // Ineffizienz-Korrektur (Code-Review, Befund P3): vormals wurden
+        // ALLE Trainingseinheiten des VEREINS geladen (findMany({ where:
+        // { clubId } })), nur um daraus per JS-.find() die Anwesenheitszeile
+        // EINER Person herauszufiltern — bei einem Verein mit
+        // mehrjähriger Trainingshistorie potenziell Tausende Zeilen samt
+        // vollständiger Anwesenheits-Arrays für einen einzigen
+        // Auskunftsantrag. Analog zum Hard-Purge (erasure.repository.ts,
+        // Befund C4) grenzt die JSONB-Containment-Bedingung (`@>`) die
+        // Abfrage direkt in Postgres auf die Zeilen ein, die den Eintrag
+        // dieser Person überhaupt enthalten.
+        user.clubId
+          ? this.prisma.$queryRaw<Array<{ id: string; date: Date; attendance: Array<Record<string, unknown>> }>>`
+              SELECT id, date, attendance
+              FROM "sessions"
+              WHERE "clubId" = ${user.clubId}
+                AND "attendance" @> ${JSON.stringify([{ athleteId: user.athleteId }])}::jsonb
+            `
+          : Promise.resolve([]),
       ]);
       athlete = athleteRow;
       results = resultRows;
       entries = entryRows;
       actionItems = actionItemRows;
-      attendance = (sessionRows as Array<{ id: string; date: Date; attendance: Array<Record<string, unknown>> }>)
+      attendance = sessionRows
         .map((session): Record<string, unknown> | null => {
           const record = session.attendance.find((a) => a.athleteId === user.athleteId);
           return record ? { sessionId: session.id, date: session.date, ...record } : null;
@@ -135,22 +154,12 @@ export class PrismaProfileDataGateway implements ProfileDataGateway {
         await tx.actionItem.updateMany({ where: { athleteId: user.athleteId }, data: { deletedAt: now } });
       }
       return tx.dataDeletionRequest.create({
-        data: { userId, requestedAt: now, purgeAfter, status: 'pending' },
+        data: { userId, requestedAt: now, purgeAfter },
       });
     });
-    // 'status' ist im Schema eine einfache String-Spalte (kein Prisma-
-    // Enum), Prisma leitet ihren Typ daher als generisches 'string' ab —
-    // breiter als unser 'pending' | 'purged'. Das Objekt wird deshalb
-    // explizit konstruiert statt das Create-Ergebnis direkt
-    // zurückzugeben; unmittelbar nach der Anlage ist der Status
-    // garantiert 'pending' (entspricht auch dem Schema-Default).
-    return {
-      id: created.id,
-      userId: created.userId,
-      requestedAt: created.requestedAt,
-      purgeAfter: created.purgeAfter,
-      purgedAt: created.purgedAt,
-      status: 'pending',
-    };
+    // Seit Befund R8 (status/purgedAt gestrichen) deckt sich die Prisma-
+    // Zeile bereits exakt mit ErasureRequestRecord — keine explizite
+    // Objekt-Konstruktion mehr nötig.
+    return created;
   }
 }

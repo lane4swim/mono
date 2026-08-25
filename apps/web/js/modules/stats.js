@@ -4,10 +4,10 @@
 import { getAll } from '../db.js';
 import {
   el, clear, field, selectInput, badge, emptyState, laneWave, fullName,
-  groupBy, average, secToTime, svgBarChart, svgLineChart, todayISO, isoAddDays, fmtDateShort, beginRender,
+  groupBy, average, secToTime, svgBarChart, svgLineChart, fmtDateShort, beginRender,
 } from '../utils.js';
 import { EVENTS } from '../refdata.js';
-import { t, trCode, trOptionsFlat } from '../i18n.js';
+import { t, trOptionsFlat } from '../i18n.js';
 
 export const statsModule = {
   id: 'stats',

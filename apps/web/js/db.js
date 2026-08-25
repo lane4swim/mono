@@ -1,6 +1,7 @@
-// db.js — thin promise-based wrapper around IndexedDB.
-// One database, one object store per entity. Generic CRUD so new
-// modules can add a store name and get get/getAll/put/remove for free.
+// db.js — schlanker, Promise-basierter Wrapper um IndexedDB.
+// Eine Datenbank, ein Object Store je Entität. Generisches CRUD, damit
+// neue Module nur einen Store-Namen ergänzen müssen und get/getAll/
+// put/remove kostenlos dazubekommen.
 import { getCurrentUser } from './state.js';
 import { IS_DEMO } from './demoMode.js';
 
@@ -11,7 +12,13 @@ import { IS_DEMO } from './demoMode.js';
 // Origin, aber IndexedDB ist pro Datenbankname isoliert, also gibt es
 // schlicht nichts zum Vermischen oder Aufräumen.
 const DB_NAME = IS_DEMO ? 'lane1-demo-db' : 'lane1-db';
-const DB_VERSION = 2; // v2: 'clubs' + 'invitations' Stores ergänzt (Nutzerverwaltung)
+// v3: Index auf syncQueue.status ergänzt (Code-Review, Befund P5) —
+// pendingSyncCount()/clearSyncedEvents() lasen zuvor bei JEDEM Aufruf die
+// GESAMTE Warteschlange (inkl. aller payload-Blobs) nur, um sie in
+// JavaScript nach status zu filtern. pendingSyncCount() läuft nach jedem
+// Render, jedem Sync-Zyklus (alle 60 s) und beim Logout — ein Index macht
+// diesen häufigsten Pfad der App billig.
+const DB_VERSION = 3;
 
 export const STORES = [
   'users', 'athletes', 'groups', 'competitions', 'entries', 'results',
@@ -32,6 +39,15 @@ function openDb(){
           db.createObjectStore(name, { keyPath: 'id' });
         }
       });
+      // `req.transaction` (die laufende versionchange-Transaktion) gibt
+      // auch für bereits BESTEHENDE Stores (z. B. bei einem Upgrade von
+      // v1/v2 einer bereits installierten PWA) Zugriff — IndexedDB baut
+      // den Index dabei automatisch aus den vorhandenen Zeilen auf, keine
+      // manuelle Migration nötig.
+      const syncQueueStore = req.transaction.objectStore('syncQueue');
+      if (!syncQueueStore.indexNames.contains('status')) {
+        syncQueueStore.createIndex('status', 'status');
+      }
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -66,9 +82,10 @@ export async function get(store, id){
   });
 }
 
-// Stores that represent internal bookkeeping rather than user content —
-// changes to these are never queued for sync (that would be circular for
-// syncQueue itself, and 'meta' is purely local app state).
+// Stores, die interne Buchführung statt Nutzerinhalte darstellen —
+// Änderungen daran werden nie für die Synchronisierung eingereiht (das
+// wäre für syncQueue selbst zirkulär, und 'meta' ist rein lokaler
+// App-Zustand).
 const SYNC_EXCLUDED = new Set(['syncQueue', 'meta']);
 
 // Mandantenfähige fachliche Stores — deckungsgleich mit ENTITY_STORE_NAMES
@@ -120,7 +137,7 @@ export async function put(store, obj){
     // abgelegter Datensatz kann es aber noch tragen) — wird hier daher
     // sicherheitshalber aus dem Sync-Event-Payload entfernt, unabhängig
     // davon, ob es im übergebenen `obj` steckt.
-    const { deletedAt, ...payload } = saved;
+    const { deletedAt: _deletedAt, ...payload } = saved;
     await enqueueSyncEvent(store, saved.id, isNew ? 'create' : 'update', payload);
   }
   return saved;
@@ -144,8 +161,8 @@ export async function putWithoutSync(store, obj){
 }
 
 export async function bulkPut(store, items){
-  // Used for seeding/import — deliberately does NOT enqueue sync events,
-  // since seeded/imported data isn't an "offline change" made by a user.
+  // Für Seeding/Import genutzt — reiht bewusst KEINE Sync-Events ein, da
+  // geseedete/importierte Daten keine "Offline-Änderung" einer Person sind.
   const os = await tx(store, 'readwrite');
   return new Promise((resolve, reject) => {
     items.forEach(it => {
@@ -192,9 +209,17 @@ export async function clearStore(store){
   });
 }
 
+// Ineffizienz-Korrektur (Code-Review, Befund P5): lud vormals ALLE
+// Datensätze eines Stores (getAll()), nur um deren Länge zurückzugeben —
+// IndexedDB hat dafür objectStore.count(), das ohne die Datensätze selbst
+// zu übertragen auskommt.
 export async function countAll(store){
-  const items = await getAll(store);
-  return items.length;
+  const os = await tx(store);
+  return new Promise((resolve, reject) => {
+    const req = os.count();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
 }
 
 export async function exportAll(){
@@ -214,9 +239,10 @@ export async function wipeAll(){
 }
 
 // ============================================================
-// Sync queue (Event Queue) — every create/update/delete made by a
-// user against a "syncable" store is appended here. A separate
-// sync engine (js/sync.js) later drains this queue toward a server.
+// Sync-Warteschlange (Event Queue) — jedes Anlegen/Bearbeiten/Löschen
+// gegen einen "synchronisierbaren" Store wird hier angehängt. Eine
+// separate Sync-Engine (syncClient.js) leert diese Warteschlange
+// anschließend zu einem Server hin.
 // ============================================================
 
 export async function enqueueSyncEvent(store, entityId, action, payload){
@@ -226,6 +252,24 @@ export async function enqueueSyncEvent(store, entityId, action, payload){
     attempts: 0, lastError: null, syncedAt: null,
   };
   return put('syncQueue', evt);
+}
+
+// Wie enqueueSyncEvent(), aber für mehrere Events IN EINER EINZIGEN
+// IndexedDB-Transaktion (Code-Review, Befund P7): ein Import/Bulk-Vorgang
+// (siehe modules/libraryTransfer.js: importLibrary()), der enqueueSyncEvent()
+// stattdessen EINZELN pro Datensatz aufgerufen hätte, öffnet dafür je
+// Aufruf eine eigene Transaktion — bei 200 importierten Übungen 200
+// zusätzliche Transaktionen allein für die Warteschlange. `items` ist ein
+// Array aus { store, entityId, action, payload }, identisch zu den
+// Einzelargumenten von enqueueSyncEvent().
+export async function bulkEnqueueSyncEvents(items){
+  const now = new Date().toISOString();
+  const events = items.map(({ store, entityId, action, payload }) => ({
+    id: uid(), store, entityId, action, payload,
+    createdAt: now, status: 'pending',
+    attempts: 0, lastError: null, syncedAt: null,
+  }));
+  return bulkPut('syncQueue', events);
 }
 
 export function getSyncQueue(){
@@ -239,14 +283,48 @@ export async function updateSyncEvent(id, patch){
   return put('syncQueue', evt);
 }
 
+// Ineffizienz-Korrektur (Code-Review, Befund P5): las vormals die
+// GESAMTE Warteschlange, um die 'synced'-Einträge herauszufiltern — und
+// öffnete danach pro gelöschtem Eintrag eine EIGENE Read-Write-
+// Transaktion (remove() einzeln aufgerufen). Der status-Index liefert die
+// betroffenen ids direkt (ohne die übrigen Einträge zu laden); das
+// Löschen läuft anschließend in EINER gemeinsamen Transaktion statt einer
+// je Eintrag.
 export async function clearSyncedEvents(){
-  const all = await getAll('syncQueue');
-  const synced = all.filter(e => e.status === 'synced');
-  for (const e of synced) await remove('syncQueue', e.id);
-  return synced.length;
+  const readStore = await tx('syncQueue');
+  const ids = await new Promise((resolve, reject) => {
+    const req = readStore.index('status').getAllKeys('synced');
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => reject(req.error);
+  });
+  if (ids.length === 0) return 0;
+
+  const writeStore = await tx('syncQueue', 'readwrite');
+  await new Promise((resolve, reject) => {
+    ids.forEach(id => writeStore.delete(id));
+    writeStore.transaction.oncomplete = () => resolve();
+    writeStore.transaction.onerror = () => reject(writeStore.transaction.error);
+  });
+  return ids.length;
 }
 
+// Ineffizienz-Korrektur (Code-Review, Befund P5): las vormals bei JEDEM
+// Aufruf die GESAMTE Warteschlange (inkl. aller payload-Blobs), nur um
+// sie in JavaScript nach status zu filtern — läuft nach jedem Render,
+// jedem Sync-Zyklus (alle 60 s) und beim Logout. Der status-Index erlaubt
+// stattdessen, nur die Anzahl je gesuchtem Status abzufragen
+// (objectStore.count() über den Index), ohne einen einzigen Datensatz zu
+// laden. Zwei separate count()-Aufrufe statt eines Bereichs, da 'pending'
+// und 'error' keine zusammenhängende Schlüsselspanne bilden (IndexedDB
+// kennt kein "IN").
 export async function pendingSyncCount(){
-  const all = await getAll('syncQueue');
-  return all.filter(e => e.status === 'pending' || e.status === 'error').length;
+  const os = await tx('syncQueue');
+  const idx = os.index('status');
+  const count = (key) => new Promise((resolve, reject) => {
+    const req = idx.count(key);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+  const [pending, error] = await Promise.all([count('pending'), count('error')]);
+  return pending + error;
 }

@@ -4,7 +4,7 @@
 // Speicher. Ermöglicht vollständige Tests von sync.service.ts (Idempotenz,
 // Konfliktlogik, Vereins-Scoping, Pagination) ohne Datenbank.
 import type { EntityStoreName } from '@lane1/shared-types';
-import type { SyncGateway, SyncRecord, ChangedRecord, TombstoneRecord } from './sync.gateway.js';
+import type { SyncGateway, SyncRecord, ChangedRecord, TombstoneRecord, SyncWriteOperation, ApplyOutcome } from './sync.gateway.js';
 
 export class InMemorySyncGateway implements SyncGateway {
   // store -> (id -> record)
@@ -168,5 +168,34 @@ export class InMemorySyncGateway implements SyncGateway {
 
   async markEventProcessed(eventId: string, clubId: string): Promise<void> {
     this.processedEvents.set(eventId, clubId);
+  }
+
+  // Spiegelt PrismaSyncGateway.applyAndMarkProcessed() (siehe dort für den
+  // Hintergrund — Code-Review, Befund C3): Node ist hier ohnehin
+  // single-threaded, ein echtes Nebenläufigkeits-/Transaktionsmodell lässt
+  // sich im Speicher nicht sinnvoll nachbilden (die eigentliche Race-
+  // Condition-Sicherheit wird stattdessen von den Prisma-
+  // Integrationstests gegen echtes Postgres abgedeckt) — der VERTRAG
+  // (alles-oder-nichts, idempotent bei Wiederholung desselben Events)
+  // wird trotzdem exakt nachgebildet: bereits verarbeitet? ->
+  // 'already-processed' OHNE die Datenänderung zu versuchen; sonst
+  // schreiben und erst DANACH als verarbeitet vermerken — wirft die
+  // Datenänderung, bleibt der Ledger-Eintrag (wie bei einer echten,
+  // fehlgeschlagenen Transaktion) unverändert unvermerkt.
+  async applyAndMarkProcessed(
+    operation: SyncWriteOperation,
+    event: { id: string; clubId: string; store: EntityStoreName; action: string },
+  ): Promise<ApplyOutcome> {
+    if (await this.isEventProcessed(event.id, event.clubId)) return 'already-processed';
+
+    if (operation.kind === 'create') {
+      await this.create(operation.store, operation.payload);
+    } else if (operation.kind === 'update') {
+      await this.update(operation.store, operation.id, operation.clubId, operation.payload);
+    } else {
+      await this.softDelete(operation.store, operation.id, operation.clubId);
+    }
+    await this.markEventProcessed(event.id, event.clubId);
+    return 'applied';
   }
 }

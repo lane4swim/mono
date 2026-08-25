@@ -27,7 +27,7 @@ betrieben auf einem Raspberry Pi bei dir zuhause statt in einem Rechenzentrum.
 | Ersteinrichtung | Cloud Console, SSH-Key beim Server-Erstellen hinterlegen | Raspberry Pi Imager, SSH-Key + Benutzer schon beim Beschreiben der Speicherkarte hinterlegen |
 | „Firewall" | Hetzner Cloud Firewall (vorgelagert) + `ufw` | nur `ufw` + Portweiterleitung im eigenen Router — SSH wird **nicht** ins Internet weitergeleitet (siehe Abschnitt 4) |
 | Domain erreichbar machen | A-Record zeigt direkt auf feste Server-IP | A-Record + **Dynamic DNS** (die Heim-IP ändert sich), **Portweiterleitung** im Router, Prüfung auf **CGNAT** (siehe Abschnitt 5) |
-| Backend/Nginx/PostgreSQL/PM2/Zertifikat | — | **identisch**, inkl. aller in `deployment.md` bereits gefundenen Bugfixes (Nginx-`/api/`+`/auth/`-Weiterleitung, PostgreSQL-15-Schema-Rechte, `prisma db push`, Backup-Cronjob-Fix) |
+| Backend/Nginx/PostgreSQL/PM2/Zertifikat | — | **identisch**, inkl. aller in `deployment.md` bereits gefundenen Bugfixes (Nginx-`/api/`+`/auth/`-Weiterleitung, PostgreSQL-15-Schema-Rechte, `prisma migrate deploy`, Backup-Cronjob-Fix) |
 | Backups/Snapshots | Hetzner-Cloud-Backup (Knopfdruck) | SD-Karten-/SSD-Image statt Cloud-Snapshot; Offsite-Backup umso wichtiger (einzelnes Gerät zuhause) |
 | Laufende Kosten | ca. 5–6 €/Monat + Domain | einmalig Hardware + Strom (siehe Abschnitt 15) + Domain |
 
@@ -252,7 +252,7 @@ GRANT ALL ON SCHEMA public TO lane1_app;
 > im Schema `public` Tabellen anzulegen — `GRANT ALL PRIVILEGES ON DATABASE`
 > allein reicht dafür **nicht** mehr. Ohne das zusätzliche `\c lane1` +
 > `GRANT ALL ON SCHEMA public` oben bricht Schritt 7.3
-> (`prisma db push`) mit `permission denied for schema public` ab.
+> (`prisma migrate deploy`) mit `permission denied for schema public` ab.
 
 ### 6.3 Nginx (liefert die Weboberfläche aus und leitet API-Anfragen weiter)
 ```bash
@@ -368,21 +368,13 @@ rm /tmp/jwt_private.pem /tmp/jwt_public.pem
 ### 7.3 Datenbank-Schema anlegen
 ```bash
 cd apps/api
-npx prisma db push
+npx prisma migrate deploy
 cd ../..
 ```
-> **Warum `db push` statt `migrate deploy`?** `prisma migrate deploy`
-> wendet vorhandene Migrationsdateien aus `apps/api/prisma/migrations/`
-> an — dieser Ordner existiert im Repo (Stand dieser Anleitung) **noch
-> nicht** (bewusst per `.gitignore` ausgeschlossen, es wurde bislang keine
-> erste Migration erzeugt/committet). `migrate deploy` hätte hier also
-> nichts zu tun und die Datenbank bliebe leer, ohne dass ein Fehler
-> auftritt. `prisma db push` erzeugt das Schema stattdessen direkt aus
-> `prisma/schema.prisma`, ohne Migrationshistorie — für die erste
-> Inbetriebnahme ausreichend. Sobald das Projekt eine echte
-> Migrationshistorie führt (`npx prisma migrate dev --name init` in der
-> Entwicklung, Ergebnis eingecheckt), sollte künftig `migrate deploy`
-> verwendet werden — dann auch Abschnitt 13 entsprechend anpassen.
+> Siehe `deployment.md`, Abschnitt 7.3 für die ausführliche Begründung
+> (`migrate deploy` statt `db push` — Code-Review, Befund W5): das Projekt
+> führt eine committete, reviewbare Migrationshistorie unter
+> `apps/api/prisma/migrations/`.
 
 ### 7.4 Backend bauen
 ```bash
@@ -445,13 +437,21 @@ server {
     root /home/deploy/lane1/apps/web;
     index index.html;
 
+    # Content-Security-Policy für das Frontend (Code-Review, Befund S3) —
+    # siehe `deployment.md`, Abschnitt 9 für die ausführliche Begründung
+    # (u. a. warum `style-src 'unsafe-inline'` hier ein bewusster,
+    # dokumentierter Kompromiss ist).
+    set $csp "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; worker-src 'self'; manifest-src 'self'";
+
     location / {
         try_files $uri $uri/ /index.html;
+        add_header Content-Security-Policy $csp always;
     }
 
     # Service Worker & Manifest müssen exakt korrekt ausgeliefert werden
     location = /sw.js {
         add_header Cache-Control "no-cache";
+        add_header Content-Security-Policy $csp always;
     }
 
     # API-Anfragen an das Node.js-Backend weiterleiten
@@ -665,15 +665,11 @@ Identisch zu `deployment.md`, Abschnitt 13.
 cd /home/deploy/lane1
 git pull                                    # oder: neues ZIP hochladen & entpacken
 npm install
-cd apps/api && npx prisma db push && cd ../..   # siehe Hinweis zu `db push` vs. `migrate deploy` in Schritt 7.3
+cd apps/api && npx prisma migrate deploy && cd ../..   # wendet neue Migrationsdateien an, siehe Schritt 7.3
 npm run build --workspace=apps/api
 pm2 restart lane1-api
 sudo systemctl reload nginx
 ```
-> Sobald das Projekt auf eine committete Migrationshistorie umgestellt hat
-> (siehe Hinweis in Schritt 7.3), hier stattdessen
-> `npx prisma migrate deploy --schema apps/api/prisma/schema.prisma`
-> verwenden.
 
 ---
 

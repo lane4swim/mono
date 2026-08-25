@@ -16,6 +16,16 @@
 // 2000-5000 Zeichen, Athlete.notes als einziges Feld mit erkennbar
 // höherem Bedarf (laufende Trainer:innen-Notizen über die gesamte
 // Karriere hinweg) 10000 Zeichen.
+//
+// Aufräumarbeit (Code-Review, Befund S7): dieselbe Begründung galt bislang
+// NICHT für Array-Felder (tags, equipment, comments, laps, attendance,
+// days, sets) — ein einzelner Datensatz mit z. B. 20.000 Kommentaren wäre
+// unter dem 1-MB-Bodylimit geblieben und dauerhaft gespeichert worden,
+// obwohl jedes eingebettete Textfeld längst begrenzt ist. Jetzt trägt auch
+// jedes Array ein `.max(...)`, großzügig über dem, was eine legitime
+// Nutzung je erreichen würde (z. B. Plan.days: eine "Wochenplan" genannte
+// Struktur, die die Oberfläche dennoch nicht auf 7 Einträge hart begrenzt
+// — 60 deckt bequem auch mehrwöchige Pläne ab, ohne unbegrenzt zu bleiben).
 import { z } from 'zod';
 import { SyncStoreSchema } from './syncEvent.js';
 
@@ -110,7 +120,7 @@ export const ResultSchema = z.object({
   place: z.number().int().positive().nullable(),
   isPB: z.boolean(),
   // Rundenzeiten der Stoppuhr-Funktion — kumulierte Sekunden je Runde.
-  laps: z.array(z.number().positive()).nullable().optional(),
+  laps: z.array(z.number().positive()).max(500).nullable().optional(),
   createdAt: isoDate,
   updatedAt: isoDate,
 }).strict();
@@ -124,11 +134,11 @@ export const ExerciseSchema = z.object({
   stroke: z.string().max(100).nullable(),
   description: z.string().max(5000).default(''),
   defaultDistance: z.number().int().positive().nullable(),
-  tags: z.array(z.string().max(100)).default([]),
-  equipment: z.array(z.string().max(100)).default([]),
+  tags: z.array(z.string().max(100)).max(50).default([]),
+  equipment: z.array(z.string().max(100)).max(50).default([]),
   // Diskussions-/Hinweiskommentare im Übungskatalog (z. B. Technikhinweise
   // mehrerer Trainer:innen zu derselben Übung).
-  comments: z.array(CommentSchema).default([]),
+  comments: z.array(CommentSchema).max(500).default([]),
   createdAt: isoDate,
   updatedAt: isoDate,
 }).strict();
@@ -150,7 +160,7 @@ export const PlainSetSchema = z.object({
   // Kommentare zu genau diesem Satz/dieser Übung innerhalb eines
   // Trainingsplans (bzw. einer Vorlage, da Templates dieselbe Struktur
   // verwenden) — z. B. Rückfragen oder Feedback zu einer konkreten Serie.
-  comments: z.array(CommentSchema).default([]),
+  comments: z.array(CommentSchema).max(200).default([]),
 }).strict();
 export type PlainSet = z.infer<typeof PlainSetSchema>;
 
@@ -159,7 +169,7 @@ export const RepeatBlockSchema = z.object({
   id: z.string(),
   label: z.string().max(200).default(''),
   repeatCount: z.number().int().positive(),
-  sets: z.array(PlainSetSchema),
+  sets: z.array(PlainSetSchema).max(50),
 }).strict();
 export type RepeatBlock = z.infer<typeof RepeatBlockSchema>;
 
@@ -171,8 +181,8 @@ export const TemplateSchema = z.object({
   clubId: z.string().uuid(),
   name: z.string().min(1).max(200),
   description: z.string().max(5000).default(''),
-  tags: z.array(z.string().max(100)).default([]),
-  sets: z.array(SetEntrySchema),
+  tags: z.array(z.string().max(100)).max(50).default([]),
+  sets: z.array(SetEntrySchema).max(200),
   createdAt: isoDate,
   updatedAt: isoDate,
 }).strict();
@@ -180,7 +190,7 @@ export type Template = z.infer<typeof TemplateSchema>;
 
 export const PlanDaySchema = z.object({
   date: isoDate,
-  sets: z.array(SetEntrySchema),
+  sets: z.array(SetEntrySchema).max(200),
 }).strict();
 export type PlanDay = z.infer<typeof PlanDaySchema>;
 
@@ -193,10 +203,10 @@ export const PlanSchema = z.object({
   weekStart: isoDate,
   groupId: z.string().uuid().nullable(),
   status: PlanStatusSchema,
-  days: z.array(PlanDaySchema),
+  days: z.array(PlanDaySchema).max(60),
   // Kommentare zum gesamten Trainingsplan (nicht zu einem einzelnen Satz
   // — siehe dafür PlainSetSchema.comments oben).
-  comments: z.array(CommentSchema).default([]),
+  comments: z.array(CommentSchema).max(500).default([]),
   createdAt: isoDate,
   updatedAt: isoDate,
 }).strict();
@@ -217,7 +227,7 @@ export const TrainingSessionSchema = z.object({
   groupId: z.string().uuid().nullable(),
   planId: z.string().uuid().nullable(),
   trainerNote: z.string().max(5000).default(''),
-  attendance: z.array(AttendanceRecordSchema),
+  attendance: z.array(AttendanceRecordSchema).max(500),
   createdAt: isoDate,
   updatedAt: isoDate,
 }).strict();

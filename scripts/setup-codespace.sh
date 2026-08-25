@@ -146,8 +146,10 @@ EOF
 fi
 
 # --- Schritt 7: Datenbank-Schema anlegen -------------------------------------
-log "Schritt 7: Datenbank-Schema anlegen (prisma db push)"
-(cd apps/api && npx prisma db push)
+# `migrate deploy` statt `db push` (Code-Review, Befund W5): wendet die
+# committete Migrationshistorie unter apps/api/prisma/migrations/ an.
+log "Schritt 7: Datenbank-Schema anlegen (prisma migrate deploy)"
+(cd apps/api && npx prisma migrate deploy)
 
 # --- Schritt 8: Backend bauen -------------------------------------------------
 log "Schritt 8: Backend bauen (inkl. packages/shared-types, packages/sync-protocol über prebuild-Skripte)"
@@ -192,13 +194,19 @@ server {
     root ${REPO_ROOT}/apps/web;
     index index.html;
 
+    # Content-Security-Policy für das Frontend (Code-Review, Befund S3) —
+    # siehe docs/deployment.md, Abschnitt 9 für die ausführliche Begründung.
+    set \$csp "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; worker-src 'self'; manifest-src 'self'";
+
     location / {
         try_files \$uri \$uri/ /index.html;
+        add_header Content-Security-Policy \$csp always;
     }
 
     # Service Worker & Manifest müssen exakt korrekt ausgeliefert werden
     location = /sw.js {
         add_header Cache-Control "no-cache";
+        add_header Content-Security-Policy \$csp always;
     }
 
     # API-Anfragen an das Node.js-Backend weiterleiten

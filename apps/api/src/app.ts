@@ -79,6 +79,7 @@ export async function buildApp(env: Env, overrides: BuildAppOverrides = {}): Pro
       clubs: new PrismaClubRepository(getPrisma()),
       invitations: new PrismaInvitationRepository(getPrisma()),
       athletes: new PrismaAthleteRepository(getPrisma()),
+      users: new PrismaUserRepository(getPrisma()),
       mailer,
       frontendBaseUrl: env.FRONTEND_BASE_URL,
       clubInvitationTtlDays: CLUB_INVITATION_TTL_DAYS,

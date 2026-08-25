@@ -3,7 +3,7 @@
 // ============================================================
 import { getAll, put, remove } from '../db.js';
 import {
-  el, clear, field, textInput, selectInput, dateInput, openModal, confirmAction, toast, badge,
+  el, clear, field, selectInput, dateInput, openModal, confirmAction, toast, badge,
   emptyState, laneWave, fmtDateLong, todayISO, toIsoDateTime, average, fullName, beginRender,
 } from '../utils.js';
 import { getRole, getCurrentUser } from '../state.js';
@@ -19,14 +19,14 @@ export const sessionsModule = {
     clear(container);
     const role = getRole();
     if (role === 'athlete') return renderAthleteView(container, isCurrent);
-    const [sessions, groups, athletes, plans] = await Promise.all(['sessions', 'groups', 'athletes', 'plans'].map(getAll));
+    const [sessions, groups, athletes] = await Promise.all(['sessions', 'groups', 'athletes'].map(getAll));
     if (!isCurrent()) return;
     if (params[0]) return renderDetail(container, params[0]);
-    renderList(container, sessions, groups, athletes, plans);
+    renderList(container, sessions, groups, athletes);
   }
 };
 
-function renderList(container, sessions, groups, athletes, plans) {
+function renderList(container, sessions, groups, athletes) {
   const wrap = el('div');
   wrap.appendChild(el('div', { class: 'page-head' }, [
     el('div', {}, [el('div', { class: 'page-eyebrow' }, t('sessions.eyebrow', { count: sessions.length })), el('h1', { class: 'mt-0' }, t('sessions.title'))]),
@@ -56,7 +56,7 @@ function renderList(container, sessions, groups, athletes, plans) {
   table.appendChild(tbody);
   host.appendChild(el('div', { class: 'table-wrap card' }, table));
 
-  async function refresh() { const [s2, g2, a2, p2] = await Promise.all(['sessions', 'groups', 'athletes', 'plans'].map(getAll)); clear(container); renderList(container, s2, g2, a2, p2); }
+  async function refresh() { const [s2, g2, a2] = await Promise.all(['sessions', 'groups', 'athletes'].map(getAll)); clear(container); renderList(container, s2, g2, a2); }
 }
 
 async function renderDetail(container, sessionId) {
@@ -97,7 +97,7 @@ async function renderDetail(container, sessionId) {
 
 async function renderAthleteView(container, isCurrent) {
   const user = getCurrentUser();
-  const [sessions, athletes, groups] = await Promise.all(['sessions', 'athletes', 'groups'].map(getAll));
+  const [sessions, athletes] = await Promise.all(['sessions', 'athletes'].map(getAll));
   if (!isCurrent()) return;
   const me = athletes.find(a => a.id === user?.athleteId);
   const wrap = el('div');

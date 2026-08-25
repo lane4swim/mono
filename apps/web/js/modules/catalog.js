@@ -2,9 +2,8 @@
 // modules/catalog.js — Übungskatalog
 // ============================================================
 import { getAll, put, remove } from '../db.js';
-import { el, clear, field, textInput, selectInput, openModal, confirmAction, toast, badge, emptyState, laneWave, beginRender } from '../utils.js';
+import { el, clear, field, textInput, selectInput, openModal, confirmAction, toast, badge, emptyState, laneWave, beginRender, icon } from '../utils.js';
 import { EXERCISE_CATEGORIES, STROKES, EQUIPMENT_ITEMS } from '../refdata.js';
-import { getRole } from '../state.js';
 import { t, trLabel, trCode, trOptions } from '../i18n.js';
 import { renderCommentThread } from './comments.js';
 import { libraryTransferButtons } from './libraryTransfer.js';
@@ -12,10 +11,10 @@ import { libraryTransferButtons } from './libraryTransfer.js';
 const VIEW_STORAGE_KEY = 'lane1-catalog-view';
 function loadCatalogView() {
   try { return localStorage.getItem(VIEW_STORAGE_KEY) === 'list' ? 'list' : 'grid'; }
-  catch (e) { return 'grid'; }
+  catch { return 'grid'; }
 }
 function saveCatalogView(mode) {
-  try { localStorage.setItem(VIEW_STORAGE_KEY, mode); } catch (e) { /* ignore (private mode etc.) */ }
+  try { localStorage.setItem(VIEW_STORAGE_KEY, mode); } catch { /* ignore (private mode etc.) */ }
 }
 
 const ICON_VIEW_GRID = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg>`;
@@ -41,13 +40,13 @@ function renderList(container, exercises) {
   const gridBtn = el('button', {
     type: 'button', class: `view-toggle-btn ${viewMode === 'grid' ? 'active' : ''}`,
     title: t('catalog.viewGrid'), 'aria-label': t('catalog.viewGrid'), 'aria-pressed': viewMode === 'grid',
-    html: ICON_VIEW_GRID, onclick: () => setView('grid'),
-  });
+    onclick: () => setView('grid'),
+  }, icon(ICON_VIEW_GRID));
   const listBtn = el('button', {
     type: 'button', class: `view-toggle-btn ${viewMode === 'list' ? 'active' : ''}`,
     title: t('catalog.viewList'), 'aria-label': t('catalog.viewList'), 'aria-pressed': viewMode === 'list',
-    html: ICON_VIEW_LIST, onclick: () => setView('list'),
-  });
+    onclick: () => setView('list'),
+  }, icon(ICON_VIEW_LIST));
   const viewToggle = el('div', { class: 'view-toggle' }, [gridBtn, listBtn]);
 
   wrap.appendChild(el('div', { class: 'page-head' }, [

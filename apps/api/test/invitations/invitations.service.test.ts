@@ -13,6 +13,7 @@ import {
   InvitationRevokedError,
 } from '../../src/modules/invitations/invitations.service.js';
 import { InMemoryClubRepository, InMemoryInvitationRepository, InMemoryAthleteRepository } from '../../src/modules/invitations/invitations.repository.memory.js';
+import { InMemoryUserRepository } from '../../src/modules/auth/auth.repository.memory.js';
 
 const SUPERADMIN = { id: 'super-1', role: 'superadmin', clubId: null };
 const ADMIN_OF_CLUB_A = { id: 'admin-a', role: 'admin', clubId: 'club-a' };
@@ -26,12 +27,13 @@ function makeService() {
   // ClubRepository.createWithAdminInvitation()) funktioniert.
   const clubs = new InMemoryClubRepository(undefined, invitations);
   const athletes = new InMemoryAthleteRepository();
+  const users = new InMemoryUserRepository();
   const mailer = new InMemoryMailSender();
   const service = createInvitationsService({
-    clubs, invitations, athletes, mailer, frontendBaseUrl: 'https://app.example.org',
+    clubs, invitations, athletes, users, mailer, frontendBaseUrl: 'https://app.example.org',
     clubInvitationTtlDays: 14, memberInvitationTtlDays: 7,
   });
-  return { service, clubs, invitations, athletes, mailer };
+  return { service, clubs, invitations, athletes, users, mailer };
 }
 
 describe('invitationsService.createClub', () => {
@@ -297,6 +299,36 @@ describe('invitationsService — Einladungs-E-Mail-Versand', () => {
     expect(mailer.sentEmails[0]!.inviteUrl).toContain('https://app.example.org/#/accept-invite/');
   });
 
+  // Regressionstest für Befund W9 (Code-Review): mailer.ts formatierte
+  // Einladungs-E-Mails bislang unabhängig von der tatsächlich verfügbaren
+  // Locale IMMER auf Deutsch — obwohl die einladende Person (der einzige
+  // zu diesem Zeitpunkt bekannte Locale-Träger, da die eingeladene Person
+  // noch kein Konto hat) eine andere Sprache eingestellt haben kann.
+  it('sendet auf Englisch, wenn die einladende Person en-US als Locale eingestellt hat', async () => {
+    const { service, mailer, clubs, users } = makeService();
+    const club = await clubs.create({ name: 'Club A' });
+    const adminUser = await users.create({
+      clubId: club.id, name: 'Jamie Admin', email: 'jamie@a.de', passwordHash: 'x',
+      role: 'admin', consentGivenAt: new Date(), consentVersion: '1',
+    });
+    await users.update(adminUser.id, { locale: 'en-US' });
+    const requester = { id: adminUser.id, role: 'admin', clubId: club.id };
+
+    await service.createInvitation({ email: 'trainer@a.de', role: 'trainer' }, requester);
+
+    expect(mailer.sentEmails[0]!.locale).toBe('en-US');
+  });
+
+  it('sendet ohne bekannte Locale der einladenden Person (unbekannte requester.id) — mailer.ts fällt intern auf Deutsch zurück', async () => {
+    const { service, mailer, clubs } = makeService();
+    const club = await clubs.create({ name: 'Club A' });
+    const requester = { ...ADMIN_OF_CLUB_A, clubId: club.id }; // 'admin-a' ist kein seeded User
+
+    await service.createInvitation({ email: 'trainer@a.de', role: 'trainer' }, requester);
+
+    expect(mailer.sentEmails[0]!.locale).toBeUndefined();
+  });
+
   it('createInvitation() versendet eine Einladungs-E-Mail an die eingeladene Person', async () => {
     const { service, mailer, clubs } = makeService();
     const club = await clubs.create({ name: 'Club A' });
@@ -316,14 +348,14 @@ describe('invitationsService — Einladungs-E-Mail-Versand', () => {
 
 describe('invitationsService.listClubs — Mitgliederzahlen', () => {
   it('liefert für jeden Verein die Anzahl aktiver Admins/Trainer:innen/Athlet:innen', async () => {
-    let users: Array<{ clubId: string | null; role: string; deletedAt?: Date | null }> = [];
-    const clubs = new InMemoryClubRepository(() => users);
+    let clubMembers: Array<{ clubId: string | null; role: string; deletedAt?: Date | null }> = [];
+    const clubs = new InMemoryClubRepository(() => clubMembers);
     const invitations = new InMemoryInvitationRepository();
     const mailer = new InMemoryMailSender();
-    const service = createInvitationsService({ clubs, invitations, athletes: new InMemoryAthleteRepository(), mailer, frontendBaseUrl: 'https://app.example.org', clubInvitationTtlDays: 14, memberInvitationTtlDays: 7 });
+    const service = createInvitationsService({ clubs, invitations, athletes: new InMemoryAthleteRepository(), users: new InMemoryUserRepository(), mailer, frontendBaseUrl: 'https://app.example.org', clubInvitationTtlDays: 14, memberInvitationTtlDays: 7 });
 
     const club = await clubs.create({ name: 'Club A' });
-    users = [
+    clubMembers = [
       { clubId: club.id, role: 'admin' },
       { clubId: club.id, role: 'trainer' },
       { clubId: club.id, role: 'trainer' },

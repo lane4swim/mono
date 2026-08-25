@@ -116,6 +116,16 @@ describe('ResultSchema', () => {
     expect(ResultSchema.safeParse({ ...valid, time: 0 }).success).toBe(false);
     expect(ResultSchema.safeParse({ ...valid, time: -5 }).success).toBe(false);
   });
+
+  // Regressionstest für Befund S7 (Code-Review): Array-Felder waren
+  // bislang unbegrenzt lang, obwohl jedes freie Textfeld längst ein
+  // `.max(...)` trägt (siehe Dateikopf).
+  it('lehnt mehr als 500 Rundenzeiten ab', () => {
+    expect(ResultSchema.safeParse({ ...valid, laps: Array(501).fill(1) }).success).toBe(false);
+  });
+  it('akzeptiert genau 500 Rundenzeiten', () => {
+    expect(ResultSchema.safeParse({ ...valid, laps: Array(500).fill(1) }).success).toBe(true);
+  });
 });
 
 describe('CommentSchema', () => {
@@ -156,6 +166,14 @@ describe('ExerciseSchema', () => {
     const withBadComment = { ...valid, comments: [{ id: 'c1', authorName: 'Jonas Beck', text: '', createdAt: now }] };
     expect(ExerciseSchema.safeParse(withBadComment).success).toBe(false);
   });
+
+  // Regressionstest für Befund S7 (Code-Review).
+  it('lehnt mehr als 50 Tags/Ausrüstungsgegenstände sowie mehr als 500 Kommentare ab', () => {
+    expect(ExerciseSchema.safeParse({ ...valid, tags: Array(51).fill('x') }).success).toBe(false);
+    expect(ExerciseSchema.safeParse({ ...valid, equipment: Array(51).fill('x') }).success).toBe(false);
+    const manyComments = Array.from({ length: 501 }, (_, i) => ({ id: `c${i}`, authorName: 'X', text: 'x', createdAt: now }));
+    expect(ExerciseSchema.safeParse({ ...valid, comments: manyComments }).success).toBe(false);
+  });
 });
 
 describe('SetEntrySchema (Sätze & Wiederholungsblöcke)', () => {
@@ -189,6 +207,17 @@ describe('SetEntrySchema (Sätze & Wiederholungsblöcke)', () => {
     };
     expect(SetEntrySchema.safeParse(block).success).toBe(true);
   });
+
+  // Regressionstest für Befund S7 (Code-Review).
+  it('lehnt mehr als 200 Kommentare an einem Satz sowie mehr als 50 Sätze in einem Block ab', () => {
+    const manyComments = Array.from({ length: 201 }, (_, i) => ({ id: `c${i}`, authorName: 'X', text: 'x', createdAt: now }));
+    const setWithTooManyComments = { kind: 'set', id: 's1', description: 'X', distance: 100, reps: 1, intensity: 'ga1', restSec: 0, comments: manyComments };
+    expect(SetEntrySchema.safeParse(setWithTooManyComments).success).toBe(false);
+
+    const oneSet = { kind: 'set', id: 's1', description: 'X', distance: 100, reps: 1, intensity: 'ga1', restSec: 0 };
+    const blockWithTooManySets = { kind: 'block', id: 'b1', label: 'X', repeatCount: 1, sets: Array(51).fill(oneSet) };
+    expect(SetEntrySchema.safeParse(blockWithTooManySets).success).toBe(false);
+  });
 });
 
 describe('TemplateSchema', () => {
@@ -202,6 +231,14 @@ describe('TemplateSchema', () => {
       createdAt: now, updatedAt: now,
     };
     expect(TemplateSchema.safeParse(template).success).toBe(true);
+  });
+
+  // Regressionstest für Befund S7 (Code-Review).
+  it('lehnt mehr als 50 Tags sowie mehr als 200 Sätze/Blöcke ab', () => {
+    const base = { id: ATHLETE_ID, clubId: CLUB_ID, name: 'X', description: '', createdAt: now, updatedAt: now };
+    expect(TemplateSchema.safeParse({ ...base, tags: Array(51).fill('x'), sets: [] }).success).toBe(false);
+    const oneSet = { kind: 'set', id: 's1', description: 'X', distance: 100, reps: 1, intensity: 'ga1', restSec: 0 };
+    expect(TemplateSchema.safeParse({ ...base, tags: [], sets: Array(201).fill(oneSet) }).success).toBe(false);
   });
 });
 
@@ -226,6 +263,19 @@ describe('PlanSchema', () => {
     };
     expect(PlanSchema.safeParse(plan).success).toBe(true);
   });
+
+  // Regressionstest für Befund S7 (Code-Review): "days" trägt trotz des
+  // Feldnamens "weekStart" bewusst ein großzügigeres Limit als 7 — die
+  // Oberfläche begrenzt die Anzahl der Tage selbst nicht hart (siehe
+  // apps/web/js/modules/plans.js), ein mehrwöchiger Plan bleibt also gültig.
+  it('lehnt mehr als 60 Tage sowie mehr als 500 Kommentare ab', () => {
+    const base = { id: ATHLETE_ID, clubId: CLUB_ID, name: 'X', weekStart: now, groupId: null, status: 'aktiv', createdAt: now, updatedAt: now };
+    const oneDay = { date: now, sets: [] };
+    expect(PlanSchema.safeParse({ ...base, days: Array(61).fill(oneDay), comments: [] }).success).toBe(false);
+    expect(PlanSchema.safeParse({ ...base, days: Array(60).fill(oneDay), comments: [] }).success).toBe(true);
+    const manyComments = Array.from({ length: 501 }, (_, i) => ({ id: `c${i}`, authorName: 'X', text: 'x', createdAt: now }));
+    expect(PlanSchema.safeParse({ ...base, days: [], comments: manyComments }).success).toBe(false);
+  });
 });
 
 describe('TrainingSessionSchema', () => {
@@ -244,6 +294,14 @@ describe('TrainingSessionSchema', () => {
       createdAt: now, updatedAt: now,
     };
     expect(TrainingSessionSchema.safeParse(session).success).toBe(false);
+  });
+
+  // Regressionstest für Befund S7 (Code-Review).
+  it('lehnt mehr als 500 Anwesenheits-Einträge ab', () => {
+    const base = { id: ATHLETE_ID, clubId: CLUB_ID, date: now, groupId: null, planId: null, trainerNote: '', createdAt: now, updatedAt: now };
+    const entry = { athleteId: ATHLETE_ID, present: true, rpe: null, note: '' };
+    expect(TrainingSessionSchema.safeParse({ ...base, attendance: Array(501).fill(entry) }).success).toBe(false);
+    expect(TrainingSessionSchema.safeParse({ ...base, attendance: Array(500).fill(entry) }).success).toBe(true);
   });
 });
 

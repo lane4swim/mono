@@ -12,6 +12,34 @@ import * as api from './apiClient.js';
 
 const META_CURSOR_KEY = 'syncCursor';
 
+// Server-Obergrenze pro Push-Request (siehe
+// packages/shared-types/src/syncEvent.ts: SyncPushRequestSchema —
+// `events: z.array(...).max(500)`). Deutlich darunter, damit push() in
+// mehreren Blöcken senden kann (siehe unten) statt an dieser Grenze zu
+// scheitern.
+const PUSH_BATCH_SIZE = 200;
+
+// Code-Review, Befund C2: ein Event, das serverseitig DAUERHAFT scheitert
+// (z. B. unbekannter Store, verletzter Fremdschlüssel, gelöschte
+// Referenz), bekam bislang status: 'error' und wurde dadurch bei JEDEM
+// weiteren Sync-Zyklus (alle 60s, siehe app.js) erneut mitgeschickt — für
+// immer, ohne dass `attempts` je ausgewertet wurde. Ab dieser Anzahl
+// Versuche gilt ein Event stattdessen als 'failed' (siehe push() unten)
+// und wird aus dem automatischen Push-Filter genommen — die
+// Sync-Warteschlangen-Ansicht (modules/syncQueue.js) zeigt es weiterhin an
+// und bietet über den vorhandenen "Erneut versuchen"-Button einen
+// manuellen Reset auf 'pending'.
+const MAX_SYNC_ATTEMPTS = 5;
+
+// Code-Review, Befund C5: pull() verlässt sich darauf, dass der Server
+// niemals hasMore: true zusammen mit nextCursor: null liefert (heute
+// serverseitig ausgeschlossen, siehe sync.service.ts) — bricht diese
+// Invariante künftig durch einen Server-Fehler, würde die Schleife sonst
+// mit cursor: null endlos dieselbe (erste) Seite erneut abfragen. Eine
+// harte Iterationsobergrenze dient als zweites, vom Server unabhängiges
+// Sicherheitsnetz.
+const MAX_PULL_ITERATIONS = 1000;
+
 async function getCursor() {
   const meta = await get('meta', META_CURSOR_KEY);
   return meta?.cursor ?? null;
@@ -45,46 +73,68 @@ async function renameLocalRecord(store, oldId, newId) {
 // Sendet alle ausstehenden/fehlerhaften Events aus der lokalen
 // Sync-Warteschlange. Aktualisiert jedes Event anhand der Server-Antwort
 // (siehe apps/api SyncEventResult: "applied" | "conflict" | "error").
+//
+// Code-Review, Befund C1: sendet die Warteschlange nicht mehr als EINEN
+// Request, sondern in Blöcken von PUSH_BATCH_SIZE. Eine Offline-Phase mit
+// mehr als 500 Änderungen (server-seitiges Limit, siehe oben) ließ push()
+// zuvor mit einer 400 fehlschlagen — dauerhaft, denn die Warteschlange
+// konnte sich nie unter 500 abbauen; ein Logout in diesem Zustand verlor
+// per wipeAll() (siehe state.js: logout()) sämtliche ausstehenden
+// Änderungen. Schlägt ein Block fehl (Netzwerk-/Serverfehler), wirft
+// diese Funktion weiter — bereits verarbeitete Blöcke bleiben als
+// 'synced'/'error' markiert, der nächste Sync-Zyklus setzt bei den
+// verbleibenden Events fort.
 export async function push() {
   const queue = await getSyncQueue();
   const toSend = queue.filter(e => e.status === 'pending' || e.status === 'error');
   if (toSend.length === 0) return { sent: 0, applied: 0, conflicts: 0, errors: 0 };
 
-  const events = toSend.map(e => ({
-    id: e.id, store: e.store, entityId: e.entityId, action: e.action,
-    payload: e.payload, clientUpdatedAt: e.createdAt,
-  }));
-
-  const { results } = await api.syncPush(events);
   let applied = 0, conflicts = 0, errors = 0;
 
-  for (const result of results) {
-    const sourceEvent = toSend.find(e => e.id === result.eventId);
-    if (result.status === 'applied') {
-      applied++;
-      // "insert-as-new" (siehe apps/api sync.service.ts: resolveConflict()
-      // -> "results" nutzt die Konfliktstrategie "never-overwrite") vergibt
-      // bei einem Konflikt serverseitig eine NEUE id statt zu
-      // überschreiben und meldet sie über serverVersion.id zurück. Ohne
-      // dieses Nachziehen bliebe der lokale Datensatz unter der ALTEN
-      // (client-generierten) id gespeichert; der nächste pull() würde
-      // denselben Datensatz zusätzlich unter der NEUEN id importieren —
-      // er erschiene lokal doppelt (siehe renameLocalRecord() oben).
-      const newId = result.serverVersion?.id;
-      if (sourceEvent && typeof newId === 'string' && newId !== sourceEvent.entityId) {
-        await renameLocalRecord(sourceEvent.store, sourceEvent.entityId, newId);
+  for (let i = 0; i < toSend.length; i += PUSH_BATCH_SIZE) {
+    const batch = toSend.slice(i, i + PUSH_BATCH_SIZE);
+    const bySourceId = new Map(batch.map(e => [e.id, e]));
+    const events = batch.map(e => ({
+      id: e.id, store: e.store, entityId: e.entityId, action: e.action,
+      payload: e.payload, clientUpdatedAt: e.createdAt,
+    }));
+
+    const { results } = await api.syncPush(events);
+
+    for (const result of results) {
+      const sourceEvent = bySourceId.get(result.eventId);
+      if (result.status === 'applied') {
+        applied++;
+        // "insert-as-new" (siehe apps/api sync.service.ts: resolveConflict()
+        // -> "results" nutzt die Konfliktstrategie "never-overwrite") vergibt
+        // bei einem Konflikt serverseitig eine NEUE id statt zu
+        // überschreiben und meldet sie über serverVersion.id zurück. Ohne
+        // dieses Nachziehen bliebe der lokale Datensatz unter der ALTEN
+        // (client-generierten) id gespeichert; der nächste pull() würde
+        // denselben Datensatz zusätzlich unter der NEUEN id importieren —
+        // er erschiene lokal doppelt (siehe renameLocalRecord() oben).
+        const newId = result.serverVersion?.id;
+        if (sourceEvent && typeof newId === 'string' && newId !== sourceEvent.entityId) {
+          await renameLocalRecord(sourceEvent.store, sourceEvent.entityId, newId);
+        }
+        await updateSyncEvent(result.eventId, { status: 'synced', syncedAt: new Date().toISOString(), attempts: (sourceEvent?.attempts || 0) + 1, lastError: null });
+      } else if (result.status === 'conflict') {
+        conflicts++;
+        // Server-Stand ist neuer — das lokale Event wird verworfen (nicht
+        // als Fehler markiert, siehe Konfliktstrategie last-write-wins);
+        // der nächste pull() bringt den aktuellen Serverstand ohnehin lokal
+        // an.
+        await updateSyncEvent(result.eventId, { status: 'synced', syncedAt: new Date().toISOString(), lastError: null });
+      } else {
+        errors++;
+        const attempts = (sourceEvent?.attempts || 0) + 1;
+        // Code-Review, Befund C2: nach MAX_SYNC_ATTEMPTS Fehlschlägen gilt
+        // das Event als 'failed' statt weiterhin 'error' — 'failed' fällt
+        // aus dem obigen toSend-Filter heraus und wird dadurch nicht mehr
+        // automatisch wiederholt (siehe Konstanten-Kommentar oben).
+        const status = attempts >= MAX_SYNC_ATTEMPTS ? 'failed' : 'error';
+        await updateSyncEvent(result.eventId, { status, attempts, lastError: result.message || 'Unbekannter Fehler.' });
       }
-      await updateSyncEvent(result.eventId, { status: 'synced', syncedAt: new Date().toISOString(), attempts: (sourceEvent?.attempts || 0) + 1, lastError: null });
-    } else if (result.status === 'conflict') {
-      conflicts++;
-      // Server-Stand ist neuer — das lokale Event wird verworfen (nicht
-      // als Fehler markiert, siehe Konfliktstrategie last-write-wins);
-      // der nächste pull() bringt den aktuellen Serverstand ohnehin lokal
-      // an.
-      await updateSyncEvent(result.eventId, { status: 'synced', syncedAt: new Date().toISOString(), lastError: null });
-    } else {
-      errors++;
-      await updateSyncEvent(result.eventId, { status: 'error', attempts: (sourceEvent?.attempts || 0) + 1, lastError: result.message || 'Unbekannter Fehler.' });
     }
   }
 
@@ -98,8 +148,14 @@ export async function pull() {
   let cursor = await getCursor();
   let totalChanges = 0;
   let hasMore = true;
+  let iterations = 0;
 
   while (hasMore) {
+    if (iterations >= MAX_PULL_ITERATIONS) {
+      throw new Error(`pull(): Abbruch nach ${MAX_PULL_ITERATIONS} Seiten ohne hasMore: false — vermutlich ein Server-Fehler.`);
+    }
+    iterations++;
+
     const response = await api.syncPull(cursor);
     for (const change of response.changes) {
       if (change.action === 'delete') {
@@ -118,14 +174,18 @@ export async function pull() {
         // (Löschungen laufen ausschließlich über eigene "delete"-Sync-
         // Events, siehe oben) — das Feld wird daher beim Übernehmen in die
         // lokale Ablage konsequent entfernt statt nur ignoriert.
-        const { deletedAt, ...payload } = change.payload;
+        const { deletedAt: _deletedAt, ...payload } = change.payload;
         await putWithoutSync(change.store, payload);
       }
       totalChanges++;
     }
     cursor = response.nextCursor;
     hasMore = response.hasMore;
-    if (cursor) await setCursor(cursor);
+    // Sicherheitsnetz (Befund C5): hasMore: true ohne nextCursor dürfte
+    // laut Server-Invariante nie vorkommen — Abbruch statt Endlosschleife
+    // mit cursor: null.
+    if (!cursor) break;
+    await setCursor(cursor);
   }
 
   return { received: totalChanges };

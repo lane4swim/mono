@@ -47,6 +47,7 @@ async function buildTestApp() {
     clubs,
     invitations,
     athletes: new InMemoryAthleteRepository(),
+    users,
     mailer: new InMemoryMailSender(),
     frontendBaseUrl: 'https://app.example.org',
     clubInvitationTtlDays: 14,
@@ -166,6 +167,35 @@ describe('Rate-Limiting auf /auth/login', () => {
     const statusCodes = results.map((r) => r.statusCode);
     expect(statusCodes.slice(0, 5).every((code) => code === 401)).toBe(true);
     expect(statusCodes[5]).toBe(429);
+
+    await app.close();
+  });
+
+  // Regressionstest (Code-Review): der `keyGenerator` kombiniert IP +
+  // E-Mail explizit, damit z. B. ein Verein hinter gemeinsamer NAT-IP sich
+  // nicht gegenseitig aussperrt. Das setzt voraus, dass der Request-Body
+  // (und damit `email`) zum Zeitpunkt der Zählung bereits geparst ist —
+  // @fastify/rate-limit zählt standardmäßig bei 'onRequest', VOR dem
+  // Body-Parsing, sodass `email` dort immer `undefined` gewesen wäre und
+  // der obige Test (bewusst nur eine E-Mail) das nicht aufgedeckt hätte.
+  // Dieser Test nutzt zwei verschiedene E-Mail-Adressen von derselben
+  // (simulierten) IP: bekommt jede ihr eigenes 5er-Budget, greift das
+  // Rate-Limit tatsächlich pro E-Mail statt pauschal pro IP.
+  it('limitiert pro E-Mail-Adresse, nicht pauschal pro IP (mehrere Konten hinter derselben IP bleiben unabhängig)', async () => {
+    const { app } = await buildTestApp();
+
+    const attempt = (email: string) =>
+      app.inject({ method: 'POST', url: '/auth/login', payload: { email, password: 'falsch', consent: true } });
+
+    const firstAccountResults = [];
+    for (let i = 0; i < 5; i++) firstAccountResults.push(await attempt('konto-a@example.org'));
+    expect(firstAccountResults.every((r) => r.statusCode === 401)).toBe(true);
+    expect((await attempt('konto-a@example.org')).statusCode).toBe(429);
+
+    // Ein zweites Konto von derselben IP darf sein eigenes, noch
+    // unverbrauchtes Budget nutzen — wäre der Schlüssel tatsächlich nur
+    // die IP, wäre dieser erste Versuch bereits 429.
+    expect((await attempt('konto-b@example.org')).statusCode).toBe(401);
 
     await app.close();
   });

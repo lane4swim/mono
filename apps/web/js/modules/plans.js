@@ -1,12 +1,12 @@
 // ============================================================
 // modules/plans.js — Trainingspläne (Sets, Serien, Wochenpläne, Kalender)
 // ============================================================
-import { getAll, put, remove, uid } from '../db.js';
+import { getAll, put, remove } from '../db.js';
 import {
   el, clear, field, textInput, selectInput, dateInput, openModal, confirmAction, toast, badge,
   emptyState, laneWave, fmtDateLong, fmtDateShort, todayISO, toIsoDateTime, dateOnly, isoAddDays, startOfWeek, beginRender,
 } from '../utils.js';
-import { WEEKDAYS, EQUIPMENT_ITEMS } from '../refdata.js';
+import { EQUIPMENT_ITEMS } from '../refdata.js';
 import { renderSetEditor, totalDistance, cloneItems, collectEquipment } from './setEditor.js';
 import { renderCommentThread, commentsButton } from './comments.js';
 import { exportPlanToPdf, exportDayToPdf } from './planPdfExport.js';

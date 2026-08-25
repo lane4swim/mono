@@ -12,8 +12,8 @@
 // that remains coach-managed under "Athleten & Team", since it
 // reflects team/roster decisions rather than personal account info.
 // ============================================================
-import { getAll, put, remove } from '../db.js';
-import { el, clear, field, textInput, toast, laneWave, badge, fullName, beginRender, confirmAction, openModal } from '../utils.js';
+import { getAll } from '../db.js';
+import { el, clear, field, textInput, toast, laneWave, badge, fullName, beginRender, openModal } from '../utils.js';
 import { getCurrentUser, updateProfile, setUserLocale, logout } from '../state.js';
 import * as api from '../apiClient.js';
 import { ApiError, NetworkError } from '../apiClient.js';
@@ -165,7 +165,7 @@ function renderView(container, athletes, results, entries, actionItems, sessions
     },
   }, t('profileData.exportButton'));
 
-  const deleteBtn = el('button', { class: 'btn btn-danger', onclick: () => openDeleteAccountModal(user, athletes) }, t('profileData.deleteButton'));
+  const deleteBtn = el('button', { class: 'btn btn-danger', onclick: () => openDeleteAccountModal() }, t('profileData.deleteButton'));
 
   dataCard.appendChild(el('div', { class: 'flex gap-8', style: 'flex-wrap:wrap' }, [exportBtn, deleteBtn]));
   wrap.appendChild(dataCard);
@@ -185,7 +185,7 @@ function describeError(err) {
 // Verlangt zur Bestätigung die exakte Eingabe von "LÖSCHEN"/"DELETE"
 // (stärker als das einfache confirmAction()-Muster, da diese Aktion nicht
 // rückgängig gemacht werden kann).
-function openDeleteAccountModal(user, athletes) {
+function openDeleteAccountModal() {
   const body = el('div');
   body.appendChild(el('p', {}, t('profileData.deleteIntro')));
   body.appendChild(el('p', { class: 'text-sm' }, t('profileData.deleteConfirmPrompt')));
@@ -202,14 +202,20 @@ function openDeleteAccountModal(user, athletes) {
     confirmDeleteBtn.disabled = true;
     try {
       const result = await api.deleteMyAccount();
-      // Erst NACH erfolgreicher serverseitiger Löschanfrage auch den
-      // lokalen Cache aufräumen — ein fehlgeschlagener Serveraufruf darf
-      // niemals dazu führen, dass nur lokal etwas verschwindet, während
-      // das Konto serverseitig unverändert weiterbesteht (das war genau
-      // der frühere Irreführungs-Bug, siehe Änderungsprotokoll).
-      await eraseMyAccountAndData(user, athletes);
-      toast(t('profileData.deleted', { date: new Date(result.purgeAfter).toLocaleDateString('de-DE') }));
+      toast(t('profileData.deleted', { date: new Date(result.purgeAfter).toLocaleDateString(getLocale()) }));
       close();
+      // Code-Review, Befund R2: räumte den lokalen Cache zuvor Datensatz
+      // für Datensatz per eigener eraseMyAccountAndData()-Funktion auf —
+      // vollständig überflüssig, denn logout() (state.js) ruft ohnehin
+      // wipeAll() auf, das ALLE Stores leert, und lief nur drei Zeilen
+      // später. Schlimmer als nur überflüssig: sie nutzte die
+      // sync-erzeugenden remove()/put() statt removeWithoutSync()/
+      // putWithoutSync() — für ein Konto, das serverseitig soeben
+      // soft-gelöscht und dessen Refresh Tokens widerrufen wurden, wurden
+      // dadurch kurzzeitig unnötige Sync-Events erzeugt (darunter ein
+      // Event für den Store "users", den die Sync-API gar nicht kennt),
+      // die wipeAll() zwar sofort mitlöschte, aber als offene Falle für
+      // eine künftige Reihenfolge-Änderung bestehen blieben.
       await logout();
       setTimeout(() => location.reload(), 600);
     } catch (err) {
@@ -223,31 +229,4 @@ function openDeleteAccountModal(user, athletes) {
     confirmDeleteBtn,
   ]));
   const { close } = openModal({ title: t('profileData.deleteButton'), bodyNode: body, wide: true });
-}
-
-// Räumt den lokalen Cache auf (Athletenprofil, Ergebnisse, Startlisten-
-// einträge, Handlungsfelder, eigene Anwesenheitseinträge) — wird NUR nach
-// erfolgreicher serverseitiger Löschanfrage aufgerufen (siehe oben). Die
-// serverseitige Löschung selbst erfolgt zeitversetzt per Purge-Job
-// (siehe apps/api/src/jobs/purgeExpiredDeletions.ts).
-async function eraseMyAccountAndData(user, athletes) {
-  const linkedAthlete = user.athleteId ? athletes.find(a => a.id === user.athleteId) : null;
-
-  if (linkedAthlete) {
-    const [results, entries, actionItems, sessions] = await Promise.all(
-      ['results', 'entries', 'actionItems', 'sessions'].map(getAll)
-    );
-    for (const r of results.filter(x => x.athleteId === linkedAthlete.id)) await remove('results', r.id);
-    for (const e of entries.filter(x => x.athleteId === linkedAthlete.id)) await remove('entries', e.id);
-    for (const a of actionItems.filter(x => x.athleteId === linkedAthlete.id)) await remove('actionItems', a.id);
-    for (const s of sessions) {
-      const filtered = (s.attendance || []).filter(a => a.athleteId !== linkedAthlete.id);
-      if (filtered.length !== (s.attendance || []).length) {
-        await put('sessions', { ...s, attendance: filtered });
-      }
-    }
-    await remove('athletes', linkedAthlete.id);
-  }
-
-  await remove('users', user.id);
 }

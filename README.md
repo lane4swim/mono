@@ -112,7 +112,7 @@ Datenbank), sondern eigenständig:
 
 ```bash
 cd apps/api
-npx prisma db push                # Schema in die Zieldatenbank pushen (siehe DATABASE_URL in .env)
+npx prisma migrate deploy         # Migrationshistorie in die Zieldatenbank anwenden (siehe DATABASE_URL in .env)
 npm run test:integration
 ```
 
@@ -195,16 +195,22 @@ jeden Store einen eigenen Validierungspfad zu brauchen. Auf API-Seite
 übernimmt `apps/api/src/db/entityRegistry.ts` dieselbe Rolle für die
 Zuordnung SyncStore → Prisma-Delegate.
 
-**Migrationen:** In dieser Sandbox-Umgebung ohne Internetzugriff auf
-`binaries.prisma.sh` konnten `prisma validate`/`prisma migrate dev` nicht
-ausgeführt werden (identische Einschränkung wie schon in Phase 0). Das
-Schema wurde sorgfältig von Hand geprüft; die erste Migration entsteht
-normal mit vollem Internetzugriff:
+**Migrationen:** `apps/api/prisma/migrations/` enthält eine committete,
+reviewbare Migrationshistorie (Code-Review, Befund W5) — zuvor lief sowohl
+CI als auch jedes Deployment über `prisma db push`, das das Schema direkt
+aus `schema.prisma` erzeugt, ohne Historie, ohne Review-Möglichkeit für
+einzelne Schemaänderungen und ohne Rollback-Pfad. Eine künftige
+Schemaänderung entsteht lokal per
 
 ```bash
 cd apps/api
-npm run prisma:migrate -- --name init
+npm run prisma:migrate -- --name <kurze-beschreibung>
 ```
+
+(erzeugt eine neue Datei unter `prisma/migrations/`, die committet wird);
+CI (`.github/workflows/ci.yml`) und jedes Deployment
+(`docs/deployment*.md`) wenden die Historie stattdessen nicht-interaktiv
+per `npx prisma migrate deploy` an.
 
 **Seed-Daten:** `apps/api/prisma/seed.ts` spiegelt inhaltlich
 `apps/web/js/seed.js` (ein Demo-Verein, sechs Athlet:innen, vier

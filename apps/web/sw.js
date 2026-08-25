@@ -7,10 +7,11 @@
 // Bump CACHE_VERSION whenever any cached file changes so clients
 // pick up the new version instead of serving stale assets.
 // ============================================================
-const CACHE_VERSION = 'lane1-v26';
+const CACHE_VERSION = 'lane1-v27';
 const PRECACHE_URLS = [
   './',
   './index.html',
+  './demo.html',
   './manifest.json',
   './css/styles.css',
   './help/index.html',
@@ -18,10 +19,12 @@ const PRECACHE_URLS = [
   './help/admin.html',
   './help/help.css',
   './js/app.js',
+  './js/app-demo.js',
   './js/apiClient.js',
   './js/syncClient.js',
   './js/db.js',
   './js/demoMode.js',
+  './js/demoSeed.js',
   './js/state.js',
   './js/router.js',
   './js/utils.js',
@@ -50,12 +53,25 @@ const PRECACHE_URLS = [
   './js/modules/userManagement.js',
   './js/modules/info.js',
   './icons/icon.svg',
+  './icons/icon-192.png',
+  './icons/icon-512.png',
+  './icons/icon-maskable.png',
 ];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_VERSION)
-      .then((cache) => cache.addAll(PRECACHE_URLS))
+      .then((cache) => Promise.all(
+        // Kein cache.addAll(): das ist atomar — eine einzelne nicht
+        // auflösbare URL (z. B. ein beim nächsten Refactor vergessener
+        // Eintrag, siehe Code-Review Befund W8) würde die komplette
+        // Installation und damit die gesamte Offline-Fähigkeit zum
+        // Scheitern bringen. Stattdessen scheitert höchstens die einzelne
+        // Datei; alle anderen werden trotzdem gecacht.
+        PRECACHE_URLS.map((url) =>
+          cache.add(url).catch((err) => console.warn('[sw] Precache fehlgeschlagen für', url, err))
+        )
+      ))
       .then(() => self.skipWaiting())
   );
 });
@@ -80,7 +96,13 @@ self.addEventListener('fetch', (event) => {
   // /admin sonst automatisch im Geltungsbereich, obwohl admin.js selbst
   // gar keinen Service Worker registriert.
   const url = new URL(req.url);
-  if (url.pathname.startsWith('/admin')) {
+  // Pfade relativ zum tatsächlichen Registrierungs-Scope prüfen statt
+  // fest von "/" auszugehen — unter einem GitHub-Pages-Unterpfad (siehe
+  // .github/workflows/static.yml) läuft die App z. B. unter
+  // /<repo>/ statt /, und "/admin"/"/api/" würden dort nie zutreffen
+  // (Code-Review, Befund W8).
+  const scopePath = new URL(self.registration.scope).pathname;
+  if (url.pathname.startsWith(`${scopePath}admin`)) {
     event.respondWith(fetch(req));
     return;
   }
@@ -95,7 +117,7 @@ self.addEventListener('fetch', (event) => {
   // Übersichten (z. B. die Vereinsliste der Nutzerverwaltung) nach dem
   // Anlegen leer blieben, bis ein Reload den Cache-Eintrag (der im
   // Hintergrund per fetchAndCache aktualisiert wurde) erneut auslas.
-  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/auth/')) {
+  if (url.pathname.startsWith(`${scopePath}api/`) || url.pathname.startsWith(`${scopePath}auth/`)) {
     event.respondWith(fetch(req));
     return;
   }

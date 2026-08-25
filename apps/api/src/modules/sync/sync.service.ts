@@ -13,7 +13,6 @@ import { randomUUID } from 'node:crypto';
 import {
   SyncEventSchema,
   ENTITY_SCHEMAS,
-  type SyncEvent,
   type SyncEventResult,
   type SyncChange,
   type SyncStore,
@@ -81,8 +80,8 @@ const PULL_TIE_SAFETY_LIMIT = 5000;
 //   Store          | trainer | admin | athlete | Begründung
 //   ---------------|---------|-------|---------|--------------------
 //   results        | R + W   | R + W | R + W   | js/modules/times.js zeigt/bearbeitet für ALLE Rollen identisch die volle Liste.
-//   plans          | R + W   | R + W | R + W   | js/modules/plans.js: ebenso, für alle Rollen geteilt.
-//   athletes       | R only  | R + W | R only  | js/modules/athletes.js: die Seite selbst ist laut `roles:['trainer','admin']` für trainer sichtbar, aber Anlegen/Ändern des Athleten-Stamms (inkl. "notes") ist dort zusätzlich hinter isAdminOrSuperAdmin() versteckt ("Verteidigung in der Tiefe"-Kommentar in openAthleteModal()) — write bewusst NICHT im "Coach"-Profil (anders als die übrigen coachVerwaltet-Stores unten), sonst wäre die UI-Restriktion nur Fassade. "notes" zusätzlich per scopeChangeForAthlete() beim Lesen redigiert (Zeilen-/Feldebene, siehe unten).
+//   plans          | R + W   | R + W | R + W   | js/modules/plans.js: ebenso, für alle Rollen shared.
+//   athletes       | R only  | R + W | R only  | js/modules/athletes.js: die Seite selbst ist laut `roles:['trainer','admin']` für trainer sichtbar, aber Anlegen/Ändern des Athleten-Stamms (inkl. "notes") ist dort zusätzlich hinter isAdminOrSuperAdmin() versteckt ("Verteidigung in der Tiefe"-Kommentar in openAthleteModal()) — write bewusst NICHT im "Coach"-Profil (anders als die übrigen coachManaged-Stores unten), sonst wäre die UI-Restriktion nur Fassade. "notes" zusätzlich per scopeChangeForAthlete() beim Lesen redigiert (Zeilen-/Feldebene, siehe unten).
 //   groups         | R + W   | R + W | R only  | wird nur innerhalb von athletes.js verwaltet (kein eigenes Modul).
 //   exercises      | R + W   | R + W | R only  | js/modules/catalog.js: `roles:['trainer','admin']`.
 //   templates      | R + W   | R + W | R only  | js/modules/templates.js: `roles:['trainer','admin']`.
@@ -108,32 +107,37 @@ interface StoreAccess {
 // dürfen (siehe SyncRequester.clubId-Kommentar oben).
 const TEAM_ROLES: readonly Role[] = ['trainer', 'admin', 'athlete'];
 
-// Drei wiederkehrende Zugriffsprofile, um die Tabelle unten knapp zu halten:
-//   - geteilt: alle drei Rollen lesen UND schreiben (results, plans).
-//   - coachVerwaltet: alle drei Rollen lesen, nur trainer/admin schreiben
+// Drei wiederkehrende Zugriffsprofile, um die Tabelle unten knapp zu halten
+// (Code-Review, Befund W2: hießen zuvor "geteilt"/"coachVerwaltet"/
+// "adminVerwaltet" — deutsche Bezeichner inmitten einer sonst
+// durchgängig englischen Codebasis, direkt neben STORE_PERMISSIONS/
+// canRead/canWrite. Konvention wie im übrigen Projekt: Bezeichner
+// englisch, Kommentare/Erklärungen weiterhin deutsch):
+//   - shared: alle drei Rollen lesen UND schreiben (results, plans).
+//   - coachManaged: alle drei Rollen lesen, nur trainer/admin schreiben
 //     (sieben der übrigen acht Stores).
-//   - adminVerwaltet: alle drei Rollen lesen, NUR admin schreibt (athletes
+//   - adminManaged: alle drei Rollen lesen, NUR admin schreibt (athletes
 //     — siehe Begründung in der Tabelle oben: js/modules/athletes.js
 //     versteckt Anlegen/Ändern des Athleten-Stamms per isAdminOrSuperAdmin()
 //     ausdrücklich auch vor "trainer", nicht nur vor "athlete"; ein
-//     gemeinsames coachVerwaltet-Profil würde diese UI-Restriktion serverseitig
+//     gemeinsames coachManaged-Profil würde diese UI-Restriktion serverseitig
 //     unterlaufen — jede Person könnte per direktem Push an /api/sync
 //     trotzdem als "trainer" schreiben).
-const geteilt: StoreAccess = { read: new Set(TEAM_ROLES), write: new Set(TEAM_ROLES) };
-const coachVerwaltet: StoreAccess = { read: new Set(TEAM_ROLES), write: new Set(['trainer', 'admin']) };
-const adminVerwaltet: StoreAccess = { read: new Set(TEAM_ROLES), write: new Set(['admin']) };
+const shared: StoreAccess = { read: new Set(TEAM_ROLES), write: new Set(TEAM_ROLES) };
+const coachManaged: StoreAccess = { read: new Set(TEAM_ROLES), write: new Set(['trainer', 'admin']) };
+const adminManaged: StoreAccess = { read: new Set(TEAM_ROLES), write: new Set(['admin']) };
 
 const STORE_PERMISSIONS: Record<EntityStoreName, StoreAccess> = {
-  results: geteilt,
-  plans: geteilt,
-  athletes: adminVerwaltet,
-  groups: coachVerwaltet,
-  exercises: coachVerwaltet,
-  templates: coachVerwaltet,
-  competitions: coachVerwaltet,
-  entries: coachVerwaltet,
-  actionItems: coachVerwaltet,
-  sessions: coachVerwaltet,
+  results: shared,
+  plans: shared,
+  athletes: adminManaged,
+  groups: coachManaged,
+  exercises: coachManaged,
+  templates: coachManaged,
+  competitions: coachManaged,
+  entries: coachManaged,
+  actionItems: coachManaged,
+  sessions: coachManaged,
 };
 
 // Nimmt bewusst den weiteren Wire-Typ `SyncStore` entgegen (nicht nur
@@ -376,7 +380,15 @@ export function splitAtSafeTimestampBoundary(rows: ChangedRecord[], pageSize: nu
 
 export function createSyncService(deps: { gateway: SyncGateway }) {
   return {
-    async push(events: SyncEvent[], requester: SyncRequester): Promise<SyncEventResult[]> {
+    // `events: unknown[]` statt `SyncEvent[]` (Code-Review, Befund R3): die
+    // Route (sync.route.ts) lockert die Batch-weite Prüfung inzwischen auf
+    // die reine Array-Länge (siehe SyncPushRequestSchema) — die
+    // STRUKTURELLE Prüfung jedes einzelnen Events übernimmt ausschließlich
+    // dieser Codepfad hier (SyncEventSchema.safeParse(rawEvent) unten), der
+    // dadurch erstmals tatsächlich erreichbar ist: ein einzelnes
+    // fehlerhaftes Event scheitert jetzt nur noch selbst (als "error"-
+    // Ergebnis), statt den gesamten Batch abzulehnen.
+    async push(events: unknown[], requester: SyncRequester): Promise<SyncEventResult[]> {
       const results: SyncEventResult[] = [];
 
       for (const rawEvent of events) {
@@ -419,13 +431,25 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
           continue;
         }
 
-        // Idempotenz: bereits verarbeitete Events werden als "applied"
-        // gemeldet (nicht als Fehler), damit ein Client, der wegen eines
-        // Verbindungsabbruchs dieselbe Antwort nicht sah, beim erneuten
-        // Senden ein konsistentes Ergebnis bekommt. clubId-gescoped (siehe
-        // SyncGateway.isEventProcessed()-Kommentar) — ein fremdes,
+        // Idempotenz-FAST-PATH: bereits verarbeitete Events werden als
+        // "applied" gemeldet (nicht als Fehler), damit ein Client, der
+        // wegen eines Verbindungsabbruchs dieselbe Antwort nicht sah, beim
+        // erneuten Senden ein konsistentes Ergebnis bekommt. clubId-gescoped
+        // (siehe SyncGateway.isEventProcessed()-Kommentar) — ein fremdes,
         // erratenes Event-ID bekommt dadurch die korrekte, ungescopte
         // Antwort statt eines wirkungslosen "applied".
+        //
+        // Bewusst nur ein FAST-PATH, keine alleinige Korrektheitsgarantie
+        // mehr (Code-Review, Befund C3): dieser Check ist ein reines
+        // Check-then-Act ohne Sperre — zwei praktisch gleichzeitige Pushes
+        // desselben Events könnten diese Prüfung beide passieren, bevor
+        // eine von beiden den Ledger-Eintrag geschrieben hat. Er spart in
+        // diesem (Normal-)Fall lediglich die nachfolgende Schema-/
+        // Fremdschlüssel-Prüfung sowie den Transaktionsversuch für ein
+        // Event, dessen Ergebnis ohnehin feststeht. Die tatsächliche,
+        // nebenläufigkeitssichere Garantie liefert erst
+        // applyAndMarkProcessed() weiter unten, das die Datenänderung UND
+        // den Ledger-Eintrag atomar in einer Transaktion zusammenfasst.
         if (await deps.gateway.isEventProcessed(event.id, requester.clubId)) {
           results.push({ eventId: event.id, status: 'applied' });
           continue;
@@ -520,9 +544,25 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
           continue;
         }
 
+        // Ledger-Eintrag für applyAndMarkProcessed() unten — identisch für
+        // alle vier Zweige, daher hier einmal statt viermal aufgebaut.
+        const ledgerEvent = { id: event.id, clubId: requester.clubId, store, action: event.action };
+
         try {
           if (event.action === 'delete') {
-            await deps.gateway.softDelete(store, event.entityId, requester.clubId);
+            // Sicherheitskorrektur (Code-Review, Befund C3): Datenänderung
+            // UND Ledger-Eintrag werden jetzt ATOMAR in einer Transaktion
+            // geschrieben (siehe applyAndMarkProcessed()) statt in zwei
+            // getrennten Schritten — brach der Prozess vormals zwischen
+            // beiden ab (Deploy, OOM, DB-Verbindungsabbruch), wurde ein
+            // erneut gesendetes Event beim Retry ein zweites Mal
+            // angewendet. Der Rückgabewert ('applied' vs.
+            // 'already-processed') ändert die Antwort für delete/update/
+            // reguläres create NICHT (siehe unten) — nur der
+            // insert-as-new-Zweig braucht ihn, um zu wissen, ob die HIER
+            // erzeugte serverVersion.id tatsächlich geschrieben wurde.
+            await deps.gateway.applyAndMarkProcessed({ kind: 'softDelete', store, id: event.entityId, clubId: requester.clubId }, ledgerEvent);
+            results.push({ eventId: event.id, status: 'applied' });
           } else if (decision.outcome === 'insert-as-new') {
             // "results": nie überschreiben. Die eingehende Payload trägt
             // dieselbe (client-generierte) id wie der bereits bestehende,
@@ -533,17 +573,35 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
             // serverVersion und muss seinen lokalen Datensatz entsprechend
             // nachziehen (z. B. die alte id durch die neue ersetzen).
             const newId = randomUUID();
-            await deps.gateway.create(store, { ...(validatedPayload as Record<string, unknown>), id: newId });
-            await deps.gateway.markEventProcessed(event.id, requester.clubId, store, event.action);
-            results.push({ eventId: event.id, status: 'applied', serverVersion: { id: newId } });
+            const outcome = await deps.gateway.applyAndMarkProcessed(
+              { kind: 'create', store, payload: { ...(validatedPayload as Record<string, unknown>), id: newId } },
+              ledgerEvent,
+            );
+            // 'already-processed': ein GLEICHZEITIGER Versuch hat den
+            // Ledger-Eintrag zuerst geschrieben — DIESER Aufruf hat seine
+            // eigene, hier lokal erzeugte newId dadurch NIE tatsächlich
+            // gespeichert. Sie in serverVersion zu melden wäre eine
+            // Phantom-id, die es in der Datenbank nicht gibt. serverVersion
+            // bleibt in diesem Fall daher bewusst weg — identisch zum
+            // Verhalten des isEventProcessed()-Fast-Pfads oben, der für
+            // exakt denselben "das ist längst passiert"-Fall ebenfalls
+            // ohne serverVersion antwortet.
+            results.push(
+              outcome === 'applied'
+                ? { eventId: event.id, status: 'applied', serverVersion: { id: newId } }
+                : { eventId: event.id, status: 'applied' },
+            );
             continue;
           } else if (existing) {
-            await deps.gateway.update(store, event.entityId, requester.clubId, validatedPayload as Record<string, unknown>);
+            await deps.gateway.applyAndMarkProcessed(
+              { kind: 'update', store, id: event.entityId, clubId: requester.clubId, payload: validatedPayload as Record<string, unknown> },
+              ledgerEvent,
+            );
+            results.push({ eventId: event.id, status: 'applied' });
           } else {
-            await deps.gateway.create(store, validatedPayload as Record<string, unknown>);
+            await deps.gateway.applyAndMarkProcessed({ kind: 'create', store, payload: validatedPayload as Record<string, unknown> }, ledgerEvent);
+            results.push({ eventId: event.id, status: 'applied' });
           }
-          await deps.gateway.markEventProcessed(event.id, requester.clubId, store, event.action);
-          results.push({ eventId: event.id, status: 'applied' });
         } catch (err) {
           results.push({ eventId: event.id, status: 'error', message: describeSyncError(err) });
         }
@@ -673,7 +731,6 @@ export function describeSyncError(err: unknown): string {
   }
 
   if (err !== undefined) {
-    // eslint-disable-next-line no-console
     console.error('[sync] Fehler beim Anwenden eines Sync-Events:', err);
   }
   return GENERIC_SYNC_ERROR_MESSAGE;

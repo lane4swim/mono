@@ -16,9 +16,14 @@ import { RoleSchema, LocaleSchema, UserSchema } from './user.js';
 
 export const CURRENT_CONSENT_VERSION = '2026-07-15';
 
-const consentField = z
-  .literal(true)
-  .refine((v) => v === true, { message: 'Die Einwilligung zur Datenverarbeitung ist erforderlich.' });
+// Code-Review, Befund R4: `.refine((v) => v === true, { message })` konnte
+// hier NIE fehlschlagen — z.literal(true) lässt bereits ausschließlich
+// `true` durch (jeder andere Wert scheitert schon am literal-Check selbst,
+// mit Zods generischer "Invalid literal value"-Meldung), das nachgestellte
+// `.refine()` sieht also immer nur noch `v === true` und die deutsche
+// Meldung erschien nie. Die Meldung gehört als `message`-Parameter direkt
+// an `z.literal()`.
+const consentField = z.literal(true, { message: 'Die Einwilligung zur Datenverarbeitung ist erforderlich.' });
 
 export const LoginRequestSchema = z.object({
   email: z.string().email(),
@@ -85,12 +90,13 @@ export const MyDataExportSchema = z.object({
 });
 export type MyDataExport = z.infer<typeof MyDataExportSchema>;
 
+// Code-Review, Befund R8: `purgedAt`/`status` gestrichen — der Zustand
+// "purged" war strukturell unerreichbar (siehe schema.prisma:
+// DataDeletionRequest für die Begründung).
 export const DataDeletionRequestSchema = z.object({
   id: z.string().uuid(),
   userId: z.string().uuid(),
   requestedAt: z.string().datetime(),
   purgeAfter: z.string().datetime(),
-  purgedAt: z.string().datetime().nullable(),
-  status: z.enum(['pending', 'purged']),
 });
 export type DataDeletionRequest = z.infer<typeof DataDeletionRequestSchema>;

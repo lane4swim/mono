@@ -22,11 +22,11 @@ export const actionItemsModule = {
     clear(container);
     const role = getRole();
     if (role === 'athlete') {
-      const [items, athletes] = await Promise.all([getAll('actionItems'), getAll('athletes')]);
+      const items = await getAll('actionItems');
       if (!isCurrent()) return;
       const user = getCurrentUser();
       const mine = items.filter(i => i.athleteId === user?.athleteId);
-      return renderAthleteList(container, mine, athletes);
+      return renderAthleteList(container, mine);
     }
     const [items, athletes, trainers] = await Promise.all([getAll('actionItems'), getAll('athletes'), fetchAssignableTrainers()]);
     if (!isCurrent()) return;
@@ -136,7 +136,7 @@ async function renderDetail(container, itemId, trainers) {
   container.appendChild(wrap);
 }
 
-function renderAthleteList(container, items, athletes) {
+function renderAthleteList(container, items) {
   const wrap = el('div');
   wrap.appendChild(el('div', { class: 'page-head' }, [el('div', {}, [el('div', { class: 'page-eyebrow' }, t('actionitems.myGoalsEyebrow')), el('h1', { class: 'mt-0' }, t('actionitems.myGoalsTitle'))])]));
   wrap.appendChild(laneWave());
