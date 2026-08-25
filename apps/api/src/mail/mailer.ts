@@ -134,7 +134,6 @@ export class SmtpMailSender implements MailSender {
 // der Einladungslink zumindest im Server-Log sichtbar ist.
 export class ConsoleMailSender implements MailSender {
   async sendInvitationEmail(payload: InvitationMailPayload): Promise<void> {
-    // eslint-disable-next-line no-console
     console.warn(
       `[mail] Kein SMTP konfiguriert — Einladung wird nur protokolliert:\n` +
         `  An: ${payload.to}\n  Verein: ${payload.clubName}\n  Rolle: ${payload.role}\n  Link: ${payload.inviteUrl}`,

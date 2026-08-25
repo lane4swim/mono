@@ -13,7 +13,7 @@
 // reflects team/roster decisions rather than personal account info.
 // ============================================================
 import { getAll } from '../db.js';
-import { el, clear, field, textInput, toast, laneWave, badge, fullName, beginRender, confirmAction, openModal } from '../utils.js';
+import { el, clear, field, textInput, toast, laneWave, badge, fullName, beginRender, openModal } from '../utils.js';
 import { getCurrentUser, updateProfile, setUserLocale, logout } from '../state.js';
 import * as api from '../apiClient.js';
 import { ApiError, NetworkError } from '../apiClient.js';
@@ -165,7 +165,7 @@ function renderView(container, athletes, results, entries, actionItems, sessions
     },
   }, t('profileData.exportButton'));
 
-  const deleteBtn = el('button', { class: 'btn btn-danger', onclick: () => openDeleteAccountModal(user) }, t('profileData.deleteButton'));
+  const deleteBtn = el('button', { class: 'btn btn-danger', onclick: () => openDeleteAccountModal() }, t('profileData.deleteButton'));
 
   dataCard.appendChild(el('div', { class: 'flex gap-8', style: 'flex-wrap:wrap' }, [exportBtn, deleteBtn]));
   wrap.appendChild(dataCard);
@@ -185,7 +185,7 @@ function describeError(err) {
 // Verlangt zur Bestätigung die exakte Eingabe von "LÖSCHEN"/"DELETE"
 // (stärker als das einfache confirmAction()-Muster, da diese Aktion nicht
 // rückgängig gemacht werden kann).
-function openDeleteAccountModal(user) {
+function openDeleteAccountModal() {
   const body = el('div');
   body.appendChild(el('p', {}, t('profileData.deleteIntro')));
   body.appendChild(el('p', { class: 'text-sm' }, t('profileData.deleteConfirmPrompt')));

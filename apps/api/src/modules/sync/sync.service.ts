@@ -731,7 +731,6 @@ export function describeSyncError(err: unknown): string {
   }
 
   if (err !== undefined) {
-    // eslint-disable-next-line no-console
     console.error('[sync] Fehler beim Anwenden eines Sync-Events:', err);
   }
   return GENERIC_SYNC_ERROR_MESSAGE;

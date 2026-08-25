@@ -10,7 +10,7 @@
     "build": "tsc -p tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "eslint . --ext .ts"
+    "lint": "eslint ."
   },
   "dependencies": {
     "zod": "^3.23.8"

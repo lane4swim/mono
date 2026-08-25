@@ -7,7 +7,7 @@ import {
   field, textInput, selectInput, dateInput, openModal, confirmAction, toast, badge,
   emptyState, laneWave, groupBy, secToTime, statCard,
 } from '../utils.js';
-import { getRole, isAdminOrSuperAdmin } from '../state.js';
+import { isAdminOrSuperAdmin } from '../state.js';
 import { navigate } from '../router.js';
 import { t, trCode } from '../i18n.js';
 import { beginRender } from '../utils.js';

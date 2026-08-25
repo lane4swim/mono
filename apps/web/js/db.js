@@ -137,7 +137,7 @@ export async function put(store, obj){
     // abgelegter Datensatz kann es aber noch tragen) — wird hier daher
     // sicherheitshalber aus dem Sync-Event-Payload entfernt, unabhängig
     // davon, ob es im übergebenen `obj` steckt.
-    const { deletedAt, ...payload } = saved;
+    const { deletedAt: _deletedAt, ...payload } = saved;
     await enqueueSyncEvent(store, saved.id, isNew ? 'create' : 'update', payload);
   }
   return saved;

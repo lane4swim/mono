@@ -290,7 +290,6 @@ export function svgLineChart({ points, width = 560, height = 200, yFormat, color
   const pad = { l: 46, r: 14, t: 16, b: 26 };
   const w = width - pad.l - pad.r, hgt = height - pad.t - pad.b;
   if (!points.length) return el('div', { class: 'empty-state' }, t('stats.noDataTitle'));
-  const xs = points.map((_, i) => i);
   const ys = points.map(p => p.y);
   let yMin = Math.min(...ys), yMax = Math.max(...ys);
   if (yMin === yMax) { yMin -= 1; yMax += 1; }

@@ -20,7 +20,7 @@
     "test:watch": "vitest",
     "pretest:integration": "cd ../../packages/sync-protocol && npm run build",
     "test:integration": "vitest run --config vitest.integration.config.ts",
-    "lint": "eslint . --ext .ts",
+    "lint": "eslint .",
     "prisma:generate": "prisma generate",
     "prisma:validate": "prisma validate",
     "prisma:migrate": "prisma migrate dev",

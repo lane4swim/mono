@@ -38,7 +38,7 @@ export function getLocale() { return currentLocale; }
 export function setLocale(locale) {
   if (!LOCALES[locale]) locale = FALLBACK_LOCALE;
   currentLocale = locale;
-  try { localStorage.setItem(STORAGE_KEY, locale); } catch (e) { /* ignore (private mode etc.) */ }
+  try { localStorage.setItem(STORAGE_KEY, locale); } catch { /* ignore (private mode etc.) */ }
   listeners.forEach(fn => fn(currentLocale));
 }
 
@@ -48,7 +48,7 @@ export function detectInitialLocale() {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored && LOCALES[stored]) return stored;
-  } catch (e) { /* ignore */ }
+  } catch { /* ignore */ }
   const nav = (navigator.language || '').toLowerCase();
   if (nav.startsWith('en')) return 'en-US';
   if (nav.startsWith('de')) return 'de-DE';

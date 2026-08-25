@@ -172,15 +172,12 @@ describe('authService.acceptInvitation', () => {
 });
 
 async function registerViaInvitation(
-  service: ReturnType<typeof createAuthServiceForFixture>,
+  service: ReturnType<typeof makeService>['service'],
   invitations: InMemoryInvitationRepository,
   overrides: Partial<{ email: string; role: string; clubId: string | null }> = {},
 ) {
   const token = await seedInvitation(invitations, overrides);
   return service.acceptInvitation({ token, name: 'Test Person', password: 'ein-sicheres-passwort', consent: true });
-}
-function createAuthServiceForFixture() {
-  return makeService().service;
 }
 
 describe('authService.login', () => {

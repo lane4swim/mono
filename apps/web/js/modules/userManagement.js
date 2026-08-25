@@ -9,7 +9,7 @@ import {
   el, clear, field, textInput, selectInput, openModal, confirmAction, toast, badge,
   emptyState, laneWave, beginRender, fmtDateShort,
 } from '../utils.js';
-import { getCurrentUser, isSuperAdmin } from '../state.js';
+import { isSuperAdmin } from '../state.js';
 import * as api from '../apiClient.js';
 import { ApiError, NetworkError } from '../apiClient.js';
 import { t } from '../i18n.js';
@@ -65,7 +65,6 @@ function buildInviteUrl(token) {
 }
 
 function renderView(container, clubs, invitations, members) {
-  const me = getCurrentUser();
   const wrap = el('div');
   wrap.appendChild(el('div', { class: 'page-head' }, [
     el('div', {}, [el('div', { class: 'page-eyebrow' }, t('usermgmt.eyebrow')), el('h1', { class: 'mt-0' }, t('usermgmt.title'))]),

@@ -4,7 +4,7 @@
 import { getAll, put, remove } from '../db.js';
 import { el, clear, fullName, fmtDateShort, todayISO, toIsoDateTime, field, textInput, selectInput, dateInput,
   openModal, confirmAction, toast, badge, emptyState, laneWave, secToTime, timeToSec,
-  groupBy, svgLineChart, beginRender,
+  svgLineChart, beginRender,
 } from '../utils.js';
 import { EVENTS, COURSES } from '../refdata.js';
 import { t, trCode, trOptions, trOptionsFlat } from '../i18n.js';

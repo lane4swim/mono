@@ -8,7 +8,7 @@
 // Ansicht macht die Warteschlange sichtbar und erlaubt es, die
 // spätere Übertragung an ein Backend in der Demo zu simulieren.
 // ============================================================
-import { getSyncQueue, updateSyncEvent, clearSyncedEvents, pendingSyncCount, remove } from '../db.js';
+import { getSyncQueue, updateSyncEvent, clearSyncedEvents, remove } from '../db.js';
 import { runSync } from '../syncClient.js';
 import { ApiError, NetworkError } from '../apiClient.js';
 import { IS_DEMO } from '../demoMode.js';

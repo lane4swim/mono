@@ -8,7 +8,6 @@ import {
 } from '../utils.js';
 import { EVENTS, COURSES } from '../refdata.js';
 import { navigate } from '../router.js';
-import { getRole } from '../state.js';
 import { t, trCode, trOptions, trOptionsFlat } from '../i18n.js';
 import { beginRender } from '../utils.js';
 import { openItemModal, fetchAssignableTrainers } from './actionItems.js';
@@ -23,14 +22,14 @@ export const competitionsModule = {
     if (params[0] && params[1] === 'live') {
       return renderLiveMode(container, params[0], parseInt(params[2], 10) || 0);
     }
-    const [competitions, athletes] = await Promise.all([getAll('competitions'), getAll('athletes')]);
+    const competitions = await getAll('competitions');
     if (!isCurrent()) return;
     if (params[0]) return renderDetail(container, params[0]);
-    renderList(container, competitions, athletes);
+    renderList(container, competitions);
   }
 };
 
-function renderList(container, competitions, athletes) {
+function renderList(container, competitions) {
   const today = todayISO();
   const wrap = el('div');
   wrap.appendChild(el('div', { class: 'page-head' }, [

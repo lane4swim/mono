@@ -149,7 +149,16 @@ function buildSetRow(s, exercises, onRemove, onEquipmentChange) {
       extra.appendChild(eqEditorHost);
       let editorOpen = false;
 
-      function drawDisplay() {
+      // Als Funktionsausdrücke statt Funktionsdeklarationen (Code-Review,
+      // Befund W3/no-inner-declarations): eine Funktionsdeklaration
+      // innerhalb eines Blocks (hier `if (ex) { … }`) ist historisch
+      // uneinheitlich zwischen JS-Engines spezifiziert — als
+      // Ausdruck zugewiesen ist das Verhalten eindeutig. Gegenseitiger
+      // Aufruf bleibt unproblematisch: `drawDisplay` ruft `drawEditor` nur
+      // aus einem später ausgelösten onclick-Handler auf (nicht bei der
+      // Definition), und `drawEditor` wird selbst erst aufgerufen, nachdem
+      // beide bereits zugewiesen sind.
+      const drawDisplay = () => {
         clear(eqDisplay);
         const badges = (ex.equipment || []).map(eq => badge(trLabel(EQUIPMENT_ITEMS, eq, 'equipment'), 'pb'));
         const editBtn = el('button', {
@@ -157,9 +166,9 @@ function buildSetRow(s, exercises, onRemove, onEquipmentChange) {
           onclick: () => { editorOpen = !editorOpen; drawEditor(); },
         }, editorOpen ? t('common.close') : t('setEditor.editEquipment'));
         eqDisplay.appendChild(el('div', { class: 'pill-group', style: 'margin-top:4px' }, [...badges, editBtn]));
-      }
+      };
 
-      function drawEditor() {
+      const drawEditor = () => {
         clear(eqEditorHost);
         if (!editorOpen) { drawDisplay(); return; }
         const selected = new Set(ex.equipment || []);
@@ -181,7 +190,7 @@ function buildSetRow(s, exercises, onRemove, onEquipmentChange) {
         });
         eqEditorHost.appendChild(pills);
         drawDisplay();
-      }
+      };
       drawDisplay();
     }
   }

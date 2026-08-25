@@ -174,7 +174,7 @@ export async function pull() {
         // (Löschungen laufen ausschließlich über eigene "delete"-Sync-
         // Events, siehe oben) — das Feld wird daher beim Übernehmen in die
         // lokale Ablage konsequent entfernt statt nur ignoriert.
-        const { deletedAt, ...payload } = change.payload;
+        const { deletedAt: _deletedAt, ...payload } = change.payload;
         await putWithoutSync(change.store, payload);
       }
       totalChanges++;
