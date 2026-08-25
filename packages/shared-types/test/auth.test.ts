@@ -12,6 +12,19 @@ describe('LoginRequestSchema', () => {
   it('lehnt Login mit consent: false ab', () => {
     expect(LoginRequestSchema.safeParse({ email: 'a@b.de', password: 'x', consent: false }).success).toBe(false);
   });
+
+  // Regressionstest für Befund R4 (Code-Review): das nachgestellte
+  // .refine() auf consentField konnte NIE fehlschlagen (z.literal(true)
+  // lässt bereits nur `true` durch) — die deutsche Meldung erschien daher
+  // nie, stattdessen Zods generische "Invalid literal value"-Meldung.
+  it('liefert die deutsche Einwilligungs-Meldung, wenn consent fehlt', () => {
+    const result = LoginRequestSchema.safeParse({ email: 'a@b.de', password: 'x' });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const consentIssue = result.error.issues.find((i) => i.path.join('.') === 'consent');
+      expect(consentIssue?.message).toBe('Die Einwilligung zur Datenverarbeitung ist erforderlich.');
+    }
+  });
   it('lehnt eine leere E-Mail ab', () => {
     expect(LoginRequestSchema.safeParse({ email: '', password: 'x', consent: true }).success).toBe(false);
   });

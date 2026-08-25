@@ -119,3 +119,81 @@ describe('request() — 401-Retry über refreshTokens() (Befund S4, End-to-End)'
     expect(meCalls).toHaveLength(6);
   });
 });
+
+// Regressionstests für Befund R6 (Code-Review): accessTokenExpiresAt wurde
+// zuvor nur geschrieben, nie gelesen — request() erneuert das Access Token
+// jetzt PROAKTIV, wenn es laut diesem Zeitstempel in Kürze abläuft, statt
+// ausschließlich auf einen tatsächlichen 401 zu warten.
+describe('request() — proaktiver Refresh vor Ablauf (Befund R6)', () => {
+  it('erneuert das Access Token proaktiv, wenn es innerhalb der Sicherheitsspanne abläuft, OHNE dass die erste Anfrage einen 401 erhält', async () => {
+    // expiresIn: 5s liegt unterhalb der 10s-Sicherheitsspanne (siehe
+    // PROACTIVE_REFRESH_MARGIN_MS in apiClient.js) — gilt sofort als
+    // "läuft in Kürze ab".
+    api.setTokens({ accessToken: 'bald-ablaufendes-token', refreshToken: 'gueltiges-refresh-token', expiresIn: 5 });
+
+    globalThis.fetch = vi.fn(async (url, options) => {
+      if (String(url).endsWith('/auth/refresh')) {
+        return {
+          status: 200, ok: true,
+          json: async () => ({ accessToken: 'frisches-access-token', refreshToken: 'frisches-refresh-token', expiresIn: 900, user: { id: 'u1' } }),
+        };
+      }
+      // Die eigentliche Anfrage darf NIE mit dem alten, bald ablaufenden
+      // Token gesendet werden — der proaktive Refresh muss ihr vorausgehen.
+      expect(options?.headers?.Authorization).toBe('Bearer frisches-access-token');
+      return { status: 200, ok: true, json: async () => ({ id: 'u1', name: 'Test Person' }) };
+    });
+
+    await api.getMe();
+
+    const refreshCalls = globalThis.fetch.mock.calls.filter(([url]) => String(url).endsWith('/auth/refresh'));
+    expect(refreshCalls).toHaveLength(1);
+    // GENAU EIN Aufruf von GET /api/me — kein 401/Retry-Zyklus nötig.
+    const meCalls = globalThis.fetch.mock.calls.filter(([url]) => String(url).endsWith('/api/me'));
+    expect(meCalls).toHaveLength(1);
+  });
+
+  it('löst KEINEN proaktiven Refresh aus, wenn das Access Token noch lange gültig ist', async () => {
+    api.setTokens({ accessToken: 'frisches-token', refreshToken: 'gueltiges-refresh-token', expiresIn: 900 });
+    globalThis.fetch = vi.fn(async (url, options) => {
+      expect(String(url)).not.toContain('/auth/refresh');
+      expect(options?.headers?.Authorization).toBe('Bearer frisches-token');
+      return { status: 200, ok: true, json: async () => ({ id: 'u1' }) };
+    });
+
+    await api.getMe();
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('bündelt mehrere gleichzeitige proaktive Refresh-Auslöser auf denselben Single-Flight wie reaktive Refreshs (kein doppelter POST /auth/refresh)', async () => {
+    api.setTokens({ accessToken: 'bald-ablaufendes-token', refreshToken: 'gueltiges-refresh-token', expiresIn: 5 });
+    globalThis.fetch = vi.fn(async (url) => {
+      if (String(url).endsWith('/auth/refresh')) {
+        return {
+          status: 200, ok: true,
+          json: async () => ({ accessToken: 'frisches-access-token', refreshToken: 'frisches-refresh-token', expiresIn: 900, user: { id: 'u1' } }),
+        };
+      }
+      return { status: 200, ok: true, json: async () => ({ id: 'u1' }) };
+    });
+
+    await Promise.all([api.getMe(), api.getMe(), api.getMe()]);
+
+    const refreshCalls = globalThis.fetch.mock.calls.filter(([url]) => String(url).endsWith('/auth/refresh'));
+    expect(refreshCalls).toHaveLength(1);
+  });
+
+  it('login() löst keinen proaktiven Refresh aus (allowRefreshRetry: false, ohnehin noch kein Access Token vorhanden)', async () => {
+    api.clearTokens();
+    globalThis.fetch = vi.fn(async (url) => {
+      expect(String(url)).not.toContain('/auth/refresh');
+      return {
+        status: 200, ok: true,
+        json: async () => ({ accessToken: 'a1', refreshToken: 'r1', expiresIn: 900, user: { id: 'u1' } }),
+      };
+    });
+
+    await api.login({ email: 'a@b.de', password: 'x', consent: true });
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+});

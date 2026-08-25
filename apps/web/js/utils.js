@@ -36,7 +36,11 @@ export const h = el;
 // (siehe oben) gesetzt werden, das per node.setAttribute() geht und damit
 // automatisch korrekt/vollständig escapt, statt esc() für einen
 // String-zusammengebauten Attributwert zu missbrauchen.
-export function esc(str) {
+//
+// Nicht exportiert (Code-Review, Befund R5): wird ausschließlich von den
+// beiden SVG-Chart-Buildern in dieser Datei genutzt, nirgendwo sonst im
+// Frontend importiert.
+function esc(str) {
   const d = document.createElement('div');
   d.textContent = str ?? '';
   return d.innerHTML;

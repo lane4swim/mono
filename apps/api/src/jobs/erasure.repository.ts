@@ -27,9 +27,14 @@ export interface ErasureJobGateway {
 export class PrismaErasureJobGateway implements ErasureJobGateway {
   constructor(private readonly prisma: PrismaClient) {}
 
+  // Kein `status`-Filter mehr (Code-Review, Befund R8): jede noch
+  // EXISTIERENDE DataDeletionRequest-Zeile ist implizit "pending" — eine
+  // bereits abgearbeitete verschwindet mit dem gepurgten User per
+  // onDelete: Cascade (siehe schema.prisma). Ein separates Statusfeld war
+  // dafür überflüssig.
   async findDuePendingRequests(now: Date): Promise<DueErasureRequest[]> {
     const rows = await this.prisma.dataDeletionRequest.findMany({
-      where: { status: 'pending', purgeAfter: { lte: now } },
+      where: { purgeAfter: { lte: now } },
       select: { id: true, userId: true },
     });
     return rows;

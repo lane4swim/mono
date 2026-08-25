@@ -13,7 +13,6 @@ import { randomUUID } from 'node:crypto';
 import {
   SyncEventSchema,
   ENTITY_SCHEMAS,
-  type SyncEvent,
   type SyncEventResult,
   type SyncChange,
   type SyncStore,
@@ -376,7 +375,15 @@ export function splitAtSafeTimestampBoundary(rows: ChangedRecord[], pageSize: nu
 
 export function createSyncService(deps: { gateway: SyncGateway }) {
   return {
-    async push(events: SyncEvent[], requester: SyncRequester): Promise<SyncEventResult[]> {
+    // `events: unknown[]` statt `SyncEvent[]` (Code-Review, Befund R3): die
+    // Route (sync.route.ts) lockert die Batch-weite Prüfung inzwischen auf
+    // die reine Array-Länge (siehe SyncPushRequestSchema) — die
+    // STRUKTURELLE Prüfung jedes einzelnen Events übernimmt ausschließlich
+    // dieser Codepfad hier (SyncEventSchema.safeParse(rawEvent) unten), der
+    // dadurch erstmals tatsächlich erreichbar ist: ein einzelnes
+    // fehlerhaftes Event scheitert jetzt nur noch selbst (als "error"-
+    // Ergebnis), statt den gesamten Batch abzulehnen.
+    async push(events: unknown[], requester: SyncRequester): Promise<SyncEventResult[]> {
       const results: SyncEventResult[] = [];
 
       for (const rawEvent of events) {

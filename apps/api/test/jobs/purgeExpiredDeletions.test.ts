@@ -25,7 +25,7 @@ describe('purgeExpiredDeletions', () => {
   it('löscht nichts, wenn keine Löschanfrage fällig ist', async () => {
     const db = makeDb({
       users: [{ id: 'u1', clubId: null, athleteId: null }],
-      deletionRequests: [{ id: 'req1', userId: 'u1', purgeAfter: FUTURE, status: 'pending', purgedAt: null }],
+      deletionRequests: [{ id: 'req1', userId: 'u1', purgeAfter: FUTURE }],
     });
     const gateway = new InMemoryErasureJobGateway(db);
     const result = await purgeExpiredDeletions(gateway, NOW);
@@ -38,7 +38,7 @@ describe('purgeExpiredDeletions', () => {
     const db = makeDb({
       users: [{ id: 'u1', clubId: null, athleteId: null }],
       refreshTokens: [{ id: 't1', userId: 'u1' }],
-      deletionRequests: [{ id: 'req1', userId: 'u1', purgeAfter: PAST, status: 'pending', purgedAt: null }],
+      deletionRequests: [{ id: 'req1', userId: 'u1', purgeAfter: PAST }],
     });
     const gateway = new InMemoryErasureJobGateway(db);
     const result = await purgeExpiredDeletions(gateway, NOW);
@@ -60,7 +60,7 @@ describe('purgeExpiredDeletions', () => {
         { id: 's1', clubId: 'club-1', attendance: [{ athleteId: 'ath-1', present: true }, { athleteId: 'ath-2', present: true }] },
         { id: 's2', clubId: 'club-2', attendance: [{ athleteId: 'ath-1', present: true }] }, // anderer Verein -> unangetastet
       ],
-      deletionRequests: [{ id: 'req1', userId: 'u1', purgeAfter: PAST, status: 'pending', purgedAt: null }],
+      deletionRequests: [{ id: 'req1', userId: 'u1', purgeAfter: PAST }],
     });
     const gateway = new InMemoryErasureJobGateway(db);
     await purgeExpiredDeletions(gateway, NOW);
@@ -78,8 +78,8 @@ describe('purgeExpiredDeletions', () => {
     const db = makeDb({
       users: [{ id: 'u1', clubId: null, athleteId: null }, { id: 'u2', clubId: null, athleteId: null }],
       deletionRequests: [
-        { id: 'req1', userId: 'u1', purgeAfter: PAST, status: 'pending', purgedAt: null },
-        { id: 'req2', userId: 'u2', purgeAfter: PAST, status: 'pending', purgedAt: null },
+        { id: 'req1', userId: 'u1', purgeAfter: PAST },
+        { id: 'req2', userId: 'u2', purgeAfter: PAST },
       ],
     });
     const gateway = new InMemoryErasureJobGateway(db);
@@ -98,8 +98,8 @@ describe('purgeExpiredDeletions', () => {
     const db = makeDb({
       users: [{ id: 'u1', clubId: null, athleteId: null }, { id: 'u2', clubId: null, athleteId: null }],
       deletionRequests: [
-        { id: 'req1', userId: 'u1', purgeAfter: PAST, status: 'pending', purgedAt: null },
-        { id: 'req2', userId: 'u2', purgeAfter: FUTURE, status: 'pending', purgedAt: null },
+        { id: 'req1', userId: 'u1', purgeAfter: PAST },
+        { id: 'req2', userId: 'u2', purgeAfter: FUTURE },
       ],
     });
     const gateway = new InMemoryErasureJobGateway(db);
@@ -119,7 +119,7 @@ describe('purgeExpiredDeletions — Tombstones (Verbesserung: Löschungen bleibe
       results: [{ id: 'r1', athleteId: 'ath-1' }],
       entries: [{ id: 'e1', athleteId: 'ath-1' }],
       actionItems: [{ id: 'a1', athleteId: 'ath-1' }],
-      deletionRequests: [{ id: 'req1', userId: 'u1', purgeAfter: PAST, status: 'pending', purgedAt: null }],
+      deletionRequests: [{ id: 'req1', userId: 'u1', purgeAfter: PAST }],
       tombstones,
     });
     const gateway = new InMemoryErasureJobGateway(db);
@@ -135,7 +135,7 @@ describe('purgeExpiredDeletions — Tombstones (Verbesserung: Löschungen bleibe
     const tombstones: import('../../src/modules/sync/sync.gateway.js').TombstoneRecord[] = [];
     const db = makeDb({
       users: [{ id: 'u1', clubId: 'club-1', athleteId: null }],
-      deletionRequests: [{ id: 'req1', userId: 'u1', purgeAfter: PAST, status: 'pending', purgedAt: null }],
+      deletionRequests: [{ id: 'req1', userId: 'u1', purgeAfter: PAST }],
       tombstones,
     });
     const gateway = new InMemoryErasureJobGateway(db);
@@ -156,7 +156,7 @@ describe('purgeExpiredDeletions — Tombstones (Verbesserung: Löschungen bleibe
     const erasureDb = makeDb({
       users: [{ id: 'u1', clubId: 'club-1', athleteId: 'ath-1' }],
       athletes: [{ id: 'ath-1' }],
-      deletionRequests: [{ id: 'req1', userId: 'u1', purgeAfter: PAST, status: 'pending', purgedAt: null }],
+      deletionRequests: [{ id: 'req1', userId: 'u1', purgeAfter: PAST }],
       tombstones: sharedTombstones,
     });
     const erasureGateway = new InMemoryErasureJobGateway(erasureDb);

@@ -20,13 +20,14 @@ export interface PersonalDataExport {
   attendance: Array<Record<string, unknown>>;
 }
 
+// Code-Review, Befund R8: `purgedAt`/`status` gestrichen — siehe
+// schema.prisma: DataDeletionRequest für die Begründung (der Zustand
+// "purged" war strukturell unerreichbar).
 export interface ErasureRequestRecord {
   id: string;
   userId: string;
   requestedAt: Date;
   purgeAfter: Date;
-  purgedAt: Date | null;
-  status: 'pending' | 'purged';
 }
 
 export interface ProfileDataGateway {
@@ -153,22 +154,12 @@ export class PrismaProfileDataGateway implements ProfileDataGateway {
         await tx.actionItem.updateMany({ where: { athleteId: user.athleteId }, data: { deletedAt: now } });
       }
       return tx.dataDeletionRequest.create({
-        data: { userId, requestedAt: now, purgeAfter, status: 'pending' },
+        data: { userId, requestedAt: now, purgeAfter },
       });
     });
-    // 'status' ist im Schema eine einfache String-Spalte (kein Prisma-
-    // Enum), Prisma leitet ihren Typ daher als generisches 'string' ab —
-    // breiter als unser 'pending' | 'purged'. Das Objekt wird deshalb
-    // explizit konstruiert statt das Create-Ergebnis direkt
-    // zurückzugeben; unmittelbar nach der Anlage ist der Status
-    // garantiert 'pending' (entspricht auch dem Schema-Default).
-    return {
-      id: created.id,
-      userId: created.userId,
-      requestedAt: created.requestedAt,
-      purgeAfter: created.purgeAfter,
-      purgedAt: created.purgedAt,
-      status: 'pending',
-    };
+    // Seit Befund R8 (status/purgedAt gestrichen) deckt sich die Prisma-
+    // Zeile bereits exakt mit ErasureRequestRecord — keine explizite
+    // Objekt-Konstruktion mehr nötig.
+    return created;
   }
 }

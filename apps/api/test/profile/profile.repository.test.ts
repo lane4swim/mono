@@ -108,7 +108,6 @@ describe('InMemoryProfileDataGateway.requestErasure', () => {
     const request = await gateway.requestErasure(USER_ID, 30);
     const expectedMs = before + 30 * 24 * 60 * 60 * 1000;
     expect(Math.abs(request.purgeAfter.getTime() - expectedMs)).toBeLessThan(5000);
-    expect(request.status).toBe('pending');
   });
 
   it('lehnt eine zweite Löschanfrage für denselben Nutzer ab', async () => {

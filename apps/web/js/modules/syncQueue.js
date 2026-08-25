@@ -88,7 +88,14 @@ function renderView(container, queue) {
     ])));
     const tbody = el('tbody');
     queue.slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt)).forEach(evt => {
-      const label = t(`syncqueue.${ENTITY_KEYS[evt.store] || ''}`) !== `syncqueue.${ENTITY_KEYS[evt.store] || ''}` ? t(`syncqueue.${ENTITY_KEYS[evt.store]}`) : evt.store;
+      // Code-Review, Befund R9: prüfte zuvor per doppeltem t()-Aufruf
+      // ("liefert t() den Key selbst unverändert zurück?"), ob ein
+      // Übersetzungsschlüssel existiert — ENTITY_KEYS/ACTION_KEYS sind
+      // aber feste, von dieser Datei kontrollierte Lookup-Tabellen: ob ein
+      // Schlüssel existiert, steht bereits nach dem Map-Zugriff selbst
+      // fest, ganz ohne t() dafür zu bemühen.
+      const entityKey = ENTITY_KEYS[evt.store];
+      const label = entityKey ? t(`syncqueue.${entityKey}`) : evt.store;
       const statusEl = evt.status === 'synced' ? badge(t('syncqueue.statusSynced'), 'done')
         : evt.status === 'failed' ? badge(t('syncqueue.statusFailed'), 'open')
         : evt.status === 'error' ? badge(t('syncqueue.statusError'), 'open')
@@ -98,7 +105,7 @@ function renderView(container, queue) {
       const row = el('tr', {}, [
         el('td', { class: 'data text-sm' }, timeLabel),
         el('td', {}, label),
-        el('td', {}, t(`syncqueue.${ACTION_KEYS[evt.action] || ''}`) !== `syncqueue.${ACTION_KEYS[evt.action] || ''}` ? t(`syncqueue.${ACTION_KEYS[evt.action]}`) : evt.action),
+        el('td', {}, ACTION_KEYS[evt.action] ? t(`syncqueue.${ACTION_KEYS[evt.action]}`) : evt.action),
         el('td', {}, [statusEl, (evt.status === 'error' || evt.status === 'failed') && evt.lastError ? el('div', { class: 'hint', style: 'margin-top:3px' }, evt.lastError) : null]),
         el('td', {}, String(evt.attempts || 0)),
         el('td', {}, evt.status !== 'synced' ? el('button', { class: 'btn btn-ghost btn-sm', onclick: async () => { await updateSyncEvent(evt.id, { status: 'pending', lastError: null }); toast(t('syncqueue.retryQueued')); refresh(); } }, t('common.retry')) : el('button', { class: 'btn btn-danger btn-sm', onclick: async () => { await remove('syncQueue', evt.id); toast(t('syncqueue.entryRemoved')); refresh(); } }, t('common.remove'))),

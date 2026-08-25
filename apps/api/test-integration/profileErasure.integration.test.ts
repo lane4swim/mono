@@ -54,7 +54,7 @@ describe('PrismaProfileDataGateway.requestErasure()', () => {
     await prisma.result.create({ data: { clubId: club.id, athleteId: athlete!.id, event: '100m Freistil', time: 60, date: new Date() } });
 
     const result = await profileGateway.requestErasure(user.id, 30);
-    expect(result.status).toBe('pending');
+    expect(result.id).toBeTruthy();
 
     const updatedUser = await prisma.user.findUnique({ where: { id: user.id } });
     expect(updatedUser?.deletedAt).not.toBeNull();
@@ -62,7 +62,6 @@ describe('PrismaProfileDataGateway.requestErasure()', () => {
     expect(updatedAthlete?.deletedAt).not.toBeNull();
     const deletionRequest = await prisma.dataDeletionRequest.findUnique({ where: { userId: user.id } });
     expect(deletionRequest).not.toBeNull();
-    expect(deletionRequest?.status).toBe('pending');
   });
 
   it('lehnt eine zweite Löschanfrage für dasselbe Konto ab', async () => {
@@ -306,16 +305,18 @@ describe('PrismaErasureJobGateway.purgeUserAndDependents()', () => {
 });
 
 describe('PrismaErasureJobGateway.findDuePendingRequests()', () => {
-  it('liefert nur "pending"-Anfragen, deren purgeAfter bereits erreicht ist', async () => {
+  it('liefert nur Anfragen, deren purgeAfter bereits erreicht ist', async () => {
     const club = await createTestClub();
     const { user: dueUser } = await seedAthleteUser(club.id);
     const { user: notYetDueUser } = await seedAthleteUser(club.id);
-    const { user: alreadyPurgedUser } = await seedAthleteUser(club.id);
 
     const now = new Date();
-    await prisma.dataDeletionRequest.create({ data: { userId: dueUser.id, purgeAfter: new Date(now.getTime() - 1000), status: 'pending' } });
-    await prisma.dataDeletionRequest.create({ data: { userId: notYetDueUser.id, purgeAfter: new Date(now.getTime() + 100_000), status: 'pending' } });
-    await prisma.dataDeletionRequest.create({ data: { userId: alreadyPurgedUser.id, purgeAfter: new Date(now.getTime() - 1000), status: 'purged' } });
+    await prisma.dataDeletionRequest.create({ data: { userId: dueUser.id, purgeAfter: new Date(now.getTime() - 1000) } });
+    await prisma.dataDeletionRequest.create({ data: { userId: notYetDueUser.id, purgeAfter: new Date(now.getTime() + 100_000) } });
+    // Ein bereits abgearbeitetes Konto hinterlässt gar KEINE Zeile mehr
+    // (weder User noch DataDeletionRequest, siehe onDelete: Cascade) —
+    // anders als vor Befund R8 gibt es dafür kein separates
+    // status: 'purged' mehr zu simulieren.
 
     const due = await erasureGateway.findDuePendingRequests(now);
     expect(due.map((d) => d.userId)).toEqual([dueUser.id]);

@@ -111,6 +111,52 @@ describe('POST /api/sync/push', () => {
     await app.close();
   });
 
+  // Regressionstest für Befund R3 (Code-Review): die Route prüfte
+  // vormals JEDES Event bereits vollständig gegen SyncEventSchema — ein
+  // einzelnes strukturell ungültiges Event ließ den GESAMTEN Batch mit
+  // einer 400 scheitern, inklusive aller übrigen, gültigen Events. Die
+  // Route lockert diese Prüfung jetzt auf die reine Array-Länge; die
+  // eigentliche Struktur-Prüfung (SyncEventSchema.safeParse) übernimmt
+  // sync.service.ts: push() PRO EVENT — ein kaputtes Event scheitert
+  // jetzt nur noch selbst, alle anderen Events desselben Batches werden
+  // regulär angewendet.
+  it('wendet gültige Events eines Batches an und meldet nur das strukturell ungültige als Fehler, statt den gesamten Batch abzulehnen (Befund R3)', async () => {
+    const { app, keyPair, gateway } = await buildTestApp();
+    const token = await tokenFor(keyPair, 'trainer', CLUB_ID);
+    const validEvent = makeGroupEvent('33333333-3333-3333-3333-333333333333');
+    // Fehlt "store" — strukturell ungültig gegen SyncEventSchema.
+    const malformedEvent = { id: 'evt-broken', entityId: 'x', action: 'create', payload: {}, clientUpdatedAt: new Date().toISOString() };
+
+    const response = await app.inject({
+      method: 'POST', url: '/api/sync/push',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { events: [validEvent, malformedEvent] },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const results = response.json().results;
+    expect(results).toContainEqual({ eventId: validEvent.id, status: 'applied' });
+    expect(results.find((r: { eventId: string }) => r.eventId === 'evt-broken')).toMatchObject({ status: 'error' });
+    // Das gültige Event wurde tatsächlich angewendet, nicht nur als
+    // "applied" gemeldet, ohne dass es passiert wäre.
+    expect(await gateway.findById('groups', validEvent.entityId)).not.toBeNull();
+    await app.close();
+  });
+
+  it('liefert weiterhin 400 bei mehr als 500 Events (Batch-Größenlimit bleibt auf Routen-Ebene bestehen)', async () => {
+    const { app, keyPair } = await buildTestApp();
+    const token = await tokenFor(keyPair, 'trainer', CLUB_ID);
+    const events = Array.from({ length: 501 }, (_, i) => makeGroupEvent(`44444444-4444-4444-4444-${String(i).padStart(12, '0')}`));
+
+    const response = await app.inject({
+      method: 'POST', url: '/api/sync/push',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { events },
+    });
+    expect(response.statusCode).toBe(400);
+    await app.close();
+  });
+
   it('athlete-Rolle darf ebenfalls synchronisieren (eigene Trainingsdaten)', async () => {
     const { app, keyPair } = await buildTestApp();
     const token = await tokenFor(keyPair, 'athlete', CLUB_ID);

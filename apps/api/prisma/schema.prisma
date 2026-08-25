@@ -101,16 +101,20 @@ model User {
 // Frist (Standard: 30 Tage, siehe DATA_ERASURE_RETENTION_DAYS in .env),
 // z. B. für versehentliche Löschungen oder laufende Backup-Zyklen, erfüllt
 // aber weiterhin die Pflicht zur Löschung "ohne unangemessene Verzögerung".
+// Code-Review, Befund R8: `status`/`purgedAt` gestrichen. Der Hard-Purge
+// löscht den User, und dieser Datensatz verschwindet per onDelete: Cascade
+// mit — der Zustand "purged" war dadurch strukturell unerreichbar (jede
+// noch EXISTIERENDE Zeile ist damit implizit "pending", ein separates
+// Statusfeld dafür überflüssig). Siehe erasure.repository.ts:
+// findDuePendingRequests() für die entsprechend vereinfachte Abfrage.
 model DataDeletionRequest {
-  id          String    @id @default(uuid())
-  userId      String    @unique
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  requestedAt DateTime  @default(now())
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  requestedAt DateTime @default(now())
   purgeAfter  DateTime
-  purgedAt    DateTime?
-  status      String    @default("pending") // "pending" | "purged"
 
-  @@index([status, purgeAfter])
+  @@index([purgeAfter])
   @@map("data_deletion_requests")
 }
 
