@@ -8,7 +8,8 @@
 - [x] Kommentare bei Trainingsplänen
 - [x] Import/Export von Übungen via JSON
 - [x] Einladungen als kopierfähigen Link
-
+- Kommentare bei Übungen anzeigen
+- 
 # Zukünftige Entwicklungen
 
 ## Push Nachrichten
