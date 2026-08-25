@@ -19,23 +19,26 @@ ist stattdessen durch einen eigens geschriebenen, ausgeführten Test belegt.
 Schweregrade: **Hoch** = jetzt beheben · **Mittel** = einplanen · **Niedrig** = bei nächster
 Berührung mitnehmen.
 
-**Stand der Behebung (25.08.2026):** Sämtliche Befunde in Abschnitt 1 (W1–W7) sowie R1/R2 aus
-Abschnitt 2 sind behoben (Commits „Behebt W1–W3 […]", „Behebt W4–W5 […]", „Behebt W6–W7 […]"
-und „Behebt R1–R2 […]" auf diesem Branch) — mit drei dokumentierten Abweichungen vom
-ursprünglichen Befund-/Fix-Text: W3 nur auf den vier am dichtesten betroffenen Dateien (siehe
-dortiger Status), W2s `SyncStoreSchema` bewusst nicht mit abgeleitet (siehe dortiger Status),
-und R1s Fix grundlegend überarbeitet, nachdem sich der ursprünglich vorgeschlagene
-`openEntityForm()`-Mega-Helfer beim tatsächlichen Implementieren als nicht tragfähig erwies
-(siehe dortiger Status für die Begründung und was stattdessen umgesetzt wurde). Verifiziert
-über `npm run lint/test/build/typecheck --workspaces` (grün: 309 API- + 63 Web- + 102
-Shared-Types- + 9 Sync-Protocol-Tests, 483 insgesamt), für R1 zusätzlich im echten Browser
-gegen `demo.html` (Playwright: vier Formulare geöffnet/geschlossen, ein Datensatz angelegt und
-in Bearbeitung erneut geprüft) und für W7 gezielt gegen die neue `no-bitwise`-Regel. Wie bei
-der ursprünglichen Verifikation oben stand auch in diesen Folgesessions kein
-Postgres-Container zur Verfügung — die 309 API-Tests sind weiterhin die Vitest-Suite gegen die
-`*.repository.memory.ts`-Doubles (`npm run test`), nicht die Prisma-Integrationssuite
-(`npm run test:integration`), die dementsprechend erneut ungeprüft blieb. Offen sind noch R3–R9
-(Abschnitt 2) und L1–L7 (Abschnitt 3, lange Methoden/Klassen).
+**Stand der Behebung (25.08.2026):** Sämtliche Befunde in Abschnitt 1 (W1–W7) sowie R1–R9 aus
+Abschnitt 2 sind behoben (Commits „Behebt W1–W3 […]", „Behebt W4–W5 […]", „Behebt W6–W7 […]",
+„Behebt R1–R2 […]" und „Behebt R3–R9 […]" auf diesem Branch) — mit vier dokumentierten
+Abweichungen vom ursprünglichen Befund-/Fix-Text: W3 nur auf den vier am dichtesten
+betroffenen Dateien (siehe dortiger Status), W2s `SyncStoreSchema` bewusst nicht mit
+abgeleitet (siehe dortiger Status), R1s Fix grundlegend überarbeitet, nachdem sich der
+ursprünglich vorgeschlagene `openEntityForm()`-Mega-Helfer beim tatsächlichen Implementieren
+als nicht tragfähig erwies (siehe dortiger Status für die Begründung und was stattdessen
+umgesetzt wurde), und R4s gemeinsamer `clubForm.js`-Helfer verzichtet in `admin.js`s
+Anlegen-Formular auf dessen ursprüngliche 401-Sonderbehandlung (siehe dortiger Status).
+Verifiziert über `npm run lint/test/build/typecheck --workspaces` (grün: 309 API- + 63 Web- +
+102 Shared-Types- + 9 Sync-Protocol-Tests, 483 insgesamt), für R1 und R3–R5/R8 zusätzlich im
+echten Browser gegen `demo.html`/`admin/index.html`/`index.html` (Playwright: Formulare und
+Einstellungsdialog geöffnet/geschlossen, Sprache umgeschaltet, Wettkampf-Ansicht neu geladen,
+keine Konsolenfehler beim Laden eines der drei Einstiegspunkte) und für W7 gezielt gegen die
+neue `no-bitwise`-Regel. Wie bei der ursprünglichen Verifikation oben stand auch in diesen
+Folgesessions kein Postgres-Container zur Verfügung — die 309 API-Tests sind weiterhin die
+Vitest-Suite gegen die `*.repository.memory.ts`-Doubles (`npm run test`), nicht die
+Prisma-Integrationssuite (`npm run test:integration`), die dementsprechend erneut ungeprüft
+blieb. Offen ist noch L1–L7 (Abschnitt 3, lange Methoden/Klassen).
 
 ---
 
@@ -544,6 +547,22 @@ Status?" wieder in einem Bildschirm lesbar ist.
 
 ### R3 — `app.js` / `app-demo.js`: Modul-Registrierung und Einstellungen doppelt (Mittel)
 
+**Status: behoben, wie vorgeschlagen.** `js/moduleRegistry.js` (neu) enthält die 14
+Modul-Imports und exportiert `registerAllModules()`; beide Bootstrap-Dateien rufen nur noch
+diese eine Funktion auf. `shell.js` exportiert `setupSettingsModal({ storageNoteKey,
+exportPrefix, getExportData, extraActions })`; beide Aufrufer übergeben ihre jeweiligen
+Abweichungen (Hinweistext, Datei-Präfix, Export-Quelle, ob ein Zurücksetzen-Knopf existiert)
+als Parameter. Eine Stolperfalle beim Implementieren: `storageNoteKey` wird bewusst als
+Übersetzungs**schlüssel** (nicht als bereits übersetzter Text) übergeben und `extraActions`
+bewusst als Fabrikfunktion (nicht als fertiges Array) — beide werden dadurch bei **jedem**
+Öffnen des Dialogs frisch ausgewertet, statt einmalig beim Modul-Laden. Ohne diese
+Unterscheidung hätte die Konsolidierung die Live-Sprachumschaltung im Einstellungsdialog
+stillschweigend zerstört, die vorher funktionierte, weil `t(...)` in der lokalen Kopie jedes
+Mal neu aufgerufen wurde. Im echten Browser gegen `demo.html` geprüft (Playwright: Dialog
+geöffnet, Sprache von Deutsch auf Englisch umgeschaltet, Hinweistext aktualisiert sich
+korrekt bei beiden Öffnungen). Zusätzlich gegen `index.html` und `demo.html` auf
+Konsolenfehler beim Laden geprüft (keine).
+
 Befund **R1** des Vorgänger-Reviews („~130 Zeilen Duplikat") ist nur teilweise behoben — der
 Shell-Teil ist nach `shell.js` gewandert, aber es stehen weiterhin ~60 Zeilen wortgleich in
 beiden Dateien:
@@ -576,6 +595,25 @@ Beschriftungen (`admin.formClubName` / `usermgmt.formClubName`, `admin.formAdmin
 Erfolgsbehandlung als Callback übergeben, den `admin.*`-Schlüsselsatz zugunsten von
 `usermgmt.*` auflösen.
 
+**Status: behoben, wie vorgeschlagen.** `js/modules/clubForm.js` (neu) exportiert
+`openCreateClubModal({ onSuccess })`; Felder, Validierung, `errorBox`-Mechanik und
+`usermgmt.*`-Schlüssel sind jetzt genau einmal vorhanden. `userManagement.js` übergibt einen
+`onSuccess`, der Toast + `onChanged?.()` + `showInviteLinkModal(...)` reproduziert; `admin.js`
+übergibt einen `onSuccess`, der stattdessen `admin.clubCreatedMailSent` toastet und die
+Vereinsliste neu lädt — genau die Abweichung, die laut Befund beim jeweiligen Aufrufer bleiben
+sollte. Die vier `admin.*`-Schlüssel (`formClubName`, `formAdminName`, `formAdminEmail`,
+`createClubModalTitle`) wurden aus beiden Sprachdateien entfernt, nachdem ein Repo-weites Grep
+bestätigte, dass sie nirgends mehr referenziert werden; `admin.clubCreatedMailSent` (fachlich
+verschieden vom `usermgmt`-Pendant) blieb erhalten. Eine Abweichung vom Ist-Zustand vor dem
+Fix: `admin.js`s Fehlerbox in diesem einen Formular zeigt bei einem 401 jetzt die generische
+Fehlermeldung statt (wie zuvor lokal in `admin.js` üblich) `auth.errorInvalidCredentials` —
+der geteilte Helfer kennt diese Sonderbehandlung bewusst nicht (sie ist Aufrufer-spezifisch,
+siehe R5), und ein 401 mitten im Anlegen-Formular einer bereits laufenden Superadmin-Sitzung
+ist ein seltener Randfall (abgelaufenes Token), für den die generische Meldung ausreicht.
+Verifiziert über Lint, die volle Testsuite (483 Tests) und einen Playwright-Lauf gegen
+`admin/index.html`, `index.html`, `demo.html` (keine Konsolenfehler beim Laden, alle drei
+Einstiegspunkte importieren die neuen Module fehlerfrei).
+
 ### R5 — `describeError()` dreimal, mit drei Schlüsselpaaren (Niedrig)
 
 `profile.js:176`, `userManagement.js:358`, `admin/admin.js:121` — dieselbe Funktion, jeweils
@@ -586,6 +624,19 @@ Internetverbindung prüfen.").
 **Fix:** Eine Funktion in `apiClient.js` (dort leben `ApiError`/`NetworkError` ohnehin), ein
 Schlüsselpaar `common.errorNetwork`/`common.errorUnknown`. Die Sonderbehandlung von 401 aus
 `admin.js` als optionaler Parameter.
+
+**Status: behoben, wie vorgeschlagen.** `apiClient.js` exportiert jetzt
+`describeError(err, { on401Message } = {})`, das die schon vorhandenen, aber bis dahin
+ungenutzten Schlüssel `common.errorNetwork`/`common.errorUnknown` nutzt. `profile.js` und
+`userManagement.js` importieren die Funktion direkt und haben ihre lokalen Kopien entfernt
+(`userManagement.js`s eigene Kopie hatte zusätzlich einen unabhängigen, redundanten
+`NetworkError`/`ApiError`-Ternary in `renderError()`, der bei dieser Gelegenheit auf denselben
+Helfer umgestellt wurde). `admin/admin.js` importiert die Funktion ebenfalls, behält aber einen
+lokalen Einzeiler `describeAdminError = (err) => describeError(err, { on401Message:
+t('auth.errorInvalidCredentials') })` für seine drei ursprünglichen Aufrufstellen (Login,
+Vereinsliste laden) — genau der optionale Parameter aus dem Fix-Vorschlag, mit der einen
+bewussten Ausnahme in `clubForm.js` (siehe R4-Status). Verifiziert über Lint und die volle
+Testsuite (483 Tests).
 
 ### R6 — IndexedDB-Request→Promise-Boilerplate zehnmal (Niedrig)
 
@@ -602,6 +653,16 @@ return new Promise((resolve, reject) => {
 **Fix:** `const p = (req, map = r => r) => new Promise((res, rej) => { req.onsuccess = () => res(map(req.result)); req.onerror = () => rej(req.error); });`
 Ersparnis ~40 Zeilen, und `db.js` wird auf einen Blick lesbar.
 
+**Status: behoben, wie vorgeschlagen.** `db.js` enthält jetzt `reqPromise(req, map = r => r)`
+genau nach diesem Muster; alle zehn Fundstellen (`getAll`, `get`, `put`, `putWithoutSync`,
+`remove`, `removeWithoutSync`, `clearStore`, `countAll`, `clearSyncedEvents`,
+`pendingSyncCount`) rufen sie jetzt auf, statt die drei Zeilen erneut auszuschreiben.
+`bulkPut()` und die beiden transaktionsweiten Löschungen in `clearSyncedEvents()` bleiben
+unverändert — sie hängen an `transaction.oncomplete`/`onerror` statt an
+`request.onsuccess`/`onerror` und passen nicht in dasselbe Muster. Ersparnis: 30 Zeilen (352 →
+322). Verifiziert über Lint und die volle Testsuite (483 Tests, darunter alle `db.js`-Aufrufer
+in `apps/web`).
+
 ### R7 — Konstante definiert, dann als Literal wiederholt (Niedrig)
 
 `sync.service.ts:254` definiert `FOREIGN_ENTITY_ERROR`; `describeSyncError()` in derselben
@@ -609,6 +670,11 @@ Datei (Zeile 730) schreibt denselben Satz noch einmal als String-Literal aus. De
 dazwischen erklärt sogar ausdrücklich, dass beide identisch *sein müssen* („Bewusst dieselbe
 Formulierung … schließt so das Existenz-Orakel") — und verlässt sich dann auf Handarbeit.
 Die Konstante steht direkt darüber.
+
+**Status: behoben.** `describeSyncError()`s `P2003`-Zweig gibt jetzt `FOREIGN_ENTITY_ERROR`
+zurück statt den Satz erneut als Literal auszuschreiben. Verifiziert über Lint, `typecheck`
+und die volle API-Testsuite (309 Tests, darunter die bestehenden Tests für beide
+Aufrufstellen der Konstante).
 
 ### R8 — Toter Code (Niedrig)
 
@@ -625,11 +691,26 @@ renderList(container, c2, a2);       // renderList nimmt nur (container, competi
 `a2` — ein vollständiger `getAll('athletes')` — wird bei jedem Refresh der Wettkampfliste
 geladen und sofort verworfen.
 
+**Status: behoben, wie beschrieben.** `nowISO`, `daysBetween`, `avatarInitials`, `debounce`
+(`utils.js`), `hasAccessToken` (`apiClient.js`) und `WEEKDAYS` (`refdata.js`) entfernt —
+jeweils per Repo-weitem Grep bestätigt, dass keine andere Datei sie importiert.
+`competitions.js`s `refresh()` lädt jetzt nur noch `getAll('competitions')` und übergibt es an
+`renderList(container, c2)`, ohne den verworfenen zweiten Parameter. Verifiziert über Lint,
+die volle Testsuite (483 Tests) und einen Playwright-Lauf gegen `demo.html`, der gezielt zur
+Wettkampf-Ansicht navigiert und danach erneut (löst `refresh()` indirekt über einen
+Modul-Wiedereinstieg aus) — keine Konsolenfehler.
+
 ### R9 — `listClubMembers` / `listAssignableTrainers` (Niedrig)
 
 `auth.service.ts:351` und `:372` teilen sich Abruf, Sortierung und `toPublicUser`-Mapping und
 unterscheiden sich nur in Filter und Sortierkriterium. Eine gemeinsame private Hilfsfunktion
 `listMembers(clubId, { filter, compare })` genügt.
+
+**Status: behoben, wie vorgeschlagen.** `createAuthService()` enthält jetzt die lokale
+Hilfsfunktion `listMembers(clubId, { filter, compare })`; `listClubMembers()` ruft sie mit der
+bestehenden Rollen-dann-Name-Sortierung ohne Filter auf, `listAssignableTrainers()` mit dem
+Trainer/Admin-Filter und reiner Namenssortierung. Verifiziert über Lint, `typecheck` und die
+volle API-Testsuite (309 Tests, darunter die bestehenden Tests für beide Endpunkte).
 
 ---
 
@@ -845,14 +926,14 @@ Damit die Befunde nicht den Blick verstellen — diese Entscheidungen sollten er
 | 6 | **L1** — `push()` in Guard-Kette zerlegen | ~1 Tag | Regeln einzeln testbar, Reihenfolge explizit | offen |
 | 7 | **W4** — Zyklus `db.js` ↔ `state.js` | ~2 Std. | `db.js` ohne Mock testbar | ✅ behoben |
 | 8 | **L2/L3/L4** — Dateien aufteilen | ~2 Tage | Rein mechanisch, kein Verhaltensrisiko | offen |
-| 9 | **R3/R4/R5/R6/R7/R8/R9** — kleine Duplikate | je < 2 Std. | −150 Zeilen | offen |
+| 9 | **R3/R4/R5/R6/R7/R8/R9** — kleine Duplikate | je < 2 Std. | −150 Zeilen | ✅ behoben |
 | 10 | **W3** — Kommentar-Diät | fortlaufend | −1.200 bis −1.500 Zeilen; senkt die Einstiegshürde am stärksten | 🟡 begonnen (4 Dateien, 239→206 Fundstellen) |
 | 11 | **W7** — `no-bitwise` in ESLint aufnehmen | 1 Zeile | Fängt beide `&`-Stellen und alle künftigen | ✅ behoben |
 
-Positionen 1, 2, 3, 4, 7 und 11 sind vollständig erledigt; W6 (kein eigener Tabelleneintrag,
-siehe dortiger Abschnitt) ist als Nebeneffekt von Position 2 ebenfalls erledigt. Position 5
-(R1) ist im Kern erledigt, aber mit korrigiertem Umfang — 13 von 17 Formular-Modals
-konvertiert, kein `openEntityForm()`-Mega-Helfer (siehe dortiger Status für die Begründung).
-Position 10 ist als fortlaufende Aufgabe angelegt und auf den dichtesten Dateien begonnen.
-Offen sind noch `push()`s Zerlegung in eine Guard-Kette (L1), die übrigen Datei-Aufteilungen
-(L2–L4, L7) und die kleinen Einzelbefunde (R3–R9).
+Positionen 1, 2, 3, 4, 7, 9 und 11 sind vollständig erledigt; W6 (kein eigener
+Tabelleneintrag, siehe dortiger Abschnitt) ist als Nebeneffekt von Position 2 ebenfalls
+erledigt. Position 5 (R1) ist im Kern erledigt, aber mit korrigiertem Umfang — 13 von 17
+Formular-Modals konvertiert, kein `openEntityForm()`-Mega-Helfer (siehe dortiger Status für
+die Begründung). Position 10 ist als fortlaufende Aufgabe angelegt und auf den dichtesten
+Dateien begonnen. Offen sind noch `push()`s Zerlegung in eine Guard-Kette (L1) und die
+übrigen Datei-Aufteilungen (L2–L4, L7).

@@ -8,9 +8,18 @@
 // Bezug. Wiederverwendet aus dem Hauptsystem nur, was KEINE IndexedDB-
 // Abhängigkeit hat: apiClient.js, utils.js, i18n.js.
 import * as api from '../js/apiClient.js';
-import { el, clear, field, textInput, toast, openModal, formActions } from '../js/utils.js';
+import { describeError } from '../js/apiClient.js';
+import { el, clear, field, textInput, toast } from '../js/utils.js';
 import { t, getLocale, setLocale, detectInitialLocale } from '../js/i18n.js';
 import { CURRENT_CONSENT_VERSION } from '../js/state.js';
+import { openCreateClubModal } from '../js/modules/clubForm.js';
+
+// Diese Oberfläche zeigt bei einem 401 an JEDER Stelle (Login, Vereinsliste
+// laden, Verein anlegen) bewusst t('auth.errorInvalidCredentials') statt
+// der rohen Serverantwort — ein abgelaufenes/entzogenes Refresh-Token
+// äußert sich hier genauso wie ein falsches Passwort, und beide sollen
+// gleich aussehen.
+const describeAdminError = (err) => describeError(err, { on401Message: t('auth.errorInvalidCredentials') });
 
 setLocale(detectInitialLocale());
 
@@ -107,7 +116,7 @@ function renderLoginForm(errorMessage) {
       const user = await api.login({ email: fEmail.value.trim(), password: fPassword.value, consent: true });
       await handleAuthenticated(user);
     } catch (err) {
-      errorBox.textContent = describeError(err);
+      errorBox.textContent = describeAdminError(err);
       errorBox.style.display = 'block';
     } finally {
       submitBtn.disabled = false;
@@ -118,21 +127,17 @@ function renderLoginForm(errorMessage) {
   authScreenEl.appendChild(box);
 }
 
-function describeError(err) {
-  if (err instanceof api.NetworkError) return t('admin.errorNetwork');
-  if (err instanceof api.ApiError) {
-    if (err.status === 401) return t('auth.errorInvalidCredentials');
-    return err.message;
-  }
-  return t('admin.errorUnknown');
-}
-
 // ---------------- Vereinsübersicht ----------------
 async function renderClubsView() {
   clear(viewEl);
   viewEl.appendChild(el('div', { class: 'page-head' }, [
     el('div', {}, [el('div', { class: 'page-eyebrow' }, t('admin.eyebrow')), el('h1', { class: 'mt-0' }, t('admin.title'))]),
-    el('button', { class: 'btn btn-primary', onclick: () => openCreateClubModal(renderClubsView) }, t('admin.createClub')),
+    el('button', { class: 'btn btn-primary', onclick: () => openCreateClubModal({
+      onSuccess: async (result) => {
+        toast(t('admin.clubCreatedMailSent', { email: result.invitation.email }));
+        await renderClubsView();
+      },
+    }) }, t('admin.createClub')),
   ]));
 
   const listHost = el('div', { class: 'card' }, el('p', {}, t('common.loading')));
@@ -167,48 +172,8 @@ async function renderClubsView() {
     }
   } catch (err) {
     clear(listHost);
-    listHost.appendChild(el('p', { class: 'form-error' }, describeError(err)));
+    listHost.appendChild(el('p', { class: 'form-error' }, describeAdminError(err)));
   }
-}
-
-function openCreateClubModal(onDone) {
-  const form = el('form', { class: 'form-grid' });
-  const fClubName = textInput('', { required: true });
-  const fAdminName = textInput('', { required: true });
-  const fAdminEmail = textInput('', { type: 'email', required: true });
-  form.appendChild(field(t('admin.formClubName'), fClubName, { span2: true }));
-  form.appendChild(field(t('admin.formAdminName'), fAdminName));
-  form.appendChild(field(t('admin.formAdminEmail'), fAdminEmail));
-
-  const errorBox = el('p', { class: 'form-error', style: 'grid-column:1/-1;display:none' });
-  form.appendChild(errorBox);
-  const { row: actionsRow, submitBtn } = formActions({ onCancel: () => close(), submitLabel: t('common.create') });
-  form.appendChild(actionsRow);
-
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    errorBox.style.display = 'none';
-    if (!fClubName.value.trim()) { toast(t('usermgmt.validationClubName'), 'error'); return; }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fAdminEmail.value.trim())) { toast(t('usermgmt.validationEmail'), 'error'); return; }
-    submitBtn.disabled = true;
-    try {
-      const result = await api.createClub({
-        name: fClubName.value.trim(),
-        adminEmail: fAdminEmail.value.trim(),
-        adminName: fAdminName.value.trim(),
-      });
-      toast(t('admin.clubCreatedMailSent', { email: result.invitation.email }));
-      close();
-      await onDone();
-    } catch (err) {
-      errorBox.textContent = describeError(err);
-      errorBox.style.display = 'block';
-    } finally {
-      submitBtn.disabled = false;
-    }
-  });
-
-  const { close } = openModal({ title: t('admin.createClubModalTitle'), bodyNode: form, wide: true });
 }
 
 boot();

@@ -30,31 +30,15 @@
 import { pendingSyncCount } from './db.js';
 import { wipeDemoDataIfPresent } from './seed.js';
 import { restoreSession, getCurrentUser, setUserLocale, logout, onUserChange, isLoggedIn } from './state.js';
-import { registerModule, currentRoute, onRouteChange } from './router.js';
-import { el, toast, openModal, confirmAction } from './utils.js';
+import { currentRoute, onRouteChange } from './router.js';
+import { toast, confirmAction } from './utils.js';
 import { t, onLocaleChange } from './i18n.js';
 import { renderLoginScreen, renderAcceptInvitationScreen } from './modules/authScreens.js';
 import { runSync } from './syncClient.js';
-import { buildNav, renderRoute, populateLanguageSelect, downloadExportJSON, updateSyncBadge } from './shell.js';
+import { buildNav, renderRoute, populateLanguageSelect, updateSyncBadge, setupSettingsModal } from './shell.js';
+import { registerAllModules } from './moduleRegistry.js';
 
-import { dashboardModule } from './modules/dashboard.js';
-import { athletesModule } from './modules/athletes.js';
-import { competitionsModule } from './modules/competitions.js';
-import { timesModule } from './modules/times.js';
-import { plansModule } from './modules/plans.js';
-import { templatesModule } from './modules/templates.js';
-import { catalogModule } from './modules/catalog.js';
-import { sessionsModule } from './modules/sessions.js';
-import { actionItemsModule } from './modules/actionItems.js';
-import { statsModule } from './modules/stats.js';
-import { syncQueueModule } from './modules/syncQueue.js';
-import { profileModule } from './modules/profile.js';
-import { userManagementModule } from './modules/userManagement.js';
-import { infoModule } from './modules/info.js';
-
-[dashboardModule, athletesModule, competitionsModule, timesModule, plansModule,
-  templatesModule, catalogModule, sessionsModule, actionItemsModule, statsModule, syncQueueModule, profileModule, userManagementModule, infoModule]
-  .forEach(registerModule);
+registerAllModules();
 
 const appShellEl = document.getElementById('app-shell');
 const authScreenEl = document.getElementById('auth-screen');
@@ -238,25 +222,15 @@ async function render(route) {
 }
 
 // ---------------- Settings modal ----------------
-document.getElementById('btn-settings').addEventListener('click', openSettings);
-
-async function openSettings() {
-  document.getElementById('btn-settings').textContent = t('topbar.settings');
-  const user = getCurrentUser();
-  const body = el('div');
-  body.appendChild(el('h3', { class: 'mt-0' }, t('settings.accounts')));
-  if (user) body.appendChild(el('p', { class: 'text-sm' }, `${user.name} — ${t('settings.roleLabel')}: ${t(`settings.role_${user.role}`)}`));
-  body.appendChild(el('p', { class: 'hint' }, t('settings.storageNote')));
-  body.appendChild(el('div', { class: 'form-actions', style: 'justify-content:flex-start;margin-top:20px' }, [
-    el('button', { class: 'btn btn-ghost', onclick: exportData }, t('settings.exportButton')),
-  ]));
-  openModal({ title: t('settings.title'), bodyNode: body, wide: true });
-}
-
-async function exportData() {
-  const { exportAll } = await import('./db.js');
-  downloadExportJSON(await exportAll(), 'lane1-export');
-}
+// db.js wird hier bewusst erst per dynamischem Import geladen (nicht
+// oben statisch) — der Export-Button ist der einzige Ort in app.js, der
+// exportAll() braucht; ein statischer Import würde db.js unnötig früh
+// laden, auch wenn "Einstellungen" nie geöffnet wird.
+setupSettingsModal({
+  storageNoteKey: 'settings.storageNote',
+  exportPrefix: 'lane1-export',
+  getExportData: async () => (await import('./db.js')).exportAll(),
+});
 
 function registerServiceWorker() {
   if ('serviceWorker' in navigator) {

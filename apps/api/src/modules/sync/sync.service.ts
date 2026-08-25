@@ -716,7 +716,7 @@ export function describeSyncError(err: unknown): string {
   const code = err && typeof err === 'object' && 'code' in err ? (err as { code?: unknown }).code : undefined;
 
   if (code === 'P2003') {
-    return 'Die referenzierte Person oder der referenzierte Datensatz existiert nicht mehr (wurde vermutlich zwischenzeitlich endgültig gelöscht).';
+    return FOREIGN_ENTITY_ERROR;
   }
 
   if (err !== undefined) {

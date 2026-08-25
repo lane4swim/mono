@@ -325,13 +325,10 @@ export default {
   admin: {
     loginTitle: 'Superadmin-Anmeldung', loginIntro: 'Nur für Superadministrator:innen. Diese Oberfläche ist ausschließlich online verfügbar.',
     loginButton: 'Anmelden', notSuperadmin: 'Dieses Konto ist keine Superadministrator:in. Zugriff verweigert.',
-    errorNetwork: 'Server nicht erreichbar. Bitte Internetverbindung prüfen.',
-    errorUnknown: 'Ein unerwarteter Fehler ist aufgetreten.',
     eyebrow: 'Superadmin', title: 'Vereine',
-    createClub: '+ Verein anlegen', createClubModalTitle: 'Verein anlegen',
+    createClub: '+ Verein anlegen',
     noClubsYet: 'Noch keine Vereine angelegt.',
     colClubName: 'Verein', colAdmins: 'Admins', colTrainers: 'Trainer:innen', colAthletes: 'Athlet:innen', colCreatedAt: 'Angelegt am',
-    formClubName: 'Vereinsname', formAdminName: 'Name des ersten Admins', formAdminEmail: 'E-Mail des ersten Admins',
     clubCreatedMailSent: 'Verein angelegt — Einladung wurde per E-Mail an {email} versendet.',
   },
   consent: {

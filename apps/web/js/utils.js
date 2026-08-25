@@ -86,7 +86,6 @@ export function beginRender(container) {
 
 // ---- Datumsangaben ----
 export function todayISO() { return new Date().toISOString().slice(0, 10); }
-export function nowISO(){ return new Date().toISOString(); }
 // Reine Datumsfelder (birthdate, joinDate, weekStart, dueDate, …) werden
 // serverseitig als vollständiger ISO-Zeitstempel geführt (siehe
 // packages/shared-types/src/entities.ts: `isoDate`/`nullableIsoDate` sind
@@ -142,9 +141,6 @@ export function startOfWeek(iso) {
   d.setDate(d.getDate() - day);
   return d.toISOString().slice(0, 10);
 }
-export function daysBetween(a, b) {
-  return Math.round((new Date(b) - new Date(a)) / 86400000);
-}
 export function ageFromBirthdate(iso){
   if (!iso) return null;
   const b = new Date(dateOnly(iso) + 'T00:00:00'), n = new Date();
@@ -172,11 +168,6 @@ export function timeToSec(str) {
 }
 
 // ---- Kleine UI-Bausteine (liefern DOM-Knoten) ----
-export function avatarInitials(name) {
-  const initials = (name || '?').split(' ').map(p => p[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
-  return el('span', { class: 'avatar' }, initials || '?');
-}
-
 export function badge(text, variant = 'neutral') {
   return el('span', { class: `badge badge-${variant}` }, text);
 }
@@ -299,11 +290,6 @@ export function selectInput(options, value, attrs = {}) {
     sel.appendChild(o);
   }
   return sel;
-}
-
-export function debounce(fn, ms = 250) {
-  let t;
-  return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
 }
 
 export function groupBy(arr, keyFn) {

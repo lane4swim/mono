@@ -11,8 +11,9 @@ import {
 } from '../utils.js';
 import { isSuperAdmin } from '../state.js';
 import * as api from '../apiClient.js';
-import { ApiError, NetworkError } from '../apiClient.js';
+import { describeError } from '../apiClient.js';
 import { t } from '../i18n.js';
+import { openCreateClubModal } from './clubForm.js';
 
 export const userManagementModule = {
   id: 'usermgmt',
@@ -39,12 +40,9 @@ export const userManagementModule = {
 };
 
 function renderError(container, err) {
-  const message = err instanceof NetworkError ? t('usermgmt.errorNetwork')
-    : err instanceof ApiError ? err.message
-    : t('usermgmt.errorUnknown');
   container.appendChild(el('div', { class: 'empty-state' }, [
     el('h3', {}, t('common.somethingWentWrong')),
-    el('p', {}, message),
+    el('p', {}, describeError(err)),
   ]));
 }
 
@@ -160,7 +158,13 @@ function renderClubsSection(clubs, onChanged) {
   const card = el('div', { class: 'card mb-16' }, [
     el('div', { class: 'flex justify-between items-center mb-16' }, [
       el('h3', { class: 'mt-0' }, t('usermgmt.clubsSection')),
-      el('button', { class: 'btn btn-primary btn-sm', onclick: () => openCreateClubModal(onChanged) }, t('usermgmt.createClub')),
+      el('button', { class: 'btn btn-primary btn-sm', onclick: () => openCreateClubModal({
+        onSuccess: (result) => {
+          toast(t('usermgmt.clubCreated'));
+          onChanged?.();
+          showInviteLinkModal(result.invitation);
+        },
+      }) }, t('usermgmt.createClub')),
     ]),
   ]);
   if (clubs.length === 0) {
@@ -178,40 +182,6 @@ function renderClubsSection(clubs, onChanged) {
     card.appendChild(el('div', { class: 'table-wrap' }, table));
   }
   return card;
-}
-
-function openCreateClubModal(onChanged) {
-  const form = el('form', { class: 'form-grid' });
-  const fClubName = textInput('', { required: true });
-  const fAdminName = textInput('', { required: true });
-  const fAdminEmail = textInput('', { type: 'email', required: true });
-  form.appendChild(field(t('usermgmt.formClubName'), fClubName, { span2: true }));
-  form.appendChild(field(t('usermgmt.formAdminName'), fAdminName));
-  form.appendChild(field(t('usermgmt.formAdminEmail'), fAdminEmail));
-  const errorBox = el('p', { class: 'form-error', style: 'grid-column:1/-1;display:none' });
-  form.appendChild(errorBox);
-  const { row: actionsRow, submitBtn } = formActions({ onCancel: () => close(), submitLabel: t('common.create') });
-  form.appendChild(actionsRow);
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    errorBox.style.display = 'none';
-    if (!fClubName.value.trim()) { toast(t('usermgmt.validationClubName'), 'error'); return; }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fAdminEmail.value.trim())) { toast(t('usermgmt.validationEmail'), 'error'); return; }
-    submitBtn.disabled = true;
-    try {
-      const result = await api.createClub({ name: fClubName.value.trim(), adminEmail: fAdminEmail.value.trim(), adminName: fAdminName.value.trim() });
-      toast(t('usermgmt.clubCreated'));
-      close();
-      onChanged?.();
-      showInviteLinkModal(result.invitation);
-    } catch (err) {
-      errorBox.textContent = describeError(err);
-      errorBox.style.display = 'block';
-    } finally {
-      submitBtn.disabled = false;
-    }
-  });
-  const { close } = openModal({ title: t('usermgmt.clubModalTitle'), bodyNode: form, wide: true });
 }
 
 // ---------------- Admin/Superadmin: Team einladen ----------------
@@ -347,10 +317,4 @@ function renderInvitationsList(invitations, clubs, onChanged) {
   table.appendChild(tbody);
   card.appendChild(el('div', { class: 'table-wrap' }, table));
   return card;
-}
-
-function describeError(err) {
-  if (err instanceof NetworkError) return t('usermgmt.errorNetwork');
-  if (err instanceof ApiError) return err.message;
-  return t('usermgmt.errorUnknown');
 }

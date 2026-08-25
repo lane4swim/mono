@@ -325,13 +325,10 @@ export default {
   admin: {
     loginTitle: 'Super Admin Sign In', loginIntro: 'Super administrators only. This interface is available online only.',
     loginButton: 'Sign in', notSuperadmin: 'This account is not a super administrator. Access denied.',
-    errorNetwork: 'Server unreachable. Please check your internet connection.',
-    errorUnknown: 'An unexpected error occurred.',
     eyebrow: 'Super Admin', title: 'Clubs',
-    createClub: '+ Create club', createClubModalTitle: 'Create club',
+    createClub: '+ Create club',
     noClubsYet: 'No clubs created yet.',
     colClubName: 'Club', colAdmins: 'Admins', colTrainers: 'Coaches', colAthletes: 'Athletes', colCreatedAt: 'Created on',
-    formClubName: 'Club name', formAdminName: "First admin's name", formAdminEmail: "First admin's email",
     clubCreatedMailSent: 'Club created — invitation email sent to {email}.',
   },
   consent: {

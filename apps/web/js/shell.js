@@ -12,7 +12,7 @@
 // alles andere. Diese Datei bündelt genau den geteilten Teil; app.js und
 // app-demo.js rufen sie auf und behalten nur ihre eigene Logik.
 import { pendingSyncCount } from './db.js';
-import { getRole } from './state.js';
+import { getRole, getCurrentUser } from './state.js';
 import { visibleModules, navigate, getModule, currentRoute } from './router.js';
 import { el, clear, toast, openModal, beginRender, icon } from './utils.js';
 import { t, getLocale, getAvailableLocales } from './i18n.js';
@@ -215,4 +215,51 @@ export function downloadExportJSON(dump, filenamePrefix) {
   a.download = `${filenamePrefix}-${new Date().toISOString().slice(0, 10)}.json`;
   a.click();
   toast(t('settings.exportStarted'));
+}
+
+// Das "Einstellungen"-Modal (Konto-/Speicherhinweis + Export-Button) —
+// vormals in app.js/app-demo.js wortgleich bis auf den Hinweistext, den
+// Export-Dateinamen und app-demo.js' zusätzlichen "Demo zurücksetzen"-
+// Button ausgeschrieben. Bindet den Klick auf #btn-settings gleich mit,
+// da beide Aufrufer dafür ohnehin identischen Code hatten.
+//   - storageNoteKey: i18n-Schlüssel für den Hinweistext unter den
+//     Kontodaten (app.js: 'settings.storageNote'; app-demo.js:
+//     'topbar.demoBadge') — bewusst der SCHLÜSSEL, nicht der bereits
+//     übersetzte Text: erst bei jedem Öffnen übersetzt (wie zuvor),
+//     damit ein zwischenzeitlicher Sprachwechsel sich auch hier
+//     niederschlägt, statt beim Registrieren einmalig eingefroren zu
+//     werden.
+//   - exportPrefix/getExportData: an downloadExportJSON() durchgereicht;
+//     getExportData() liefert den zu exportierenden Datensatz (app.js
+//     lädt db.js dafür bewusst erst hier per dynamischem Import, siehe
+//     dortiger Kommentar — app-demo.js hat exportAll() ohnehin schon
+//     statisch importiert).
+//   - extraActions: Fabrikfunktion für weitere Buttons nach "Export"
+//     (app-demo.js: der "Demo zurücksetzen"-Button; app.js braucht
+//     keine) — bewusst eine Funktion, nicht ein fertiges Array: baut die
+//     Knoten bei JEDEM Öffnen neu, aus demselben Grund wie
+//     storageNoteKey oben (sonst blieben Beschriftung und die darin
+//     eingebetteten t()-Aufrufe der confirmAction() nach einem
+//     Sprachwechsel auf der beim Registrieren aktiven Sprache hängen).
+export function setupSettingsModal({ storageNoteKey, exportPrefix, getExportData, extraActions = () => [] }) {
+  const btn = document.getElementById('btn-settings');
+  btn.addEventListener('click', openSettings);
+
+  function openSettings() {
+    btn.textContent = t('topbar.settings');
+    const user = getCurrentUser();
+    const body = el('div');
+    body.appendChild(el('h3', { class: 'mt-0' }, t('settings.accounts')));
+    if (user) body.appendChild(el('p', { class: 'text-sm' }, `${user.name} — ${t('settings.roleLabel')}: ${t(`settings.role_${user.role}`)}`));
+    body.appendChild(el('p', { class: 'hint' }, t(storageNoteKey)));
+    body.appendChild(el('div', { class: 'form-actions', style: 'justify-content:flex-start;margin-top:20px' }, [
+      el('button', { class: 'btn btn-ghost', onclick: exportData }, t('settings.exportButton')),
+      ...extraActions(),
+    ]));
+    openModal({ title: t('settings.title'), bodyNode: body, wide: true });
+  }
+
+  async function exportData() {
+    downloadExportJSON(await getExportData(), exportPrefix);
+  }
 }

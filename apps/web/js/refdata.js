@@ -67,5 +67,3 @@ export const ACTION_STATUS = [
   { value: 'progress', label: 'In Bearbeitung' },
   { value: 'done', label: 'Erledigt' },
 ];
-
-export const WEEKDAYS = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];

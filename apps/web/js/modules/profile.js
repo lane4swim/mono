@@ -16,7 +16,7 @@ import { getAll } from '../db.js';
 import { el, clear, field, textInput, toast, laneWave, badge, fullName, beginRender, openModal } from '../utils.js';
 import { getCurrentUser, updateProfile, setUserLocale, logout } from '../state.js';
 import * as api from '../apiClient.js';
-import { ApiError, NetworkError } from '../apiClient.js';
+import { NetworkError, describeError } from '../apiClient.js';
 import { t, getLocale, getAvailableLocales } from '../i18n.js';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -171,12 +171,6 @@ function renderView(container, athletes, results, entries, actionItems, sessions
   wrap.appendChild(dataCard);
 
   container.appendChild(wrap);
-}
-
-function describeError(err) {
-  if (err instanceof NetworkError) return t('profileData.errorNetwork');
-  if (err instanceof ApiError) return err.message;
-  return t('profileData.errorUnknown');
 }
 
 // Beantragt die echte, serverseitige Löschung (Art. 17 DSGVO — sofortiger

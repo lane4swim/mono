@@ -49,9 +49,9 @@ function renderList(container, competitions) {
   container.appendChild(wrap);
 
   async function refresh() {
-    const [c2, a2] = await Promise.all([getAll('competitions'), getAll('athletes')]);
+    const c2 = await getAll('competitions');
     clear(container);
-    renderList(container, c2, a2);
+    renderList(container, c2);
   }
 }
 

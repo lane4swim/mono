@@ -68,6 +68,17 @@ function tx(store, mode = 'readonly'){
   return openDb().then(db => db.transaction(store, mode).objectStore(store));
 }
 
+// Code-Review, Befund R6: dieselbe request→Promise-Übersetzung (onsuccess/
+// onerror auf resolve/reject abbilden) stand vormals als Duplikat in fast
+// jeder Funktion unten. `map` wandelt das rohe req.result bei Bedarf um
+// (z. B. ein fehlendes Ergebnis auf `[]`/`null` statt `undefined`).
+function reqPromise(req, map = (r) => r){
+  return new Promise((resolve, reject) => {
+    req.onsuccess = () => resolve(map(req.result));
+    req.onerror = () => reject(req.error);
+  });
+}
+
 export function uid(){
   if (crypto?.randomUUID) return crypto.randomUUID();
   return 'id-' + Date.now() + '-' + Math.random().toString(16).slice(2);
@@ -75,20 +86,12 @@ export function uid(){
 
 export async function getAll(store){
   const os = await tx(store);
-  return new Promise((resolve, reject) => {
-    const req = os.getAll();
-    req.onsuccess = () => resolve(req.result || []);
-    req.onerror = () => reject(req.error);
-  });
+  return reqPromise(os.getAll(), (r) => r || []);
 }
 
 export async function get(store, id){
   const os = await tx(store);
-  return new Promise((resolve, reject) => {
-    const req = os.get(id);
-    req.onsuccess = () => resolve(req.result || null);
-    req.onerror = () => reject(req.error);
-  });
+  return reqPromise(os.get(id), (r) => r || null);
 }
 
 // Stores, die interne Buchführung statt Nutzerinhalte darstellen —
@@ -142,11 +145,7 @@ export async function put(store, obj){
   obj.updatedAt = new Date().toISOString();
   if (!obj.createdAt) obj.createdAt = obj.updatedAt;
   const os = await tx(store, 'readwrite');
-  const saved = await new Promise((resolve, reject) => {
-    const req = os.put(obj);
-    req.onsuccess = () => resolve(obj);
-    req.onerror = () => reject(req.error);
-  });
+  const saved = await reqPromise(os.put(obj), () => obj);
   if (!SYNC_EXCLUDED.has(store)) {
     // `deletedAt` ist kein Feld der Entity-Schemas (siehe
     // packages/shared-types/src/entities.ts) und würde von der Sync-API
@@ -174,11 +173,7 @@ export async function put(store, obj){
 export async function putWithoutSync(store, obj){
   if (!obj.id) obj.id = uid();
   const os = await tx(store, 'readwrite');
-  return new Promise((resolve, reject) => {
-    const req = os.put(obj);
-    req.onsuccess = () => resolve(obj);
-    req.onerror = () => reject(req.error);
-  });
+  return reqPromise(os.put(obj), () => obj);
 }
 
 export async function bulkPut(store, items){
@@ -197,11 +192,7 @@ export async function bulkPut(store, items){
 
 export async function remove(store, id){
   const os = await tx(store, 'readwrite');
-  await new Promise((resolve, reject) => {
-    const req = os.delete(id);
-    req.onsuccess = () => resolve(true);
-    req.onerror = () => reject(req.error);
-  });
+  await reqPromise(os.delete(id));
   if (!SYNC_EXCLUDED.has(store)) {
     await enqueueSyncEvent(store, id, 'delete', null);
   }
@@ -213,21 +204,13 @@ export async function remove(store, id){
 // wenn der Server eine Löschung meldet (action: "delete").
 export async function removeWithoutSync(store, id){
   const os = await tx(store, 'readwrite');
-  await new Promise((resolve, reject) => {
-    const req = os.delete(id);
-    req.onsuccess = () => resolve(true);
-    req.onerror = () => reject(req.error);
-  });
+  await reqPromise(os.delete(id));
   return true;
 }
 
 export async function clearStore(store){
   const os = await tx(store, 'readwrite');
-  return new Promise((resolve, reject) => {
-    const req = os.clear();
-    req.onsuccess = () => resolve(true);
-    req.onerror = () => reject(req.error);
-  });
+  return reqPromise(os.clear(), () => true);
 }
 
 // Ineffizienz-Korrektur (Code-Review, Befund P5): lud vormals ALLE
@@ -236,11 +219,7 @@ export async function clearStore(store){
 // zu übertragen auskommt.
 export async function countAll(store){
   const os = await tx(store);
-  return new Promise((resolve, reject) => {
-    const req = os.count();
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
+  return reqPromise(os.count());
 }
 
 export async function exportAll(){
@@ -313,11 +292,7 @@ export async function updateSyncEvent(id, patch){
 // je Eintrag.
 export async function clearSyncedEvents(){
   const readStore = await tx('syncQueue');
-  const ids = await new Promise((resolve, reject) => {
-    const req = readStore.index('status').getAllKeys('synced');
-    req.onsuccess = () => resolve(req.result || []);
-    req.onerror = () => reject(req.error);
-  });
+  const ids = await reqPromise(readStore.index('status').getAllKeys('synced'), (r) => r || []);
   if (ids.length === 0) return 0;
 
   const writeStore = await tx('syncQueue', 'readwrite');
@@ -341,11 +316,7 @@ export async function clearSyncedEvents(){
 export async function pendingSyncCount(){
   const os = await tx('syncQueue');
   const idx = os.index('status');
-  const count = (key) => new Promise((resolve, reject) => {
-    const req = idx.count(key);
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
+  const count = (key) => reqPromise(idx.count(key));
   const [pending, error] = await Promise.all([count('pending'), count('error')]);
   return pending + error;
 }
