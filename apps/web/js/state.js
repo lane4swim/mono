@@ -109,11 +109,11 @@ export async function logout() {
   emit();
 }
 
-// Changes and persists the *current* user's preferred display language.
-// Note: this intentionally does NOT call emit() (onUserChange) — only
-// setLocale() (onLocaleChange), to avoid a double-render (see app.js's
-// onLocaleChange handler, which already refreshes everything that
-// depends on the active user).
+// Ändert und speichert die bevorzugte Anzeigesprache der/des AKTUELL
+// eingeloggten Person. Ruft bewusst NICHT emit() (onUserChange) auf,
+// sondern nur setLocale() (onLocaleChange) — sonst würde doppelt neu
+// gerendert (siehe app.js' onLocaleChange-Handler, der bereits alles
+// aktualisiert, was von der aktiven Person abhängt).
 export async function setUserLocale(locale) {
   if (!current) { setLocale(locale); return null; }
   if (IS_DEMO) { current = { ...current, locale }; setLocale(locale); return current; }
@@ -122,10 +122,11 @@ export async function setUserLocale(locale) {
   return current;
 }
 
-// Updates the *current* user's own personal data (e.g. name, email) —
-// used by the "Mein Profil" / "My Profile" module. In demo mode there is
-// no backend to persist this against, so the change is applied to the
-// in-memory demo user only (see loginDemo() above for why it's a copy).
+// Aktualisiert die eigenen persönlichen Daten der/des AKTUELL eingeloggten
+// Person (z. B. Name, E-Mail) — genutzt vom "Mein Profil"-Modul. Im
+// Demo-Modus gibt es kein Backend, gegen das gespeichert werden könnte —
+// die Änderung wird daher nur auf die Im-Speicher-Demo-Person angewendet
+// (siehe loginDemo() oben zur Begründung, warum das eine Kopie ist).
 export async function updateProfile(patch) {
   if (!current) return null;
   if (IS_DEMO) { current = { ...current, ...patch }; emit(); return current; }

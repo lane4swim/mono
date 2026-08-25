@@ -80,8 +80,8 @@ const PULL_TIE_SAFETY_LIMIT = 5000;
 //   Store          | trainer | admin | athlete | Begründung
 //   ---------------|---------|-------|---------|--------------------
 //   results        | R + W   | R + W | R + W   | js/modules/times.js zeigt/bearbeitet für ALLE Rollen identisch die volle Liste.
-//   plans          | R + W   | R + W | R + W   | js/modules/plans.js: ebenso, für alle Rollen geteilt.
-//   athletes       | R only  | R + W | R only  | js/modules/athletes.js: die Seite selbst ist laut `roles:['trainer','admin']` für trainer sichtbar, aber Anlegen/Ändern des Athleten-Stamms (inkl. "notes") ist dort zusätzlich hinter isAdminOrSuperAdmin() versteckt ("Verteidigung in der Tiefe"-Kommentar in openAthleteModal()) — write bewusst NICHT im "Coach"-Profil (anders als die übrigen coachVerwaltet-Stores unten), sonst wäre die UI-Restriktion nur Fassade. "notes" zusätzlich per scopeChangeForAthlete() beim Lesen redigiert (Zeilen-/Feldebene, siehe unten).
+//   plans          | R + W   | R + W | R + W   | js/modules/plans.js: ebenso, für alle Rollen shared.
+//   athletes       | R only  | R + W | R only  | js/modules/athletes.js: die Seite selbst ist laut `roles:['trainer','admin']` für trainer sichtbar, aber Anlegen/Ändern des Athleten-Stamms (inkl. "notes") ist dort zusätzlich hinter isAdminOrSuperAdmin() versteckt ("Verteidigung in der Tiefe"-Kommentar in openAthleteModal()) — write bewusst NICHT im "Coach"-Profil (anders als die übrigen coachManaged-Stores unten), sonst wäre die UI-Restriktion nur Fassade. "notes" zusätzlich per scopeChangeForAthlete() beim Lesen redigiert (Zeilen-/Feldebene, siehe unten).
 //   groups         | R + W   | R + W | R only  | wird nur innerhalb von athletes.js verwaltet (kein eigenes Modul).
 //   exercises      | R + W   | R + W | R only  | js/modules/catalog.js: `roles:['trainer','admin']`.
 //   templates      | R + W   | R + W | R only  | js/modules/templates.js: `roles:['trainer','admin']`.
@@ -107,32 +107,37 @@ interface StoreAccess {
 // dürfen (siehe SyncRequester.clubId-Kommentar oben).
 const TEAM_ROLES: readonly Role[] = ['trainer', 'admin', 'athlete'];
 
-// Drei wiederkehrende Zugriffsprofile, um die Tabelle unten knapp zu halten:
-//   - geteilt: alle drei Rollen lesen UND schreiben (results, plans).
-//   - coachVerwaltet: alle drei Rollen lesen, nur trainer/admin schreiben
+// Drei wiederkehrende Zugriffsprofile, um die Tabelle unten knapp zu halten
+// (Code-Review, Befund W2: hießen zuvor "geteilt"/"coachVerwaltet"/
+// "adminVerwaltet" — deutsche Bezeichner inmitten einer sonst
+// durchgängig englischen Codebasis, direkt neben STORE_PERMISSIONS/
+// canRead/canWrite. Konvention wie im übrigen Projekt: Bezeichner
+// englisch, Kommentare/Erklärungen weiterhin deutsch):
+//   - shared: alle drei Rollen lesen UND schreiben (results, plans).
+//   - coachManaged: alle drei Rollen lesen, nur trainer/admin schreiben
 //     (sieben der übrigen acht Stores).
-//   - adminVerwaltet: alle drei Rollen lesen, NUR admin schreibt (athletes
+//   - adminManaged: alle drei Rollen lesen, NUR admin schreibt (athletes
 //     — siehe Begründung in der Tabelle oben: js/modules/athletes.js
 //     versteckt Anlegen/Ändern des Athleten-Stamms per isAdminOrSuperAdmin()
 //     ausdrücklich auch vor "trainer", nicht nur vor "athlete"; ein
-//     gemeinsames coachVerwaltet-Profil würde diese UI-Restriktion serverseitig
+//     gemeinsames coachManaged-Profil würde diese UI-Restriktion serverseitig
 //     unterlaufen — jede Person könnte per direktem Push an /api/sync
 //     trotzdem als "trainer" schreiben).
-const geteilt: StoreAccess = { read: new Set(TEAM_ROLES), write: new Set(TEAM_ROLES) };
-const coachVerwaltet: StoreAccess = { read: new Set(TEAM_ROLES), write: new Set(['trainer', 'admin']) };
-const adminVerwaltet: StoreAccess = { read: new Set(TEAM_ROLES), write: new Set(['admin']) };
+const shared: StoreAccess = { read: new Set(TEAM_ROLES), write: new Set(TEAM_ROLES) };
+const coachManaged: StoreAccess = { read: new Set(TEAM_ROLES), write: new Set(['trainer', 'admin']) };
+const adminManaged: StoreAccess = { read: new Set(TEAM_ROLES), write: new Set(['admin']) };
 
 const STORE_PERMISSIONS: Record<EntityStoreName, StoreAccess> = {
-  results: geteilt,
-  plans: geteilt,
-  athletes: adminVerwaltet,
-  groups: coachVerwaltet,
-  exercises: coachVerwaltet,
-  templates: coachVerwaltet,
-  competitions: coachVerwaltet,
-  entries: coachVerwaltet,
-  actionItems: coachVerwaltet,
-  sessions: coachVerwaltet,
+  results: shared,
+  plans: shared,
+  athletes: adminManaged,
+  groups: coachManaged,
+  exercises: coachManaged,
+  templates: coachManaged,
+  competitions: coachManaged,
+  entries: coachManaged,
+  actionItems: coachManaged,
+  sessions: coachManaged,
 };
 
 // Nimmt bewusst den weiteren Wire-Typ `SyncStore` entgegen (nicht nur

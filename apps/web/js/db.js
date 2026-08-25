@@ -1,6 +1,7 @@
-// db.js — thin promise-based wrapper around IndexedDB.
-// One database, one object store per entity. Generic CRUD so new
-// modules can add a store name and get get/getAll/put/remove for free.
+// db.js — schlanker, Promise-basierter Wrapper um IndexedDB.
+// Eine Datenbank, ein Object Store je Entität. Generisches CRUD, damit
+// neue Module nur einen Store-Namen ergänzen müssen und get/getAll/
+// put/remove kostenlos dazubekommen.
 import { getCurrentUser } from './state.js';
 import { IS_DEMO } from './demoMode.js';
 
@@ -81,9 +82,10 @@ export async function get(store, id){
   });
 }
 
-// Stores that represent internal bookkeeping rather than user content —
-// changes to these are never queued for sync (that would be circular for
-// syncQueue itself, and 'meta' is purely local app state).
+// Stores, die interne Buchführung statt Nutzerinhalte darstellen —
+// Änderungen daran werden nie für die Synchronisierung eingereiht (das
+// wäre für syncQueue selbst zirkulär, und 'meta' ist rein lokaler
+// App-Zustand).
 const SYNC_EXCLUDED = new Set(['syncQueue', 'meta']);
 
 // Mandantenfähige fachliche Stores — deckungsgleich mit ENTITY_STORE_NAMES
@@ -159,8 +161,8 @@ export async function putWithoutSync(store, obj){
 }
 
 export async function bulkPut(store, items){
-  // Used for seeding/import — deliberately does NOT enqueue sync events,
-  // since seeded/imported data isn't an "offline change" made by a user.
+  // Für Seeding/Import genutzt — reiht bewusst KEINE Sync-Events ein, da
+  // geseedete/importierte Daten keine "Offline-Änderung" einer Person sind.
   const os = await tx(store, 'readwrite');
   return new Promise((resolve, reject) => {
     items.forEach(it => {
@@ -237,9 +239,10 @@ export async function wipeAll(){
 }
 
 // ============================================================
-// Sync queue (Event Queue) — every create/update/delete made by a
-// user against a "syncable" store is appended here. A separate
-// sync engine (js/sync.js) later drains this queue toward a server.
+// Sync-Warteschlange (Event Queue) — jedes Anlegen/Bearbeiten/Löschen
+// gegen einen "synchronisierbaren" Store wird hier angehängt. Eine
+// separate Sync-Engine (syncClient.js) leert diese Warteschlange
+// anschließend zu einem Server hin.
 // ============================================================
 
 export async function enqueueSyncEvent(store, entityId, action, payload){
