@@ -19,25 +19,23 @@ const META_CURSOR_KEY = 'syncCursor';
 // scheitern.
 const PUSH_BATCH_SIZE = 200;
 
-// Code-Review, Befund C2: ein Event, das serverseitig DAUERHAFT scheitert
-// (z. B. unbekannter Store, verletzter Fremdschlüssel, gelöschte
-// Referenz), bekam bislang status: 'error' und wurde dadurch bei JEDEM
-// weiteren Sync-Zyklus (alle 60s, siehe app.js) erneut mitgeschickt — für
-// immer, ohne dass `attempts` je ausgewertet wurde. Ab dieser Anzahl
-// Versuche gilt ein Event stattdessen als 'failed' (siehe push() unten)
-// und wird aus dem automatischen Push-Filter genommen — die
+// Ein Event, das serverseitig DAUERHAFT scheitert (z. B. unbekannter
+// Store, verletzter Fremdschlüssel, gelöschte Referenz), würde mit
+// status: 'error' bei JEDEM weiteren Sync-Zyklus (alle 60s, siehe app.js)
+// erneut mitgeschickt — für immer, ohne diese Obergrenze. Ab dieser
+// Anzahl Versuche gilt ein Event stattdessen als 'failed' (siehe push()
+// unten) und wird aus dem automatischen Push-Filter genommen — die
 // Sync-Warteschlangen-Ansicht (modules/syncQueue.js) zeigt es weiterhin an
 // und bietet über den vorhandenen "Erneut versuchen"-Button einen
 // manuellen Reset auf 'pending'.
 const MAX_SYNC_ATTEMPTS = 5;
 
-// Code-Review, Befund C5: pull() verlässt sich darauf, dass der Server
-// niemals hasMore: true zusammen mit nextCursor: null liefert (heute
-// serverseitig ausgeschlossen, siehe sync.service.ts) — bricht diese
-// Invariante künftig durch einen Server-Fehler, würde die Schleife sonst
-// mit cursor: null endlos dieselbe (erste) Seite erneut abfragen. Eine
-// harte Iterationsobergrenze dient als zweites, vom Server unabhängiges
-// Sicherheitsnetz.
+// pull() verlässt sich darauf, dass der Server niemals hasMore: true
+// zusammen mit nextCursor: null liefert (serverseitig ausgeschlossen,
+// siehe sync.service.ts) — bräche diese Invariante durch einen
+// Server-Fehler, würde die Schleife sonst mit cursor: null endlos
+// dieselbe (erste) Seite erneut abfragen. Eine harte Iterationsobergrenze
+// dient als zweites, vom Server unabhängiges Sicherheitsnetz.
 const MAX_PULL_ITERATIONS = 1000;
 
 async function getCursor() {
@@ -54,7 +52,7 @@ async function setCursor(cursor) {
 // erzeugen, der Server hat ihn ja bereits unter dieser id angelegt (siehe
 // putWithoutSync()) —, entfernt danach die alte Kopie lokal (ebenfalls
 // ohne Sync-Event, siehe removeWithoutSync()). Siehe push() unten für den
-// Hintergrund (Code-Review, Befund 12).
+// Hintergrund.
 //
 // Bekannte Grenze: ein weiteres, zum Zeitpunkt DIESES Push-Zyklus bereits
 // in der Warteschlange stehendes Event für dieselbe alte entityId (z. B.
@@ -71,19 +69,17 @@ async function renameLocalRecord(store, oldId, newId) {
 }
 
 // Sendet alle ausstehenden/fehlerhaften Events aus der lokalen
-// Sync-Warteschlange. Aktualisiert jedes Event anhand der Server-Antwort
-// (siehe apps/api SyncEventResult: "applied" | "conflict" | "error").
-//
-// Code-Review, Befund C1: sendet die Warteschlange nicht mehr als EINEN
-// Request, sondern in Blöcken von PUSH_BATCH_SIZE. Eine Offline-Phase mit
-// mehr als 500 Änderungen (server-seitiges Limit, siehe oben) ließ push()
-// zuvor mit einer 400 fehlschlagen — dauerhaft, denn die Warteschlange
-// konnte sich nie unter 500 abbauen; ein Logout in diesem Zustand verlor
-// per wipeAll() (siehe state.js: logout()) sämtliche ausstehenden
-// Änderungen. Schlägt ein Block fehl (Netzwerk-/Serverfehler), wirft
-// diese Funktion weiter — bereits verarbeitete Blöcke bleiben als
-// 'synced'/'error' markiert, der nächste Sync-Zyklus setzt bei den
-// verbleibenden Events fort.
+// Sync-Warteschlange, in Blöcken von PUSH_BATCH_SIZE statt als einen
+// einzigen Request — eine Offline-Phase mit mehr als 500 Änderungen
+// (server-seitiges Limit, siehe oben) würde sonst mit einer 400
+// fehlschlagen, dauerhaft, denn die Warteschlange könnte sich nie unter
+// 500 abbauen; ein Logout in diesem Zustand verlöre per wipeAll() (siehe
+// state.js: logout()) sämtliche ausstehenden Änderungen. Aktualisiert
+// jedes Event anhand der Server-Antwort (siehe apps/api SyncEventResult:
+// "applied" | "conflict" | "error"). Schlägt ein Block fehl
+// (Netzwerk-/Serverfehler), wirft diese Funktion weiter — bereits
+// verarbeitete Blöcke bleiben als 'synced'/'error' markiert, der nächste
+// Sync-Zyklus setzt bei den verbleibenden Events fort.
 export async function push() {
   const queue = await getSyncQueue();
   const toSend = queue.filter(e => e.status === 'pending' || e.status === 'error');
@@ -128,10 +124,10 @@ export async function push() {
       } else {
         errors++;
         const attempts = (sourceEvent?.attempts || 0) + 1;
-        // Code-Review, Befund C2: nach MAX_SYNC_ATTEMPTS Fehlschlägen gilt
-        // das Event als 'failed' statt weiterhin 'error' — 'failed' fällt
-        // aus dem obigen toSend-Filter heraus und wird dadurch nicht mehr
-        // automatisch wiederholt (siehe Konstanten-Kommentar oben).
+        // Nach MAX_SYNC_ATTEMPTS Fehlschlägen gilt das Event als 'failed'
+        // statt weiterhin 'error' — 'failed' fällt aus dem obigen
+        // toSend-Filter heraus und wird dadurch nicht mehr automatisch
+        // wiederholt (siehe Konstanten-Kommentar oben).
         const status = attempts >= MAX_SYNC_ATTEMPTS ? 'failed' : 'error';
         await updateSyncEvent(result.eventId, { status, attempts, lastError: result.message || 'Unbekannter Fehler.' });
       }
@@ -181,9 +177,9 @@ export async function pull() {
     }
     cursor = response.nextCursor;
     hasMore = response.hasMore;
-    // Sicherheitsnetz (Befund C5): hasMore: true ohne nextCursor dürfte
-    // laut Server-Invariante nie vorkommen — Abbruch statt Endlosschleife
-    // mit cursor: null.
+    // Sicherheitsnetz: hasMore: true ohne nextCursor dürfte laut
+    // Server-Invariante nie vorkommen — Abbruch statt Endlosschleife mit
+    // cursor: null.
     if (!cursor) break;
     await setCursor(cursor);
   }

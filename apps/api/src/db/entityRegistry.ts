@@ -12,6 +12,7 @@
 // das einen Prisma-Client-Stub statt einer echten Instanz verwendet).
 import type { PrismaClient } from '@prisma/client';
 import type { EntityStoreName } from '@lane1/shared-types';
+import { ENTITY_STORE_NAMES } from '@lane1/shared-types';
 
 // Minimale Form, die jedes verwendete Prisma-Delegate erfüllen muss —
 // reicht für generische CRUD-Operationen in Phase 3, ohne den vollen
@@ -53,10 +54,11 @@ export function getEntityDelegate(prisma: PrismaClient, store: EntityStoreName):
   }
 }
 
-// Alle unterstützten fachlichen Store-Namen — von Tests genutzt, um zu
-// prüfen, dass getEntityDelegate() für jeden davon tatsächlich etwas
-// liefert (siehe entityRegistry.test.ts).
-export const ENTITY_STORE_NAMES: EntityStoreName[] = [
-  'athletes', 'groups', 'competitions', 'entries', 'results',
-  'exercises', 'templates', 'plans', 'sessions', 'actionItems',
-];
+// Wieder-Export von @lane1/shared-types statt einer eigenen Kopie dieser
+// Liste: entityRegistry.test.ts importiert ENTITY_STORE_NAMES von hier,
+// um zu prüfen, dass getEntityDelegate() für jeden Store tatsächlich
+// etwas liefert. Die kanonische Liste lebt in
+// packages/shared-types/src/entities.ts (aus den Schlüsseln von
+// ENTITY_SCHEMAS abgeleitet) — hier nur erneut sichtbar gemacht, damit
+// bestehende Importe unverändert bleiben.
+export { ENTITY_STORE_NAMES };

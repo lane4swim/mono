@@ -8,6 +8,7 @@
 // bereits für genau diesen Zweck vorbereitet wurde.
 import type { PrismaClient } from '@prisma/client';
 import type { EntityStoreName } from '@lane1/shared-types';
+import { ENTITY_STORE_NAMES } from '@lane1/shared-types';
 import { getEntityDelegate } from '../../db/entityRegistry.js';
 
 export interface SyncRecord {
@@ -39,17 +40,17 @@ export interface TombstoneRecord {
   deletedAt: Date;
 }
 
-// Sicherheitskorrektur (Code-Review, Befund C3): die im SyncGateway-
-// Interface einzeln aufgeführten create()/update()/softDelete() sowie
-// isEventProcessed()/markEventProcessed() blieben als PRIMITIVE bestehen
-// (weiterhin direkt getestet, siehe test-integration/syncGateway.
-// integration.test.ts) — sync.service.ts' push() ruft für den
-// eigentlichen Schreibvorgang nun aber applyAndMarkProcessed() unten auf,
-// das die Datenänderung UND den Idempotenz-Vermerk atomar in EINER
-// Transaktion zusammenfasst. Als diskriminierte Union statt dreier
-// getrennter Methoden, damit die Prisma-Implementierung sie in EINER
-// gemeinsamen $transaction()-Closure anhand von `operation.kind`
-// unterscheiden kann, ohne drei separate Transaktions-Wrapper zu brauchen.
+// push() (sync.service.ts) ruft für den eigentlichen Schreibvorgang
+// applyAndMarkProcessed() unten auf, das die Datenänderung UND den
+// Idempotenz-Vermerk atomar in EINER Transaktion zusammenfasst. Als
+// diskriminierte Union statt dreier getrennter Methoden, damit die
+// Prisma-Implementierung sie in EINER gemeinsamen $transaction()-Closure
+// anhand von `operation.kind` unterscheiden kann, ohne drei separate
+// Transaktions-Wrapper zu brauchen. Die einzeln aufgeführten create()/
+// update()/softDelete() sowie isEventProcessed()/markEventProcessed()
+// bleiben als eigenständige Methoden im Interface bestehen — genutzt von
+// test-integration/syncGateway.integration.test.ts, das die zugrunde
+// liegenden Primitiven unabhängig von applyAndMarkProcessed() prüft.
 export type SyncWriteOperation =
   | { kind: 'create'; store: EntityStoreName; payload: Record<string, unknown> }
   | { kind: 'update'; store: EntityStoreName; id: string; clubId: string; payload: Record<string, unknown> }
@@ -72,8 +73,8 @@ export interface SyncGateway {
   // prüfen wollen) weiterhin ungescoped nachsehen können. sync.service.ts
   // MUSS jedoch beim Verarbeiten eines eingehenden Events IMMER die
   // requester.clubId mitgeben — sonst könnte ein Datensatz eines fremden
-  // Vereins gefunden und (siehe Sicherheitsreview) über den Umweg des
-  // Konfliktergebnisses ausgelesen werden.
+  // Vereins gefunden und über den Umweg des Konfliktergebnisses ausgelesen
+  // werden.
   findById(store: EntityStoreName, id: string, clubId?: string): Promise<SyncRecord | null>;
   create(store: EntityStoreName, payload: Record<string, unknown>): Promise<void>;
   // clubId ist PFLICHT (nicht optional wie bei findById): update() darf
@@ -82,20 +83,20 @@ export interface SyncGateway {
   // immer sowohl id als auch clubId enthalten (analog zu softDelete()),
   // sonst könnte ein manipuliertes Event mit einer fremden entityId, aber
   // der eigenen clubId im Payload, den Datensatz eines fremden Vereins
-  // überschreiben (siehe Sicherheitsreview, Punkt 1).
+  // überschreiben.
   update(store: EntityStoreName, id: string, clubId: string, payload: Record<string, unknown>): Promise<void>;
   softDelete(store: EntityStoreName, id: string, clubId: string): Promise<void>;
   // Änderungen eines Vereins seit einem Zeitpunkt, über alle Stores hinweg,
   // absteigend nach updatedAt limitiert (Pagination via `limit`).
   listChangedSince(clubId: string, since: Date | null, limit: number): Promise<ChangedRecord[]>;
-  // clubId-gescoped (Aufräumarbeit, Code-Review): eine Event-id ist zwar
-  // client-generiert und praktisch garantiert global eindeutig (UUID), ein
-  // Abgleich ohne clubId erlaubte aber ein fremdes Event-ID-Ratespiel, das
-  // konsequenzlos mit "applied" beantwortet wurde (siehe push()'
-  // Idempotenz-Kommentar), statt korrekt mit dem eigentlichen Ergebnis
-  // (i. d. R. "nicht gefunden"/regulärer Ablauf) — harmlos (keine
-  // Wirkung, kein Zugriff auf fremde Daten), aber inkonsistent mit dem
-  // sonst überall konsequenten Vereins-Scoping dieses Gateways.
+  // clubId-gescoped: eine Event-id ist zwar client-generiert und praktisch
+  // garantiert global eindeutig (UUID), ein Abgleich ohne clubId würde
+  // aber ein fremdes Event-ID-Ratespiel konsequenzlos mit "applied"
+  // beantworten (siehe push()' Idempotenz-Kommentar) statt mit dem
+  // eigentlichen Ergebnis (i. d. R. "nicht gefunden"/regulärer Ablauf) —
+  // harmlos (keine Wirkung, kein Zugriff auf fremde Daten), aber
+  // inkonsistent mit dem sonst überall konsequenten Vereins-Scoping dieses
+  // Gateways.
   isEventProcessed(eventId: string, clubId: string): Promise<boolean>;
   markEventProcessed(eventId: string, clubId: string, store: EntityStoreName, action: string): Promise<void>;
   // Siehe ausführlicher Kommentar bei SyncWriteOperation/ApplyOutcome oben.
@@ -114,10 +115,14 @@ export interface SyncGateway {
   findClubIdForUser(userId: string): Promise<string | null>;
 }
 
-const ALL_STORES: EntityStoreName[] = [
-  'athletes', 'groups', 'competitions', 'entries', 'results',
-  'exercises', 'templates', 'plans', 'sessions', 'actionItems',
-];
+// Genau diese Liste entscheidet in listChangedSince() unten, welche
+// Stores beim Pull überhaupt betrachtet werden — ein hier fehlender Store
+// würde ohne jede Fehlermeldung stillschweigend nie ausgeliefert.
+// ENTITY_STORE_NAMES (siehe packages/shared-types/src/entities.ts) ist
+// aus ENTITY_SCHEMAS abgeleitet, statt hier als eigene Kopie erneut
+// aufgezählt zu werden — dieselbe Liste, die bereits STORE_PERMISSIONS in
+// sync.service.ts über den Record<EntityStoreName, …>-Typ absichert.
+const ALL_STORES: EntityStoreName[] = ENTITY_STORE_NAMES;
 
 export class PrismaSyncGateway implements SyncGateway {
   constructor(private readonly prisma: PrismaClient) {}

@@ -13,6 +13,7 @@ vi.mock('../js/demoMode.js', () => ({ IS_DEMO: false }));
 
 import { getCurrentUser } from '../js/state.js';
 import * as db from '../js/db.js';
+import { ENTITY_STORE_NAMES } from '../../../packages/shared-types/src/entities.js';
 
 beforeEach(async () => {
   vi.mocked(getCurrentUser).mockReturnValue(null);
@@ -260,5 +261,20 @@ describe('bulkPut()/exportAll()/importAll()/wipeAll()', () => {
     for (const store of db.STORES) {
       expect(await db.getAll(store)).toEqual([]);
     }
+  });
+});
+
+// apps/web ist bewusst build-frei (Vanilla-ESM, kein Bundler) und kann
+// packages/shared-types deshalb zur Laufzeit nicht importieren —
+// CLUB_SCOPED_STORES in db.js ist dadurch eine von Hand gepflegte Kopie
+// der zehn fachlichen Stores, unabhängig von der kanonischen Liste
+// (ENTITY_STORE_NAMES, aus ENTITY_SCHEMAS abgeleitet), die die generische
+// Sync-API serverseitig verwendet. Ein TEST darf shared-types aber laden
+// (nur die ausgelieferte App nicht) — dieser Test schließt die Lücke dort,
+// wo sie sonst unbemerkt bliebe: ein Store, der hier fehlt oder zu viel
+// hat, weicht sofort sichtbar von der Server-Wahrheit ab.
+describe('CLUB_SCOPED_STORES', () => {
+  it('deckt sich exakt mit den fachlichen Stores der generischen Sync-API (ENTITY_STORE_NAMES)', () => {
+    expect([...db.CLUB_SCOPED_STORES].sort()).toEqual([...ENTITY_STORE_NAMES].sort());
   });
 });

@@ -24,9 +24,8 @@ import type { SyncGateway, ChangedRecord } from './sync.gateway.js';
 
 export interface SyncRequester {
   clubId: string; // Superadmin (clubId: null) darf nicht synchronisieren — siehe sync.route.ts (requireRole).
-  // Für die Rollen-Scopierung unten (Sicherheitsreview, "Fehlende
-  // Rollen-Scopierung in der Sync-API") — clubId allein reicht nicht:
-  // ein Athlet:innen-Konto darf zwar denselben Verein sehen wie
+  // Für die Rollen-Scopierung unten — clubId allein reicht nicht: ein
+  // Athlet:innen-Konto darf zwar denselben Verein sehen wie
   // Trainer:innen/Admins, aber nicht dieselbe Datentiefe (siehe Kommentar
   // bei STORE_PERMISSIONS unten).
   role: Role;
@@ -45,27 +44,25 @@ const PULL_TIE_SAFETY_LIMIT = 5000;
 
 // ---- Rollen-/Store-Berechtigungsmatrix ------------------------------------
 //
-// Hintergrund (siehe Sicherheitsreview): die generische Sync-API kannte
-// ursprünglich NUR clubId-Scoping — jede authentifizierte Rolle bekam
-// denselben, vollständigen Vereinsdatensatz, lesend UND schreibend. Diese
-// Tabelle ist die EINE Stelle, die für jeden Store und jede Rolle festlegt,
-// ob Lesen (Pull) bzw. Schreiben (Push: create/update/delete) erlaubt ist —
-// push()/pull() unten fragen ausschließlich diese Tabelle ab (canRead()/
-// canWrite()), statt Rollen-Sonderfälle im Ablauf selbst zu verdrahten.
+// Reines clubId-Scoping würde jeder authentifizierten Rolle denselben,
+// vollständigen Vereinsdatensatz geben, lesend UND schreibend — diese
+// Tabelle ist die EINE Stelle, die für jeden Store und jede Rolle
+// zusätzlich festlegt, ob Lesen (Pull) bzw. Schreiben (Push:
+// create/update/delete) erlaubt ist. push()/pull() unten fragen
+// ausschließlich diese Tabelle ab (canRead()/canWrite()), statt
+// Rollen-Sonderfälle im Ablauf selbst zu verdrahten.
 //
-// BEWUSST als Whitelist (statt der früheren Blacklist
-// "ATHLETE_WRITE_FORBIDDEN_STORES", die nur "athlete" kannte): eine Rolle,
-// die für einen Store nicht explizit gelistet ist, hat dort KEINEN Zugriff.
-// Das ist die entscheidende Eigenschaft für Erweiterbarkeit — kommt künftig
-// eine weitere Rolle hinzu (z. B. "co-trainer" oder "parent" in
-// packages/shared-types/src/user.ts: RoleSchema), hat sie automatisch
-// NIRGENDS Zugriff, bis sie hier für die passenden Stores explizit
-// eingetragen wird. Ein Vergessen fällt so als "zu wenig Rechte" auf (leicht
-// zu beheben), nicht als übersehene Sicherheitslücke (siehe genau der Fall,
-// der zur bisherigen Erweiterung von ATHLETE_WRITE_FORBIDDEN_STORES führte).
-// `Record<EntityStoreName, StoreAccess>` erzwingt zusätzlich zur Compile-
-// Zeit, dass JEDER Store einen Eintrag hat — ein künftiger elfter Store
-// ohne Zeile hier lässt sich nicht kompilieren.
+// BEWUSST als Whitelist, nicht als Blacklist einzelner verbotener
+// Kombinationen: eine Rolle, die für einen Store nicht explizit gelistet
+// ist, hat dort KEINEN Zugriff. Das ist die entscheidende Eigenschaft für
+// Erweiterbarkeit — kommt künftig eine weitere Rolle hinzu (z. B.
+// "co-trainer" oder "parent" in packages/shared-types/src/user.ts:
+// RoleSchema), hat sie automatisch NIRGENDS Zugriff, bis sie hier für die
+// passenden Stores explizit eingetragen wird. Ein Vergessen fällt so als
+// "zu wenig Rechte" auf (leicht zu beheben), nicht als übersehene
+// Sicherheitslücke. `Record<EntityStoreName, StoreAccess>` erzwingt
+// zusätzlich zur Compile-Zeit, dass JEDER Store einen Eintrag hat — ein
+// künftiger elfter Store ohne Zeile hier lässt sich nicht kompilieren.
 //
 // Rollen-Übersicht (siehe docs/backend-plan.md / packages/shared-types/src/
 // user.ts): "superadmin" gehört zu keinem Verein und darf laut
@@ -93,9 +90,8 @@ const PULL_TIE_SAFETY_LIMIT = 5000;
 // Diese Tabelle regelt nur die STORE-Ebene (ganzer Store lesbar/schreibbar
 // ja/nein). Die mit * markierten, feineren Einschränkungen (nur eigene
 // Zeile/eigenes Feld statt ganzer Store) bleiben zusätzlich über
-// scopeChangeForAthlete() (Pull) bzw. die ATHLETE_WRITE_FORBIDDEN_STORES-
-// Vorgängerin ersetzenden canWrite()-Prüfung (Push, sperrt den Store hier
-// bereits komplett) abgedeckt — sie sind bewusst nicht Teil dieser
+// scopeChangeForAthlete() (Pull) bzw. canWrite() (Push, sperrt den Store
+// hier bereits komplett) abgedeckt — sie sind bewusst nicht Teil dieser
 // generischen Rollen-Tabelle, da sie vom KONKRETEN Dateninhalt abhängen
 // (eigene athleteId im Payload/Attendance-Eintrag), nicht nur von Rolle+Store.
 interface StoreAccess {
@@ -107,12 +103,9 @@ interface StoreAccess {
 // dürfen (siehe SyncRequester.clubId-Kommentar oben).
 const TEAM_ROLES: readonly Role[] = ['trainer', 'admin', 'athlete'];
 
-// Drei wiederkehrende Zugriffsprofile, um die Tabelle unten knapp zu halten
-// (Code-Review, Befund W2: hießen zuvor "geteilt"/"coachVerwaltet"/
-// "adminVerwaltet" — deutsche Bezeichner inmitten einer sonst
-// durchgängig englischen Codebasis, direkt neben STORE_PERMISSIONS/
-// canRead/canWrite. Konvention wie im übrigen Projekt: Bezeichner
-// englisch, Kommentare/Erklärungen weiterhin deutsch):
+// Drei wiederkehrende Zugriffsprofile, um die Tabelle unten knapp zu
+// halten (Bezeichner englisch, wie im übrigen Projekt üblich —
+// Kommentare/Erklärungen weiterhin deutsch):
 //   - shared: alle drei Rollen lesen UND schreiben (results, plans).
 //   - coachManaged: alle drei Rollen lesen, nur trainer/admin schreiben
 //     (sieben der übrigen acht Stores).
@@ -162,8 +155,8 @@ function canWrite(store: SyncStore, role: Role): boolean {
 
 // ---- Fremdschlüssel-Eigentümerprüfung ------------------------------------
 //
-// Sicherheitsreview (Nachtrag): das Vereins-Scoping oben deckt nur die
-// clubId des Top-Level-Datensatzes selbst ab. Mehrere Stores referenzieren
+// Das Vereins-Scoping oben deckt nur die clubId des Top-Level-Datensatzes
+// selbst ab. Mehrere Stores referenzieren
 // aber ZUSÄTZLICH andere fachliche Entitäten über eine ID (athleteId,
 // groupId, competitionId, planId, assignedTrainerId) — die Zod-Schemas in
 // packages/shared-types/src/entities.ts prüfen dafür nur das UUID-Format,
@@ -347,7 +340,6 @@ function scopeChangeForAthlete(change: SyncChange, athleteId: string | null): Sy
   return change;
 }
 
-// Sicherheitskorrektur (Code-Review, kritischer Befund 3 — Pagination):
 // listChangedSince() liefert Zeilen aufsteigend nach `updatedAt` sortiert,
 // über alle zehn fachlichen Stores UND Tombstones hinweg zusammengeführt.
 // Teilen sich zwei Zeilen exakt denselben Zeitstempel (z. B. weil mehrere
@@ -380,14 +372,15 @@ export function splitAtSafeTimestampBoundary(rows: ChangedRecord[], pageSize: nu
 
 export function createSyncService(deps: { gateway: SyncGateway }) {
   return {
-    // `events: unknown[]` statt `SyncEvent[]` (Code-Review, Befund R3): die
-    // Route (sync.route.ts) lockert die Batch-weite Prüfung inzwischen auf
-    // die reine Array-Länge (siehe SyncPushRequestSchema) — die
+    // `events: unknown[]` statt `SyncEvent[]`: die Route (sync.route.ts)
+    // prüft nur die reine Array-Länge (siehe SyncPushRequestSchema) — die
     // STRUKTURELLE Prüfung jedes einzelnen Events übernimmt ausschließlich
-    // dieser Codepfad hier (SyncEventSchema.safeParse(rawEvent) unten), der
-    // dadurch erstmals tatsächlich erreichbar ist: ein einzelnes
-    // fehlerhaftes Event scheitert jetzt nur noch selbst (als "error"-
-    // Ergebnis), statt den gesamten Batch abzulehnen.
+    // dieser Codepfad hier (SyncEventSchema.safeParse(rawEvent) unten).
+    // Ein einzelnes fehlerhaftes Event scheitert dadurch nur selbst (als
+    // "error"-Ergebnis), statt den gesamten Batch abzulehnen — bei einer
+    // Prüfung bereits auf Route-Ebene gegen SyncEvent[] wäre dieser
+    // Codepfad für ein strukturell ungültiges Event unerreichbar, da die
+    // Route den Request dann schon vorher mit 400 abgelehnt hätte.
     async push(events: unknown[], requester: SyncRequester): Promise<SyncEventResult[]> {
       const results: SyncEventResult[] = [];
 
@@ -439,9 +432,9 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
         // erratenes Event-ID bekommt dadurch die korrekte, ungescopte
         // Antwort statt eines wirkungslosen "applied".
         //
-        // Bewusst nur ein FAST-PATH, keine alleinige Korrektheitsgarantie
-        // mehr (Code-Review, Befund C3): dieser Check ist ein reines
-        // Check-then-Act ohne Sperre — zwei praktisch gleichzeitige Pushes
+        // Bewusst nur ein FAST-PATH, keine alleinige Korrektheitsgarantie:
+        // dieser Check ist ein reines Check-then-Act ohne Sperre — zwei
+        // praktisch gleichzeitige Pushes
         // desselben Events könnten diese Prüfung beide passieren, bevor
         // eine von beiden den Ledger-Eintrag geschrieben hat. Er spart in
         // diesem (Normal-)Fall lediglich die nachfolgende Schema-/
@@ -466,8 +459,7 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
         // eine echte Prisma-Spalte) zwar ablehnen — das nützt aber nichts,
         // wenn hinterher trotzdem der ungeprüfte Rohwert an Prisma
         // weitergereicht wird. Erst die Verwendung von validatedPayload
-        // schließt das Mass-Assignment-Risiko tatsächlich (siehe
-        // Sicherheitsreview, Punkt 8/Nachtrag).
+        // schließt das Mass-Assignment-Risiko tatsächlich.
         let validatedPayload: Record<string, unknown> | null = null;
         if (event.action !== 'delete') {
           const entitySchema = ENTITY_SCHEMAS[store];
@@ -476,9 +468,9 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
             results.push({ eventId: event.id, status: 'error', message: `Payload entspricht nicht dem Schema für "${store}".` });
             continue;
           }
-          // Sicherheitskorrektur (Code-Review): "createdAt"/"updatedAt" sind
-          // im Entity-Schema Pflichtfelder (siehe packages/shared-types/src/
-          // entities.ts) — der CLIENT setzt sie beim lokalen Anlegen/Ändern
+          // "createdAt"/"updatedAt" sind im Entity-Schema Pflichtfelder
+          // (siehe packages/shared-types/src/entities.ts) — der CLIENT
+          // setzt sie beim lokalen Anlegen/Ändern
           // (apps/web/js/db.js: put()) und schickt sie mit. Würden sie
           // unverändert an create()/update() weitergereicht, bestimmte die
           // lokale Client-Uhr (nicht der Server) den Zeitpunkt, der
@@ -523,9 +515,8 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
         // fremden Vereins gilt dadurch für den gesamten weiteren Ablauf
         // (Konfliktentscheidung, serverVersion im Response, update()) als
         // nicht existent — verhindert sowohl einen Infoleak über das
-        // "conflict"-Ergebnis (Punkt 2 des Sicherheitsreviews) als auch,
-        // dass unten fälschlich der update()-Zweig statt insert-as-new/
-        // create() gewählt wird.
+        // "conflict"-Ergebnis als auch, dass unten fälschlich der
+        // update()-Zweig statt insert-as-new/create() gewählt wird.
         const existing = await deps.gateway.findById(store, event.entityId, requester.clubId);
 
         const decision = resolveConflict(
@@ -550,12 +541,11 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
 
         try {
           if (event.action === 'delete') {
-            // Sicherheitskorrektur (Code-Review, Befund C3): Datenänderung
-            // UND Ledger-Eintrag werden jetzt ATOMAR in einer Transaktion
-            // geschrieben (siehe applyAndMarkProcessed()) statt in zwei
-            // getrennten Schritten — brach der Prozess vormals zwischen
-            // beiden ab (Deploy, OOM, DB-Verbindungsabbruch), wurde ein
-            // erneut gesendetes Event beim Retry ein zweites Mal
+            // Datenänderung UND Ledger-Eintrag werden ATOMAR in einer
+            // Transaktion geschrieben (siehe applyAndMarkProcessed()),
+            // nicht in zwei getrennten Schritten: bräche der Prozess
+            // zwischen beiden ab (Deploy, OOM, DB-Verbindungsabbruch),
+            // würde ein erneut gesendetes Event beim Retry ein zweites Mal
             // angewendet. Der Rückgabewert ('applied' vs.
             // 'already-processed') ändert die Antwort für delete/update/
             // reguläres create NICHT (siehe unten) — nur der
@@ -674,16 +664,15 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
           .filter((change): change is SyncChange => change !== null);
       }
 
-      // Sicherheitskorrektur (Code-Review, kritischer Befund 1): `nextCursor`
-      // wird jetzt IMMER zurückgegeben, sobald diese Seite Zeilen enthält —
-      // nicht mehr nur, wenn `hasMore` gesetzt ist. Vormals blieb der Cursor
-      // auf der jeweils LETZTEN Seite eines Sync-Zyklus `null`, und der
-      // Client (syncClient.js: pull()) persistiert einen Cursor nur, wenn er
-      // nicht `null` ist — passen alle Änderungen eines Vereins in eine
-      // einzige Seite (der Normalfall bei ≤ PULL_PAGE_SIZE Änderungen seit
-      // dem letzten Sync), wurde dadurch NIE ein Cursor gespeichert: jeder
-      // automatische Hintergrund-Sync (alle 60 s, siehe app.js) zog seither
-      // dauerhaft den kompletten Vereinsbestand erneut. `page` ist nach der
+      // `nextCursor` wird IMMER zurückgegeben, sobald diese Seite Zeilen
+      // enthält — nicht nur, wenn `hasMore` gesetzt ist. Der Client
+      // (syncClient.js: pull()) persistiert einen Cursor nur, wenn er
+      // nicht `null` ist; bliebe er auf der letzten Seite eines
+      // Sync-Zyklus `null`, würde bei ≤ PULL_PAGE_SIZE Änderungen seit dem
+      // letzten Sync (der Normalfall — alle passen in eine einzige Seite)
+      // NIE ein Cursor gespeichert, und jeder automatische
+      // Hintergrund-Sync (alle 60 s, siehe app.js) zöge dauerhaft den
+      // kompletten Vereinsbestand erneut. `page` ist nach der
       // Grenzbehandlung oben (splitAtSafeTimestampBoundary()) niemals leer,
       // solange `rows` selbst nicht leer war — der Cursor zeigt also immer
       // auf die tatsächlich zuletzt ausgelieferte Zeile.
@@ -700,25 +689,25 @@ export type SyncService = ReturnType<typeof createSyncService>;
 // behandelten Prisma-Fehlercodes entspricht (siehe describeSyncError()).
 const GENERIC_SYNC_ERROR_MESSAGE = 'Der Vorgang konnte nicht angewendet werden (interner Fehler).';
 
-// Verbesserung: Prismas Fremdschlüssel-Verletzung (Fehlercode "P2003")
-// tritt konkret dann auf, wenn ein Event auf eine Person verweist, die
-// zwischenzeitlich endgültig gelöscht wurde (siehe
-// jobs/purgeExpiredDeletions.ts) — die referenzierte Zeile existiert dann
-// physisch nicht mehr. Statt der rohen, technischen Postgres-Meldung
-// ("Foreign key constraint failed on the field: ...") bekommt der Client
-// eine verständliche Erklärung. Bewusst als eigenständige, exportierte
-// Funktion (statt Prisma.PrismaClientKnownRequestError zu importieren) —
-// so lässt sie sich direkt testen, ohne einen echten generierten Prisma-
-// Client zu brauchen, und funktioniert unabhängig davon, welche konkrete
+// Prismas Fremdschlüssel-Verletzung (Fehlercode "P2003") tritt konkret
+// dann auf, wenn ein Event auf eine Person verweist, die zwischenzeitlich
+// endgültig gelöscht wurde (siehe jobs/purgeExpiredDeletions.ts) — die
+// referenzierte Zeile existiert dann physisch nicht mehr. Statt der
+// rohen, technischen Postgres-Meldung ("Foreign key constraint failed on
+// the field: ...") bekommt der Client eine verständliche Erklärung.
+// Bewusst als eigenständige, exportierte Funktion (statt
+// Prisma.PrismaClientKnownRequestError zu importieren) — so lässt sie
+// sich direkt testen, ohne einen echten generierten Prisma-Client zu
+// brauchen, und funktioniert unabhängig davon, welche konkrete
 // Fehlerklasse eine Gateway-Implementierung tatsächlich wirft.
 //
-// Sicherheitskorrektur (Code-Review): vormals wurde für jeden Fehler ohne
-// erkannten Code `err.message` UNVERÄNDERT an den Client zurückgegeben.
-// Prismas rohe Fehlertexte (z. B. "Unique constraint failed on the
-// fields: (`tokenHash`)" bei P2002, oder die Meldung zu "P2025" — Record
-// not found, tritt z. B. bei einem clubId-fremden update()/softDelete()
-// auf, siehe sync.gateway.ts) nennen Spalten-/Tabellen-/Constraint-Namen
-// aus dem internen Datenbankschema — ein Informationsleck, das der Rest
+// Jeder Fehler ohne erkannten Code wird nur generisch beantwortet, statt
+// `err.message` unverändert an den Client zurückzugeben: Prismas rohe
+// Fehlertexte (z. B. "Unique constraint failed on the fields:
+// (`tokenHash`)" bei P2002, oder die Meldung zu "P2025" — Record not
+// found, tritt z. B. bei einem clubId-fremden update()/softDelete() auf,
+// siehe sync.gateway.ts) nennen Spalten-/Tabellen-/Constraint-Namen aus
+// dem internen Datenbankschema — ein Informationsleck, das der Rest
 // dieses Moduls bewusst vermeidet (siehe InvalidCredentialsError,
 // FOREIGN_ENTITY_ERROR oben, beide absichtlich generisch formuliert).
 // Jeder nicht explizit behandelte Fehler wird daher stattdessen

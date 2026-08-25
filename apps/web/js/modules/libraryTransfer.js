@@ -11,16 +11,24 @@
 // Import setzt clubId NIE aus der Datei, sondern lässt db.js's put()
 // automatisch die clubId des aktuell eingeloggten Nutzers eintragen (siehe
 // dortige CLUB_SCOPED_STORES-Logik). IDs werden beim Import immer neu
-// vergeben (uid()) statt der exportierten IDs — die `id` einer exportierten
-// Übung dient nur innerhalb der Datei als Referenz, damit Vorlagen-Sätze
-// (sets[].exerciseId) nach dem Import wieder auf die neu angelegte,
-// club-eigene Übung zeigen. Ohne diese Neuvergabe könnten zwei Vereine, die
-// dieselbe Datei importieren, in Konflikt geraten — `id` ist in der
-// Datenbank global eindeutig (Primärschlüssel), nicht je Verein.
+// vergeben (uid() aus db.js) statt der exportierten IDs — die `id` einer
+// exportierten Übung dient nur innerhalb der Datei als Referenz, damit
+// Vorlagen-Sätze (sets[].exerciseId) nach dem Import wieder auf die neu
+// angelegte, club-eigene Übung zeigen. Ohne diese Neuvergabe könnten zwei
+// Vereine, die dieselbe Datei importieren, in Konflikt geraten — `id` ist
+// in der Datenbank global eindeutig (Primärschlüssel), nicht je Verein.
+// `uid()` kommt hier bewusst aus db.js (crypto.randomUUID()), NICHT aus
+// utils.js: exercises.id/templates.id sind fachliche Primärschlüssel, für
+// die ExerciseSchema/TemplateSchema (packages/shared-types/src/entities.ts)
+// `z.string().uuid()` verlangen — ein per Sync-Push importierter Datensatz
+// mit einer Nicht-UUID-id scheitert sonst dauerhaft an der Server-Validierung.
+// Für die EINGEBETTETEN Set-/Block-ids in remapSetEntry() unten gilt das
+// nicht (PlainSetSchema.id/RepeatBlockSchema.id sind nur `z.string()`) —
+// dort kommt weiterhin localId() aus utils.js zum Einsatz.
 // ============================================================
-import { getAll, bulkPut, bulkEnqueueSyncEvents } from '../db.js';
+import { getAll, bulkPut, bulkEnqueueSyncEvents, uid } from '../db.js';
 import { getCurrentUser } from '../state.js';
-import { el, uid, toast, openModal } from '../utils.js';
+import { el, localId, toast, openModal } from '../utils.js';
 import { t } from '../i18n.js';
 
 export const LIBRARY_EXPORT_FORMAT = 'lane1-library-export-v1';
@@ -81,7 +89,7 @@ function remapSetEntry(entry, idMap) {
   if (entry?.kind === 'block') {
     return {
       kind: 'block',
-      id: uid('block'),
+      id: localId('block'),
       label: entry.label || '',
       repeatCount: entry.repeatCount || 1,
       sets: (entry.sets || []).map(s => remapSetEntry(s, idMap)),
@@ -89,7 +97,7 @@ function remapSetEntry(entry, idMap) {
   }
   return {
     kind: 'set',
-    id: uid('set'),
+    id: localId('set'),
     description: entry?.description || '',
     distance: entry?.distance ?? null,
     reps: entry?.reps || 1,

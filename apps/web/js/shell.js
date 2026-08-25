@@ -172,12 +172,9 @@ export async function renderRoute(viewEl, route) {
   let mod = getModule(route.routeId);
   if (!mod || (mod.roles && !mod.roles.includes(role))) mod = defaultModuleFor(role);
   markActive(mod.id);
-  // Code-Review, Befund W11: zuvor per Template-Literal direkt auf
-  // viewEl.innerHTML geschrieben — ein unauffälliger, unbenannter HTML-
-  // Sink neben dem sonst in dieser Datei konsequent verwendeten
-  // el()/clear()-Baukasten (der aktuelle Inhalt, t('common.loading'), ist
-  // zwar unkritisch, aber genau diese Sonderstellung sollte bei jedem
-  // künftigen Audit nicht erneut geprüft werden müssen).
+  // Über el()/clear() statt eines Template-Literals auf viewEl.innerHTML
+  // — konsistent mit dem sonst in dieser Datei konsequent verwendeten
+  // DOM-Baukasten, kein unbenannter HTML-Sink für ein künftiges Audit.
   clear(viewEl);
   viewEl.appendChild(el('div', { class: 'empty-state' }, t('common.loading')));
   try {

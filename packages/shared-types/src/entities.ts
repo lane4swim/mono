@@ -278,3 +278,13 @@ export const ENTITY_SCHEMAS = {
 } satisfies Partial<Record<z.infer<typeof SyncStoreSchema>, z.ZodTypeAny>>;
 
 export type EntityStoreName = keyof typeof ENTITY_SCHEMAS;
+
+// Aus ENTITY_SCHEMAS abgeleitet (statt an jeder Verwendungsstelle erneut
+// als eigenes Array getippt) — die zehn fachlichen Store-Namen existieren
+// dadurch nur an EINER Stelle im Code. Konsumenten (u. a.
+// apps/api/src/db/entityRegistry.ts: ENTITY_STORE_NAMES,
+// apps/api/src/modules/sync/sync.gateway.ts: ALL_STORES) importieren
+// dieses Array, statt es erneut aufzuzählen — ein Store, der hier fehlt
+// oder hinzukommt, wirkt sich automatisch überall aus, ohne dass eine der
+// bislang unabhängig gepflegten Kopien in Vergessenheit geraten kann.
+export const ENTITY_STORE_NAMES = Object.keys(ENTITY_SCHEMAS) as EntityStoreName[];

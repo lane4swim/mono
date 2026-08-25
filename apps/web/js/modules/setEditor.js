@@ -11,7 +11,7 @@
 // Entries without a `kind` (older saved data) are treated as plain sets
 // for backward compatibility — no data migration needed.
 // ============================================================
-import { el, clear, uid, selectInput, badge, toast } from '../utils.js';
+import { el, clear, localId, selectInput, badge, toast } from '../utils.js';
 import { SET_INTENSITIES, EXERCISE_CATEGORIES, EQUIPMENT_ITEMS } from '../refdata.js';
 import { t, trLabel, trOptions } from '../i18n.js';
 import { put } from '../db.js';
@@ -30,18 +30,18 @@ const CATEGORY_DEFAULTS = {
 };
 
 function newBlankSet() {
-  return { kind: 'set', id: uid('set'), description: '', distance: 100, reps: 1, intensity: 'ga1', restSec: 20, comments: [] };
+  return { kind: 'set', id: localId('set'), description: '', distance: 100, reps: 1, intensity: 'ga1', restSec: 20, comments: [] };
 }
 
 function newBlock() {
-  return { kind: 'block', id: uid('block'), label: '', repeatCount: 3, sets: [newBlankSet()] };
+  return { kind: 'block', id: localId('block'), label: '', repeatCount: 3, sets: [newBlankSet()] };
 }
 
 function setFromExercise(exercise) {
   const defaults = CATEGORY_DEFAULTS[exercise.category] || { intensity: 'ga1', restSec: 20 };
   return {
     kind: 'set',
-    id: uid('set'),
+    id: localId('set'),
     description: exercise.name,
     distance: exercise.defaultDistance || 100,
     reps: 1,
@@ -74,9 +74,9 @@ export function totalDistance(items) {
 export function cloneItems(items) {
   return (items || []).map(entry => {
     if (entry.kind === 'block') {
-      return { ...entry, id: uid('block'), sets: (entry.sets || []).map(s => ({ ...s, id: uid('set') })) };
+      return { ...entry, id: localId('block'), sets: (entry.sets || []).map(s => ({ ...s, id: localId('set') })) };
     }
-    return { ...entry, id: uid('set') };
+    return { ...entry, id: localId('set') };
   });
 }
 
@@ -149,11 +149,10 @@ function buildSetRow(s, exercises, onRemove, onEquipmentChange) {
       extra.appendChild(eqEditorHost);
       let editorOpen = false;
 
-      // Als Funktionsausdrücke statt Funktionsdeklarationen (Code-Review,
-      // Befund W3/no-inner-declarations): eine Funktionsdeklaration
-      // innerhalb eines Blocks (hier `if (ex) { … }`) ist historisch
-      // uneinheitlich zwischen JS-Engines spezifiziert — als
-      // Ausdruck zugewiesen ist das Verhalten eindeutig. Gegenseitiger
+      // Als Funktionsausdrücke statt Funktionsdeklarationen: eine
+      // Funktionsdeklaration innerhalb eines Blocks (hier `if (ex) { … }`)
+      // ist historisch uneinheitlich zwischen JS-Engines spezifiziert —
+      // als Ausdruck zugewiesen ist das Verhalten eindeutig. Gegenseitiger
       // Aufruf bleibt unproblematisch: `drawDisplay` ruft `drawEditor` nur
       // aus einem später ausgelösten onclick-Handler auf (nicht bei der
       // Definition), und `drawEditor` wird selbst erst aufgerufen, nachdem

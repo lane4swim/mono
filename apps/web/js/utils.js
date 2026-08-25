@@ -3,7 +3,15 @@
 // ============================================================
 import { t, getLocale } from './i18n.js';
 
-export function uid(prefix = 'id') {
+// Nicht für Primärschlüssel fachlicher Entitäten (athletes.id, results.id, …)
+// gedacht — die Entity-Schemas (packages/shared-types/src/entities.ts)
+// verlangen dafür `z.string().uuid()`; diese Funktion erzeugt bewusst KEIN
+// UUID. Für Primärschlüssel siehe stattdessen db.js: uid()
+// (crypto.randomUUID()). localId() ist für IDs eingebetteter,
+// nicht eigenständig referenzierter Einträge gedacht (Set-/Block-Einträge
+// in einem Trainingsplan, Kommentare) — deren Schemas (PlainSetSchema.id,
+// RepeatBlockSchema.id, CommentSchema.id) verlangen nur `z.string()`.
+export function localId(prefix = 'id') {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
@@ -24,36 +32,33 @@ export function el(tag, attrs = {}, children = []) {
 }
 export const h = el;
 
-// Code-Review, Befund W11: el() erlaubte bislang ein generisches
-// `html`-Attribut (schrieb direkt auf node.innerHTML) — unauffällig
-// zwischen den übrigen, textContent-basierten Attributen versteckt und
-// bei jedem künftigen Audit erneut als potenzieller XSS-Sink zu prüfen,
-// obwohl der einzige tatsächliche Verwendungszweck feste, intern
-// definierte SVG-Icon-Konstanten (ICON_*) sind. icon() macht diesen
-// einen legitimen Fall stattdessen explizit benannt und isoliert — NUR
-// für solche fest im Code stehenden SVG-Strings gedacht, NIEMALS für
-// Nutzereingaben oder Serverdaten.
+// Eigene, explizit benannte Funktion statt eines generischen `html`-
+// Attributs auf el() — der einzige tatsächliche Verwendungszweck sind
+// feste, intern definierte SVG-Icon-Konstanten (ICON_*); ein generisches
+// Attribut wäre unauffällig zwischen den übrigen, textContent-basierten
+// Attributen versteckt und bei jedem künftigen Audit erneut als
+// potenzieller XSS-Sink zu prüfen. NUR für solche fest im Code stehenden
+// SVG-Strings gedacht, NIEMALS für Nutzereingaben oder Serverdaten.
 export function icon(svgMarkup, attrs = {}) {
   const node = el('span', attrs);
   node.innerHTML = svgMarkup;
   return node;
 }
 
-// Code-Review, Befund S8: nur für ELEMENT-INHALTE gedacht (Text zwischen
-// zwei Tags, z. B. `<title>${esc(x)}</title>` in den SVG-Chart-Buildern
-// unten) — nicht für Attributwerte (z. B. `title="${esc(x)}"`). Der Browser
-// escaped beim Serialisieren eines Textknotens zurück zu HTML bewusst nur
-// "&"/"<"/">" — Anführungszeichen haben in Element-Inhalten keine
-// syntaktische Bedeutung, dort also korrekt und ausreichend. Für einen
-// Attributwert reicht das NICHT: ein "'"/'"' im Wert könnte das Attribut
-// aufbrechen — dafür müsste der Wert stattdessen als Attribut über el()
-// (siehe oben) gesetzt werden, das per node.setAttribute() geht und damit
-// automatisch korrekt/vollständig escapt, statt esc() für einen
-// String-zusammengebauten Attributwert zu missbrauchen.
+// Nur für ELEMENT-INHALTE gedacht (Text zwischen zwei Tags, z. B.
+// `<title>${esc(x)}</title>` in den SVG-Chart-Buildern unten) — nicht für
+// Attributwerte (z. B. `title="${esc(x)}"`). Der Browser escaped beim
+// Serialisieren eines Textknotens zurück zu HTML bewusst nur "&"/"<"/">"
+// — Anführungszeichen haben in Element-Inhalten keine syntaktische
+// Bedeutung, dort also korrekt und ausreichend. Für einen Attributwert
+// reicht das NICHT: ein "'"/'"' im Wert könnte das Attribut aufbrechen —
+// dafür müsste der Wert stattdessen als Attribut über el() (siehe oben)
+// gesetzt werden, das per node.setAttribute() geht und damit automatisch
+// korrekt/vollständig escapt, statt esc() für einen String-
+// zusammengebauten Attributwert zu missbrauchen.
 //
-// Nicht exportiert (Code-Review, Befund R5): wird ausschließlich von den
-// beiden SVG-Chart-Buildern in dieser Datei genutzt, nirgendwo sonst im
-// Frontend importiert.
+// Nicht exportiert: wird ausschließlich von den beiden SVG-Chart-Buildern
+// in dieser Datei genutzt, nirgendwo sonst im Frontend importiert.
 function esc(str) {
   const d = document.createElement('div');
   d.textContent = str ?? '';

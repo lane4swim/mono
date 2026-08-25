@@ -16,7 +16,7 @@
 // across very different "where does this array actually live" contexts
 // without needing to know about plans/exercises/db.js itself.
 // ============================================================
-import { el, clear, uid, toast, openModal, fmtDateTime } from '../utils.js';
+import { el, clear, localId, toast, openModal, fmtDateTime } from '../utils.js';
 import { getCurrentUser } from '../state.js';
 import { t } from '../i18n.js';
 
@@ -65,7 +65,7 @@ export function renderCommentThread(hostNode, initialComments, persist) {
     if (!text) { toast(t('comments.validationText'), 'error'); return; }
     const user = getCurrentUser();
     const next = [...comments, {
-      id: uid('comment'),
+      id: localId('comment'),
       authorName: user?.name || user?.email || '—',
       text,
       createdAt: new Date().toISOString(),
