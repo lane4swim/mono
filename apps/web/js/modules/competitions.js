@@ -4,7 +4,7 @@
 import { getAll, put, remove } from '../db.js';
 import {
   el, clear, fullName, fmtDateLong, todayISO, toIsoDateTime, field, textInput, selectInput, dateInput,
-  openModal, confirmAction, toast, badge, emptyState, laneWave, secToTime, timeToSec,
+  openModal, confirmAction, toast, badge, emptyState, laneWave, secToTime, timeToSec, formActions,
 } from '../utils.js';
 import { EVENTS, COURSES } from '../refdata.js';
 import { navigate } from '../router.js';
@@ -596,10 +596,7 @@ function openCompModal(comp, onSaved) {
   form.appendChild(field(t('competitions.formCourse'), fCourse));
   form.appendChild(field(t('competitions.formLocation'), fLoc, { span2: true }));
   form.appendChild(field(t('competitions.formNotes'), fNotes, { span2: true }));
-  form.appendChild(el('div', { class: 'form-actions', style: 'grid-column:1/-1' }, [
-    el('button', { type: 'button', class: 'btn btn-ghost', onclick: () => close() }, t('common.cancel')),
-    el('button', { type: 'submit', class: 'btn btn-primary' }, isEdit ? t('common.save') : t('common.create')),
-  ]));
+  form.appendChild(formActions({ onCancel: () => close(), submitLabel: isEdit ? t('common.save') : t('common.create') }).row);
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     if (!fName.value.trim()) { toast(t('competitions.validationName'), 'error'); return; }
@@ -626,10 +623,7 @@ function openEntryModal(entry, comp, athletes, onSaved) {
   form.appendChild(field(t('competitions.formHeat'), fHeat));
   form.appendChild(field(t('competitions.formLane'), fLane));
   form.appendChild(field(t('competitions.formSeedTime'), fSeed, { hint: t('competitions.formSeedTimeHint') }));
-  form.appendChild(el('div', { class: 'form-actions', style: 'grid-column:1/-1' }, [
-    el('button', { type: 'button', class: 'btn btn-ghost', onclick: () => close() }, t('common.cancel')),
-    el('button', { type: 'submit', class: 'btn btn-primary' }, isEdit ? t('common.save') : t('common.create')),
-  ]));
+  form.appendChild(formActions({ onCancel: () => close(), submitLabel: isEdit ? t('common.save') : t('common.create') }).row);
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const seedSec = fSeed.value.trim() ? timeToSec(fSeed.value) : null;
@@ -659,10 +653,7 @@ function openResultModal(result, comp, athletes, onSaved) {
   form.appendChild(field(t('competitions.formTime'), fTime, { hint: t('competitions.formTimeHint') }));
   form.appendChild(field(t('competitions.formPlace'), fPlace));
   form.appendChild(field(t('competitions.formIsPB'), el('div', { class: 'flex items-center gap-8' }, [fPB, el('span', { class: 'text-sm' }, t('competitions.formIsPBYes'))])));
-  form.appendChild(el('div', { class: 'form-actions', style: 'grid-column:1/-1' }, [
-    el('button', { type: 'button', class: 'btn btn-ghost', onclick: () => close() }, t('common.cancel')),
-    el('button', { type: 'submit', class: 'btn btn-primary' }, t('common.save')),
-  ]));
+  form.appendChild(formActions({ onCancel: () => close(), submitLabel: t('common.save') }).row);
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const sec = timeToSec(fTime.value);

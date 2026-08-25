@@ -8,7 +8,7 @@
 // Bezug. Wiederverwendet aus dem Hauptsystem nur, was KEINE IndexedDB-
 // Abhängigkeit hat: apiClient.js, utils.js, i18n.js.
 import * as api from '../js/apiClient.js';
-import { el, clear, field, textInput, toast, openModal } from '../js/utils.js';
+import { el, clear, field, textInput, toast, openModal, formActions } from '../js/utils.js';
 import { t, getLocale, setLocale, detectInitialLocale } from '../js/i18n.js';
 import { CURRENT_CONSENT_VERSION } from '../js/state.js';
 
@@ -182,11 +182,8 @@ function openCreateClubModal(onDone) {
 
   const errorBox = el('p', { class: 'form-error', style: 'grid-column:1/-1;display:none' });
   form.appendChild(errorBox);
-  const submitBtn = el('button', { type: 'submit', class: 'btn btn-primary' }, t('common.create'));
-  form.appendChild(el('div', { class: 'form-actions', style: 'grid-column:1/-1' }, [
-    el('button', { type: 'button', class: 'btn btn-ghost', onclick: () => close() }, t('common.cancel')),
-    submitBtn,
-  ]));
+  const { row: actionsRow, submitBtn } = formActions({ onCancel: () => close(), submitLabel: t('common.create') });
+  form.appendChild(actionsRow);
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();

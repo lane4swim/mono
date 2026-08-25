@@ -4,7 +4,7 @@
 import { getAll, put, remove } from '../db.js';
 import {
   el, clear, field, selectInput, dateInput, openModal, confirmAction, toast, badge,
-  emptyState, laneWave, fmtDateLong, todayISO, toIsoDateTime, average, fullName, beginRender,
+  emptyState, laneWave, fmtDateLong, todayISO, toIsoDateTime, average, fullName, beginRender, formActions,
 } from '../utils.js';
 import { getRole, getCurrentUser } from '../state.js';
 import { navigate } from '../router.js';
@@ -159,10 +159,7 @@ function openSessionModal(session, groups, athletes, onSaved) {
   drawAttendance();
   fGroup.addEventListener('change', () => { data.groupId = fGroup.value; data.attendance = attendanceFor(fGroup.value); drawAttendance(); });
 
-  form.appendChild(el('div', { class: 'form-actions' }, [
-    el('button', { type: 'button', class: 'btn btn-ghost', onclick: () => close() }, t('common.cancel')),
-    el('button', { type: 'submit', class: 'btn btn-primary' }, isEdit ? t('common.save') : t('sessions.addSession').replace('+ ', '')),
-  ]));
+  form.appendChild(formActions({ onCancel: () => close(), submitLabel: isEdit ? t('common.save') : t('sessions.addSession').replace('+ ', ''), spanFull: false }).row);
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     await put('sessions', { ...data, date: toIsoDateTime(fDate.value), groupId: fGroup.value, trainerNote: fNote.value.trim(), attendance: data.attendance });

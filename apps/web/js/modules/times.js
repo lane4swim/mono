@@ -4,7 +4,7 @@
 import { getAll, put, remove } from '../db.js';
 import { el, clear, fullName, fmtDateShort, todayISO, toIsoDateTime, field, textInput, selectInput, dateInput,
   openModal, confirmAction, toast, badge, emptyState, laneWave, secToTime, timeToSec,
-  svgLineChart, beginRender,
+  svgLineChart, beginRender, formActions,
 } from '../utils.js';
 import { EVENTS, COURSES } from '../refdata.js';
 import { t, trCode, trOptions, trOptionsFlat } from '../i18n.js';
@@ -107,10 +107,7 @@ function openTimeModal(result, athletes, onSaved) {
   form.appendChild(field(t('times.formDate'), fDate));
   form.appendChild(field(t('times.formCourse'), fCourse));
   form.appendChild(field(t('times.formIsPB'), el('div', { class: 'flex items-center gap-8' }, [fPB, el('span', { class: 'text-sm' }, t('times.formIsPBYes'))]), { span2: true }));
-  form.appendChild(el('div', { class: 'form-actions', style: 'grid-column:1/-1' }, [
-    el('button', { type: 'button', class: 'btn btn-ghost', onclick: () => close() }, t('common.cancel')),
-    el('button', { type: 'submit', class: 'btn btn-primary' }, t('common.save')),
-  ]));
+  form.appendChild(formActions({ onCancel: () => close(), submitLabel: t('common.save') }).row);
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const sec = timeToSec(fTime.value);

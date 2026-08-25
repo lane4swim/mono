@@ -5,7 +5,7 @@ import { getAll, put, remove } from '../db.js';
 import {
   el, clear, fullName, ageFromBirthdate, fmtDateShort, todayISO, toIsoDateTime,
   field, textInput, selectInput, dateInput, openModal, confirmAction, toast, badge,
-  emptyState, laneWave, groupBy, secToTime, statCard,
+  emptyState, laneWave, groupBy, secToTime, statCard, formActions,
 } from '../utils.js';
 import { isAdminOrSuperAdmin } from '../state.js';
 import { navigate } from '../router.js';
@@ -192,10 +192,7 @@ function openAthleteModal(athlete, groups, onSaved) {
   const activeField = field(t('athletes.formStatus'), el('div', { class: 'flex items-center gap-8' }, [fActive, el('span', { class: 'text-sm' }, t('athletes.formActiveLabel'))]), { span2: true });
   form.appendChild(activeField);
 
-  form.appendChild(el('div', { class: 'form-actions span-2', style: 'grid-column:1/-1' }, [
-    el('button', { type: 'button', class: 'btn btn-ghost', onclick: () => close() }, t('common.cancel')),
-    el('button', { type: 'submit', class: 'btn btn-primary' }, isEdit ? t('common.save') : t('common.create')),
-  ]));
+  form.appendChild(formActions({ onCancel: () => close(), submitLabel: isEdit ? t('common.save') : t('common.create'), extraClass: 'span-2' }).row);
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();

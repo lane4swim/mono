@@ -11,6 +11,7 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import type { Env } from './config/env.js';
 import { registerSecurityPlugins } from './plugins/security.js';
+import { registerHttpErrorHandler } from './plugins/httpErrorHandler.js';
 import authenticatePlugin from './plugins/authenticate.js';
 import { healthRoutes } from './modules/health/health.route.js';
 import { authRoutes } from './modules/auth/auth.route.js';
@@ -59,6 +60,10 @@ export async function buildApp(env: Env, overrides: BuildAppOverrides = {}): Pro
   });
 
   await registerSecurityPlugins(app, env);
+  // Auf der Wurzelinstanz registriert (vor jedem app.register() für die
+  // Routen-Module unten) — gilt dadurch automatisch für alle Routen, ohne
+  // dass jedes Modul einzeln daran denken muss.
+  registerHttpErrorHandler(app);
 
   // Wichtig: dasselbe Schlüsselpaar wird sowohl für die Token-Ausstellung
   // (authService) als auch für die Verifikation (authenticate-Plugin)

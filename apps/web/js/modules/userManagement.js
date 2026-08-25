@@ -7,7 +7,7 @@
 // ============================================================
 import {
   el, clear, field, textInput, selectInput, openModal, confirmAction, toast, badge,
-  emptyState, laneWave, beginRender, fmtDateShort,
+  emptyState, laneWave, beginRender, fmtDateShort, formActions,
 } from '../utils.js';
 import { isSuperAdmin } from '../state.js';
 import * as api from '../apiClient.js';
@@ -190,11 +190,8 @@ function openCreateClubModal(onChanged) {
   form.appendChild(field(t('usermgmt.formAdminEmail'), fAdminEmail));
   const errorBox = el('p', { class: 'form-error', style: 'grid-column:1/-1;display:none' });
   form.appendChild(errorBox);
-  const submitBtn = el('button', { type: 'submit', class: 'btn btn-primary' }, t('common.create'));
-  form.appendChild(el('div', { class: 'form-actions', style: 'grid-column:1/-1' }, [
-    el('button', { type: 'button', class: 'btn btn-ghost', onclick: () => close() }, t('common.cancel')),
-    submitBtn,
-  ]));
+  const { row: actionsRow, submitBtn } = formActions({ onCancel: () => close(), submitLabel: t('common.create') });
+  form.appendChild(actionsRow);
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     errorBox.style.display = 'none';
@@ -241,11 +238,8 @@ function openInviteModal(clubs, onChanged) {
   if (fClub) form.appendChild(field(t('usermgmt.colClub'), fClub, { span2: true }));
   const errorBox = el('p', { class: 'form-error', style: 'grid-column:1/-1;display:none' });
   form.appendChild(errorBox);
-  const submitBtn = el('button', { type: 'submit', class: 'btn btn-primary' }, t('common.create'));
-  form.appendChild(el('div', { class: 'form-actions', style: 'grid-column:1/-1' }, [
-    el('button', { type: 'button', class: 'btn btn-ghost', onclick: () => close() }, t('common.cancel')),
-    submitBtn,
-  ]));
+  const { row: actionsRow, submitBtn } = formActions({ onCancel: () => close(), submitLabel: t('common.create') });
+  form.appendChild(actionsRow);
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     errorBox.style.display = 'none';

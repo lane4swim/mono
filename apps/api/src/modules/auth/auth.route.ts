@@ -11,17 +11,8 @@ import {
   UpdateMeRequestSchema,
 } from '@lane1/shared-types';
 import type { AuthService } from './auth.service.js';
-import {
-  EmailAlreadyRegisteredError,
-  AthleteAlreadyLinkedError,
-  InvalidCredentialsError,
-  InvalidRefreshTokenError,
-  InvalidInvitationError,
-  UserNotFoundError,
-  ClubIdRequiredError,
-} from './auth.service.js';
-import { UserNotFoundForExportError, ErasureAlreadyRequestedError } from '../profile/profile.repository.js';
 import { requireRole } from '../../plugins/authorize.js';
+import { parseInput } from '../../plugins/parseInput.js';
 
 export async function authRoutes(app: FastifyInstance, opts: { authService: AuthService }) {
   const { authService } = opts;
@@ -34,24 +25,15 @@ export async function authRoutes(app: FastifyInstance, opts: { authService: Auth
       config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
     },
     async (request, reply) => {
-      const parsed = AcceptInvitationRequestSchema.safeParse(request.body);
-      if (!parsed.success) return reply.code(400).send({ error: 'validation_failed', issues: parsed.error.issues });
+      const body = parseInput(AcceptInvitationRequestSchema, request.body, reply);
+      if (!body) return;
 
-      try {
-        const result = await authService.acceptInvitation(parsed.data);
-        return reply.code(201).send(result);
-      } catch (err) {
-        if (err instanceof EmailAlreadyRegisteredError) {
-          return reply.code(409).send({ error: 'email_taken', message: err.message });
-        }
-        if (err instanceof AthleteAlreadyLinkedError) {
-          return reply.code(409).send({ error: 'athlete_already_linked', message: err.message });
-        }
-        if (err instanceof InvalidInvitationError) {
-          return reply.code(410).send({ error: 'invalid_invitation', message: err.message });
-        }
-        throw err;
-      }
+      // EmailAlreadyRegisteredError/AthleteAlreadyLinkedError/
+      // InvalidInvitationError: alle drei über die zentrale
+      // Fehler-Registry abgedeckt (siehe plugins/httpErrorHandler.ts) —
+      // kein eigenes catch mehr nötig.
+      const result = await authService.acceptInvitation(body);
+      return reply.code(201).send(result);
     },
   );
 
@@ -75,18 +57,11 @@ export async function authRoutes(app: FastifyInstance, opts: { authService: Auth
       },
     },
     async (request, reply) => {
-      const parsed = LoginRequestSchema.safeParse(request.body);
-      if (!parsed.success) return reply.code(400).send({ error: 'validation_failed', issues: parsed.error.issues });
+      const body = parseInput(LoginRequestSchema, request.body, reply);
+      if (!body) return;
 
-      try {
-        const result = await authService.login(parsed.data);
-        return reply.code(200).send(result);
-      } catch (err) {
-        if (err instanceof InvalidCredentialsError) {
-          return reply.code(401).send({ error: 'invalid_credentials', message: err.message });
-        }
-        throw err;
-      }
+      const result = await authService.login(body);
+      return reply.code(200).send(result);
     },
   );
 
@@ -102,18 +77,11 @@ export async function authRoutes(app: FastifyInstance, opts: { authService: Auth
       config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
     },
     async (request, reply) => {
-      const parsed = RefreshRequestSchema.safeParse(request.body);
-      if (!parsed.success) return reply.code(400).send({ error: 'validation_failed', issues: parsed.error.issues });
+      const body = parseInput(RefreshRequestSchema, request.body, reply);
+      if (!body) return;
 
-      try {
-        const result = await authService.refresh(parsed.data.refreshToken);
-        return reply.code(200).send(result);
-      } catch (err) {
-        if (err instanceof InvalidRefreshTokenError) {
-          return reply.code(401).send({ error: 'invalid_refresh_token', message: err.message });
-        }
-        throw err;
-      }
+      const result = await authService.refresh(body.refreshToken);
+      return reply.code(200).send(result);
     },
   );
 
@@ -127,10 +95,10 @@ export async function authRoutes(app: FastifyInstance, opts: { authService: Auth
       config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
     },
     async (request, reply) => {
-      const parsed = LogoutRequestSchema.safeParse(request.body);
-      if (!parsed.success) return reply.code(400).send({ error: 'validation_failed', issues: parsed.error.issues });
+      const body = parseInput(LogoutRequestSchema, request.body, reply);
+      if (!body) return;
 
-      await authService.logout(parsed.data.refreshToken);
+      await authService.logout(body.refreshToken);
       return reply.code(204).send();
     },
   );
@@ -143,18 +111,11 @@ export async function authRoutes(app: FastifyInstance, opts: { authService: Auth
     '/api/users',
     { preHandler: [app.authenticate, requireRole('admin', 'superadmin')] },
     async (request, reply) => {
-      try {
-        const users = await authService.listClubMembers(
-          { role: request.user!.role, clubId: request.user!.clubId },
-          request.query.clubId,
-        );
-        return reply.code(200).send({ users });
-      } catch (err) {
-        if (err instanceof ClubIdRequiredError) {
-          return reply.code(400).send({ error: 'club_id_required', message: err.message });
-        }
-        throw err;
-      }
+      const users = await authService.listClubMembers(
+        { role: request.user!.role, clubId: request.user!.clubId },
+        request.query.clubId,
+      );
+      return reply.code(200).send({ users });
     },
   );
 
@@ -173,47 +134,23 @@ export async function authRoutes(app: FastifyInstance, opts: { authService: Auth
   );
 
   app.get('/api/me', { preHandler: app.authenticate }, async (request, reply) => {
-    try {
-      const user = await authService.getMe(request.user!.sub);
-      return reply.code(200).send(user);
-    } catch (err) {
-      if (err instanceof UserNotFoundError) {
-        return reply.code(404).send({ error: 'not_found', message: err.message });
-      }
-      throw err;
-    }
+    const user = await authService.getMe(request.user!.sub);
+    return reply.code(200).send(user);
   });
 
   app.patch('/api/me', { preHandler: app.authenticate }, async (request, reply) => {
-    const parsed = UpdateMeRequestSchema.safeParse(request.body);
-    if (!parsed.success) return reply.code(400).send({ error: 'validation_failed', issues: parsed.error.issues });
+    const body = parseInput(UpdateMeRequestSchema, request.body, reply);
+    if (!body) return;
 
-    try {
-      const user = await authService.updateMe(request.user!.sub, parsed.data);
-      return reply.code(200).send(user);
-    } catch (err) {
-      if (err instanceof EmailAlreadyRegisteredError) {
-        return reply.code(409).send({ error: 'email_taken', message: err.message });
-      }
-      if (err instanceof UserNotFoundError) {
-        return reply.code(404).send({ error: 'not_found', message: err.message });
-      }
-      throw err;
-    }
+    const user = await authService.updateMe(request.user!.sub, body);
+    return reply.code(200).send(user);
   });
 
   // Art. 15 DSGVO — Recht auf Auskunft: bündelt sämtliche zum eigenen
   // Konto gespeicherten Daten als JSON.
   app.get('/api/me/export', { preHandler: app.authenticate }, async (request, reply) => {
-    try {
-      const data = await authService.exportMyData(request.user!.sub);
-      return reply.code(200).send(data);
-    } catch (err) {
-      if (err instanceof UserNotFoundForExportError) {
-        return reply.code(404).send({ error: 'not_found', message: err.message });
-      }
-      throw err;
-    }
+    const data = await authService.exportMyData(request.user!.sub);
+    return reply.code(200).send(data);
   });
 
   // Art. 17 DSGVO — Recht auf Löschung: sofortiger Soft-Delete, endgültiger
@@ -221,20 +158,10 @@ export async function authRoutes(app: FastifyInstance, opts: { authService: Auth
   // 200 statt 204, da die Antwort das Datum des endgültigen Löschens
   // mitteilt (Transparenzpflicht).
   app.delete('/api/me', { preHandler: app.authenticate }, async (request, reply) => {
-    try {
-      const { purgeAfter } = await authService.requestAccountDeletion(request.user!.sub);
-      return reply.code(200).send({
-        message: 'Ihr Konto wurde zur Löschung vorgemerkt und ist ab sofort deaktiviert.',
-        purgeAfter: purgeAfter.toISOString(),
-      });
-    } catch (err) {
-      if (err instanceof UserNotFoundForExportError) {
-        return reply.code(404).send({ error: 'not_found', message: err.message });
-      }
-      if (err instanceof ErasureAlreadyRequestedError) {
-        return reply.code(409).send({ error: 'erasure_already_requested', message: err.message });
-      }
-      throw err;
-    }
+    const { purgeAfter } = await authService.requestAccountDeletion(request.user!.sub);
+    return reply.code(200).send({
+      message: 'Ihr Konto wurde zur Löschung vorgemerkt und ist ab sofort deaktiviert.',
+      purgeAfter: purgeAfter.toISOString(),
+    });
   });
 }

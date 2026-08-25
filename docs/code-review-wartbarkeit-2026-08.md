@@ -19,20 +19,23 @@ ist stattdessen durch einen eigens geschriebenen, ausgeführten Test belegt.
 Schweregrade: **Hoch** = jetzt beheben · **Mittel** = einplanen · **Niedrig** = bei nächster
 Berührung mitnehmen.
 
-**Stand der Behebung (25.08.2026):** W1–W7 sind behoben (Commits „Behebt W1–W3 […]",
-„Behebt W4–W5 […]" und „Behebt W6–W7 […]" auf diesem Branch — bei W3 nur auf den
-vier am dichtesten betroffenen Dateien, siehe dortiger Status; W6 als Nebeneffekt der
-W2-Behebung, siehe dort). Verifiziert über `npm run lint/test/build/typecheck --workspaces`
-(grün: 309 API- + 63 Web- + 102 Shared-Types- + 9 Sync-Protocol-Tests, 483 insgesamt) sowie
-für W7 zusätzlich gezielt: die neue `no-bitwise`-Regel wurde testweise gegen einen
-absichtlich eingefügten `1 & 2`-Ausdruck ausgelöst, dann verifiziert, dass sie sauber wieder
-verschwindet. Wie bei der ursprünglichen Verifikation oben stand auch in dieser Folgesession
-kein Postgres-Container zur Verfügung — die 309 API-Tests sind weiterhin die Vitest-Suite
-gegen die `*.repository.memory.ts`-Doubles (`npm run test`), nicht die
-Prisma-Integrationssuite (`npm run test:integration`), die dementsprechend erneut ungeprüft
-blieb. Alle Befunde ab Abschnitt 2 (Redundanzen, lange Methoden) sind unverändert offen.
-Alle übrigen Befunde (W6/W7, Redundanzen, lange Methoden) sind unverändert
-offen.
+**Stand der Behebung (25.08.2026):** Sämtliche Befunde in Abschnitt 1 (W1–W7) sowie R1/R2 aus
+Abschnitt 2 sind behoben (Commits „Behebt W1–W3 […]", „Behebt W4–W5 […]", „Behebt W6–W7 […]"
+und „Behebt R1–R2 […]" auf diesem Branch) — mit drei dokumentierten Abweichungen vom
+ursprünglichen Befund-/Fix-Text: W3 nur auf den vier am dichtesten betroffenen Dateien (siehe
+dortiger Status), W2s `SyncStoreSchema` bewusst nicht mit abgeleitet (siehe dortiger Status),
+und R1s Fix grundlegend überarbeitet, nachdem sich der ursprünglich vorgeschlagene
+`openEntityForm()`-Mega-Helfer beim tatsächlichen Implementieren als nicht tragfähig erwies
+(siehe dortiger Status für die Begründung und was stattdessen umgesetzt wurde). Verifiziert
+über `npm run lint/test/build/typecheck --workspaces` (grün: 309 API- + 63 Web- + 102
+Shared-Types- + 9 Sync-Protocol-Tests, 483 insgesamt), für R1 zusätzlich im echten Browser
+gegen `demo.html` (Playwright: vier Formulare geöffnet/geschlossen, ein Datensatz angelegt und
+in Bearbeitung erneut geprüft) und für W7 gezielt gegen die neue `no-bitwise`-Regel. Wie bei
+der ursprünglichen Verifikation oben stand auch in diesen Folgesessions kein
+Postgres-Container zur Verfügung — die 309 API-Tests sind weiterhin die Vitest-Suite gegen die
+`*.repository.memory.ts`-Doubles (`npm run test`), nicht die Prisma-Integrationssuite
+(`npm run test:integration`), die dementsprechend erneut ungeprüft blieb. Offen sind noch R3–R9
+(Abschnitt 2) und L1–L7 (Abschnitt 3, lange Methoden/Klassen).
 
 ---
 
@@ -383,6 +386,41 @@ Rund **700 Zeilen** mechanisches Duplikat, davon ~600 in zwei Mustern.
 
 ### R1 — 16 fast identische Formular-Modals (~450 Zeilen) (Hoch)
 
+**Status: teilweise behoben — mit einer wichtigen Korrektur am Fix-Vorschlag.** Beim
+tatsächlichen Implementieren stellte sich heraus, dass der unten vorgeschlagene
+`openEntityForm({ title, entity, defaults, fields, validate, save })`-Mega-Helfer in der
+Praxis nicht trägt: die Feld-Zusammensetzung variiert zwischen den Modalen weit stärker, als
+sich aus einer Höhenübersicht erkennen ließ — dynamische Tageslisten mit eingebettetem
+Set-Editor und Vorlagen-Einfügung (`openPlanModal`), eine Anwesenheitstabelle, die sich beim
+Gruppenwechsel komplett neu aufbaut (`openSessionModal`), ein eingebetteter, sofort
+speichernder Kommentar-Thread (`openExerciseModal`), umschaltbare Ausrüstungs-Pills mit
+eigenem Zustand (`openExerciseModal`), eine Berechtigungsprüfung mit frühem Abbruch vor dem
+Aufbau des Formulars (`openAthleteModal`). Ein deklaratives `fields`-Array kann das nicht
+abbilden, ohne selbst zu einer vollständigen zweiten DOM-Bau-Sprache zu werden — der Helfer
+wäre am Ende undurchsichtiger als die 16 einzelnen, aber jeweils linear lesbaren Funktionen,
+die er ersetzen sollte (siehe die generelle Warnung vor Abstraktionen, die mehr verstecken als
+sie sparen).
+
+Tatsächlich **identisch** ist dagegen genau ein Baustein: der vierzeilige
+Abbrechen/Speichern-Knopfblock am Fußende. Der wurde extrahiert
+(`apps/web/js/utils.js: formActions({ onCancel, submitLabel, extraClass, spanFull })`, gibt
+zusätzlich zum fertigen Element den Submit-Button selbst zurück, für die drei Modals, die ihn
+während eines laufenden Speichervorgangs deaktivieren) und in **13 der 17** `openXModal()`-
+Funktionen im Frontend eingesetzt (die tatsächliche Gesamtzahl — vier davon sind gar keine
+Entity-Formulare und blieben deshalb bewusst unangetastet: `openGroupModal`, eine dauerhafte
+Liste+Anlegen-Zeile ohne Abbrechen-Knopf; `openImportConfirmModal`, ein reiner
+Bestätigungsdialog ohne Datenfelder; `openDeleteAccountModal`, eine löschende Bestätigung mit
+Texteingabe-Verifikation; `openClubMembersModal`, eine reine Anzeige ohne Formular). Ersparnis:
+39 Zeilen an den 13 Aufrufstellen, abzüglich 21 Zeilen für den neuen Helfer — netto 18 Zeilen,
+deutlich weniger als die ursprünglich geschätzten ~250, aber ohne den Interpretationsaufwand
+einer Konfigurations-API für hochgradig unterschiedliche Formulare. Jede der 13 konvertierten
+Stellen wurde gegen das Original diffed (Klassen, Styles, Labels, Reihenfolge) und zusätzlich
+im echten Browser gegen `demo.html` geprüft (Playwright: vier Modals geöffnet, Feldanzahl und
+Beschriftung geprüft, ein Datensatz tatsächlich angelegt und in der Liste bestätigt, danach im
+Bearbeiten-Modus erneut geöffnet und die "Speichern"-Beschriftung verifiziert).
+
+Ursprünglicher Befund (Stand der Analyse, vor der obigen Korrektur):
+
 `openCompModal`, `openEntryModal`, `openResultModal`, `openAthleteModal`, `openGroupModal`,
 `openExerciseModal`, `openTemplateModal`, `openPlanModal`, `openSessionModal`, `openTimeModal`,
 `openItemModal`, `openInviteModal`, `openCreateClubModal` (2×), … folgen alle demselben
@@ -431,6 +469,34 @@ Escape-Handling, Doppelklick-Schutz auf Speichern) danach *an einer* Stelle stat
 Heute müsste man sie 16-mal nachziehen — und 16-mal daran denken.
 
 ### R2 — Route-Boilerplate: 9× Validierung, 29× Fehler-Mapping (Hoch)
+
+**Status: behoben, wie unten vorgeschlagen — mit einer Zahlenkorrektur.** Nachgezählt tragen
+`auth.route.ts` und `invitations.route.ts` zusammen tatsächlich 22 `instanceof`-Zweige, nicht
+29 — die 29 zählten offenbar (die ursprüngliche Analyse nannte keine Fundstellen) auch
+`instanceof`-Vorkommen außerhalb der HTTP-Fehler-Zuordnung mit (u. a. `auth.service.ts`s
+eigene interne Fehler-Übersetzung beim Einlösen einer Einladung, `authenticate.ts`,
+`tokens.ts`) — andere Zuständigkeit, absichtlich nicht Teil dieses Umbaus. Beide Teile des
+Fix-Vorschlags wurden umgesetzt:
+
+1. `apps/api/src/plugins/httpErrorHandler.ts` (neu, 109 Zeilen): eine `Map<ErrorKlasse, {
+   status, code }>` mit allen 17 unterscheidbaren Fehlerklassen, registriert über
+   `app.setErrorHandler()` auf der Wurzelinstanz (siehe `app.ts`). Alle try/catch-Blöcke in
+   `auth.route.ts` entfielen dadurch vollständig (12 Zweige, alle deckungsgleich mit der
+   Registry). In `invitations.route.ts` entfiel ebenfalls jedes catch bis auf eines: `preview()`
+   behält bewusst ein lokales catch für `InvitationNotFoundError` (410 statt der
+   registrierten 404) — genau der unten beschriebene Fall, jetzt als bewusste, kommentierte
+   Ausnahme sichtbar statt als unbemerkte Abweichung.
+2. `apps/api/src/plugins/parseInput.ts` (neu, 22 Zeilen): `parseInput(schema, data, reply)`
+   ersetzt die neun wortgleichen Validierungsblöcke (acht gegen `request.body`, einer —
+   `GET /api/sync/pull` — gegen `request.query`; als ein Parameter statt zweier Funktionen,
+   da beide identisch funktionieren).
+
+Ergebnis: `auth.route.ts` 240 → 167 Zeilen, `invitations.route.ts` 112 → 100, `sync.route.ts`
+59 → 55 (−89 Zeilen an den drei Routen-Dateien zusammen), gegen +131 Zeilen für die beiden
+neuen, wiederverwendbaren Dateien — netto +42 Zeilen repo-weit, aber die Fehler-Zuordnung
+steht jetzt an einer Stelle statt über 22 Zweige verteilt. Verifiziert über die volle
+API-Testsuite (309 Tests, ausschließlich statusCode-Erwartungen — bestätigt, dass sich am
+beobachtbaren Verhalten nichts geändert hat) sowie `typecheck`/`build`/`lint`, alle grün.
 
 Jeder der neun Route-Handler beginnt gleich:
 
@@ -774,17 +840,19 @@ Damit die Befunde nicht den Blick verstellen — diese Entscheidungen sollten er
 | 1 | **W1** — `uid()`-Fehlgriff in `libraryTransfer.js` | 1 Zeile + Test | Behebt einen aktiven Datenverlust-Pfad | ✅ behoben |
 | 2 | **W2** — Store-Listen aus `ENTITY_SCHEMAS` ableiten | ~10 Zeilen | Schließt eine stille Fehlerklasse | ✅ behoben |
 | 3 | **W5** — Test auf i18n-Schlüsselgleichheit | ~5 Zeilen | Verhindert Sprachdrift | ✅ behoben |
-| 4 | **R2** — Fehler-Registry + `setErrorHandler` | ~1 Tag | −120 Zeilen, Status-Mapping wieder überblickbar | offen |
-| 5 | **R1** — `openEntityForm()`-Helfer | ~1–2 Tage | −250 Zeilen, Modal-Verhalten an einer Stelle | offen |
+| 4 | **R2** — Fehler-Registry + `setErrorHandler` | ~1 Tag | −89 Zeilen an den Routen, Status-Mapping an einer Stelle lesbar | ✅ behoben |
+| 5 | **R1** — gemeinsamer Formular-Knopfblock | ~1–2 Tage | −18 Zeilen netto; Mega-Helfer verworfen, siehe dortiger Status | ✅ teilweise behoben |
 | 6 | **L1** — `push()` in Guard-Kette zerlegen | ~1 Tag | Regeln einzeln testbar, Reihenfolge explizit | offen |
 | 7 | **W4** — Zyklus `db.js` ↔ `state.js` | ~2 Std. | `db.js` ohne Mock testbar | ✅ behoben |
 | 8 | **L2/L3/L4** — Dateien aufteilen | ~2 Tage | Rein mechanisch, kein Verhaltensrisiko | offen |
-| 9 | **R3/R4/R5/R6/R7/R8** — kleine Duplikate | je < 2 Std. | −150 Zeilen | offen |
+| 9 | **R3/R4/R5/R6/R7/R8/R9** — kleine Duplikate | je < 2 Std. | −150 Zeilen | offen |
 | 10 | **W3** — Kommentar-Diät | fortlaufend | −1.200 bis −1.500 Zeilen; senkt die Einstiegshürde am stärksten | 🟡 begonnen (4 Dateien, 239→206 Fundstellen) |
 | 11 | **W7** — `no-bitwise` in ESLint aufnehmen | 1 Zeile | Fängt beide `&`-Stellen und alle künftigen | ✅ behoben |
 
-Positionen 1, 2, 3, 7 und 11 sind erledigt; W6 (kein eigener Tabelleneintrag, siehe dortiger
-Abschnitt) ist als Nebeneffekt von Position 2 ebenfalls erledigt. Position 10 ist als
-fortlaufende Aufgabe angelegt und auf den dichtesten Dateien begonnen. Offen sind noch die
-beiden großen Duplikatsmuster (R1/R2), `push()`s Zerlegung in eine Guard-Kette (L1), die
-übrigen Datei-Aufteilungen (L2–L4, L7) und die kleinen Einzelbefunde (R3–R9).
+Positionen 1, 2, 3, 4, 7 und 11 sind vollständig erledigt; W6 (kein eigener Tabelleneintrag,
+siehe dortiger Abschnitt) ist als Nebeneffekt von Position 2 ebenfalls erledigt. Position 5
+(R1) ist im Kern erledigt, aber mit korrigiertem Umfang — 13 von 17 Formular-Modals
+konvertiert, kein `openEntityForm()`-Mega-Helfer (siehe dortiger Status für die Begründung).
+Position 10 ist als fortlaufende Aufgabe angelegt und auf den dichtesten Dateien begonnen.
+Offen sind noch `push()`s Zerlegung in eine Guard-Kette (L1), die übrigen Datei-Aufteilungen
+(L2–L4, L7) und die kleinen Einzelbefunde (R3–R9).
