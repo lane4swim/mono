@@ -304,6 +304,107 @@ describe('PrismaErasureJobGateway.purgeUserAndDependents()', () => {
   });
 });
 
+// Sicherheitsreview 2026-08, Befund N5: Comment.authorName (eingebettet in
+// plans/exercises/templates) wurde vom Purge bislang gar nicht erfasst.
+// Läuft bewusst gegen eine ECHTE Datenbank — die Anonymisierung stützt
+// sich auf `@>`-Containment sowie `jsonb_path_exists(..., '$..comments[*]
+// ? (...)')` (rekursiver Abstieg durch beliebig tief verschachtelte
+// Sets/Blöcke), beides Postgres-JSONB-Operatoren, die sich gegen die
+// InMemory-Testdouble (siehe purgeExpiredDeletions.test.ts) nicht
+// verlässlich mitprüfen lassen.
+describe('PrismaErasureJobGateway.purgeUserAndDependents() — Comment.authorName-Anonymisierung (Befund N5)', () => {
+  it('anonymisiert Plan-, verschachtelte Set-/Block-, Übungskatalog- und Vorlagen-Kommentare, lässt den Kommentartext erhalten', async () => {
+    const club = await createTestClub();
+    const { user } = await seedAthleteUser(club.id);
+    const now = new Date();
+
+    const plan = await prisma.plan.create({
+      data: {
+        clubId: club.id,
+        name: 'Wochenplan',
+        weekStart: now,
+        comments: [{ id: 'c1', authorName: user.name, text: 'Guter Plan', createdAt: now.toISOString() }],
+        days: [
+          {
+            date: now.toISOString(),
+            sets: [
+              { kind: 'set', id: 's1', description: '', distance: 100, reps: 4, intensity: 'GA1', restSec: 30, comments: [{ id: 'c2', authorName: user.name, text: 'Harte Serie', createdAt: now.toISOString() }] },
+              // Verschachtelt in einem Block — der rekursive
+              // jsonb_path_exists-Abstieg (`$..comments`) muss auch hier
+              // treffen, nicht nur auf der obersten Set-Ebene.
+              {
+                kind: 'block', id: 'b1', label: '', repeatCount: 3,
+                sets: [{ kind: 'set', id: 's2', description: '', distance: 50, reps: 8, intensity: 'GA2', restSec: 15, comments: [{ id: 'c3', authorName: user.name, text: 'Im Block', createdAt: now.toISOString() }] }],
+              },
+            ],
+          },
+        ],
+      },
+    });
+    const exercise = await prisma.exercise.create({
+      data: { clubId: club.id, name: 'Kraulbeine', category: 'kick', comments: [{ id: 'c4', authorName: user.name, text: 'Technik-Hinweis', createdAt: now.toISOString() }] },
+    });
+    const template = await prisma.template.create({
+      data: { clubId: club.id, name: 'Standard-Vorlage', sets: [{ kind: 'set', id: 's3', description: '', distance: 200, reps: 1, intensity: 'GA1', restSec: 0, comments: [{ id: 'c5', authorName: user.name, text: 'Vorlagen-Hinweis', createdAt: now.toISOString() }] }] },
+    });
+
+    await erasureGateway.purgeUserAndDependents(user.id);
+
+    const updatedPlan = await prisma.plan.findUnique({ where: { id: plan.id } });
+    expect(updatedPlan?.comments).toMatchObject([{ authorName: 'Gelöschtes Konto', text: 'Guter Plan' }]);
+    const days = updatedPlan?.days as Array<{ sets: Array<Record<string, unknown>> }>;
+    expect(days[0]!.sets[0]).toMatchObject({ comments: [{ authorName: 'Gelöschtes Konto', text: 'Harte Serie' }] });
+    const block = days[0]!.sets[1] as { sets: Array<Record<string, unknown>> };
+    expect(block.sets[0]).toMatchObject({ comments: [{ authorName: 'Gelöschtes Konto', text: 'Im Block' }] });
+
+    const updatedExercise = await prisma.exercise.findUnique({ where: { id: exercise.id } });
+    expect(updatedExercise?.comments).toMatchObject([{ authorName: 'Gelöschtes Konto', text: 'Technik-Hinweis' }]);
+
+    const updatedTemplate = await prisma.template.findUnique({ where: { id: template.id } });
+    expect((updatedTemplate?.sets as Array<Record<string, unknown>>)[0]).toMatchObject({ comments: [{ authorName: 'Gelöschtes Konto', text: 'Vorlagen-Hinweis' }] });
+  });
+
+  it('lässt Kommentare ANDERER Personen und eines ANDEREN Vereins unangetastet', async () => {
+    const club = await createTestClub();
+    const otherClub = await createTestClub(prisma, 'Anderer Verein');
+    const { user } = await seedAthleteUser(club.id);
+    const now = new Date();
+
+    const foreignAuthorPlan = await prisma.plan.create({
+      data: { clubId: club.id, name: 'Plan A', weekStart: now, comments: [{ id: 'c1', authorName: 'Jens Bauer', text: 'Nicht meins', createdAt: now.toISOString() }], days: [] },
+    });
+    const otherClubPlan = await prisma.plan.create({
+      data: { clubId: otherClub.id, name: 'Plan B', weekStart: now, comments: [{ id: 'c2', authorName: user.name, text: 'Anderer Verein', createdAt: now.toISOString() }], days: [] },
+    });
+
+    await erasureGateway.purgeUserAndDependents(user.id);
+
+    const unaffectedA = await prisma.plan.findUnique({ where: { id: foreignAuthorPlan.id } });
+    expect(unaffectedA?.comments).toMatchObject([{ authorName: 'Jens Bauer' }]);
+    const unaffectedB = await prisma.plan.findUnique({ where: { id: otherClubPlan.id } });
+    expect(unaffectedB?.comments).toMatchObject([{ authorName: user.name }]);
+  });
+
+  // Kommentare stammen ebenso von Trainer:innen/Admins ohne athleteId —
+  // die Anonymisierung darf nicht an ein verknüpftes Athletenprofil
+  // gekoppelt sein.
+  it('funktioniert auch für ein Konto OHNE verknüpftes Athletenprofil', async () => {
+    const club = await createTestClub();
+    const now = new Date();
+    const trainer = await prisma.user.create({
+      data: { clubId: club.id, name: 'Coach Nina', email: `nina-${randomUUID()}@example.org`, passwordHash: 'hash', role: 'trainer', athleteId: null },
+    });
+    const exercise = await prisma.exercise.create({
+      data: { clubId: club.id, name: 'Beinschlag', category: 'kick', comments: [{ id: 'c1', authorName: 'Coach Nina', text: 'Trainer-Hinweis', createdAt: now.toISOString() }] },
+    });
+
+    await erasureGateway.purgeUserAndDependents(trainer.id);
+
+    const updated = await prisma.exercise.findUnique({ where: { id: exercise.id } });
+    expect(updated?.comments).toMatchObject([{ authorName: 'Gelöschtes Konto', text: 'Trainer-Hinweis' }]);
+  });
+});
+
 describe('PrismaErasureJobGateway.findDuePendingRequests()', () => {
   it('liefert nur Anfragen, deren purgeAfter bereits erreicht ist', async () => {
     const club = await createTestClub();

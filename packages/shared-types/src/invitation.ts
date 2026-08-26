@@ -33,10 +33,16 @@ export const ClubWithCountsSchema = ClubSchema.extend({
 });
 export type ClubWithCounts = z.infer<typeof ClubWithCountsSchema>;
 
+// `.max(200)` (Sicherheitsreview 2026-08, Befund N2): analog zu den
+// entsprechenden Namensfeldern in entities.ts — Fastifys 1-MB-Bodylimit
+// begrenzt den Schaden zwar auf HTTP-Ebene, aber ein einzelnes, absichtlich
+// riesiges Feld hätte trotzdem unbemerkt akzeptiert und dauerhaft
+// gespeichert werden können. `Club.name` wird zusätzlich in den
+// E-Mail-Betreff geschrieben (siehe mail/mailer.ts).
 export const CreateClubRequestSchema = z.object({
-  name: z.string().min(1),
+  name: z.string().min(1).max(200),
   adminEmail: z.string().email(),
-  adminName: z.string().min(1),
+  adminName: z.string().min(1).max(200),
 });
 export type CreateClubRequest = z.infer<typeof CreateClubRequestSchema>;
 
@@ -120,7 +126,10 @@ export type InvitationPreview = z.infer<typeof InvitationPreviewSchema>;
 
 export const AcceptInvitationRequestSchema = z.object({
   token: z.string().min(1),
-  name: z.string().min(1),
+  // `.max(200)` (Sicherheitsreview 2026-08, Befund N2) — siehe Begründung
+  // bei CreateClubRequestSchema oben. `User.name` wird in jeder
+  // Mitgliederliste gerendert.
+  name: z.string().min(1).max(200),
   password: z.string().min(8, 'Passwort muss mindestens 8 Zeichen lang sein'),
   consent: z
     .literal(true)

@@ -1004,6 +1004,89 @@ describe('syncService — Rollen-Scopierung für "athlete" (Sicherheitsregressio
     },
   );
 
+  describe('syncService.push — Zeilenscoping für "results" bei Rolle "athlete" (Sicherheitsreview 2026-08, Befund N1)', () => {
+    const OWN_ATHLETE_ID = '55555555-5555-5555-5555-555555555555';
+    const FOREIGN_ATHLETE_ID = '66666666-6666-6666-6666-666666666661';
+
+    function seedBothAthletes(gateway: InMemorySyncGateway) {
+      const own = makeAthletePayload({ id: OWN_ATHLETE_ID });
+      const foreign = makeAthletePayload({ id: FOREIGN_ATHLETE_ID, firstName: 'Lea', lastName: 'Neumann' });
+      for (const a of [own, foreign]) {
+        gateway.seed('athletes', { ...a, birthdate: new Date(a.birthdate), joinDate: new Date(a.joinDate), updatedAt: new Date(a.updatedAt), createdAt: new Date(a.createdAt), deletedAt: null });
+      }
+    }
+
+    it('lehnt CREATE eines "results"-Events mit fremder athleteId im Payload ab', async () => {
+      const { service, gateway } = makeService();
+      seedBothAthletes(gateway);
+      const payload = makeResultPayload({ athleteId: FOREIGN_ATHLETE_ID });
+      const results = await service.push(
+        [{ id: 'evt-n1-create-foreign', store: 'results', entityId: payload.id, action: 'create', payload, clientUpdatedAt: payload.updatedAt }],
+        asAthlete(CLUB_A, OWN_ATHLETE_ID),
+      );
+      expect(results[0]!.status).toBe('error');
+      expect(results[0]!.message).toContain('eigene Ergebnisse');
+      expect(await gateway.findById('results', payload.id)).toBeNull();
+    });
+
+    it('lehnt UPDATE und DELETE eines fremden "results"-Datensatzes ab, selbst wenn das Payload die eigene athleteId trägt', async () => {
+      const { service, gateway } = makeService();
+      seedBothAthletes(gateway);
+      const foreignResult = makeResultPayload({ athleteId: FOREIGN_ATHLETE_ID });
+      gateway.seed('results', { ...foreignResult, updatedAt: new Date(foreignResult.updatedAt), date: new Date(foreignResult.date), createdAt: new Date(foreignResult.createdAt), deletedAt: null });
+
+      // Versuch, den fremden Datensatz zu "übernehmen" — eigene athleteId
+      // im Payload, aber die bestehende Zeile (dieselbe id) gehört
+      // jemand anderem.
+      const takeoverPayload = { ...foreignResult, athleteId: OWN_ATHLETE_ID, updatedAt: new Date(Date.now() + 1000).toISOString() };
+      const updateResults = await service.push(
+        [{ id: 'evt-n1-update-foreign', store: 'results', entityId: foreignResult.id, action: 'update', payload: takeoverPayload, clientUpdatedAt: takeoverPayload.updatedAt }],
+        asAthlete(CLUB_A, OWN_ATHLETE_ID),
+      );
+      expect(updateResults[0]!.status).toBe('error');
+
+      const deleteResults = await service.push(
+        [{ id: 'evt-n1-delete-foreign', store: 'results', entityId: foreignResult.id, action: 'delete', payload: null, clientUpdatedAt: new Date().toISOString() }],
+        asAthlete(CLUB_A, OWN_ATHLETE_ID),
+      );
+      expect(deleteResults[0]!.status).toBe('error');
+
+      const stillThere = await gateway.findById('results', foreignResult.id);
+      expect(stillThere?.athleteId).toBe(FOREIGN_ATHLETE_ID);
+    });
+
+    it('erlaubt weiterhin CREATE/UPDATE/DELETE der EIGENEN Ergebnisse', async () => {
+      const { service, gateway } = makeService();
+      seedBothAthletes(gateway);
+      const ownResult = makeResultPayload({ athleteId: OWN_ATHLETE_ID });
+      gateway.seed('results', { ...ownResult, updatedAt: new Date(ownResult.updatedAt), date: new Date(ownResult.date), createdAt: new Date(ownResult.createdAt), deletedAt: null });
+
+      const updatePayload = { ...ownResult, time: 59.9, updatedAt: new Date(Date.now() + 1000).toISOString() };
+      const updateResults = await service.push(
+        [{ id: 'evt-n1-update-own', store: 'results', entityId: ownResult.id, action: 'update', payload: updatePayload, clientUpdatedAt: updatePayload.updatedAt }],
+        asAthlete(CLUB_A, OWN_ATHLETE_ID),
+      );
+      expect(updateResults[0]!.status).toBe('applied');
+
+      const deleteResults = await service.push(
+        [{ id: 'evt-n1-delete-own', store: 'results', entityId: ownResult.id, action: 'delete', payload: null, clientUpdatedAt: new Date().toISOString() }],
+        asAthlete(CLUB_A, OWN_ATHLETE_ID),
+      );
+      expect(deleteResults[0]!.status).toBe('applied');
+    });
+
+    it('trainer/admin bleiben von der Zeilen-Verengung unberührt — dürfen weiterhin fremde Ergebnisse schreiben', async () => {
+      const { service, gateway } = makeService();
+      seedBothAthletes(gateway);
+      const payload = makeResultPayload({ athleteId: FOREIGN_ATHLETE_ID, id: '44444444-4444-4444-4444-444444444445' });
+      const results = await service.push(
+        [{ id: 'evt-n1-trainer-foreign', store: 'results', entityId: payload.id, action: 'create', payload, clientUpdatedAt: payload.updatedAt }],
+        asTrainer(CLUB_A),
+      );
+      expect(results[0]!.status).toBe('applied');
+    });
+  });
+
   it('PUSH: ein Event mit einem laut STORE_PERMISSIONS unbekannten Store (z. B. "users") wird sauber als "error" gemeldet, statt die Anfrage abstürzen zu lassen', async () => {
     const { service } = makeService();
     const now = new Date().toISOString();

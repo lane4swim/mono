@@ -33,11 +33,11 @@ Schweregrade: **Hoch** = vor dem nächsten Produktivbetrieb beheben,
 | M3 | Einladungs-Token landet im Klartext in Zugriffs-/Anwendungslogs | `invitations.route.ts`, `app.ts`, `mailer.ts` | Mittel — **behoben** |
 | M4 | SMTP ohne `requireTLS` — stille Klartext-Zustellung möglich | `mail/mailer.ts` | Mittel — **behoben** |
 | M5 | Kein Passwortwechsel und keine Passwort-Wiederherstellung | `modules/auth/*` | Mittel — **behoben** |
-| N1 | Rolle `athlete` darf `results`/`plans` vereinsweit schreiben und löschen | `sync.permissions.ts` | Niedrig |
-| N2 | Namensfelder ohne Längenbegrenzung | `packages/shared-types/src/{auth,invitation}.ts` | Niedrig |
-| N3 | Refresh-Token im `localStorage`; API-Basis-URL ebenfalls aus `localStorage` | `apps/web/js/apiClient.js` | Niedrig |
-| N4 | Soft-gelöschtes Konto behält Zugriff bis zum Ablauf des Access Tokens | `plugins/authenticate.ts` | Niedrig |
-| N5 | Hard-Purge lässt `Comment.authorName` stehen | `jobs/erasure.repository.ts` | Niedrig |
+| N1 | Rolle `athlete` darf `results`/`plans` vereinsweit schreiben und löschen | `sync.permissions.ts` | Niedrig — **behoben** |
+| N2 | Namensfelder ohne Längenbegrenzung | `packages/shared-types/src/{auth,invitation}.ts` | Niedrig — **behoben** |
+| N3 | Refresh-Token im `localStorage`; API-Basis-URL ebenfalls aus `localStorage` | `apps/web/js/apiClient.js` | Niedrig — **teilweise behoben** |
+| N4 | Soft-gelöschtes Konto behält Zugriff bis zum Ablauf des Access Tokens | `plugins/authenticate.ts` | Niedrig — **bewusst akzeptiert, dokumentiert** |
+| N5 | Hard-Purge lässt `Comment.authorName` stehen | `jobs/erasure.repository.ts` | Niedrig — **behoben** |
 | N6 | Superadmin-Passwort als Kommandozeilenargument | `scripts/createSuperAdmin.ts` | Niedrig |
 | N7 | Passwortrichtlinie: nur Mindestlänge 8 | `packages/shared-types/src/invitation.ts` | Niedrig |
 
@@ -423,8 +423,32 @@ Speicherung / TTL) nahezu unverändert wiederverwenden.
 
 ## Niedrig
 
-### N1 — `athlete` darf `results` und `plans` vereinsweit schreiben
+### N1 — `athlete` darf `results` und `plans` vereinsweit schreiben — **behoben**
 
+**Fix:** Bewusst entschieden (wie von der ursprünglichen Empfehlung
+gefordert) und für `results` umgesetzt: `sync.service.ts:push()` prüft nach
+dem Laden des ggf. bestehenden Datensatzes zusätzlich, ob Rolle `athlete`
+sich selbst betrifft — sowohl der BESTEHENDE Datensatz (falls vorhanden) als
+auch die im Payload gesendete `athleteId` müssen der eigenen `athleteId`
+entsprechen, sonst wird das Event mit `status: 'error'` abgelehnt, bevor
+irgendetwas geschrieben wird. Das schließt sowohl "fremdes Ergebnis anlegen"
+als auch "bestehendes fremdes Ergebnis per Update/Delete übernehmen bzw.
+löschen". `trainer`/`admin` bleiben unverändert unbeschränkt.
+`plans` bleibt bewusst **unverändert geteilt**: anders als `ResultSchema`
+(mit `athleteId`) hat `PlanSchema` keine Eigentümer:in auf Personenebene,
+nur `groupId` — ein Trainingsplan ist ein Team-/Gruppendokument, kein
+individueller Datensatz, dem sich "eigene athleteId" sinnvoll zuordnen
+ließe. Beide Entscheidungen sind jetzt in `sync.permissions.ts` (Kopf- und
+Tabellenkommentar) dokumentiert, nicht nur im Code selbst.
+
+Regressionstests: `apps/api/test/sync/sync.service.test.ts` (eigener
+`describe`-Block „Zeilenscoping für 'results' bei Rolle 'athlete'" — lehnt
+CREATE mit fremder `athleteId` sowie UPDATE/DELETE eines fremden
+Datensatzes ab, selbst wenn das Payload die eigene `athleteId` trägt;
+erlaubt weiterhin CREATE/UPDATE/DELETE der eigenen Ergebnisse; `trainer`
+bleibt unbeschränkt).
+
+Ursprünglicher Befund, Fundstelle zum Zeitpunkt der Analyse:
 `apps/api/src/modules/sync/sync.permissions.ts:85-86`
 
 `results` und `plans` sind als `shared` eingetragen: alle drei Rollen lesen
@@ -444,8 +468,16 @@ tatsächlich nur eigene Zeiten eintragen sollen, ist `results` ein Kandidat für
 eine zeilenbezogene Prüfung beim Push (analog zu `scopeChangeForAthlete()` beim
 Pull): Schreibzugriff nur, wenn `payload.athleteId === requester.athleteId`.
 
-### N2 — Namensfelder ohne Längenbegrenzung
+### N2 — Namensfelder ohne Längenbegrenzung — **behoben**
 
+**Fix:** `.max(200)` ergänzt bei `CreateClubRequestSchema.name`/`.adminName`
+und `AcceptInvitationRequestSchema.name` (`invitation.ts`) sowie
+`UpdateMeRequestSchema.name` (`auth.ts`) — analog zu den bereits begrenzten
+Namensfeldern in `entities.ts`. Regressionstests in
+`packages/shared-types/test/{invitation,auth}.test.ts` (jeweils ein
+201-Zeichen-Name wird abgelehnt, ein gültiger weiterhin akzeptiert).
+
+Ursprünglicher Befund, Fundstellen zum Zeitpunkt der Analyse:
 `packages/shared-types/src/invitation.ts:37,39,109`, `auth.ts:59`
 
 `CreateClubRequestSchema.name`, `.adminName`,
@@ -460,8 +492,28 @@ E-Mail-Betreff geschrieben.
 
 **Empfehlung:** `.max(200)` analog zu den übrigen Namensfeldern.
 
-### N3 — Refresh-Token und API-Basis-URL im `localStorage`
+### N3 — Refresh-Token und API-Basis-URL im `localStorage` — **teilweise behoben**
 
+**Fix:** Nur der zweite, verstärkende Teil des Befunds wurde behoben — der
+`lane1-api-base-url`-Override wird jetzt nur noch berücksichtigt (gelesen
+UND geschrieben), wenn die Seite selbst gerade von einem lokalen
+Entwicklungs-Origin (`localhost`/`127.0.0.1`/`::1`) ausgeliefert wird
+(`apps/web/js/apiClient.js: isLocalDevOrigin()`). Eine echte
+Produktionsinstanz läuft laut `docs/deployment*.md` immer auf einer
+eigenen Domain, nie auf `localhost` — dort greift der Override dadurch
+selbst dann nicht mehr, wenn der Schlüssel im `localStorage` gesetzt ist
+(z. B. über eine XSS-Lücke). Das Refresh-Token selbst bleibt bewusst
+**unverändert** im `localStorage` — das ist die bereits zum
+Analysezeitpunkt dokumentierte, akzeptierte Vereinfachung gegenüber einem
+httpOnly-Cookie (siehe Fundstelle unten) und war nicht Teil der konkreten
+Empfehlung für diesen Befund.
+
+Regressionstests: `apps/web/test/apiClient.test.js` (eigener
+`describe`-Block „Origin-Gating" — Override greift auf `localhost`/
+`127.0.0.1`, wird auf einem Produktions-Hostname ignoriert bzw. gar nicht
+erst geschrieben).
+
+Ursprünglicher Befund, Fundstelle zum Zeitpunkt der Analyse:
 `apps/web/js/apiClient.js:24-66`
 
 Der Access Token liegt korrekt nur im Speicher; das Refresh-Token liegt im
@@ -480,8 +532,24 @@ Die Nginx-CSP (`script-src 'self'`, `connect-src 'self'`) mindert beides
 deutlich — `connect-src 'self'` würde eine Umleitung auf einen fremden Host
 sogar blockieren. Deshalb niedrig eingestuft.
 
-### N4 — Soft-gelöschtes Konto behält Zugriff bis zum Token-Ablauf
+### N4 — Soft-gelöschtes Konto behält Zugriff bis zum Token-Ablauf — **bewusst akzeptiert, dokumentiert**
 
+**Entscheidung:** Kein Code-Fix — der ursprüngliche Befund selbst formuliert
+bereits keine `**Empfehlung**` (anders als N1/N2/N3/N5), sondern schließt
+mit „ein akzeptierter, üblicher Trade-off … sollte aber als bewusste
+Entscheidung dokumentiert sein". Diese Dokumentation wurde jetzt ergänzt:
+`apps/api/src/plugins/authenticate.ts` trägt einen ausführlichen Kommentar,
+der den Trade-off, seine Konsequenzen (inkl. `/api/sync/push`/`pull`) und
+die bewusste Alternative (ein DB-Lookup je authentifizierter Anfrage —
+gerade auf den beiden lastintensivsten Endpunkten der App) benennt;
+`sync.route.ts` verweist an der entsprechenden Stelle darauf. Kein
+Code-Fix, weil ein DB-Lookup bei JEDER authentifizierten Anfrage genau den
+Performance-Vorteil kurzlebiger, zustandsloser Access Tokens gegenüber
+einer serverseitigen Session-Prüfung aufheben würde — unverhältnismäßig
+gegenüber einem 15-Minuten-Zeitfenster, das per Refresh-Token-Widerruf
+ohnehin bereits einen erneuten Login/Refresh verhindert.
+
+Ursprünglicher Befund, Fundstelle zum Zeitpunkt der Analyse:
 `apps/api/src/plugins/authenticate.ts:24-38`
 
 `app.authenticate` verifiziert ausschließlich die JWT-Signatur und fragt die
@@ -496,8 +564,45 @@ steht im Token, nicht in der Datenbankabfrage.
 Für 15 Minuten ist das ein akzeptierter, üblicher Trade-off kurzlebiger
 Access-Tokens — sollte aber als bewusste Entscheidung dokumentiert sein.
 
-### N5 — Hard-Purge lässt `Comment.authorName` stehen
+### N5 — Hard-Purge lässt `Comment.authorName` stehen — **behoben**
 
+**Fix:** `purgeUserAndDependents()` anonymisiert jetzt zusätzlich
+`Comment.authorName` — nicht nur in `plans.comments`/`exercises.comments`
+und `plans.days[].sets[].comments` (wie ursprünglich empfohlen), sondern
+konsequent auch in `templates.sets[].comments`, das dieselbe
+Sets/Blöcke-Struktur verwendet und beim Analysezeitpunkt nicht ausdrücklich
+genannt war, aber derselben Lücke unterlag. Bewusst **nicht** an
+`user.athleteId` gekoppelt (anders als der bestehende Block für
+Ergebnisse/Einträge/Handlungsfelder) — Kommentare stammen ebenso von
+Trainer:innen/Admins ohne Athletenprofil. Wie bei der bereits bestehenden
+`attendance`-Bereinigung (Befund C4) werden zunächst per `@>`-Containment
+bzw. `jsonb_path_exists(..., '$.**.comments[*] ? (@.authorName == $name)')`
+(rekursiver Abstieg durch beliebig tief verschachtelte Sets/Blöcke) nur die
+TATSÄCHLICH betroffenen Zeilen ermittelt, statt alle Pläne/Übungen/Vorlagen
+des Vereins zu laden. Die eigentliche Ersetzung (reine, DB-freie Funktionen
+in `jobs/commentAnonymization.ts`, gemeinsam von der Prisma- und der
+InMemory-Implementierung genutzt) ersetzt nur `authorName` durch
+„Gelöschtes Konto" — der fachliche Kommentartext bleibt erhalten.
+
+**Bekannte Grenze** (dokumentiert in `commentAnonymization.ts`):
+`CommentSchema` hat bewusst kein `authorId` (keine serverseitige
+Autor:innen-Verifikation, wie bei den übrigen freien Textfeldern des
+Datenmodells) — die Zuordnung läuft daher über den zum Löschzeitpunkt
+gültigen `User.name`, nicht über eine stabile ID. Bei Namensgleichheit mit
+einer anderen, weiterhin aktiven Person würden auch deren Kommentare
+mit anonymisiert; ein zwischenzeitlich geänderter Anzeigename der
+gelöschten Person selbst bliebe unter dem alten Namen stehen. Diese
+Grenze ist vom Datenmodell selbst vorgegeben, nicht neu durch diesen Fix.
+
+Regressionstests: `apps/api/test/jobs/commentAnonymization.test.ts` (reine
+Funktionstests, u. a. verschachtelte Block-Sets), erweiterter
+`purgeExpiredDeletions.test.ts` (InMemory, inkl. „funktioniert auch ohne
+Athletenprofil"), sowie ein neuer Integrationstest in
+`test-integration/profileErasure.integration.test.ts` gegen eine echte
+Postgres-Instanz (prüft insbesondere die `jsonb_path_exists`-Bedingung
+tatsächlich gegen echtes SQL, nicht nur die InMemory-Nachbildung).
+
+Ursprünglicher Befund, Fundstelle zum Zeitpunkt der Analyse:
 `apps/api/src/jobs/erasure.repository.ts:43-160`
 
 `purgeUserAndDependents()` löscht Nutzer, Athletenprofil, Ergebnisse,
@@ -604,4 +709,8 @@ sind sauber:
    E-Mail-losen Betrieb mit manuellem Link-Teilen gebrochen).
 5. ~~**M5** — Passwortwechsel nachziehen.~~ **Behoben** (siehe dortiger
    **Fix**-Abschnitt).
-6. Niedrig eingestufte Befunde bei nächster Berührung.
+6. ~~Niedrig eingestufte Befunde bei nächster Berührung.~~ **N1, N2, N3
+   (teilweise), N5 behoben; N4 bewusst akzeptiert und dokumentiert** (siehe
+   jeweiliger **Fix**-/**Entscheidung**-Abschnitt). Noch offen: **N6**
+   (Superadmin-Passwort als CLI-Argument), **N7** (Passwortrichtlinie nur
+   Mindestlänge).

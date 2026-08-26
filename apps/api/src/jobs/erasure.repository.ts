@@ -7,7 +7,8 @@
 // Hard-Purge, sobald die Aufbewahrungsfrist (purgeAfter) abgelaufen ist —
 // ausgeführt über scripts/purgeDeletedData.ts (per Cron) und
 // orchestriert von jobs/purgeExpiredDeletions.ts.
-import type { PrismaClient } from '@prisma/client';
+import type { PrismaClient, Prisma } from '@prisma/client';
+import { anonymizePlanCommentAuthors, anonymizeExerciseCommentAuthors, anonymizeTemplateCommentAuthors } from './commentAnonymization.js';
 
 export interface DueErasureRequest {
   id: string;
@@ -140,6 +141,75 @@ export class PrismaErasureJobGateway implements ErasureJobGateway {
         }
 
         await tx.athlete.delete({ where: { id: user.athleteId } });
+      }
+
+      // Sicherheitskorrektur (Sicherheitsreview 2026-08, Befund N5):
+      // Comment.authorName (siehe CommentSchema in
+      // packages/shared-types/src/entities.ts) ist ein freier, vom Client
+      // beim Anlegen aus dem eingeloggten Konto übernommener Klarname —
+      // eingebettet in "plans.comments", "exercises.comments",
+      // "plans.days[].sets[].comments" und "templates.sets[].comments"
+      // (siehe commentAnonymization.ts für die genaue Struktur/Begründung).
+      // Bewusst NICHT an `user.athleteId` gekoppelt (anders als der Block
+      // oben) — Kommentare stammen ebenso von Trainer:innen/Admins ohne
+      // athleteId, ein rein athletengebundener Filter hätte deren
+      // Klarnamen nach dem Purge unangetastet gelassen. Gescoped auf
+      // `user.clubId`, damit ein Konto ohne Verein (z. B. Superadmin, das
+      // ohnehin nie Kommentare verfasst) keinen club-weiten Scan auslöst.
+      //
+      // Wie bei der Anwesenheits-Bereinigung oben (Befund C4): erst per
+      // gezielter SQL-Bedingung nur die TATSÄCHLICH betroffenen Zeilen
+      // laden (Containment `@>` für die flache oberste Ebene,
+      // `jsonb_path_exists(..., '$.**.comments[*] ? (...)')` für die
+      // beliebig tief verschachtelten Sets/Blöcke — der `..`-Operator
+      // durchsucht dafür rekursiv JEDE Tiefe, unabhängig von der
+      // Block-/Set-Verschachtelung), statt alle Pläne/Übungen/Vorlagen des
+      // Vereins zu laden und in JS zu filtern.
+      if (user.clubId) {
+        const authorNameContainment = JSON.stringify([{ authorName: user.name }]);
+        const pathVars = JSON.stringify({ name: user.name });
+
+        const affectedPlans = await tx.$queryRaw<Array<{ id: string; comments: unknown; days: unknown }>>`
+          SELECT id, comments, days FROM "plans"
+          WHERE "clubId" = ${user.clubId}
+            AND (
+              comments @> ${authorNameContainment}::jsonb
+              OR jsonb_path_exists(days, '$.**.comments[*] ? (@.authorName == $name)', ${pathVars}::jsonb)
+            )
+        `;
+        for (const row of affectedPlans) {
+          const { changed, comments, days } = anonymizePlanCommentAuthors(row, user.name);
+          if (changed) {
+            await tx.plan.update({
+              where: { id: row.id },
+              data: { comments: comments as Prisma.InputJsonValue, days: days as Prisma.InputJsonValue },
+            });
+          }
+        }
+
+        const affectedExercises = await tx.$queryRaw<Array<{ id: string; comments: unknown }>>`
+          SELECT id, comments FROM "exercises"
+          WHERE "clubId" = ${user.clubId}
+            AND comments @> ${authorNameContainment}::jsonb
+        `;
+        for (const row of affectedExercises) {
+          const { changed, comments } = anonymizeExerciseCommentAuthors(row, user.name);
+          if (changed) {
+            await tx.exercise.update({ where: { id: row.id }, data: { comments: comments as Prisma.InputJsonValue } });
+          }
+        }
+
+        const affectedTemplates = await tx.$queryRaw<Array<{ id: string; sets: unknown }>>`
+          SELECT id, sets FROM "templates"
+          WHERE "clubId" = ${user.clubId}
+            AND jsonb_path_exists(sets, '$.**.comments[*] ? (@.authorName == $name)', ${pathVars}::jsonb)
+        `;
+        for (const row of affectedTemplates) {
+          const { changed, sets } = anonymizeTemplateCommentAuthors(row, user.name);
+          if (changed) {
+            await tx.template.update({ where: { id: row.id }, data: { sets: sets as Prisma.InputJsonValue } });
+          }
+        }
       }
 
       // Löscht in derselben Transaktion auch den zugehörigen

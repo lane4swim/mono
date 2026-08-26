@@ -1,6 +1,7 @@
 // apps/api/src/jobs/erasure.repository.memory.ts
 import type { ErasureJobGateway, DueErasureRequest } from './erasure.repository.js';
 import type { TombstoneRecord } from '../modules/sync/sync.gateway.js';
+import { anonymizePlanCommentAuthors, anonymizeExerciseCommentAuthors, anonymizeTemplateCommentAuthors } from './commentAnonymization.js';
 
 export interface InMemoryErasureDatabase {
   users: Array<{ id: string; clubId: string | null; athleteId: string | null; [key: string]: unknown }>;
@@ -9,6 +10,11 @@ export interface InMemoryErasureDatabase {
   entries: Array<{ id: string; athleteId: string; [key: string]: unknown }>;
   actionItems: Array<{ id: string; athleteId: string; [key: string]: unknown }>;
   sessions: Array<{ id: string; clubId: string; attendance: Array<{ athleteId?: string; [key: string]: unknown }> }>;
+  // Optional (Sicherheitsreview 2026-08, Befund N5) — nicht jeder
+  // bestehende Test braucht diese Stores, siehe commentAnonymization.ts.
+  plans?: Array<{ id: string; clubId: string; comments: unknown; days: unknown }>;
+  exercises?: Array<{ id: string; clubId: string; comments: unknown }>;
+  templates?: Array<{ id: string; clubId: string; sets: unknown }>;
   refreshTokens: Array<{ id: string; userId: string }>;
   // Kein `status`/`purgedAt` mehr (Code-Review, Befund R8) — analog zur
   // Prisma-Implementierung ist jede noch VORHANDENE Zeile implizit
@@ -61,6 +67,31 @@ export class InMemoryErasureJobGateway implements ErasureJobGateway {
         .filter((s) => s.clubId === user.clubId)
         .forEach((s) => { s.attendance = s.attendance.filter((a) => a.athleteId !== user.athleteId); });
       this.db.athletes = this.db.athletes.filter((a) => a.id !== user.athleteId);
+    }
+
+    // Sicherheitskorrektur (Sicherheitsreview 2026-08, Befund N5) — siehe
+    // ausführliche Begründung in erasure.repository.ts (Prisma-Pendant)
+    // bzw. commentAnonymization.ts. Bewusst NICHT an `user.athleteId`
+    // gekoppelt (anders als der Block oben), da Kommentare ebenso von
+    // Trainer:innen/Admins ohne athleteId stammen.
+    if (user.clubId && typeof user.name === 'string') {
+      const clubId = user.clubId;
+      const authorName = user.name;
+      for (const plan of this.db.plans ?? []) {
+        if (plan.clubId !== clubId) continue;
+        const { changed, comments, days } = anonymizePlanCommentAuthors(plan, authorName);
+        if (changed) { plan.comments = comments; plan.days = days; }
+      }
+      for (const exercise of this.db.exercises ?? []) {
+        if (exercise.clubId !== clubId) continue;
+        const { changed, comments } = anonymizeExerciseCommentAuthors(exercise, authorName);
+        if (changed) exercise.comments = comments;
+      }
+      for (const template of this.db.templates ?? []) {
+        if (template.clubId !== clubId) continue;
+        const { changed, sets } = anonymizeTemplateCommentAuthors(template, authorName);
+        if (changed) template.sets = sets;
+      }
     }
 
     this.db.users = this.db.users.filter((u) => u.id !== userId);

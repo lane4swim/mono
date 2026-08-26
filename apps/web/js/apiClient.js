@@ -43,10 +43,31 @@ function isAccessTokenExpiringSoon() {
   return accessToken !== null && Date.now() >= accessTokenExpiresAt - PROACTIVE_REFRESH_MARGIN_MS;
 }
 
+// Sicherheitsreview 2026-08, Befund N3: getApiBaseUrl() bestimmte die
+// Ziel-URL SÄMTLICHER Requests inkl. Authorization: Bearer-Header allein
+// aus dem localStorage — wer diesen Schlüssel setzen konnte (z. B. über
+// eine XSS-Lücke), hätte damit alle Tokens an einen fremden Host umleiten
+// können. Der Override ist laut Kopfkommentar oben ein reines
+// Entwicklungswerkzeug (lokaler Dev-Server auf :5173 gegen eine separat
+// laufende API auf :3000) — eine echte Produktionsinstanz läuft laut
+// docs/deployment*.md immer auf einer eigenen Domain, nie auf
+// localhost/127.0.0.1. Der Override wird deshalb nur noch berücksichtigt
+// (gelesen UND geschrieben), wenn die Seite selbst gerade von einem
+// solchen lokalen Origin ausgeliefert wird — auf jedem anderen Origin
+// bleibt es beim sicheren Standard (gleicher Origin), selbst wenn der
+// Schlüssel im localStorage gesetzt ist.
+const LOCAL_DEV_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
+
+function isLocalDevOrigin() {
+  return typeof location !== 'undefined' && LOCAL_DEV_HOSTNAMES.has(location.hostname);
+}
+
 export function getApiBaseUrl() {
+  if (!isLocalDevOrigin()) return '';
   return localStorage.getItem(API_BASE_URL_KEY) || '';
 }
 export function setApiBaseUrl(url) {
+  if (!isLocalDevOrigin()) return;
   if (url) localStorage.setItem(API_BASE_URL_KEY, url);
   else localStorage.removeItem(API_BASE_URL_KEY);
 }

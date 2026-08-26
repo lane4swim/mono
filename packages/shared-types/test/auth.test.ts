@@ -47,6 +47,10 @@ describe('UpdateMeRequestSchema', () => {
   it('lehnt eine ungültige E-Mail ab', () => {
     expect(UpdateMeRequestSchema.safeParse({ email: 'keine-email' }).success).toBe(false);
   });
+  // Sicherheitsreview 2026-08, Befund N2.
+  it('lehnt einen zu langen Namen ab (> 200 Zeichen)', () => {
+    expect(UpdateMeRequestSchema.safeParse({ name: 'X'.repeat(201) }).success).toBe(false);
+  });
 });
 
 describe('AccessTokenClaimsSchema', () => {

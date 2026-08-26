@@ -34,8 +34,8 @@
 //
 //   Store          | trainer | admin | athlete | Begründung
 //   ---------------|---------|-------|---------|--------------------
-//   results        | R + W   | R + W | R + W   | js/modules/times.js zeigt/bearbeitet für ALLE Rollen identisch die volle Liste.
-//   plans          | R + W   | R + W | R + W   | js/modules/plans.js: ebenso, für alle Rollen shared.
+//   results        | R + W   | R + W   | R + W* | js/modules/times.js zeigt für ALLE Rollen identisch die volle Liste; *Schreiben für "athlete" seit Sicherheitsreview 2026-08 (Befund N1) zusätzlich auf die EIGENEN Ergebnisse verengt (Zeilenebene, siehe sync.service.ts: push() — ResultSchema.athleteId muss der eigenen athleteId entsprechen, sowohl bei einem betroffenen bestehenden Datensatz als auch im gesendeten Payload).
+//   plans          | R + W   | R + W | R + W   | js/modules/plans.js: ebenso, für alle Rollen shared. BEWUSST kein athleteId-Scoping wie bei "results" (Befund N1 geprüft, aber nicht angewendet): PlanSchema hat keine Eigentümer:in auf Personenebene (nur groupId) — ein Trainingsplan ist ein Team-/Gruppendokument, kein individueller Datensatz.
 //   athletes       | R only  | R + W | R only  | js/modules/athletes.js: die Seite selbst ist laut `roles:['trainer','admin']` für trainer sichtbar, aber Anlegen/Ändern des Athleten-Stamms (inkl. "notes") ist dort zusätzlich hinter isAdminOrSuperAdmin() versteckt ("Verteidigung in der Tiefe"-Kommentar in openAthleteModal()) — write bewusst NICHT im "Coach"-Profil (anders als die übrigen coachManaged-Stores unten), sonst wäre die UI-Restriktion nur Fassade. "notes" zusätzlich per scopeChangeForAthlete() beim Lesen redigiert (Zeilen-/Feldebene, siehe sync.athleteScope.ts).
 //   groups         | R + W   | R + W | R only  | wird nur innerhalb von athletes.js verwaltet (kein eigenes Modul).
 //   exercises      | R + W   | R + W | R only  | js/modules/catalog.js: `roles:['trainer','admin']`.
@@ -48,11 +48,15 @@
 // Diese Tabelle regelt nur die STORE-Ebene (ganzer Store lesbar/schreibbar
 // ja/nein). Die mit * markierten, feineren Einschränkungen (nur eigene
 // Zeile/eigenes Feld statt ganzer Store) bleiben zusätzlich über
-// scopeChangeForAthlete() (Pull, siehe sync.athleteScope.ts) bzw.
-// canWrite() (Push, sperrt den Store hier bereits komplett) abgedeckt —
-// sie sind bewusst nicht Teil dieser generischen Rollen-Tabelle, da sie
-// vom KONKRETEN Dateninhalt abhängen (eigene athleteId im
-// Payload/Attendance-Eintrag), nicht nur von Rolle+Store.
+// scopeChangeForAthlete() (Pull, siehe sync.athleteScope.ts) bzw. einer
+// eigenen Prüfung in push() selbst (sync.service.ts — "results", seit
+// Befund N1) abgedeckt — sie sind bewusst nicht Teil dieser generischen
+// Rollen-Tabelle, da sie vom KONKRETEN Dateninhalt abhängen (eigene
+// athleteId im Payload/Attendance-Eintrag/bestehenden Datensatz), nicht nur
+// von Rolle+Store. canWrite() unten bleibt für "results" bewusst `shared`
+// (store-weit erlaubt) — die Verengung auf eigene Datensätze passiert erst
+// NACH diesem Guard, da sie den bereits geladenen "existing"-Datensatz
+// braucht (push() lädt ihn ohnehin für die Konfliktentscheidung).
 import type { EntityStoreName, Role, SyncStore } from '@lane1/shared-types';
 
 interface StoreAccess {
