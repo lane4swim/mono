@@ -26,8 +26,8 @@ Schweregrade: **Hoch** = vor dem nächsten Produktivbetrieb beheben,
 
 | # | Befund | Ort | Schwere |
 |---|---|---|---|
-| H1 | Standard-Superadmin `admin@test.de` / `pwd12345` bei `NODE_ENV=production` | `scripts/setup-codespace.sh` | Hoch |
-| H2 | Kein `trustProxy`: Rate-Limiting kollabiert hinter Nginx auf einen globalen Eimer | `apps/api/src/app.ts` | Hoch |
+| H1 | Standard-Superadmin `admin@test.de` / `pwd12345` bei `NODE_ENV=production` | `scripts/setup-codespace.sh` | Hoch — **behoben** |
+| H2 | Kein `trustProxy`: Rate-Limiting kollabiert hinter Nginx auf einen globalen Eimer | `apps/api/src/app.ts` | Hoch — **behoben** |
 | M1 | `trainerNote` erreicht Athlet:innen-Konten (bestätigt) | `sync.athleteScope.ts` | Mittel |
 | M2 | Geburtsdatum/Geschlecht fremder Athlet:innen an Athlet:innen-Konten | `sync.athleteScope.ts` | Mittel |
 | M3 | Einladungs-Token landet im Klartext in Zugriffs-/Anwendungslogs | `invitations.route.ts`, `app.ts`, `mailer.ts` | Mittel |
@@ -45,7 +45,14 @@ Schweregrade: **Hoch** = vor dem nächsten Produktivbetrieb beheben,
 
 ## Hoch
 
-### H1 — Standard-Superadmin mit öffentlich bekanntem Passwort in Produktion
+### H1 — Standard-Superadmin mit öffentlich bekanntem Passwort in Produktion — **behoben**
+
+`scripts/setup-codespace.sh` fragt E-Mail-Adresse und Passwort jetzt
+interaktiv ab (Passworteingabe ohne Terminal-Echo, mit Bestätigung), ohne
+jeden Default. `SUPERADMIN_EMAIL`/`SUPERADMIN_PASSWORD` bleiben als
+Umgebungsvariablen für nicht-interaktive Läufe (CI) überschreibbar. Die
+abschließende Ausgabe nennt nur noch die E-Mail-Adresse, nie das Passwort.
+
 
 `scripts/setup-codespace.sh:170-171`
 
@@ -76,7 +83,13 @@ Klartext-Ausgabe am Skriptende entfernen. Zusätzlich prüfen, ob
 
 ---
 
-### H2 — Rate-Limiting hinter dem Reverse Proxy: ein Eimer für alle
+### H2 — Rate-Limiting hinter dem Reverse Proxy: ein Eimer für alle — **behoben**
+
+`apps/api/src/app.ts` setzt jetzt `trustProxy: true` beim Fastify-Konstruktor.
+Regressionstest in `apps/api/test/plugins/security.test.ts` (verifiziert,
+dass zwei unterschiedliche `X-Forwarded-For`-Clients getrennte
+`/auth/refresh`-Rate-Limit-Budgets erhalten).
+
 
 `apps/api/src/app.ts:58-60`, `apps/api/src/plugins/security.ts:78-96`,
 `apps/api/src/modules/auth/auth.route.ts:54`

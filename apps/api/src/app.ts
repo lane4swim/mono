@@ -57,6 +57,18 @@ function resolveMailer(env: Env): MailSender {
 export async function buildApp(env: Env, overrides: BuildAppOverrides = {}): Promise<FastifyInstance> {
   const app = Fastify({
     logger: env.NODE_ENV !== 'test',
+    // Sicherheitskorrektur (Sicherheitsreview 2026-08, Befund H2): ohne
+    // trustProxy ignoriert Fastify den von allen Deployment-Anleitungen
+    // gesetzten "X-Forwarded-For"-Header — request.ip ist dann für JEDE
+    // Anfrage die Adresse des vorgeschalteten Nginx (siehe docs/deployment*.md),
+    // nicht die des tatsächlichen Clients. Die drei IP-basierten
+    // Rate-Limits (global in plugins/security.ts, sowie /auth/refresh und
+    // /auth/logout in auth.route.ts) kollabierten dadurch auf einen
+    // EINZIGEN, geteilten Zähler für die gesamte Installation — ein
+    // einzelner Client konnte damit alle anderen aussperren. trustProxy:
+    // true wertet "X-Forwarded-For" aus; request.ip zeigt danach wieder
+    // die tatsächliche Client-Adresse.
+    trustProxy: true,
   });
 
   await registerSecurityPlugins(app, env);

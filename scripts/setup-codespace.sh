@@ -14,9 +14,14 @@
 # Nutzung:
 #   bash scripts/setup-codespace.sh
 #
-# Superadmin-Zugangsdaten (Schritt 9.1) sind per Umgebungsvariable
-# überschreibbar, Default entspricht den Vorgaben für diesen Testlauf:
-#   SUPERADMIN_EMAIL=admin@test.de SUPERADMIN_PASSWORD=pwd12345 bash scripts/setup-codespace.sh
+# Superadmin-Zugangsdaten (Schritt 9.1): das Skript fragt E-Mail-Adresse und
+# Passwort interaktiv ab (Passwort-Eingabe ohne Terminal-Echo, mit
+# Bestätigung) — es gibt bewusst KEIN Default-Passwort mehr (Sicherheits-
+# review 2026-08, Befund H1). Für einen nicht-interaktiven Lauf (z. B. CI)
+# lassen sich beide weiterhin per Umgebungsvariable vorgeben:
+#   SUPERADMIN_EMAIL=admin@verein.de SUPERADMIN_PASSWORD='...' bash scripts/setup-codespace.sh
+# Am Ende des Skripts wird ausschließlich die E-Mail-Adresse noch einmal
+# ausgegeben, nie das Passwort.
 #
 # Wiederholt ausführbar: bereits installierte Software wird übersprungen,
 # eine bereits vorhandene apps/api/.env wird NICHT überschrieben (verhindert,
@@ -167,9 +172,46 @@ pm2 status
 
 # --- Schritt 9.1: Ersten Superadmin anlegen -----------------------------------
 log "Schritt 9.1: Ersten Superadmin anlegen"
-SUPERADMIN_EMAIL="${SUPERADMIN_EMAIL:-admin@test.de}"
-SUPERADMIN_PASSWORD="${SUPERADMIN_PASSWORD:-pwd12345}"
 SUPERADMIN_NAME="${SUPERADMIN_NAME:-Test Admin}"
+
+# Sicherheitskorrektur (Sicherheitsreview 2026-08, Befund H1): vormals
+# `admin@test.de` / `pwd12345` als Default — bei einem Lauf ohne gesetzte
+# Umgebungsvariablen (der dokumentierte Normalfall) entstand damit ein
+# Superadmin-Konto mit öffentlich im Repository stehenden Zugangsdaten,
+# selbst wenn NODE_ENV=production war (siehe apps/api/.env oben). Kein
+# Default mehr: ohne vorab gesetzte SUPERADMIN_EMAIL/SUPERADMIN_PASSWORD
+# wird interaktiv nachgefragt; das Passwort wird dabei per `read -s` NICHT
+# auf dem Terminal angezeigt und zur Absicherung gegen Tippfehler ein
+# zweites Mal zur Bestätigung abgefragt.
+if [[ -z "${SUPERADMIN_EMAIL:-}" ]]; then
+  read -rp "  Superadmin-E-Mail-Adresse: " SUPERADMIN_EMAIL
+fi
+if [[ -z "${SUPERADMIN_EMAIL}" ]]; then
+  echo "  Fehler: Superadmin-E-Mail-Adresse darf nicht leer sein." >&2
+  exit 1
+fi
+
+if [[ -z "${SUPERADMIN_PASSWORD:-}" ]]; then
+  while true; do
+    read -rsp "  Superadmin-Passwort (mind. 8 Zeichen, wird nicht angezeigt): " SUPERADMIN_PASSWORD
+    echo
+    if [[ ${#SUPERADMIN_PASSWORD} -lt 8 ]]; then
+      echo "  Das Passwort muss mindestens 8 Zeichen lang sein — bitte erneut eingeben." >&2
+      continue
+    fi
+    read -rsp "  Superadmin-Passwort (Bestätigung): " SUPERADMIN_PASSWORD_CONFIRM
+    echo
+    if [[ "${SUPERADMIN_PASSWORD}" != "${SUPERADMIN_PASSWORD_CONFIRM}" ]]; then
+      echo "  Die beiden Eingaben stimmen nicht überein — bitte erneut eingeben." >&2
+      continue
+    fi
+    unset SUPERADMIN_PASSWORD_CONFIRM
+    break
+  done
+fi
+# Sicherheitsnetz auch für den nicht-interaktiven Pfad (SUPERADMIN_PASSWORD
+# per Umgebungsvariable vorgegeben) — die Schleife oben validiert nur den
+# interaktiv eingegebenen Fall.
 if [[ ${#SUPERADMIN_PASSWORD} -lt 8 ]]; then
   echo "  Fehler: SUPERADMIN_PASSWORD muss mindestens 8 Zeichen lang sein (siehe apps/api/scripts/createSuperAdmin.ts)." >&2
   exit 1
@@ -245,7 +287,11 @@ sudo nginx -t
 sudo service nginx restart
 
 log "Fertig bis einschließlich Schritt 10."
-echo "Superadmin-Login: ${SUPERADMIN_EMAIL} / ${SUPERADMIN_PASSWORD}"
+# Sicherheitskorrektur (Sicherheitsreview 2026-08, Befund H1): nur noch die
+# E-Mail-Adresse, NIE das Passwort — vormals landete das Klartext-Passwort
+# hier im Terminal-Scrollback und in jedem Log, das die Skriptausgabe
+# mitschneidet (z. B. CI-Logs bei einem automatisierten Lauf).
+echo "Superadmin-Login: ${SUPERADMIN_EMAIL} (Passwort wie eingegeben/vorgegeben — wird hier nicht wiederholt)"
 if [[ "$ENV_WAS_CREATED" == "1" ]]; then
   echo "DB-Passwort (lane1_app, frisch erzeugt): ${DB_PASSWORD}"
   echo "Öffentliche Adresse (CORS_ORIGIN/FRONTEND_BASE_URL): ${PUBLIC_URL}"
