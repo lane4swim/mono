@@ -17,7 +17,7 @@ import { el, clear, beginRender } from '../dom.js';
 import { laneWave, badge, fullName, toast } from '../ui.js';
 import { openModal } from '../modal.js';
 import { field, textInput } from '../forms.js';
-import { getCurrentUser, updateProfile, setUserLocale, logout } from '../state.js';
+import { getCurrentUser, updateProfile, setUserLocale, logout, changePassword } from '../state.js';
 import * as api from '../apiClient.js';
 import { NetworkError, describeError } from '../apiClient.js';
 import { t, getLocale, getAvailableLocales } from '../i18n.js';
@@ -77,6 +77,55 @@ function downloadJSON(filename, data) {
   URL.revokeObjectURL(a.href);
 }
 
+// Sicherheitsreview 2026-08, Befund M5 — "Passwort ändern" für die
+// aktuell eingeloggte Person, verlangt zusätzlich das aktuelle Passwort
+// (siehe apps/api/src/modules/auth/auth.service.ts: changePassword()
+// für die Begründung). Reine, eigenständige Funktion statt inline in
+// renderView() — analog zu openDeleteAccountModal() unten — hält
+// renderView() selbst überschaubar.
+function buildChangePasswordCard() {
+  const card = el('div', { class: 'card mb-16' }, [el('h3', { class: 'mt-0' }, t('profile.passwordSectionTitle'))]);
+  const form = el('form', { class: 'form-grid' });
+  const fCurrent = textInput('', { type: 'password', required: true, autocomplete: 'current-password' });
+  const fNew = textInput('', { type: 'password', required: true, autocomplete: 'new-password' });
+  const fConfirm = textInput('', { type: 'password', required: true, autocomplete: 'new-password' });
+  form.appendChild(field(t('profile.currentPasswordLabel'), fCurrent, { span2: true }));
+  form.appendChild(field(t('auth.chooseNewPassword'), fNew, { span2: true, hint: t('auth.passwordHint') }));
+  form.appendChild(field(t('auth.confirmNewPassword'), fConfirm, { span2: true }));
+
+  const errorBox = el('p', { class: 'form-error', style: 'grid-column:1/-1;display:none' });
+  form.appendChild(errorBox);
+
+  const submitBtn = el('button', { type: 'submit', class: 'btn btn-primary' }, t('profile.changePasswordButton'));
+  form.appendChild(el('div', { class: 'form-actions', style: 'grid-column:1/-1' }, [submitBtn]));
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    errorBox.style.display = 'none';
+    if (fNew.value !== fConfirm.value) {
+      errorBox.textContent = t('auth.passwordMismatch');
+      errorBox.style.display = 'block';
+      return;
+    }
+    submitBtn.disabled = true;
+    try {
+      await changePassword(fCurrent.value, fNew.value);
+      toast(t('profile.passwordChanged'));
+      // Felder leeren statt sie stehen zu lassen — sensible Werte sollen
+      // nicht länger als nötig im DOM/Formularzustand verbleiben.
+      fCurrent.value = ''; fNew.value = ''; fConfirm.value = '';
+    } catch (err) {
+      errorBox.textContent = describeError(err, { on401Message: t('profile.errorInvalidCurrentPassword') });
+      errorBox.style.display = 'block';
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
+
+  card.appendChild(form);
+  return card;
+}
+
 function renderView(container, athletes, results, entries, actionItems, sessions) {
   const user = getCurrentUser();
   const wrap = el('div');
@@ -125,6 +174,9 @@ function renderView(container, athletes, results, entries, actionItems, sessions
 
   card.appendChild(form);
   wrap.appendChild(card);
+
+  // ---- Passwortwechsel (Sicherheitsreview 2026-08, Befund M5) ----
+  wrap.appendChild(buildChangePasswordCard());
 
   // ---- Language preference ----
   const langCard = el('div', { class: 'card' }, [

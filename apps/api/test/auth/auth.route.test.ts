@@ -4,7 +4,7 @@ import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../../src/app.js';
 import { loadEnv } from '../../src/config/env.js';
 import { createAuthService } from '../../src/modules/auth/auth.service.js';
-import { InMemoryUserRepository, InMemoryRefreshTokenRepository } from '../../src/modules/auth/auth.repository.memory.js';
+import { InMemoryUserRepository, InMemoryRefreshTokenRepository, InMemoryPasswordResetTokenRepository } from '../../src/modules/auth/auth.repository.memory.js';
 import { createInvitationsService } from '../../src/modules/invitations/invitations.service.js';
 import { InMemoryClubRepository, InMemoryInvitationRepository, InMemoryAthleteRepository } from '../../src/modules/invitations/invitations.repository.memory.js';
 import { generateFreshKeyPair } from '../../src/auth/keys.js';
@@ -53,10 +53,17 @@ async function buildTestApp() {
     clubInvitationTtlDays: 14,
     memberInvitationTtlDays: 7,
   });
+  // Sicherheitsreview 2026-08, Befund M5 — eigene Variable (statt inline),
+  // damit Tests den versendeten Passwort-Reset-Link auslesen können: die
+  // Route selbst gibt das Token bewusst NIE preis (siehe auth.route.ts:
+  // /auth/forgot-password).
+  const passwordResetMailer = new InMemoryMailSender();
   const authService = createAuthService({
     users, refreshTokens, invitations: invitationsService,
     profileGateway: new InMemoryProfileDataGateway(profileDb),
     dataErasureRetentionDays: 30,
+    passwordResetTokens: new InMemoryPasswordResetTokenRepository(), mailer: passwordResetMailer,
+    frontendBaseUrl: 'https://app.example.org', passwordResetTtlMinutes: 60,
     keyPair, accessTtlSeconds: 900, refreshTtlDays: 30,
   });
   const syncService = createSyncService({ gateway: new InMemorySyncGateway() });
@@ -66,7 +73,7 @@ async function buildTestApp() {
   // nutzen, während authService oben mit einem separaten Schlüsselpaar
   // signiert (führt sonst zu 401 auf jeder geschützten Route).
   const app = await buildApp(testEnv, { authService, invitationsService, syncService, keyPair });
-  return { app, invitations, profileDb, keyPair };
+  return { app, invitations, profileDb, keyPair, passwordResetMailer };
 }
 
 async function seedInvitationToken(
@@ -231,6 +238,190 @@ describe('Rate-Limiting auf /auth/logout (10/min)', () => {
     expect(statusCodes.slice(0, 10).every((code) => code === 204)).toBe(true);
     expect(statusCodes[10]).toBe(429);
 
+    await app.close();
+  });
+});
+
+// Sicherheitsreview 2026-08, Befund M5 ("Passwort vergessen").
+describe('POST /auth/forgot-password', () => {
+  it('liefert 200 mit generischer Antwort für eine bekannte E-Mail-Adresse und versendet eine Reset-E-Mail', async () => {
+    const { app, invitations, passwordResetMailer } = await buildTestApp();
+    const token = await seedInvitationToken(invitations, { email: 'vergesslich@example.org' });
+    await app.inject({ method: 'POST', url: '/auth/register', payload: { token, name: 'X', password: 'ein-sicheres-passwort', consent: true } });
+
+    const response = await app.inject({ method: 'POST', url: '/auth/forgot-password', payload: { email: 'vergesslich@example.org' } });
+    expect(response.statusCode).toBe(200);
+    expect(passwordResetMailer.sentPasswordResetEmails).toHaveLength(1);
+    await app.close();
+  });
+
+  it('liefert DIESELBE 200-Antwort für eine unbekannte E-Mail-Adresse (verhindert User-Enumeration) und versendet keine E-Mail', async () => {
+    const { app, passwordResetMailer } = await buildTestApp();
+    const response = await app.inject({ method: 'POST', url: '/auth/forgot-password', payload: { email: 'unbekannt@example.org' } });
+    expect(response.statusCode).toBe(200);
+    expect(passwordResetMailer.sentPasswordResetEmails).toHaveLength(0);
+    await app.close();
+  });
+
+  it('liefert 400 bei einer strukturell ungültigen E-Mail-Adresse', async () => {
+    const { app } = await buildTestApp();
+    const response = await app.inject({ method: 'POST', url: '/auth/forgot-password', payload: { email: 'keine-email' } });
+    expect(response.statusCode).toBe(400);
+    await app.close();
+  });
+});
+
+describe('Rate-Limiting auf /auth/forgot-password (3/15min)', () => {
+  it('blockiert nach 3 Versuchen für dieselbe E-Mail-Adresse innerhalb des Zeitfensters (429)', async () => {
+    const { app } = await buildTestApp();
+    const attempt = () => app.inject({ method: 'POST', url: '/auth/forgot-password', payload: { email: 'flut@example.org' } });
+    const results = [];
+    for (let i = 0; i < 4; i++) results.push(await attempt());
+    const statusCodes = results.map((r) => r.statusCode);
+    expect(statusCodes.slice(0, 3).every((code) => code === 200)).toBe(true);
+    expect(statusCodes[3]).toBe(429);
+    await app.close();
+  });
+});
+
+describe('POST /auth/reset-password', () => {
+  it('setzt bei gültigem Token ein neues Passwort und meldet die Person direkt an (200)', async () => {
+    const { app, invitations, passwordResetMailer } = await buildTestApp();
+    const inviteToken = await seedInvitationToken(invitations, { email: 'reset-route@example.org' });
+    await app.inject({ method: 'POST', url: '/auth/register', payload: { token: inviteToken, name: 'X', password: 'ein-sicheres-passwort', consent: true } });
+
+    await app.inject({ method: 'POST', url: '/auth/forgot-password', payload: { email: 'reset-route@example.org' } });
+    const resetUrl = passwordResetMailer.sentPasswordResetEmails.at(-1)!.resetUrl;
+    const resetToken = resetUrl.split('/reset-password/')[1];
+
+    const response = await app.inject({ method: 'POST', url: '/auth/reset-password', payload: { token: resetToken, newPassword: 'ein-ganz-neues-passwort' } });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().user.email).toBe('reset-route@example.org');
+    expect(response.json().accessToken).toBeTruthy();
+
+    // Login mit dem neuen Passwort funktioniert.
+    const loginResponse = await app.inject({ method: 'POST', url: '/auth/login', payload: { email: 'reset-route@example.org', password: 'ein-ganz-neues-passwort', consent: true } });
+    expect(loginResponse.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it('liefert 410 für ein unbekanntes/erfundenes Token', async () => {
+    const { app } = await buildTestApp();
+    const response = await app.inject({ method: 'POST', url: '/auth/reset-password', payload: { token: 'kein-echtes-token', newPassword: 'ein-sicheres-passwort' } });
+    expect(response.statusCode).toBe(410);
+    await app.close();
+  });
+
+  it('liefert 410 für ein bereits eingelöstes Token (kein zweites Einlösen)', async () => {
+    const { app, invitations, passwordResetMailer } = await buildTestApp();
+    const inviteToken = await seedInvitationToken(invitations, { email: 'reset-route2@example.org' });
+    await app.inject({ method: 'POST', url: '/auth/register', payload: { token: inviteToken, name: 'X', password: 'ein-sicheres-passwort', consent: true } });
+    await app.inject({ method: 'POST', url: '/auth/forgot-password', payload: { email: 'reset-route2@example.org' } });
+    const resetUrl = passwordResetMailer.sentPasswordResetEmails.at(-1)!.resetUrl;
+    const resetToken = resetUrl.split('/reset-password/')[1];
+
+    await app.inject({ method: 'POST', url: '/auth/reset-password', payload: { token: resetToken, newPassword: 'erstes-neues-passwort' } });
+    const second = await app.inject({ method: 'POST', url: '/auth/reset-password', payload: { token: resetToken, newPassword: 'zweites-neues-passwort' } });
+    expect(second.statusCode).toBe(410);
+    await app.close();
+  });
+
+  it('liefert 400 bei einem zu kurzen neuen Passwort', async () => {
+    const { app } = await buildTestApp();
+    const response = await app.inject({ method: 'POST', url: '/auth/reset-password', payload: { token: 'irgendein-token', newPassword: 'kurz' } });
+    expect(response.statusCode).toBe(400);
+    await app.close();
+  });
+});
+
+describe('Rate-Limiting auf /auth/reset-password (10/min)', () => {
+  it('blockiert nach 10 Versuchen innerhalb einer Minute (429)', async () => {
+    const { app } = await buildTestApp();
+    const attempt = () => app.inject({ method: 'POST', url: '/auth/reset-password', payload: { token: 'ungueltiges-token-fuer-rate-limit-test', newPassword: 'ein-sicheres-passwort' } });
+    const results = [];
+    for (let i = 0; i < 11; i++) results.push(await attempt());
+    const statusCodes = results.map((r) => r.statusCode);
+    expect(statusCodes.slice(0, 10).every((code) => code === 410)).toBe(true);
+    expect(statusCodes[10]).toBe(429);
+    await app.close();
+  });
+});
+
+describe('POST /api/me/password (geschützt)', () => {
+  async function registerAndLogin(app: FastifyInstance, invitations: InMemoryInvitationRepository, email: string) {
+    const inviteToken = await seedInvitationToken(invitations, { email });
+    const response = await app.inject({ method: 'POST', url: '/auth/register', payload: { token: inviteToken, name: 'X', password: 'ein-sicheres-passwort', consent: true } });
+    return response.json().accessToken as string;
+  }
+
+  it('liefert 401 ohne Authorization-Header', async () => {
+    const { app } = await buildTestApp();
+    const response = await app.inject({ method: 'POST', url: '/api/me/password', payload: { currentPassword: 'x', newPassword: 'ein-neues-passwort' } });
+    expect(response.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it('ändert bei korrektem aktuellem Passwort das Passwort (200) und liefert ein frisches Token-Paar', async () => {
+    const { app, invitations } = await buildTestApp();
+    const accessToken = await registerAndLogin(app, invitations, 'change-route@example.org');
+
+    const response = await app.inject({
+      method: 'POST', url: '/api/me/password',
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: { currentPassword: 'ein-sicheres-passwort', newPassword: 'ein-ganz-neues-passwort' },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().accessToken).toBeTruthy();
+
+    const loginResponse = await app.inject({ method: 'POST', url: '/auth/login', payload: { email: 'change-route@example.org', password: 'ein-ganz-neues-passwort', consent: true } });
+    expect(loginResponse.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it('liefert 401 bei falschem aktuellem Passwort', async () => {
+    const { app, invitations } = await buildTestApp();
+    const accessToken = await registerAndLogin(app, invitations, 'change-route2@example.org');
+
+    const response = await app.inject({
+      method: 'POST', url: '/api/me/password',
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: { currentPassword: 'falsches-passwort', newPassword: 'ein-neues-passwort' },
+    });
+    expect(response.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it('liefert 400 bei einem zu kurzen neuen Passwort', async () => {
+    const { app, invitations } = await buildTestApp();
+    const accessToken = await registerAndLogin(app, invitations, 'change-route3@example.org');
+
+    const response = await app.inject({
+      method: 'POST', url: '/api/me/password',
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: { currentPassword: 'ein-sicheres-passwort', newPassword: 'kurz' },
+    });
+    expect(response.statusCode).toBe(400);
+    await app.close();
+  });
+});
+
+describe('Rate-Limiting auf /api/me/password (5/min)', () => {
+  it('blockiert nach 5 Versuchen innerhalb einer Minute (429)', async () => {
+    const { app, invitations } = await buildTestApp();
+    const inviteToken = await seedInvitationToken(invitations, { email: 'change-ratelimit@example.org' });
+    const registerResponse = await app.inject({ method: 'POST', url: '/auth/register', payload: { token: inviteToken, name: 'X', password: 'ein-sicheres-passwort', consent: true } });
+    const accessToken = registerResponse.json().accessToken;
+
+    const attempt = () => app.inject({
+      method: 'POST', url: '/api/me/password',
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: { currentPassword: 'falsches-passwort', newPassword: 'ein-neues-passwort' },
+    });
+    const results = [];
+    for (let i = 0; i < 6; i++) results.push(await attempt());
+    const statusCodes = results.map((r) => r.statusCode);
+    expect(statusCodes.slice(0, 5).every((code) => code === 401)).toBe(true);
+    expect(statusCodes[5]).toBe(429);
     await app.close();
   });
 });

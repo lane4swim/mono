@@ -15,6 +15,12 @@ export interface SyncRoutesOptions {
   syncService: SyncService;
 }
 
+// Sicherheitsreview 2026-08, Befund N4: push()/pull() vertrauen vollständig
+// den Access-Token-Claims (clubId/role/athleteId) — keine erneute
+// Datenbankabfrage gegen den aktuellen User-Datensatz. Bewusst so
+// akzeptiert (siehe ausführliche Begründung in plugins/authenticate.ts,
+// direkt über app.authenticate), nicht übersehen.
+//
 // requireRole hat bereits sichergestellt, dass die Rolle stimmt; eine Rolle
 // ohne Verein (theoretisch nur superadmin) kommt hier also nicht an —
 // clubId ist an dieser Stelle immer gesetzt. role/athleteId werden

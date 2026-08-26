@@ -43,10 +43,31 @@ function isAccessTokenExpiringSoon() {
   return accessToken !== null && Date.now() >= accessTokenExpiresAt - PROACTIVE_REFRESH_MARGIN_MS;
 }
 
+// Sicherheitsreview 2026-08, Befund N3: getApiBaseUrl() bestimmte die
+// Ziel-URL SÄMTLICHER Requests inkl. Authorization: Bearer-Header allein
+// aus dem localStorage — wer diesen Schlüssel setzen konnte (z. B. über
+// eine XSS-Lücke), hätte damit alle Tokens an einen fremden Host umleiten
+// können. Der Override ist laut Kopfkommentar oben ein reines
+// Entwicklungswerkzeug (lokaler Dev-Server auf :5173 gegen eine separat
+// laufende API auf :3000) — eine echte Produktionsinstanz läuft laut
+// docs/deployment*.md immer auf einer eigenen Domain, nie auf
+// localhost/127.0.0.1. Der Override wird deshalb nur noch berücksichtigt
+// (gelesen UND geschrieben), wenn die Seite selbst gerade von einem
+// solchen lokalen Origin ausgeliefert wird — auf jedem anderen Origin
+// bleibt es beim sicheren Standard (gleicher Origin), selbst wenn der
+// Schlüssel im localStorage gesetzt ist.
+const LOCAL_DEV_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
+
+function isLocalDevOrigin() {
+  return typeof location !== 'undefined' && LOCAL_DEV_HOSTNAMES.has(location.hostname);
+}
+
 export function getApiBaseUrl() {
+  if (!isLocalDevOrigin()) return '';
   return localStorage.getItem(API_BASE_URL_KEY) || '';
 }
 export function setApiBaseUrl(url) {
+  if (!isLocalDevOrigin()) return;
   if (url) localStorage.setItem(API_BASE_URL_KEY, url);
   else localStorage.removeItem(API_BASE_URL_KEY);
 }
@@ -166,6 +187,26 @@ export async function acceptInvitation({ token, name, password, consent }) {
   return result.user;
 }
 
+// "Passwort vergessen" (Sicherheitsreview 2026-08, Befund M5). Liefert
+// serverseitig IMMER dieselbe generische Antwort (siehe
+// auth.service.ts: requestPasswordReset()) — verrät nicht, ob die
+// E-Mail-Adresse zu einem Konto gehört. allowRefreshRetry: false wie bei
+// login()/acceptInvitation() — vor einer Sitzung gibt es kein Access
+// Token, das per 401-Retry erneuert werden könnte.
+export function forgotPassword(email) {
+  return postJson('/auth/forgot-password', { email }, { allowRefreshRetry: false });
+}
+
+// Löst das per E-Mail zugestellte Reset-Token ein — meldet bei Erfolg
+// direkt an, analog zu login()/acceptInvitation() oben (der serverseitige
+// Endpunkt liefert bereits ein volles Token-Paar, siehe
+// auth.service.ts: resetPassword()).
+export async function resetPassword({ token, newPassword }) {
+  const result = await postJson('/auth/reset-password', { token, newPassword }, { allowRefreshRetry: false });
+  setTokens(result);
+  return result.user;
+}
+
 // Code-Review, Befund S4: refreshTokens() bündelt gleichzeitige Aufrufer
 // auf GENAU einen In-Flight-Versuch. Ohne dieses Bündeln lösten mehrere
 // parallel abgesetzte Requests (typischerweise runSync()'s push()+pull(),
@@ -211,8 +252,16 @@ export async function logoutRemote() {
   catch { /* best effort — lokales Aufräumen erfolgt in jedem Fall */ }
 }
 
+// POST statt GET mit Token als URL-Pfadparameter (Sicherheitsreview
+// 2026-08, Befund M3) — verhindert, dass das Token über Server-seitiges
+// Zugriffs-/Anwendungslogging (req.url) im Klartext landet. Der geteilte
+// Einladungslink selbst (#/accept-invite/<token>, per "Link kopieren" in
+// modules/userManagement.js z. B. für den Versand per WhatsApp) bleibt
+// unverändert — das Token steht dort im URL-Fragment, das der Browser nie
+// an einen Server sendet; erst dieser Aufruf hier (nachdem der Client es
+// bereits aus dem Fragment gelesen hat) schickt es weiter, jetzt im Body.
 export function getInvitationPreview(token) {
-  return request(`/api/invitations/preview/${encodeURIComponent(token)}`, {}, { allowRefreshRetry: false });
+  return postJson('/api/invitations/preview', { token }, { allowRefreshRetry: false });
 }
 
 // ---- Eigenes Profil ----------------------------------------------------
@@ -221,6 +270,16 @@ export function getMe() {
 }
 export function updateMe(patch) {
   return request('/api/me', { method: 'PATCH', body: JSON.stringify(patch) });
+}
+// Passwortwechsel für die eigene, eingeloggte Person (Sicherheitsreview
+// 2026-08, Befund M5). Liefert wie login() ein frisches Token-Paar —
+// die aktuelle Sitzung bleibt dadurch nahtlos angemeldet, während der
+// Server alle ANDEREN Sitzungen widerruft (siehe auth.service.ts:
+// changePassword()).
+export async function changePassword({ currentPassword, newPassword }) {
+  const result = await request('/api/me/password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) });
+  setTokens(result);
+  return result.user;
 }
 // Art. 15 DSGVO — Recht auf Auskunft: bündelt alle zum eigenen Konto
 // gespeicherten Daten.

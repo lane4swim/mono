@@ -87,12 +87,18 @@ export interface GeneratedOpaqueToken {
   expiresAt: Date;
 }
 
-function generateOpaqueToken(bytes: number, ttlDays: number): GeneratedOpaqueToken {
+// Nimmt die TTL bewusst in Millisekunden entgegen (nicht in Tagen) — die
+// drei Aufrufer unten haben unterschiedliche natürliche Zeiteinheiten
+// (Tage für Refresh-/Einladungs-Tokens, Minuten für das kurzlebigere
+// Passwort-Zurücksetzen-Token, siehe generatePasswordResetToken()) und
+// rechnen jeweils selbst in Millisekunden um, statt diese Funktion mit
+// einer weiteren Einheit zu verkomplizieren.
+function generateOpaqueToken(bytes: number, ttlMs: number): GeneratedOpaqueToken {
   const plainToken = randomBytes(bytes).toString('base64url');
   return {
     plainToken,
     tokenHash: hashOpaqueToken(plainToken),
-    expiresAt: new Date(Date.now() + ttlDays * 24 * 60 * 60 * 1000),
+    expiresAt: new Date(Date.now() + ttlMs),
   };
 }
 
@@ -103,7 +109,7 @@ function hashOpaqueToken(plainToken: string): string {
 export type GeneratedRefreshToken = GeneratedOpaqueToken;
 
 export function generateRefreshToken(ttlDays: number): GeneratedRefreshToken {
-  return generateOpaqueToken(48, ttlDays);
+  return generateOpaqueToken(48, ttlDays * 24 * 60 * 60 * 1000);
 }
 
 export function hashRefreshToken(plainToken: string): string {
@@ -118,9 +124,28 @@ export function hashRefreshToken(plainToken: string): string {
 export type GeneratedInvitationToken = GeneratedOpaqueToken;
 
 export function generateInvitationToken(ttlDays: number): GeneratedInvitationToken {
-  return generateOpaqueToken(32, ttlDays);
+  return generateOpaqueToken(32, ttlDays * 24 * 60 * 60 * 1000);
 }
 
 export function hashInvitationToken(plainToken: string): string {
+  return hashOpaqueToken(plainToken);
+}
+
+// Passwort-Zurücksetzen-Tokens (Sicherheitsreview 2026-08, Befund M5):
+// folgen demselben Prinzip wie Refresh-/Einladungs-Tokens oben (opakes
+// Zufalls-Token, serverseitig nur der SHA-256-Hash gespeichert) — eigene
+// Funktion statt Wiederverwendung, da die TTL hier bewusst in MINUTEN
+// statt Tagen angegeben wird: ein Passwort-Reset-Token autorisiert eine
+// sicherheitskritische Aktion an einem BEREITS bestehenden Konto (anders
+// als ein Einladungs-Token, das nur eine Erstregistrierung ermöglicht)
+// und sollte daher deutlich kurzlebiger sein (Standard: 60 Minuten, siehe
+// app.ts: PASSWORD_RESET_TTL_MINUTES).
+export type GeneratedPasswordResetToken = GeneratedOpaqueToken;
+
+export function generatePasswordResetToken(ttlMinutes: number): GeneratedPasswordResetToken {
+  return generateOpaqueToken(32, ttlMinutes * 60 * 1000);
+}
+
+export function hashPasswordResetToken(plainToken: string): string {
   return hashOpaqueToken(plainToken);
 }

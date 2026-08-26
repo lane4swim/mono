@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { buildApp } from '../../src/app.js';
 import { loadEnv } from '../../src/config/env.js';
 import { createAuthService } from '../../src/modules/auth/auth.service.js';
-import { InMemoryUserRepository, InMemoryRefreshTokenRepository } from '../../src/modules/auth/auth.repository.memory.js';
+import { InMemoryUserRepository, InMemoryRefreshTokenRepository, InMemoryPasswordResetTokenRepository } from '../../src/modules/auth/auth.repository.memory.js';
 import { createInvitationsService } from '../../src/modules/invitations/invitations.service.js';
 import { InMemoryClubRepository, InMemoryInvitationRepository, InMemoryAthleteRepository } from '../../src/modules/invitations/invitations.repository.memory.js';
 import { createSyncService } from '../../src/modules/sync/sync.service.js';
@@ -39,6 +39,8 @@ async function buildTestApp() {
     users, refreshTokens, invitations: invitationsService,
     profileGateway: new InMemoryProfileDataGateway({ users: [], athletes: [], results: [], entries: [], actionItems: [], sessions: [] }),
     dataErasureRetentionDays: 30,
+    passwordResetTokens: new InMemoryPasswordResetTokenRepository(), mailer: new InMemoryMailSender(),
+    frontendBaseUrl: 'https://app.example.org', passwordResetTtlMinutes: 60,
     keyPair, accessTtlSeconds: 900, refreshTtlDays: 30,
   });
   const syncService = createSyncService({ gateway: new InMemorySyncGateway() });
@@ -190,7 +192,9 @@ describe('POST /api/invitations (admin/superadmin)', () => {
   });
 });
 
-describe('GET /api/invitations/preview/:token (öffentlich)', () => {
+// POST statt GET mit Token als URL-Pfadparameter (Sicherheitsreview
+// 2026-08, Befund M3) — siehe Kommentar in invitations.route.ts.
+describe('POST /api/invitations/preview (öffentlich)', () => {
   it('liefert eine Vorschau ohne Authentifizierung', async () => {
     const { app, keyPair, clubs } = await buildTestApp();
     const club = await clubs.create({ name: 'SV Wasserfreunde' });
@@ -203,7 +207,7 @@ describe('GET /api/invitations/preview/:token (öffentlich)', () => {
     });
     const { token: invitationToken } = createResponse.json();
 
-    const preview = await app.inject({ method: 'GET', url: `/api/invitations/preview/${invitationToken}` });
+    const preview = await app.inject({ method: 'POST', url: '/api/invitations/preview', payload: { token: invitationToken } });
     expect(preview.statusCode).toBe(200);
     expect(preview.json().clubName).toBe('SV Wasserfreunde');
     await app.close();
@@ -211,8 +215,15 @@ describe('GET /api/invitations/preview/:token (öffentlich)', () => {
 
   it('liefert 410 für ein unbekanntes Token', async () => {
     const { app } = await buildTestApp();
-    const response = await app.inject({ method: 'GET', url: '/api/invitations/preview/nicht-echt' });
+    const response = await app.inject({ method: 'POST', url: '/api/invitations/preview', payload: { token: 'nicht-echt' } });
     expect(response.statusCode).toBe(410);
+    await app.close();
+  });
+
+  it('liefert 400 für einen leeren Token (Validierung)', async () => {
+    const { app } = await buildTestApp();
+    const response = await app.inject({ method: 'POST', url: '/api/invitations/preview', payload: { token: '' } });
+    expect(response.statusCode).toBe(400);
     await app.close();
   });
 });
@@ -260,7 +271,7 @@ describe('DELETE /api/invitations/:id (widerrufen)', () => {
     });
     expect(revokeResponse.statusCode).toBe(204);
 
-    const previewAfterRevoke = await app.inject({ method: 'GET', url: `/api/invitations/preview/${invitationToken}` });
+    const previewAfterRevoke = await app.inject({ method: 'POST', url: '/api/invitations/preview', payload: { token: invitationToken } });
     expect(previewAfterRevoke.statusCode).toBe(410);
     await app.close();
   });

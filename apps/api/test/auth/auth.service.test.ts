@@ -6,8 +6,10 @@ import {
   InvalidCredentialsError,
   InvalidRefreshTokenError,
   InvalidInvitationError,
+  InvalidCurrentPasswordError,
+  InvalidOrExpiredResetTokenError,
 } from '../../src/modules/auth/auth.service.js';
-import { InMemoryUserRepository, InMemoryRefreshTokenRepository } from '../../src/modules/auth/auth.repository.memory.js';
+import { InMemoryUserRepository, InMemoryRefreshTokenRepository, InMemoryPasswordResetTokenRepository } from '../../src/modules/auth/auth.repository.memory.js';
 import { createInvitationsService } from '../../src/modules/invitations/invitations.service.js';
 import { InMemoryClubRepository, InMemoryInvitationRepository, InMemoryAthleteRepository } from '../../src/modules/invitations/invitations.repository.memory.js';
 import { InMemoryMailSender } from '../../src/mail/mailer.memory.js';
@@ -44,11 +46,19 @@ function makeService() {
   const profileDb: any = { users: [], athletes: [], results: [], entries: [], actionItems: [], sessions: [] };
   const profileGateway = new InMemoryProfileDataGateway(profileDb);
   const keyPair = generateFreshKeyPair();
+  // Sicherheitsreview 2026-08, Befund M5 — eigene, aus makeService()
+  // herausgereichte Instanzen (statt inline wie beim invitationsService
+  // oben), damit die Tests zu requestPasswordReset()/resetPassword()
+  // unten direkt gegen sie prüfen können (mailer.sentPasswordResetEmails,
+  // passwordResetTokens.findByHash()).
+  const passwordResetTokens = new InMemoryPasswordResetTokenRepository();
+  const mailer = new InMemoryMailSender();
   const service = createAuthService({
     users, refreshTokens, invitations: invitationsService, profileGateway, dataErasureRetentionDays: 30,
+    passwordResetTokens, mailer, frontendBaseUrl: 'https://app.example.org', passwordResetTtlMinutes: 60,
     keyPair, accessTtlSeconds: 900, refreshTtlDays: 30,
   });
-  return { service, users, refreshTokens, invitations, keyPair, profileDb };
+  return { service, users, refreshTokens, invitations, keyPair, profileDb, passwordResetTokens, mailer };
 }
 
 // Erzeugt eine gültige Trainer-Einladung und liefert das Klartext-Token,
@@ -403,5 +413,162 @@ describe('authService.exportMyData / requestAccountDeletion', () => {
     const result = await service.requestAccountDeletion(user.id);
     const expectedMs = before + 30 * 24 * 60 * 60 * 1000; // dataErasureRetentionDays: 30 in makeService()
     expect(Math.abs(result.purgeAfter.getTime() - expectedMs)).toBeLessThan(5000);
+  });
+});
+
+// Sicherheitsreview 2026-08, Befund M5 ("Passwort vergessen").
+describe('authService.requestPasswordReset', () => {
+  it('legt für eine bekannte E-Mail-Adresse ein Reset-Token an und versendet eine E-Mail', async () => {
+    const { service, invitations, passwordResetTokens, mailer } = makeService();
+    const { user } = await registerViaInvitation(service, invitations, { email: 'vergessen@example.org' });
+
+    await service.requestPasswordReset('vergessen@example.org');
+
+    expect(mailer.sentPasswordResetEmails).toHaveLength(1);
+    expect(mailer.sentPasswordResetEmails[0]).toMatchObject({ to: 'vergessen@example.org' });
+    // Das Token im versendeten Link muss tatsächlich gegen das Repository
+    // auflösbar sein (nicht nur irgendein String).
+    const url = mailer.sentPasswordResetEmails[0]!.resetUrl;
+    const token = url.split('/reset-password/')[1];
+    expect(token).toBeTruthy();
+    const { hashPasswordResetToken } = await import('../../src/auth/tokens.js');
+    const stored = await passwordResetTokens.findByHash(hashPasswordResetToken(token!));
+    expect(stored?.userId).toBe(user.id);
+  });
+
+  // Sicherheitsregression: verhindert User-Enumeration — kein Fehler, keine
+  // erkennbar unterschiedliche Antwort für eine unbekannte E-Mail-Adresse.
+  it('wirft KEINEN Fehler für eine unbekannte E-Mail-Adresse und versendet keine E-Mail', async () => {
+    const { service, mailer } = makeService();
+    await expect(service.requestPasswordReset('unbekannt@example.org')).resolves.toBeUndefined();
+    expect(mailer.sentPasswordResetEmails).toHaveLength(0);
+  });
+
+  it('versendet keine E-Mail für ein bereits soft-gelöschtes Konto (findByEmail liefert nie gelöschte Konten)', async () => {
+    const { service, invitations, users, mailer } = makeService();
+    const { user } = await registerViaInvitation(service, invitations, { email: 'geloescht@example.org' });
+    await users.update(user.id, { deletedAt: new Date() });
+
+    await service.requestPasswordReset('geloescht@example.org');
+    expect(mailer.sentPasswordResetEmails).toHaveLength(0);
+  });
+});
+
+describe('authService.resetPassword', () => {
+  async function requestAndExtractToken(
+    service: ReturnType<typeof makeService>['service'],
+    mailer: ReturnType<typeof makeService>['mailer'],
+    email: string,
+  ) {
+    await service.requestPasswordReset(email);
+    const url = mailer.sentPasswordResetEmails.at(-1)!.resetUrl;
+    return url.split('/reset-password/')[1]!;
+  }
+
+  it('setzt bei gültigem Token ein neues Passwort und meldet die Person direkt an', async () => {
+    const { service, invitations, mailer } = makeService();
+    await registerViaInvitation(service, invitations, { email: 'reset@example.org' });
+    const token = await requestAndExtractToken(service, mailer, 'reset@example.org');
+
+    const result = await service.resetPassword(token, 'ein-neues-passwort');
+    expect(result.user.email).toBe('reset@example.org');
+    expect(result.accessToken).toBeTruthy();
+    expect(result.refreshToken).toBeTruthy();
+
+    // Das neue Passwort funktioniert, das alte nicht mehr.
+    await expect(service.login({ email: 'reset@example.org', password: 'ein-neues-passwort', consent: true })).resolves.toBeTruthy();
+    await expect(
+      service.login({ email: 'reset@example.org', password: 'ein-sicheres-passwort', consent: true }),
+    ).rejects.toThrow(InvalidCredentialsError);
+  });
+
+  it('widerruft alle bestehenden Sitzungen (Refresh Tokens) beim Zurücksetzen', async () => {
+    const { service, invitations, mailer } = makeService();
+    const { refreshToken: oldRefreshToken } = await registerViaInvitation(service, invitations, { email: 'reset2@example.org' });
+    const token = await requestAndExtractToken(service, mailer, 'reset2@example.org');
+
+    await service.resetPassword(token, 'ein-neues-passwort');
+
+    await expect(service.refresh(oldRefreshToken)).rejects.toThrow(InvalidRefreshTokenError);
+  });
+
+  it('lehnt ein unbekanntes/erfundenes Token ab', async () => {
+    const { service } = makeService();
+    await expect(service.resetPassword('kein-echtes-token', 'ein-neues-passwort')).rejects.toThrow(InvalidOrExpiredResetTokenError);
+  });
+
+  it('lehnt ein bereits verwendetes Token ab (kein zweites Einlösen)', async () => {
+    const { service, invitations, mailer } = makeService();
+    await registerViaInvitation(service, invitations, { email: 'reset3@example.org' });
+    const token = await requestAndExtractToken(service, mailer, 'reset3@example.org');
+
+    await service.resetPassword(token, 'ein-neues-passwort');
+    await expect(service.resetPassword(token, 'noch-ein-passwort')).rejects.toThrow(InvalidOrExpiredResetTokenError);
+  });
+
+  it('lehnt ein abgelaufenes Token ab', async () => {
+    const { service, users, passwordResetTokens } = makeService();
+    const user = await users.create({
+      clubId: CLUB_ID, name: 'Test Person', email: 'abgelaufen@example.org', passwordHash: 'irrelevant',
+      role: 'trainer', consentGivenAt: new Date(), consentVersion: '2026-07-15',
+    });
+    const { hashPasswordResetToken } = await import('../../src/auth/tokens.js');
+    const plainToken = 'abgelaufenes-test-token';
+    await passwordResetTokens.create(user.id, hashPasswordResetToken(plainToken), new Date(Date.now() - 1000));
+
+    await expect(service.resetPassword(plainToken, 'ein-neues-passwort')).rejects.toThrow(InvalidOrExpiredResetTokenError);
+  });
+});
+
+describe('authService.changePassword', () => {
+  it('ändert bei korrektem aktuellem Passwort das Passwort und liefert ein frisches Token-Paar', async () => {
+    const { service, invitations } = makeService();
+    const { user } = await registerViaInvitation(service, invitations, { email: 'change@example.org' });
+
+    const result = await service.changePassword(user.id, 'ein-sicheres-passwort', 'ein-noch-sichereres-passwort');
+    expect(result.user.email).toBe('change@example.org');
+    expect(result.accessToken).toBeTruthy();
+
+    await expect(
+      service.login({ email: 'change@example.org', password: 'ein-noch-sichereres-passwort', consent: true }),
+    ).resolves.toBeTruthy();
+    await expect(
+      service.login({ email: 'change@example.org', password: 'ein-sicheres-passwort', consent: true }),
+    ).rejects.toThrow(InvalidCredentialsError);
+  });
+
+  it('lehnt ein falsches aktuelles Passwort ab, ohne das gespeicherte Passwort zu ändern', async () => {
+    const { service, invitations } = makeService();
+    const { user } = await registerViaInvitation(service, invitations, { email: 'change2@example.org' });
+
+    await expect(service.changePassword(user.id, 'falsches-passwort', 'ein-neues-passwort')).rejects.toThrow(InvalidCurrentPasswordError);
+
+    // Login mit dem UNVERÄNDERTEN, ursprünglichen Passwort funktioniert weiterhin.
+    await expect(
+      service.login({ email: 'change2@example.org', password: 'ein-sicheres-passwort', consent: true }),
+    ).resolves.toBeTruthy();
+  });
+
+  // Sicherheitsmaßnahme: verhindert, dass ein kurzzeitig entwendeter Access
+  // Token allein (ohne Kenntnis des aktuellen Passworts) zur dauerhaften
+  // Kontoübernahme per Passwortwechsel reicht.
+  it('widerruft ANDERE Sitzungen, stellt aber sofort ein NEUES gültiges Token-Paar für die aktuelle Sitzung aus', async () => {
+    const { service, invitations } = makeService();
+    const { user, refreshToken: oldRefreshToken } = await registerViaInvitation(service, invitations, { email: 'change3@example.org' });
+
+    const result = await service.changePassword(user.id, 'ein-sicheres-passwort', 'ein-neues-passwort');
+
+    // Das NEU ausgestellte Refresh Token funktioniert direkt (VOR dem
+    // folgenden Check unten geprüft — dessen Reuse-Detection widerruft
+    // anschließend absichtlich ALLE Sitzungen, siehe nächster Kommentar).
+    await expect(service.refresh(result.refreshToken)).resolves.toBeTruthy();
+
+    // Das ALTE, bereits vor dem Passwortwechsel widerrufene Refresh Token
+    // schlägt fehl — und löst dabei (by design, siehe refresh()'
+    // Reuse-Detection in auth.service.ts) einen Massen-Widerruf ALLER
+    // Sitzungen aus, da ein Aufruf mit einem bereits widerrufenen Token
+    // als Diebstahlsignal gilt. Deshalb bewusst als LETZTE Prüfung dieses
+    // Tests, nicht vor der obigen.
+    await expect(service.refresh(oldRefreshToken)).rejects.toThrow(InvalidRefreshTokenError);
   });
 });

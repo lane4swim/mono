@@ -11,6 +11,7 @@ import * as api from '../js/apiClient.js';
 import { describeError } from '../js/apiClient.js';
 import { el, clear } from '../js/dom.js';
 import { toast } from '../js/ui.js';
+import { openModal } from '../js/modal.js';
 import { field, textInput } from '../js/forms.js';
 import { t, getLocale, setLocale, detectInitialLocale } from '../js/i18n.js';
 import { CURRENT_CONSENT_VERSION } from '../js/state.js';
@@ -129,6 +130,45 @@ function renderLoginForm(errorMessage) {
   authScreenEl.appendChild(box);
 }
 
+// Baut den Einladungslink relativ zum SITE-ROOT, nicht relativ zu "/admin"
+// selbst: admin.js läuft unter ".../admin/" bzw. ".../admin/index.html",
+// die eigentliche Annahme-Seite (#/accept-invite/<token>) liegt aber in
+// der Haupt-App EINE Ebene darüber (analog zur Scope-Erkennung in
+// ../sw.js). Ein simples location.pathname (wie in
+// modules/userManagement.js: buildInviteUrl(), das im Kontext der
+// Haupt-App bereits am Site-Root läuft) würde hier fälschlich
+// ".../admin/#/accept-invite/<token>" ergeben.
+function buildInviteUrl(token) {
+  const rootPath = location.pathname.replace(/admin\/?(index\.html)?$/, '');
+  return `${location.origin}${rootPath}#/accept-invite/${token}`;
+}
+
+// Sicherheitskorrektur (Sicherheitsreview 2026-08, Befund M3): ohne
+// konfiguriertes SMTP protokolliert der Server die Einladung nur noch
+// OHNE den Klartext-Link (siehe mail/mailer.ts: ConsoleMailSender) — die
+// Vereinsübersicht zeigte den frisch erstellten Admin-Einladungslink
+// bislang gar nicht an (nur einen Toast mit der Ziel-E-Mail), sodass der
+// Server-Log-Eintrag die EINZIGE Möglichkeit war, ihn ohne funktionierenden
+// E-Mail-Versand zu teilen (z. B. per WhatsApp). Analog zu
+// modules/userManagement.js: showInviteLinkModal() wird der Link jetzt
+// zusätzlich hier angezeigt (samt "Link kopieren") — unabhängig als
+// eigene Funktion, da admin.js bewusst nicht auf userManagement.js
+// zugreift (siehe Kopfkommentar: keine IndexedDB-/Modul-Registry-Kopplung).
+function showInviteLinkModal(invitation) {
+  const url = buildInviteUrl(invitation.token);
+  const body = el('div');
+  body.appendChild(el('p', {}, t('usermgmt.inviteLinkHint', { date: new Date(invitation.expiresAt).toLocaleDateString(getLocale()) })));
+  const linkRow = el('div', { class: 'flex gap-8', style: 'margin-top:12px' }, [
+    el('input', { type: 'text', readonly: true, value: url, style: 'flex:1', onclick: (e) => e.target.select() }),
+    el('button', { class: 'btn btn-accent btn-sm', onclick: async () => {
+      try { await navigator.clipboard.writeText(url); toast(t('usermgmt.linkCopied')); }
+      catch { toast(t('usermgmt.linkCopied')); }
+    } }, t('usermgmt.copyLink')),
+  ]);
+  body.appendChild(linkRow);
+  openModal({ title: t('usermgmt.inviteLinkTitle'), bodyNode: body, wide: true });
+}
+
 // ---------------- Vereinsübersicht ----------------
 async function renderClubsView() {
   clear(viewEl);
@@ -138,6 +178,7 @@ async function renderClubsView() {
       onSuccess: async (result) => {
         toast(t('admin.clubCreatedMailSent', { email: result.invitation.email }));
         await renderClubsView();
+        showInviteLinkModal(result.invitation);
       },
     }) }, t('admin.createClub')),
   ]));

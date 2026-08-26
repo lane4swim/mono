@@ -1,6 +1,13 @@
 // packages/shared-types/test/auth.test.ts
 import { describe, it, expect } from 'vitest';
-import { LoginRequestSchema, UpdateMeRequestSchema, AccessTokenClaimsSchema } from '../src/auth.js';
+import {
+  LoginRequestSchema,
+  UpdateMeRequestSchema,
+  AccessTokenClaimsSchema,
+  ForgotPasswordRequestSchema,
+  ResetPasswordRequestSchema,
+  ChangePasswordRequestSchema,
+} from '../src/auth.js';
 
 describe('LoginRequestSchema', () => {
   it('akzeptiert gültige Zugangsdaten inkl. Einwilligung', () => {
@@ -28,6 +35,12 @@ describe('LoginRequestSchema', () => {
   it('lehnt eine leere E-Mail ab', () => {
     expect(LoginRequestSchema.safeParse({ email: '', password: 'x', consent: true }).success).toBe(false);
   });
+  // Sicherheitsreview 2026-08, Befund N7: argon2id verarbeitet beliebig
+  // lange Eingaben — verifyPassword() hasht das übermittelte Passwort bei
+  // JEDEM Login-Versuch, ein unbegrenztes Feld wäre ein DoS-Verstärker.
+  it('lehnt ein zu langes Passwort ab (> 200 Zeichen)', () => {
+    expect(LoginRequestSchema.safeParse({ email: 'a@b.de', password: 'x'.repeat(201), consent: true }).success).toBe(false);
+  });
 });
 
 describe('UpdateMeRequestSchema', () => {
@@ -39,6 +52,10 @@ describe('UpdateMeRequestSchema', () => {
   });
   it('lehnt eine ungültige E-Mail ab', () => {
     expect(UpdateMeRequestSchema.safeParse({ email: 'keine-email' }).success).toBe(false);
+  });
+  // Sicherheitsreview 2026-08, Befund N2.
+  it('lehnt einen zu langen Namen ab (> 200 Zeichen)', () => {
+    expect(UpdateMeRequestSchema.safeParse({ name: 'X'.repeat(201) }).success).toBe(false);
   });
 });
 
@@ -71,5 +88,51 @@ describe('AccessTokenClaimsSchema', () => {
       athleteId: null,
     };
     expect(AccessTokenClaimsSchema.safeParse(claims).success).toBe(true);
+  });
+});
+
+// Sicherheitsreview 2026-08, Befund M5 ("Passwort vergessen" +
+// Passwortwechsel).
+describe('ForgotPasswordRequestSchema', () => {
+  it('akzeptiert eine gültige E-Mail-Adresse', () => {
+    expect(ForgotPasswordRequestSchema.safeParse({ email: 'a@b.de' }).success).toBe(true);
+  });
+  it('lehnt eine ungültige E-Mail ab', () => {
+    expect(ForgotPasswordRequestSchema.safeParse({ email: 'keine-email' }).success).toBe(false);
+  });
+});
+
+describe('ResetPasswordRequestSchema', () => {
+  it('akzeptiert Token + ein ausreichend langes neues Passwort', () => {
+    expect(ResetPasswordRequestSchema.safeParse({ token: 'abc123', newPassword: 'ein-sicheres-passwort' }).success).toBe(true);
+  });
+  it('lehnt ein zu kurzes neues Passwort ab (< 8 Zeichen)', () => {
+    expect(ResetPasswordRequestSchema.safeParse({ token: 'abc123', newPassword: 'kurz' }).success).toBe(false);
+  });
+  it('lehnt ein leeres Token ab', () => {
+    expect(ResetPasswordRequestSchema.safeParse({ token: '', newPassword: 'ein-sicheres-passwort' }).success).toBe(false);
+  });
+  // Sicherheitsreview 2026-08, Befund N7.
+  it('lehnt ein zu langes neues Passwort ab (> 200 Zeichen)', () => {
+    expect(ResetPasswordRequestSchema.safeParse({ token: 'abc123', newPassword: 'x'.repeat(201) }).success).toBe(false);
+  });
+});
+
+describe('ChangePasswordRequestSchema', () => {
+  it('akzeptiert aktuelles + ein ausreichend langes neues Passwort', () => {
+    expect(ChangePasswordRequestSchema.safeParse({ currentPassword: 'alt', newPassword: 'ein-sicheres-passwort' }).success).toBe(true);
+  });
+  it('lehnt ein zu kurzes neues Passwort ab (< 8 Zeichen)', () => {
+    expect(ChangePasswordRequestSchema.safeParse({ currentPassword: 'alt', newPassword: 'kurz' }).success).toBe(false);
+  });
+  it('lehnt ein leeres aktuelles Passwort ab', () => {
+    expect(ChangePasswordRequestSchema.safeParse({ currentPassword: '', newPassword: 'ein-sicheres-passwort' }).success).toBe(false);
+  });
+  // Sicherheitsreview 2026-08, Befund N7.
+  it('lehnt ein zu langes neues Passwort ab (> 200 Zeichen)', () => {
+    expect(ChangePasswordRequestSchema.safeParse({ currentPassword: 'alt', newPassword: 'x'.repeat(201) }).success).toBe(false);
+  });
+  it('lehnt ein zu langes aktuelles Passwort ab (> 200 Zeichen)', () => {
+    expect(ChangePasswordRequestSchema.safeParse({ currentPassword: 'x'.repeat(201), newPassword: 'ein-sicheres-passwort' }).success).toBe(false);
   });
 });

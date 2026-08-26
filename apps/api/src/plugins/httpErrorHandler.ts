@@ -22,6 +22,8 @@ import {
   UserNotFoundError,
   InvalidInvitationError,
   ClubIdRequiredError,
+  InvalidCurrentPasswordError,
+  InvalidOrExpiredResetTokenError,
 } from '../modules/auth/auth.service.js';
 import { UserNotFoundForExportError, ErasureAlreadyRequestedError } from '../modules/profile/profile.repository.js';
 import {
@@ -63,6 +65,14 @@ const HTTP_ERROR_REGISTRY = new Map<abstract new (...args: never[]) => Error, Ht
   [UserNotFoundError, { status: 404, code: 'not_found' }],
   [InvalidInvitationError, { status: 410, code: 'invalid_invitation' }],
   [ClubIdRequiredError, { status: 400, code: 'club_id_required' }],
+  // Sicherheitsreview 2026-08, Befund M5 ("Passwort vergessen" +
+  // Passwortwechsel). InvalidOrExpiredResetTokenError landet wie
+  // InvalidInvitationError auf 410 — "dieser Link funktioniert nicht
+  // mehr" ist für POST /auth/reset-password dieselbe einheitliche
+  // Nutzerbotschaft, unabhängig vom genauen Grund (siehe dortiger
+  // Kommentar in auth.service.ts).
+  [InvalidCurrentPasswordError, { status: 401, code: 'invalid_current_password' }],
+  [InvalidOrExpiredResetTokenError, { status: 410, code: 'invalid_reset_token' }],
   [UserNotFoundForExportError, { status: 404, code: 'not_found' }],
   [ErasureAlreadyRequestedError, { status: 409, code: 'erasure_already_requested' }],
   [ForbiddenError, { status: 403, code: 'forbidden' }],

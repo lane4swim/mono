@@ -38,6 +38,17 @@ describe('CreateClubRequestSchema', () => {
   it('lehnt einen leeren Vereinsnamen ab', () => {
     expect(CreateClubRequestSchema.safeParse({ name: '', adminEmail: 'a@b.de', adminName: 'X' }).success).toBe(false);
   });
+  // Sicherheitsreview 2026-08, Befund N2: Namensfelder waren bislang ohne
+  // Obergrenze — ein absichtlich riesiges Feld hätte unbemerkt dauerhaft
+  // gespeichert werden können.
+  it('lehnt einen zu langen Vereinsnamen ab (> 200 Zeichen)', () => {
+    const req = { name: 'X'.repeat(201), adminEmail: 'a@b.de', adminName: 'Petra Klein' };
+    expect(CreateClubRequestSchema.safeParse(req).success).toBe(false);
+  });
+  it('lehnt einen zu langen Admin-Namen ab (> 200 Zeichen)', () => {
+    const req = { name: 'SV Wasserfreunde', adminEmail: 'a@b.de', adminName: 'X'.repeat(201) };
+    expect(CreateClubRequestSchema.safeParse(req).success).toBe(false);
+  });
 });
 
 describe('CreateInvitationRequestSchema', () => {
@@ -67,6 +78,18 @@ describe('AcceptInvitationRequestSchema', () => {
   });
   it('lehnt ein leeres Token ab', () => {
     expect(AcceptInvitationRequestSchema.safeParse({ token: '', name: 'X', password: 'lang-genug', consent: true }).success).toBe(false);
+  });
+  // Sicherheitsreview 2026-08, Befund N2.
+  it('lehnt einen zu langen Namen ab (> 200 Zeichen)', () => {
+    const req = { token: 'abc123', name: 'X'.repeat(201), password: 'ein-sicheres-passwort', consent: true };
+    expect(AcceptInvitationRequestSchema.safeParse(req).success).toBe(false);
+  });
+  // Sicherheitsreview 2026-08, Befund N7: argon2id verarbeitet beliebig
+  // lange Eingaben — bei 64 MiB Speicherkosten pro Hashing-Versuch wäre
+  // ein unbegrenztes Passwortfeld ein unnötiger DoS-Verstärker.
+  it('lehnt ein zu langes Passwort ab (> 200 Zeichen)', () => {
+    const req = { token: 'abc123', name: 'Neue Person', password: 'x'.repeat(201), consent: true };
+    expect(AcceptInvitationRequestSchema.safeParse(req).success).toBe(false);
   });
   it('erfordert weder clubId noch role/email vom Client (kommen aus der Einladung selbst)', () => {
     const req = { token: 'abc123', name: 'X', password: 'lang-genug-passwort', consent: true };

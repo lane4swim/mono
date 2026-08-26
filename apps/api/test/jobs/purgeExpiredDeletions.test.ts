@@ -17,6 +17,81 @@ function makeDb(overrides: Partial<InMemoryErasureDatabase> = {}): InMemoryErasu
   };
 }
 
+// Sicherheitsreview 2026-08, Befund N5: Comment.authorName (eingebettet in
+// plans/exercises/templates) wurde vom Purge bislang gar nicht erfasst.
+describe('purgeExpiredDeletions — Comment.authorName-Anonymisierung (Befund N5)', () => {
+  it('anonymisiert Plan-, verschachtelte Set- und Übungskatalog-Kommentare der gelöschten Person, lässt den Kommentartext erhalten', async () => {
+    const db = makeDb({
+      users: [{ id: 'u1', clubId: 'club-1', athleteId: null, name: 'Mara Vogel' }],
+      deletionRequests: [{ id: 'req1', userId: 'u1', purgeAfter: PAST }],
+      plans: [
+        {
+          id: 'p1',
+          clubId: 'club-1',
+          comments: [{ id: 'c1', authorName: 'Mara Vogel', text: 'Guter Plan', createdAt: NOW.toISOString() }],
+          days: [
+            {
+              date: NOW.toISOString(),
+              sets: [{ kind: 'set', id: 's1', comments: [{ id: 'c2', authorName: 'Mara Vogel', text: 'Harte Serie', createdAt: NOW.toISOString() }] }],
+            },
+          ],
+        },
+      ],
+      exercises: [
+        { id: 'ex1', clubId: 'club-1', comments: [{ id: 'c3', authorName: 'Mara Vogel', text: 'Technik-Hinweis', createdAt: NOW.toISOString() }] },
+      ],
+      templates: [
+        { id: 't1', clubId: 'club-1', sets: [{ kind: 'set', id: 's2', comments: [{ id: 'c4', authorName: 'Mara Vogel', text: 'Vorlagen-Hinweis', createdAt: NOW.toISOString() }] }] },
+      ],
+    });
+    const gateway = new InMemoryErasureJobGateway(db);
+    await purgeExpiredDeletions(gateway, NOW);
+
+    const plan = db.plans![0]!;
+    expect((plan.comments as Array<{ authorName: string; text: string }>)[0]).toMatchObject({ authorName: 'Gelöschtes Konto', text: 'Guter Plan' });
+    const day = (plan.days as Array<{ sets: Array<{ comments: Array<{ authorName: string; text: string }> }> }>)[0]!;
+    expect(day.sets[0]!.comments[0]).toMatchObject({ authorName: 'Gelöschtes Konto', text: 'Harte Serie' });
+
+    const exercise = db.exercises![0]!;
+    expect((exercise.comments as Array<{ authorName: string; text: string }>)[0]).toMatchObject({ authorName: 'Gelöschtes Konto', text: 'Technik-Hinweis' });
+
+    const template = db.templates![0]!;
+    expect((template.sets as Array<{ comments: Array<{ authorName: string; text: string }> }>)[0]!.comments[0]).toMatchObject({ authorName: 'Gelöschtes Konto', text: 'Vorlagen-Hinweis' });
+  });
+
+  it('lässt Kommentare ANDERER Personen und eines ANDEREN Vereins unangetastet', async () => {
+    const db = makeDb({
+      users: [{ id: 'u1', clubId: 'club-1', athleteId: null, name: 'Mara Vogel' }],
+      deletionRequests: [{ id: 'req1', userId: 'u1', purgeAfter: PAST }],
+      plans: [
+        { id: 'p1', clubId: 'club-1', comments: [{ id: 'c1', authorName: 'Jens Bauer', text: 'Nicht meins', createdAt: NOW.toISOString() }], days: [] },
+        { id: 'p2', clubId: 'club-2', comments: [{ id: 'c2', authorName: 'Mara Vogel', text: 'Anderer Verein', createdAt: NOW.toISOString() }], days: [] },
+      ],
+    });
+    const gateway = new InMemoryErasureJobGateway(db);
+    await purgeExpiredDeletions(gateway, NOW);
+
+    expect((db.plans!.find((p) => p.id === 'p1')!.comments as Array<{ authorName: string }>)[0]!.authorName).toBe('Jens Bauer');
+    expect((db.plans!.find((p) => p.id === 'p2')!.comments as Array<{ authorName: string }>)[0]!.authorName).toBe('Mara Vogel');
+  });
+
+  // Kommentare stammen ebenso von Trainer:innen/Admins ohne athleteId —
+  // die Anonymisierung darf NICHT an ein verknüpftes Athletenprofil
+  // gekoppelt sein (anders als die Ergebnisse/Einträge/Handlungsfelder
+  // oben, die athleteId voraussetzen).
+  it('funktioniert auch für ein Konto OHNE verknüpftes Athletenprofil (z. B. Trainer:in/Admin)', async () => {
+    const db = makeDb({
+      users: [{ id: 'u1', clubId: 'club-1', athleteId: null, name: 'Coach Nina' }],
+      deletionRequests: [{ id: 'req1', userId: 'u1', purgeAfter: PAST }],
+      exercises: [{ id: 'ex1', clubId: 'club-1', comments: [{ id: 'c1', authorName: 'Coach Nina', text: 'Trainer-Hinweis', createdAt: NOW.toISOString() }] }],
+    });
+    const gateway = new InMemoryErasureJobGateway(db);
+    await purgeExpiredDeletions(gateway, NOW);
+
+    expect((db.exercises![0]!.comments as Array<{ authorName: string }>)[0]!.authorName).toBe('Gelöschtes Konto');
+  });
+});
+
 const NOW = new Date('2026-07-20T00:00:00.000Z');
 const PAST = new Date('2026-07-01T00:00:00.000Z'); // vor NOW -> fällig
 const FUTURE = new Date('2026-08-01T00:00:00.000Z'); // nach NOW -> noch nicht fällig
