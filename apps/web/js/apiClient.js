@@ -154,16 +154,19 @@ function postJson(path, body, opts) {
 }
 
 // ---- Auth ------------------------------------------------------------
+// Gibt user + enabledModules zusammen zurück (nicht nur result.user) —
+// state.js legt daraus die vollständige `current`-Sitzung an, inklusive
+// der gebuchten Module des Vereins (siehe router.js: visibleModules()).
 export async function login({ email, password, consent }) {
   const result = await postJson('/auth/login', { email, password, consent }, { allowRefreshRetry: false });
   setTokens(result);
-  return result.user;
+  return { ...result.user, enabledModules: result.enabledModules };
 }
 
 export async function acceptInvitation({ token, name, password, consent }) {
   const result = await postJson('/auth/register', { token, name, password, consent }, { allowRefreshRetry: false });
   setTokens(result);
-  return result.user;
+  return { ...result.user, enabledModules: result.enabledModules };
 }
 
 // Code-Review, Befund S4: refreshTokens() bündelt gleichzeitige Aufrufer
@@ -235,11 +238,16 @@ export function deleteMyAccount() {
 }
 
 // ---- Vereine & Einladungen (Nutzerverwaltung) --------------------------
-export function createClub({ name, adminEmail, adminName }) {
-  return postJson('/api/clubs', { name, adminEmail, adminName });
+export function createClub({ name, adminEmail, adminName, enabledModules }) {
+  return postJson('/api/clubs', { name, adminEmail, adminName, enabledModules });
 }
 export function listClubs() {
   return request('/api/clubs');
+}
+// Ändert nachträglich, welche Modul-Pakete ein bestehender Verein gebucht
+// hat (Superadmin-Bearbeiten-Ansicht, siehe admin.js). Antwort: { club }.
+export function updateClub(clubId, { enabledModules }) {
+  return request(`/api/clubs/${encodeURIComponent(clubId)}`, { method: 'PATCH', body: JSON.stringify({ enabledModules }) });
 }
 export function createInvitation({ email, role, clubId, athleteId }) {
   return postJson('/api/invitations', { email, role, clubId, athleteId });

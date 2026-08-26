@@ -383,3 +383,30 @@ describe('invitationsService.listClubs — Mitgliederzahlen', () => {
     expect(counts.get('irgendeine-id')).toEqual({ admin: 0, trainer: 0, athlete: 0 });
   });
 });
+
+describe('invitationsService.updateClubModules', () => {
+  it('superadmin kann die Module eines bestehenden Vereins ändern', async () => {
+    const { service, clubs } = makeService();
+    const club = await clubs.create({ name: 'SV Wasserfreunde', enabledModules: ['athletes', 'competitions'] });
+
+    const updated = await service.updateClubModules(club.id, ['athletes'], SUPERADMIN);
+
+    expect(updated.enabledModules).toEqual(['athletes']);
+    const persisted = await clubs.findById(club.id);
+    expect(persisted?.enabledModules).toEqual(['athletes']);
+  });
+
+  it('admin/trainer/athlete dürfen die Module eines Vereins NICHT ändern (403)', async () => {
+    const { service, clubs } = makeService();
+    const club = await clubs.create({ name: 'Verein X' });
+
+    await expect(service.updateClubModules(club.id, [], ADMIN_OF_CLUB_A)).rejects.toThrow(ForbiddenError);
+    await expect(service.updateClubModules(club.id, [], TRAINER)).rejects.toThrow(ForbiddenError);
+    await expect(service.updateClubModules(club.id, [], ATHLETE)).rejects.toThrow(ForbiddenError);
+  });
+
+  it('wirft ClubNotFoundError für eine unbekannte clubId', async () => {
+    const { service } = makeService();
+    await expect(service.updateClubModules('unbekannte-id', ['athletes'], SUPERADMIN)).rejects.toThrow(ClubNotFoundError);
+  });
+});

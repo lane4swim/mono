@@ -13,6 +13,8 @@
 // simple pathname check is enough and needs no runtime toggle.
 // ============================================================
 
+import { MODULE_KEYS } from './router.js';
+
 export const IS_DEMO = location.pathname.endsWith('/demo.html') || location.pathname === '/demo.html';
 
 // Fester Wert, unter dem alle geseedeten Demo-Datensätze abgelegt werden
@@ -35,6 +37,10 @@ export const DEMO_ATHLETE_ID_MAYA = 'demo-athlete-maya';
 // Backend-Anbindung — state.js: loginDemo() übernimmt eines dieser
 // Objekte 1:1 als "aktuellen Nutzer", genau wie ein echtes Login das vom
 // Server gelieferte Nutzerobjekt übernimmt.
+// Beide Demo-Konten haben ALLE Module aktiv (MODULE_KEYS) — die Demo soll
+// den vollen Funktionsumfang zeigen, inkl. des Wettkampfmoduls, auch wenn
+// echte Vereine künftig einzelne Module abgewählt haben könnten (siehe
+// router.js: visibleModules()).
 export const DEMO_USERS = [
   {
     id: 'demo-user-sabine',
@@ -44,6 +50,7 @@ export const DEMO_USERS = [
     clubId: DEMO_CLUB_ID,
     athleteId: null,
     locale: null,
+    enabledModules: MODULE_KEYS,
   },
   {
     id: 'demo-user-maya',
@@ -53,5 +60,6 @@ export const DEMO_USERS = [
     clubId: DEMO_CLUB_ID,
     athleteId: DEMO_ATHLETE_ID_MAYA,
     locale: null,
+    enabledModules: MODULE_KEYS,
   },
 ];

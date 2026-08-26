@@ -5,6 +5,7 @@
 // eine echte, leere PostgreSQL-Datenbank mit bereits angewendetem Schema
 // (siehe README/CI: `prisma migrate deploy`).
 import { PrismaClient } from '@prisma/client';
+import { MODULE_KEYS } from '@lane1/shared-types';
 
 let prisma: PrismaClient | null = null;
 
@@ -45,7 +46,14 @@ export async function truncateAll(client: PrismaClient = getTestPrisma()): Promi
 
 // Legt einen minimalen Verein an — praktisch jede fachliche Tabelle führt
 // clubId als Pflichtfeld (siehe schema.prisma), die meisten Tests brauchen
-// also mindestens einen.
-export async function createTestClub(client: PrismaClient = getTestPrisma(), name = 'Testverein'): Promise<{ id: string; name: string }> {
-  return client.club.create({ data: { name } });
+// also mindestens einen. Standardmäßig mit ALLEN Modul-Paketen aktiv
+// (MODULE_KEYS) — die meisten Tests wollen ganz normalen, ungehinderten
+// Sync-Zugriff prüfen, nicht das Modul-Gating selbst; wer gezielt ein
+// eingeschränktes Modul-Set testen will, übergibt `enabledModules` explizit.
+export async function createTestClub(
+  client: PrismaClient = getTestPrisma(),
+  name = 'Testverein',
+  enabledModules: string[] = MODULE_KEYS,
+): Promise<{ id: string; name: string; enabledModules: string[] }> {
+  return client.club.create({ data: { name, enabledModules } });
 }

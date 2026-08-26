@@ -38,7 +38,7 @@ export async function restoreSession() {
   if (!api.getStoredRefreshToken()) return null;
   try {
     const result = await api.refreshTokens();
-    current = result.user;
+    current = { ...result.user, enabledModules: result.enabledModules };
     setLocale(current?.locale || detectInitialLocale());
     return current;
   } catch {
@@ -67,6 +67,11 @@ setClubIdProvider(() => getCurrentUser()?.clubId);
 // gezeigt.
 export function getRole() { return current?.role ?? null; }
 export function isLoggedIn() { return !!current; }
+// Fällt ohne Sitzung auf ein leeres Array zurück (zusperren statt öffnen,
+// siehe getRole()-Kommentar oben) — router.js: visibleModules() blendet
+// dadurch alle Fach-Module aus, bis eine Sitzung mit enabledModules
+// geladen ist.
+export function getEnabledModules() { return current?.enabledModules ?? []; }
 
 export async function login(email, password, consent) {
   const user = await api.login({ email, password, consent });

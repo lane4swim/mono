@@ -1,5 +1,6 @@
 // apps/api/test/sync/sync.route.test.ts
 import { describe, it, expect } from 'vitest';
+import { MODULE_KEYS } from '@lane1/shared-types';
 import { buildApp } from '../../src/app.js';
 import { loadEnv } from '../../src/config/env.js';
 import { createAuthService } from '../../src/modules/auth/auth.service.js';
@@ -33,11 +34,17 @@ async function buildTestApp() {
     clubInvitationTtlDays: 14,
     memberInvitationTtlDays: 7,
   });
+  // Diese Suite testet die Sync-Route selbst (Rollen-/FK-/Konflikt-
+  // Verhalten), nicht das Modul-Gating — jeder Verein hat hier daher
+  // standardmäßig alle Module gebucht (siehe sync.permissions.test.ts für
+  // gezielte Tests eines eingeschränkten Modul-Sets).
+  const clubs = { findById: async () => ({ enabledModules: [...MODULE_KEYS] }) };
   const authService = createAuthService({
     users: new InMemoryUserRepository(),
     refreshTokens: new InMemoryRefreshTokenRepository(),
     invitations: invitationsService,
     profileGateway: new InMemoryProfileDataGateway({ users: [], athletes: [], results: [], entries: [], actionItems: [], sessions: [] }),
+    clubs,
     dataErasureRetentionDays: 30,
     keyPair,
     accessTtlSeconds: 900,
@@ -45,7 +52,7 @@ async function buildTestApp() {
   });
   const gateway = new InMemorySyncGateway();
   const syncService = createSyncService({ gateway });
-  const app = await buildApp(testEnv, { authService, invitationsService, syncService, keyPair });
+  const app = await buildApp(testEnv, { authService, invitationsService, syncService, clubs, keyPair });
   return { app, gateway, keyPair };
 }
 

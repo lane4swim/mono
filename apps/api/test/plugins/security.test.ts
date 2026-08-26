@@ -43,13 +43,14 @@ async function buildTestApp(): Promise<FastifyInstance> {
     refreshTokens: new InMemoryRefreshTokenRepository(),
     invitations: invitationsService,
     profileGateway: new InMemoryProfileDataGateway({ users: [], athletes: [], results: [], entries: [], actionItems: [], sessions: [] }),
+    clubs: { findById: async () => null },
     dataErasureRetentionDays: 30,
     keyPair,
     accessTtlSeconds: 900,
     refreshTtlDays: 30,
   });
   const syncService = createSyncService({ gateway: new InMemorySyncGateway() });
-  return buildApp(testEnv, { authService, invitationsService, syncService, keyPair });
+  return buildApp(testEnv, { authService, invitationsService, syncService, clubs: { findById: async () => null }, keyPair });
 }
 
 describe('Security-Header (Helmet) — explizite CSP statt Defaults', () => {
@@ -110,13 +111,14 @@ describe('Security-Header (Helmet) — Produktionsmodus', () => {
       refreshTokens: new InMemoryRefreshTokenRepository(),
       invitations: invitationsService,
       profileGateway: new InMemoryProfileDataGateway({ users: [], athletes: [], results: [], entries: [], actionItems: [], sessions: [] }),
+      clubs: { findById: async () => null },
       dataErasureRetentionDays: 30,
       keyPair,
       accessTtlSeconds: 900,
       refreshTtlDays: 30,
     });
     const syncService = createSyncService({ gateway: new InMemorySyncGateway() });
-    prodApp = await buildApp(prodEnv, { authService, invitationsService, syncService, keyPair });
+    prodApp = await buildApp(prodEnv, { authService, invitationsService, syncService, clubs: { findById: async () => null }, keyPair });
   });
   afterAll(async () => { await prodApp.close(); });
 
@@ -184,13 +186,14 @@ describe('CORS — mehrere kommagetrennte Origins (End-to-End)', () => {
       refreshTokens: new InMemoryRefreshTokenRepository(),
       invitations: invitationsService,
       profileGateway: new InMemoryProfileDataGateway({ users: [], athletes: [], results: [], entries: [], actionItems: [], sessions: [] }),
+      clubs: { findById: async () => null },
       dataErasureRetentionDays: 30,
       keyPair,
       accessTtlSeconds: 900,
       refreshTtlDays: 30,
     });
     const syncService = createSyncService({ gateway: new InMemorySyncGateway() });
-    multiOriginApp = await buildApp(env, { authService, invitationsService, syncService, keyPair });
+    multiOriginApp = await buildApp(env, { authService, invitationsService, syncService, clubs: { findById: async () => null }, keyPair });
   });
   afterAll(async () => { await multiOriginApp.close(); });
 

@@ -3,7 +3,7 @@
 // Endpunkte für den einladungsbasierten Registrierungsprozess. Siehe
 // invitations.service.ts für die Autorisierungsmatrix.
 import type { FastifyInstance } from 'fastify';
-import { CreateClubRequestSchema, CreateInvitationRequestSchema } from '@lane1/shared-types';
+import { CreateClubRequestSchema, CreateInvitationRequestSchema, UpdateClubRequestSchema } from '@lane1/shared-types';
 import type { InvitationsService } from './invitations.service.js';
 import { InvitationNotFoundError } from './invitations.service.js';
 import { requireRole } from '../../plugins/authorize.js';
@@ -60,6 +60,19 @@ export async function invitationsRoutes(app: FastifyInstance, opts: InvitationsR
     const clubs = await invitationsService.listClubs(requesterFrom(request));
     return reply.code(200).send({ clubs });
   });
+
+  app.patch<{ Params: { id: string } }>(
+    '/api/clubs/:id',
+    { preHandler: [app.authenticate, requireRole('superadmin')] },
+    async (request, reply) => {
+      const body = parseInput(UpdateClubRequestSchema, request.body, reply);
+      if (!body) return;
+
+      // ClubNotFoundError: über die zentrale Fehler-Registry abgedeckt (404).
+      const club = await invitationsService.updateClubModules(request.params.id, body.enabledModules, requesterFrom(request));
+      return reply.code(200).send({ club });
+    },
+  );
 
   app.post(
     '/api/invitations',

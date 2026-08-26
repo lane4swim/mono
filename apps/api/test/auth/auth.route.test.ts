@@ -56,6 +56,7 @@ async function buildTestApp() {
   const authService = createAuthService({
     users, refreshTokens, invitations: invitationsService,
     profileGateway: new InMemoryProfileDataGateway(profileDb),
+    clubs,
     dataErasureRetentionDays: 30,
     keyPair, accessTtlSeconds: 900, refreshTtlDays: 30,
   });
@@ -65,8 +66,8 @@ async function buildTestApp() {
   // eigenes (anderes) Entwicklungs-Schlüsselpaar für die Token-Verifikation
   // nutzen, während authService oben mit einem separaten Schlüsselpaar
   // signiert (führt sonst zu 401 auf jeder geschützten Route).
-  const app = await buildApp(testEnv, { authService, invitationsService, syncService, keyPair });
-  return { app, invitations, profileDb, keyPair };
+  const app = await buildApp(testEnv, { authService, invitationsService, syncService, clubs, keyPair });
+  return { app, invitations, clubs, profileDb, keyPair };
 }
 
 async function seedInvitationToken(
@@ -152,6 +153,52 @@ describe('POST /auth/login', () => {
   it('liefert 401 bei falschem Passwort', async () => {
     const response = await app.inject({ method: 'POST', url: '/auth/login', payload: { email: 'sabine.reuter@example.org', password: 'falsch', consent: true } });
     expect(response.statusCode).toBe(401);
+  });
+});
+
+// Regressionstest für "Module pro Verein aktivierbar": login/register/
+// refresh/me müssen dem Frontend mitteilen, welche Modul-Pakete der eigene
+// Verein gebucht hat (siehe auth.service.ts: resolveEnabledModules()) —
+// ohne dieses Feld könnte apps/web/js/router.js: visibleModules() die
+// Navigation nicht korrekt aufbauen.
+describe('Session-Antworten enthalten enabledModules', () => {
+  it('register/login/refresh/me liefern konsistent die gebuchten Module des eigenen Vereins', async () => {
+    const { app, invitations, clubs } = await buildTestApp();
+    const club = await clubs.create({ name: 'SV Wasserfreunde', enabledModules: ['athletes', 'times'] });
+    const token = await seedInvitationToken(invitations, { email: 'module-test@example.org', clubId: club.id });
+
+    const registerResponse = await app.inject({ method: 'POST', url: '/auth/register', payload: { token, name: 'Test', password: 'ein-sicheres-passwort', consent: true } });
+    expect(registerResponse.json().enabledModules).toEqual(['athletes', 'times']);
+    const { accessToken, refreshToken } = registerResponse.json();
+
+    const loginResponse = await app.inject({ method: 'POST', url: '/auth/login', payload: { email: 'module-test@example.org', password: 'ein-sicheres-passwort', consent: true } });
+    expect(loginResponse.json().enabledModules).toEqual(['athletes', 'times']);
+
+    const refreshResponse = await app.inject({ method: 'POST', url: '/auth/refresh', payload: { refreshToken } });
+    expect(refreshResponse.json().enabledModules).toEqual(['athletes', 'times']);
+
+    const meResponse = await app.inject({ method: 'GET', url: '/api/me', headers: { authorization: `Bearer ${accessToken}` } });
+    expect(meResponse.json().enabledModules).toEqual(['athletes', 'times']);
+
+    await app.close();
+  });
+
+  // resolveEnabledModules() (auth.service.ts) fällt defensiv auf [] zurück,
+  // wenn clubs.findById() nichts liefert — hier über einen Nutzer geprüft,
+  // dessen Einladung eine clubId referenziert, für die (wie in vielen
+  // anderen Tests dieser Datei) NIE tatsächlich ein Club-Datensatz angelegt
+  // wurde. Dasselbe Verhalten gilt für "superadmin" (clubId: null), das
+  // aber mangels API-Registrierungsweg für diese Rolle hier nicht über den
+  // echten Login-Flow nachstellbar ist.
+  it('liefert [] statt eines Fehlers, wenn der referenzierte Verein nicht existiert', async () => {
+    const { app, invitations } = await buildTestApp();
+    const token = await seedInvitationToken(invitations, { email: 'missing-club-test@example.org' });
+    await app.inject({ method: 'POST', url: '/auth/register', payload: { token, name: 'Test', password: 'ein-sicheres-passwort', consent: true } });
+
+    const loginResponse = await app.inject({ method: 'POST', url: '/auth/login', payload: { email: 'missing-club-test@example.org', password: 'ein-sicheres-passwort', consent: true } });
+    expect(loginResponse.json().enabledModules).toEqual([]);
+
+    await app.close();
   });
 });
 

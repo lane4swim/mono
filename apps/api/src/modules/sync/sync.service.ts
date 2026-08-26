@@ -41,6 +41,11 @@ export interface SyncRequester {
   // sync.permissions.ts: STORE_PERMISSIONS-Kommentar).
   role: Role;
   athleteId: string | null;
+  // Modul-Pakete des Vereins (packages/shared-types/src/modules.ts:
+  // MODULE_PACKAGES) — von sync.route.ts EINMAL pro Request per Club-
+  // Lookup geladen, hier nur konsumiert (siehe canRead()/canWrite() in
+  // sync.permissions.ts: zusätzlich zur Rollen-Prüfung erforderlich).
+  enabledModules: readonly string[];
 }
 
 // ---- push(): Guard-Kette --------------------------------------------------
@@ -123,7 +128,7 @@ function requireKnownStore(ctx: PushCtx): SyncEventResult | null {
 function requireWritePermission(ctx: PushCtx): SyncEventResult | null {
   const event = ctx.event!;
   const store = ctx.store!;
-  if (!canWrite(store, ctx.requester.role)) {
+  if (!canWrite(store, ctx.requester.role, ctx.requester.enabledModules)) {
     return { eventId: event.id, status: 'error', message: `Die Rolle "${ctx.requester.role}" darf den Store "${store}" nicht verändern.` };
   }
   return null;
@@ -397,8 +402,11 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
       // (trainer/admin/athlete) ist das noch ein No-Op — jeder Store ist
       // für alle drei lesbar (siehe Tabelle) — aber der Mechanismus greift
       // automatisch, sobald künftig eine Rolle mit eingeschränktem
-      // Lesezugriff hinzukommt.
-      changes = changes.filter((change) => canRead(change.store, requester.role));
+      // Lesezugriff hinzukommt. Zusätzlich (kein No-Op mehr, siehe
+      // STORE_MODULE_MAP in sync.permissions.ts): Changes aus einem Store,
+      // dessen Modul-Paket der Verein nicht gebucht hat, werden ebenso
+      // unterdrückt.
+      changes = changes.filter((change) => canRead(change.store, requester.role, requester.enabledModules));
 
       // Rollen-Scopierung beim Lesen, Zeilen-/Feld-Ebene (siehe
       // sync.athleteScope.ts): WICHTIG — die Filterung erfolgt NACH der

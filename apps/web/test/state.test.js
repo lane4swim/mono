@@ -12,7 +12,7 @@ vi.mock('../js/apiClient.js', () => ({}));
 vi.mock('../js/db.js', () => ({ wipeAll: vi.fn(), setClubIdProvider: vi.fn() }));
 vi.mock('../js/i18n.js', () => ({ setLocale: vi.fn(), detectInitialLocale: vi.fn(() => 'de-DE') }));
 
-import { getRole, getCurrentUser, isLoggedIn, isTrainerOrAdmin, isAdmin, isSuperAdmin, isAdminOrSuperAdmin } from '../js/state.js';
+import { getRole, getCurrentUser, isLoggedIn, isTrainerOrAdmin, isAdmin, isSuperAdmin, isAdminOrSuperAdmin, getEnabledModules } from '../js/state.js';
 
 // Regressionstest für die Code-Review-Korrektur: getRole() fiel bei
 // fehlender Sitzung auf die konkrete Rolle 'trainer' zurück, statt zu
@@ -29,5 +29,12 @@ describe('getRole() ohne aktive Sitzung', () => {
     expect(isAdmin()).toBe(false);
     expect(isSuperAdmin()).toBe(false);
     expect(isAdminOrSuperAdmin()).toBe(false);
+  });
+
+  // Analog zu getRole(): ein leeres Array statt z. B. "alle Module" —
+  // router.js: visibleModules() blendet ohne Sitzung dadurch alle
+  // Fach-Module aus, statt sie fälschlich zu zeigen.
+  it('getEnabledModules() liefert ein leeres Array, kein "alles erlaubt"', () => {
+    expect(getEnabledModules()).toEqual([]);
   });
 });

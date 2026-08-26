@@ -53,7 +53,8 @@
 // sie sind bewusst nicht Teil dieser generischen Rollen-Tabelle, da sie
 // vom KONKRETEN Dateninhalt abhängen (eigene athleteId im
 // Payload/Attendance-Eintrag), nicht nur von Rolle+Store.
-import type { EntityStoreName, Role, SyncStore } from '@lane1/shared-types';
+import type { EntityStoreName, ModuleKey, Role, SyncStore } from '@lane1/shared-types';
+import { ENTITY_STORE_NAMES, MODULE_KEYS, MODULE_PACKAGES } from '@lane1/shared-types';
 
 interface StoreAccess {
   read: ReadonlySet<Role>;
@@ -106,10 +107,34 @@ export function isKnownStore(store: SyncStore): store is EntityStoreName {
   return store in STORE_PERMISSIONS;
 }
 
-export function canRead(store: SyncStore, role: Role): boolean {
-  return isKnownStore(store) && STORE_PERMISSIONS[store].read.has(role);
+// Store -> welches/welche Modul-Paket(e) (packages/shared-types/src/
+// modules.ts: MODULE_PACKAGES) diesen Store freischalten — zusätzlich zur
+// reinen Rollen-Prüfung oben MUSS der Verein mindestens eines der hier
+// gelisteten Pakete gebucht haben (STORE_PERMISSIONS betrifft dagegen
+// AUSSCHLIESSLICH Vereine, die das Modul überhaupt haben — die beiden
+// Prüfungen sind unabhängig voneinander UND kombiniert erforderlich).
+//
+// Aus MODULE_PACKAGES[*].stores invertiert, statt redundant von Hand
+// gepflegt — ein Store, der dort einem Paket zugeordnet wird, landet
+// automatisch hier, ohne dass beide Tabellen synchron gehalten werden
+// müssen. "results" (Bestzeiten) ist die einzige Ausnahme: der Store wird
+// von ZWEI Paketen gemeinsam benutzt (times.js für die Bestzeiten-
+// Verwaltung, competitionLive.js — Teil des competitions-Pakets — für
+// Wettkampf-Ergebnisse) und gehört daher zu keinem der beiden exklusiv;
+// Zugriff genügt, wenn EINES der beiden Pakete aktiv ist.
+const STORE_MODULE_MAP: Record<EntityStoreName, readonly ModuleKey[]> = (() => {
+  const map = Object.fromEntries(ENTITY_STORE_NAMES.map((store) => [store, [] as ModuleKey[]])) as Record<EntityStoreName, ModuleKey[]>;
+  for (const key of MODULE_KEYS) {
+    for (const store of MODULE_PACKAGES[key].stores) map[store].push(key);
+  }
+  map.results = ['times', 'competitions'];
+  return map;
+})();
+
+export function canRead(store: SyncStore, role: Role, enabledModules: readonly string[]): boolean {
+  return isKnownStore(store) && STORE_PERMISSIONS[store].read.has(role) && STORE_MODULE_MAP[store].some((m) => enabledModules.includes(m));
 }
 
-export function canWrite(store: SyncStore, role: Role): boolean {
-  return isKnownStore(store) && STORE_PERMISSIONS[store].write.has(role);
+export function canWrite(store: SyncStore, role: Role, enabledModules: readonly string[]): boolean {
+  return isKnownStore(store) && STORE_PERMISSIONS[store].write.has(role) && STORE_MODULE_MAP[store].some((m) => enabledModules.includes(m));
 }

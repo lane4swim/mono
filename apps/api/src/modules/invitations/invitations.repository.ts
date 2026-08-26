@@ -4,16 +4,26 @@
 // nur von diesen Interfaces ab, nie direkt von Prisma. Ermöglicht
 // vollständig datenbankfreie Tests der Autorisierungs- und Ablauflogik.
 import type { PrismaClient } from '@prisma/client';
+import { MODULE_KEYS } from '@lane1/shared-types';
 
 export interface ClubRecord {
   id: string;
   name: string;
+  // Modul-Pakete, die dieser Verein gebucht hat — siehe
+  // packages/shared-types/src/modules.ts: MODULE_PACKAGES.
+  enabledModules: string[];
   createdAt: Date;
   updatedAt: Date;
 }
 
 export interface CreateClubInput {
   name: string;
+  // Optional (statt Pflichtfeld): der HTTP-Layer (CreateClubRequestSchema)
+  // liefert es immer explizit (Default dort: alle Module), aber Tests, die
+  // ClubRepository direkt ansprechen und sich nicht für Modul-Gating
+  // interessieren, sollen es weglassen dürfen — beide Implementierungen
+  // unten füllen dann MODULE_KEYS (alle Module) als Default.
+  enabledModules?: string[];
 }
 
 export interface ClubMemberCounts {
@@ -43,6 +53,10 @@ export interface ClubRepository {
   // gelöschter) Mitglieder je Rolle, für mehrere Vereine auf einmal
   // (vermeidet N+1-Abfragen bei der Vereinsliste).
   countMembersForClubs(clubIds: string[]): Promise<Map<string, ClubMemberCounts>>;
+  // Ändert NUR die gebuchten Module eines bestehenden Vereins (Superadmin-
+  // Bearbeiten-Ansicht, siehe invitations.service.ts: updateClubModules()).
+  // Wirft, wenn clubId nicht existiert — Aufrufer prüft das nicht separat.
+  updateEnabledModules(clubId: string, enabledModules: string[]): Promise<ClubRecord>;
 }
 
 export interface InvitationRecord {
@@ -103,7 +117,7 @@ export class PrismaClubRepository implements ClubRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
   async create(input: CreateClubInput): Promise<ClubRecord> {
-    return this.prisma.club.create({ data: { name: input.name } });
+    return this.prisma.club.create({ data: { name: input.name, enabledModules: input.enabledModules ?? [...MODULE_KEYS] } });
   }
 
   async createWithAdminInvitation(
@@ -112,7 +126,7 @@ export class PrismaClubRepository implements ClubRepository {
   ): Promise<{ club: ClubRecord; invitation: InvitationRecord }> {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return this.prisma.$transaction(async (tx: any) => {
-      const createdClub: ClubRecord = await tx.club.create({ data: { name: club.name } });
+      const createdClub: ClubRecord = await tx.club.create({ data: { name: club.name, enabledModules: club.enabledModules ?? [...MODULE_KEYS] } });
       const invitation: InvitationRecord = await tx.invitation.create({ data: buildInvitation(createdClub) });
       return { club: createdClub, invitation };
     });
@@ -123,6 +137,10 @@ export class PrismaClubRepository implements ClubRepository {
   }
   async list(): Promise<ClubRecord[]> {
     return this.prisma.club.findMany({ orderBy: { name: 'asc' } });
+  }
+
+  async updateEnabledModules(clubId: string, enabledModules: string[]): Promise<ClubRecord> {
+    return this.prisma.club.update({ where: { id: clubId }, data: { enabledModules } });
   }
 
   async countMembersForClubs(clubIds: string[]): Promise<Map<string, ClubMemberCounts>> {

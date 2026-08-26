@@ -8,10 +8,14 @@
 //   - Eine offene Registrierung ohne gültige Einladung existiert nicht mehr
 //     — POST /auth/register verlangt zwingend ein Einladungs-Token.
 import { z } from 'zod';
+import { MODULE_KEYS, ModuleKeySchema } from './modules.js';
 
 export const ClubSchema = z.object({
   id: z.string().uuid(),
   name: z.string().min(1),
+  // Modul-Pakete, die dieser Verein gebucht hat — siehe modules.ts:
+  // MODULE_PACKAGES. Steuert Frontend-Sichtbarkeit und Sync-Zugriff.
+  enabledModules: z.array(ModuleKeySchema),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
@@ -37,8 +41,17 @@ export const CreateClubRequestSchema = z.object({
   name: z.string().min(1),
   adminEmail: z.string().email(),
   adminName: z.string().min(1),
+  // Default: alle Module aktiv — das Anlegen-Formular (clubForm.js) schickt
+  // dieses Feld zwar immer explizit, andere/künftige Aufrufer sollen aber
+  // nicht versehentlich einen Verein ohne jedes Modul anlegen.
+  enabledModules: z.array(ModuleKeySchema).default(() => [...MODULE_KEYS]),
 });
 export type CreateClubRequest = z.infer<typeof CreateClubRequestSchema>;
+
+export const UpdateClubRequestSchema = z.object({
+  enabledModules: z.array(ModuleKeySchema),
+});
+export type UpdateClubRequest = z.infer<typeof UpdateClubRequestSchema>;
 
 // Nur diese drei Rollen lassen sich per Einladung vergeben — "superadmin"
 // wird bewusst nie über die API vergeben (siehe scripts/createSuperAdmin.ts).

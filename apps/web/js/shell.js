@@ -12,8 +12,8 @@
 // alles andere. Diese Datei bündelt genau den geteilten Teil; app.js und
 // app-demo.js rufen sie auf und behalten nur ihre eigene Logik.
 import { pendingSyncCount } from './db.js';
-import { getRole, getCurrentUser } from './state.js';
-import { visibleModules, navigate, getModule, currentRoute } from './router.js';
+import { getRole, getCurrentUser, getEnabledModules } from './state.js';
+import { visibleModules, isModuleVisible, navigate, getModule, currentRoute } from './router.js';
 import { el, clear, beginRender, icon } from './dom.js';
 import { toast } from './ui.js';
 import { openModal } from './modal.js';
@@ -48,7 +48,7 @@ export function buildNav() {
   const navList = document.getElementById('nav-list');
   const bottomNav = document.getElementById('bottomnav');
   const role = getRole();
-  const byId = new Map(visibleModules(role).map(m => [m.id, m]));
+  const byId = new Map(visibleModules(role, getEnabledModules()).map(m => [m.id, m]));
   clear(navList);
   clear(bottomNav);
 
@@ -159,9 +159,10 @@ export function markActive(routeId) {
 const DEFAULT_ROUTE_BY_ROLE = { superadmin: 'usermgmt' };
 
 export function defaultModuleFor(role) {
+  const enabledModules = getEnabledModules();
   const preferred = getModule(DEFAULT_ROUTE_BY_ROLE[role] || '');
-  if (preferred && (!preferred.roles || preferred.roles.includes(role))) return preferred;
-  return visibleModules(role)[0];
+  if (preferred && isModuleVisible(preferred, role, enabledModules)) return preferred;
+  return visibleModules(role, enabledModules)[0];
 }
 
 // Rendert die angeforderte Route in `viewEl`. Bewusst OHNE die
@@ -172,7 +173,10 @@ export async function renderRoute(viewEl, route) {
   const isCurrent = beginRender(viewEl);
   const role = getRole();
   let mod = getModule(route.routeId);
-  if (!mod || (mod.roles && !mod.roles.includes(role))) mod = defaultModuleFor(role);
+  // Greift auch, wenn `mod` existiert und die Rolle passt, aber der Verein
+  // das zugehörige Modul-Paket nicht gebucht hat (direkter Hash-Aufruf
+  // einer gesperrten Route, z. B. "#/competitions" ohne Wettkampfmodul).
+  if (!mod || !isModuleVisible(mod, role, getEnabledModules())) mod = defaultModuleFor(role);
   markActive(mod.id);
   // Über el()/clear() statt eines Template-Literals auf viewEl.innerHTML
   // — konsistent mit dem sonst in dieser Datei konsequent verwendeten

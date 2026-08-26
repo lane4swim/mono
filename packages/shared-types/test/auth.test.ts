@@ -1,6 +1,6 @@
 // packages/shared-types/test/auth.test.ts
 import { describe, it, expect } from 'vitest';
-import { LoginRequestSchema, UpdateMeRequestSchema, AccessTokenClaimsSchema } from '../src/auth.js';
+import { LoginRequestSchema, UpdateMeRequestSchema, AccessTokenClaimsSchema, AuthTokensResponseSchema, MeResponseSchema } from '../src/auth.js';
 
 describe('LoginRequestSchema', () => {
   it('akzeptiert gültige Zugangsdaten inkl. Einwilligung', () => {
@@ -71,5 +71,52 @@ describe('AccessTokenClaimsSchema', () => {
       athleteId: null,
     };
     expect(AccessTokenClaimsSchema.safeParse(claims).success).toBe(true);
+  });
+});
+
+describe('AuthTokensResponseSchema (enabledModules)', () => {
+  const baseUser = {
+    id: '11111111-1111-1111-1111-111111111111',
+    clubId: '22222222-2222-2222-2222-222222222222',
+    name: 'Sabine Reuter',
+    email: 'sabine@example.org',
+    role: 'trainer',
+    athleteId: null,
+    locale: 'de-DE',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  it('akzeptiert eine gültige Modul-Liste', () => {
+    const response = {
+      accessToken: 'a', refreshToken: 'b', expiresIn: 900,
+      user: baseUser, enabledModules: ['athletes', 'competitions'],
+    };
+    expect(AuthTokensResponseSchema.safeParse(response).success).toBe(true);
+  });
+
+  it('akzeptiert ein leeres Array (z. B. superadmin ohne eigenen Verein)', () => {
+    const response = {
+      accessToken: 'a', refreshToken: 'b', expiresIn: 900,
+      user: { ...baseUser, clubId: null, role: 'superadmin' }, enabledModules: [],
+    };
+    expect(AuthTokensResponseSchema.safeParse(response).success).toBe(true);
+  });
+
+  it('lehnt einen unbekannten Modul-Key ab', () => {
+    const response = {
+      accessToken: 'a', refreshToken: 'b', expiresIn: 900,
+      user: baseUser, enabledModules: ['nicht-existierendes-modul'],
+    };
+    expect(AuthTokensResponseSchema.safeParse(response).success).toBe(false);
+  });
+
+  it('lehnt eine fehlende enabledModules ab', () => {
+    const response = { accessToken: 'a', refreshToken: 'b', expiresIn: 900, user: baseUser };
+    expect(AuthTokensResponseSchema.safeParse(response).success).toBe(false);
+  });
+
+  it('MeResponseSchema akzeptiert den Nutzer flach erweitert um enabledModules', () => {
+    expect(MeResponseSchema.safeParse({ ...baseUser, enabledModules: ['times'] }).success).toBe(true);
   });
 });

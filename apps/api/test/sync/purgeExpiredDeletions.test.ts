@@ -1,5 +1,6 @@
 // apps/api/test/jobs/purgeExpiredDeletions.test.ts
 import { describe, it, expect } from 'vitest';
+import { MODULE_KEYS } from '@lane1/shared-types';
 import { purgeExpiredDeletions } from '../../src/jobs/purgeExpiredDeletions.js';
 import { InMemoryErasureJobGateway, type InMemoryErasureDatabase } from '../../src/jobs/erasure.repository.memory.js';
 
@@ -168,7 +169,7 @@ describe('purgeExpiredDeletions — Tombstones (Verbesserung: Löschungen bleibe
 
     await purgeExpiredDeletions(erasureGateway, NOW);
 
-    const pullResult = await syncService.pull({}, { clubId: 'club-1', role: 'trainer', athleteId: null });
+    const pullResult = await syncService.pull({}, { clubId: 'club-1', role: 'trainer', athleteId: null, enabledModules: MODULE_KEYS });
     expect(pullResult.changes).toContainEqual(
       expect.objectContaining({ store: 'athletes', entityId: 'ath-1', action: 'delete', payload: null }),
     );

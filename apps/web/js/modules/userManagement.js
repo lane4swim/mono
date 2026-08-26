@@ -14,7 +14,7 @@ import { isSuperAdmin } from '../state.js';
 import * as api from '../apiClient.js';
 import { describeError } from '../apiClient.js';
 import { t } from '../i18n.js';
-import { openCreateClubModal } from './clubForm.js';
+import { openCreateClubModal, openEditClubModulesModal } from './clubForm.js';
 
 export const userManagementModule = {
   id: 'usermgmt',
@@ -172,12 +172,16 @@ function renderClubsSection(clubs, onChanged) {
     card.appendChild(emptyState(t('usermgmt.clubsSection'), t('usermgmt.noClubsYet'), null));
   } else {
     const table = el('table');
-    table.appendChild(el('thead', {}, el('tr', {}, [el('th', {}, t('usermgmt.formClubName')), el('th', {}, ''), el('th', {}, '')])));
+    table.appendChild(el('thead', {}, el('tr', {}, [el('th', {}, t('usermgmt.formClubName')), el('th', {}, ''), el('th', {}, ''), el('th', {}, '')])));
     const tbody = el('tbody');
     clubs.forEach(club => tbody.appendChild(el('tr', {}, [
       el('td', {}, club.name),
       el('td', {}, fmtDateShort((club.createdAt || '').slice(0, 10))),
       el('td', {}, el('button', { class: 'btn btn-ghost btn-sm', onclick: () => openClubMembersModal(club) }, t('usermgmt.showMembers'))),
+      el('td', {}, el('button', { class: 'btn btn-ghost btn-sm', onclick: () => openEditClubModulesModal({
+        club,
+        onSuccess: () => { toast(t('usermgmt.clubModulesUpdated')); onChanged?.(); },
+      }) }, t('usermgmt.editClub'))),
     ])));
     table.appendChild(tbody);
     card.appendChild(el('div', { class: 'table-wrap' }, table));

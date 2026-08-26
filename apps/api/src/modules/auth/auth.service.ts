@@ -99,11 +99,21 @@ export interface InvitationValidator {
   markUsed(id: string): Promise<void>;
 }
 
+// Schmale Abhängigkeit (wie InvitationValidator oben) statt des vollen
+// ClubRepository aus modules/invitations — dieser Service braucht nur
+// findById(), um die gebuchten Module des Vereins in die Session-Antwort
+// (login/refresh/acceptInvitation/getMe) einzubetten (siehe
+// resolveEnabledModules() unten).
+export interface ClubModulesLookup {
+  findById(clubId: string): Promise<{ enabledModules: string[] } | null>;
+}
+
 export interface AuthServiceDeps {
   users: UserRepository;
   refreshTokens: RefreshTokenRepository;
   invitations: InvitationValidator;
   profileGateway: ProfileDataGateway;
+  clubs: ClubModulesLookup;
   dataErasureRetentionDays: number;
   keyPair: KeyPair;
   accessTtlSeconds: number;
@@ -113,6 +123,16 @@ export interface AuthServiceDeps {
 export function toPublicUser(user: UserRecord) {
   const { passwordHash: _passwordHash, ...publicUser } = user;
   return publicUser;
+}
+
+// null nur für "superadmin" (gehört zu keinem Verein, siehe
+// UserRecord.clubId-Kommentar) — liefert dafür konsequent ein leeres
+// Array statt eines Fehlers, die Superadmin-Oberfläche ("/admin") nutzt
+// den normalen Router mit Modul-Gating ohnehin nicht.
+async function resolveEnabledModules(clubs: ClubModulesLookup, clubId: string | null): Promise<string[]> {
+  if (!clubId) return [];
+  const club = await clubs.findById(clubId);
+  return club?.enabledModules ?? [];
 }
 
 export function createAuthService(deps: AuthServiceDeps) {
@@ -217,7 +237,8 @@ export function createAuthService(deps: AuthServiceDeps) {
       await deps.invitations.markUsed(invitation.id);
 
       const tokens = await issueTokens(user);
-      return { ...tokens, user: toPublicUser(user) };
+      const enabledModules = await resolveEnabledModules(deps.clubs, user.clubId);
+      return { ...tokens, user: toPublicUser(user), enabledModules };
     },
 
     async login(input: LoginRequest) {
@@ -252,7 +273,8 @@ export function createAuthService(deps: AuthServiceDeps) {
       });
 
       const tokens = await issueTokens(updated);
-      return { ...tokens, user: toPublicUser(updated) };
+      const enabledModules = await resolveEnabledModules(deps.clubs, updated.clubId);
+      return { ...tokens, user: toPublicUser(updated), enabledModules };
     },
 
     async refresh(plainRefreshToken: string) {
@@ -304,7 +326,8 @@ export function createAuthService(deps: AuthServiceDeps) {
       // genau DIESEN Fall abfängt).
       await deps.refreshTokens.revoke(existing.id);
       const tokens = await issueTokens(user);
-      return { ...tokens, user: toPublicUser(user) };
+      const enabledModules = await resolveEnabledModules(deps.clubs, user.clubId);
+      return { ...tokens, user: toPublicUser(user), enabledModules };
     },
 
     async logout(plainRefreshToken: string) {
@@ -321,7 +344,8 @@ export function createAuthService(deps: AuthServiceDeps) {
     async getMe(userId: string) {
       const user = await deps.users.findById(userId);
       if (!user) throw new UserNotFoundError();
-      return toPublicUser(user);
+      const enabledModules = await resolveEnabledModules(deps.clubs, user.clubId);
+      return { ...toPublicUser(user), enabledModules };
     },
 
     async updateMe(userId: string, patch: { name?: string; email?: string; locale?: string }) {
@@ -334,7 +358,12 @@ export function createAuthService(deps: AuthServiceDeps) {
       }
 
       const updated = await deps.users.update(userId, patch);
-      return toPublicUser(updated);
+      // enabledModules mitgegeben (wie getMe()): state.js ersetzt `current`
+      // nach einem Profil-Update komplett durch diese Antwort (siehe
+      // updateProfile()) — ohne dieses Feld ginge die zuvor bei
+      // Login/Refresh geladene Modul-Information dabei verloren.
+      const enabledModules = await resolveEnabledModules(deps.clubs, updated.clubId);
+      return { ...toPublicUser(updated), enabledModules };
     },
 
     // Art. 15 DSGVO (Recht auf Auskunft): bündelt den eigenen Nutzer-
