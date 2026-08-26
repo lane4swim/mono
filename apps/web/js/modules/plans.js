@@ -160,6 +160,10 @@ function setCommentsButton(entry, plan) {
 // equipment badge row underneath if it's linked to a catalog exercise
 // that needs equipment — this is what was missing from the read-only
 // plan view (equipment was only ever shown inside the edit dialog).
+// Same story for comments on the linked catalog exercise (Exercise.comments,
+// not the set's own comments — see setCommentsButton): so far those were
+// only visible inside the Übungskatalog's edit modal, never here where the
+// exercise is actually used inside a plan.
 function equipmentDescCell(entry, exercises) {
   const wrap = el('div');
   wrap.appendChild(el('div', {}, entry.description || '—'));
@@ -169,8 +173,33 @@ function equipmentDescCell(entry, exercises) {
       wrap.appendChild(el('div', { class: 'pill-group', style: 'margin-top:3px' },
         ex.equipment.map(eq => badge(trLabel(EQUIPMENT_ITEMS, eq, 'equipment'), 'pb'))));
     }
+    const hint = ex && exerciseCommentsHint(ex);
+    if (hint) wrap.appendChild(el('div', { style: 'margin-top:3px' }, hint));
   }
   return wrap;
+}
+
+// Small "📝 N" hint shown next to the exercise description whenever the
+// linked catalog exercise has comments — only rendered when comments
+// exist, so it doubles as the "there's something to read here" notice.
+// Opens the same comment-thread widget the catalog's edit modal uses, so
+// added/removed comments here persist straight back onto the exercise.
+function exerciseCommentsHint(ex) {
+  const count = (ex.comments || []).length;
+  if (count === 0) return null;
+  return el('button', {
+    type: 'button',
+    class: 'btn btn-ghost btn-sm',
+    title: t('comments.exerciseCommentsTitle'),
+    onclick: () => {
+      const body = el('div');
+      openModal({ title: t('comments.exerciseCommentsTitle'), bodyNode: body });
+      renderCommentThread(body, ex.comments, async (nextComments) => {
+        ex.comments = nextComments;
+        await put('exercises', { ...ex });
+      });
+    },
+  }, t('comments.exerciseHintButton', { count }));
 }
 
 function renderBlockBox(block, exercises, plan) {

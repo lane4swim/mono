@@ -241,6 +241,7 @@ export default {
     planCommentsTitle: 'Comments on this plan',
     exerciseCommentsTitle: 'Comments on this exercise',
     setCommentsTitle: 'Comments on this set',
+    exerciseHintButton: '📝 Exercise comments ({count})',
   },
   sessions: {
     eyebrow: '{count} sessions', title: 'Training Sessions & Feedback', addSession: '+ Record session',
