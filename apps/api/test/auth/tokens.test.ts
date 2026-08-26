@@ -19,6 +19,8 @@ import {
   hashRefreshToken,
   generateInvitationToken,
   hashInvitationToken,
+  generatePasswordResetToken,
+  hashPasswordResetToken,
 } from '../../src/auth/tokens.js';
 import { generateFreshKeyPair } from '../../src/auth/keys.js';
 import type { AccessTokenClaims } from '@lane1/shared-types';
@@ -119,6 +121,34 @@ describe('generateInvitationToken / hashInvitationToken', () => {
   it('setzt die Ablaufzeit gemäß übergebener TTL in Tagen', () => {
     const { expiresAt } = generateInvitationToken(7);
     const expectedMs = Date.now() + 7 * 24 * 60 * 60 * 1000;
+    expect(Math.abs(expiresAt.getTime() - expectedMs)).toBeLessThan(5000); // Toleranz für Testlaufzeit
+  });
+});
+
+// Sicherheitsreview 2026-08, Befund M5 ("Passwort vergessen"): folgt
+// demselben generateOpaqueToken()/hashOpaqueToken()-Prinzip wie oben, aber
+// mit TTL in MINUTEN statt Tagen (siehe dortiger Kommentar).
+describe('generatePasswordResetToken / hashPasswordResetToken', () => {
+  it('erzeugt ein Klartext-Token und dessen Hash, die nicht identisch sind', () => {
+    const { plainToken, tokenHash } = generatePasswordResetToken(60);
+    expect(plainToken).not.toBe(tokenHash);
+    expect(plainToken.length).toBeGreaterThan(20);
+  });
+
+  it('erzeugt für denselben Klartext-Token stets denselben Hash (deterministisch, für die DB-Suche notwendig)', () => {
+    const { plainToken } = generatePasswordResetToken(60);
+    expect(hashPasswordResetToken(plainToken)).toBe(hashPasswordResetToken(plainToken));
+  });
+
+  it('erzeugt bei jedem Aufruf ein anderes Token (hohe Entropie)', () => {
+    const a = generatePasswordResetToken(60);
+    const b = generatePasswordResetToken(60);
+    expect(a.plainToken).not.toBe(b.plainToken);
+  });
+
+  it('setzt die Ablaufzeit gemäß übergebener TTL in MINUTEN (nicht Tagen)', () => {
+    const { expiresAt } = generatePasswordResetToken(60);
+    const expectedMs = Date.now() + 60 * 60 * 1000;
     expect(Math.abs(expiresAt.getTime() - expectedMs)).toBeLessThan(5000); // Toleranz für Testlaufzeit
   });
 });

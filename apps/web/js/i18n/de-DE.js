@@ -20,7 +20,12 @@ export default {
     noAccountHint: 'Noch kein Konto? Du benötigst einen Einladungslink von deinem Verein.',
     acceptInviteTitle: 'Einladung annehmen',
     acceptInviteIntro: 'Du wurdest als {role} für "{club}" eingeladen ({email}). Bitte lege ein Passwort fest, um dein Konto zu aktivieren.',
-    yourName: 'Dein Name', chooseNewPassword: 'Neues Passwort', passwordHint: 'Mindestens 8 Zeichen.',
+    yourName: 'Dein Name', chooseNewPassword: 'Neues Passwort',
+    // Sicherheitsreview 2026-08, Befund N7: Hinweis auf Passphrasen statt
+    // erzwungener Komplexitätsregeln (Zahlen/Sonderzeichen) — eine längere
+    // Passphrase aus mehreren Wörtern ist leichter zu merken und mindestens
+    // ebenso sicher.
+    passwordHint: 'Mindestens 8 Zeichen. Eine längere Passphrase aus mehreren Wörtern ist eine gute Wahl.',
     acceptInviteButton: 'Konto aktivieren', acceptInviteSuccess: 'Willkommen, {name}!',
     invitationInvalid: 'Diese Einladung ist ungültig, abgelaufen oder wurde bereits verwendet.',
     backToLogin: 'Zurück zur Anmeldung', noClubYetLabel: 'wird noch angelegt',
@@ -30,6 +35,20 @@ export default {
     errorEmailTaken: 'Diese E-Mail-Adresse ist bereits registriert.',
     errorUnknown: 'Ein unerwarteter Fehler ist aufgetreten.',
     demoDataReplaced: 'Beispieldaten durch die Daten deines Vereins ersetzt.',
+    // "Passwort vergessen" (Sicherheitsreview 2026-08, Befund M5).
+    forgotPasswordLink: 'Passwort vergessen?',
+    forgotPasswordTitle: 'Passwort zurücksetzen',
+    forgotPasswordIntro: 'Gib deine E-Mail-Adresse ein — falls dazu ein Konto existiert, senden wir dir einen Link zum Zurücksetzen des Passworts.',
+    forgotPasswordButton: 'Link anfordern',
+    forgotPasswordSentTitle: 'E-Mail unterwegs',
+    forgotPasswordSentMessage: 'Falls ein Konto mit dieser E-Mail-Adresse existiert, wurde soeben eine E-Mail mit einem Link zum Zurücksetzen versendet. Bitte prüfe dein Postfach (ggf. auch den Spam-Ordner).',
+    resetPasswordTitle: 'Neues Passwort vergeben',
+    resetPasswordIntro: 'Bitte lege ein neues Passwort für dein Konto fest.',
+    confirmNewPassword: 'Neues Passwort bestätigen',
+    resetPasswordButton: 'Passwort setzen',
+    resetPasswordSuccess: 'Passwort erfolgreich geändert — du bist jetzt angemeldet.',
+    passwordMismatch: 'Die beiden Passwörter stimmen nicht überein.',
+    errorResetTokenExpired: 'Dieser Link zum Zurücksetzen des Passworts ist ungültig, abgelaufen oder wurde bereits verwendet.',
   },
   topbar: {
     offlineReady: 'Offline bereit', offlineMode: 'Offline-Modus aktiv',
@@ -394,6 +413,12 @@ export default {
     validationName: 'Bitte einen Namen angeben.',
     validationEmail: 'Bitte eine gültige E-Mail-Adresse angeben.',
     saved: 'Profil aktualisiert',
+    // Passwortwechsel (Sicherheitsreview 2026-08, Befund M5).
+    passwordSectionTitle: 'Passwort ändern',
+    currentPasswordLabel: 'Aktuelles Passwort',
+    changePasswordButton: 'Passwort ändern',
+    passwordChanged: 'Passwort erfolgreich geändert.',
+    errorInvalidCurrentPassword: 'Das aktuelle Passwort ist nicht korrekt.',
   },
   setEditor: {
     colDistance: 'Dist. (m)', colDescription: 'Beschreibung', colReps: 'Wdh.', colRest: 'Pause (s)',

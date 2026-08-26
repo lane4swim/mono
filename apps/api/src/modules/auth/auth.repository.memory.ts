@@ -14,6 +14,8 @@ import type {
   UpdateUserInput,
   RefreshTokenRepository,
   RefreshTokenRecord,
+  PasswordResetTokenRepository,
+  PasswordResetTokenRecord,
 } from './auth.repository.js';
 
 export class InMemoryUserRepository implements UserRepository {
@@ -111,5 +113,34 @@ export class InMemoryRefreshTokenRepository implements RefreshTokenRepository {
         this.tokensById.set(tokenId, { ...token, revokedAt: new Date() });
       }
     }
+  }
+}
+
+export class InMemoryPasswordResetTokenRepository implements PasswordResetTokenRepository {
+  private tokensById = new Map<string, PasswordResetTokenRecord>();
+
+  async create(userId: string, tokenHash: string, expiresAt: Date): Promise<PasswordResetTokenRecord> {
+    const token: PasswordResetTokenRecord = {
+      id: randomUUID(),
+      userId,
+      tokenHash,
+      expiresAt,
+      usedAt: null,
+      createdAt: new Date(),
+    };
+    this.tokensById.set(token.id, token);
+    return { ...token };
+  }
+
+  async findByHash(tokenHash: string): Promise<PasswordResetTokenRecord | null> {
+    for (const token of this.tokensById.values()) {
+      if (token.tokenHash === tokenHash) return { ...token };
+    }
+    return null;
+  }
+
+  async markUsed(id: string): Promise<void> {
+    const existing = this.tokensById.get(id);
+    if (existing) this.tokensById.set(id, { ...existing, usedAt: new Date() });
   }
 }

@@ -3,7 +3,7 @@
 // Endpunkte für den einladungsbasierten Registrierungsprozess. Siehe
 // invitations.service.ts für die Autorisierungsmatrix.
 import type { FastifyInstance } from 'fastify';
-import { CreateClubRequestSchema, CreateInvitationRequestSchema, UpdateClubRequestSchema } from '@lane1/shared-types';
+import { CreateClubRequestSchema, CreateInvitationRequestSchema, UpdateClubRequestSchema, InvitationPreviewRequestSchema } from '@lane1/shared-types';
 import type { InvitationsService } from './invitations.service.js';
 import { InvitationNotFoundError } from './invitations.service.js';
 import { requireRole } from '../../plugins/authorize.js';
@@ -24,25 +24,45 @@ export async function invitationsRoutes(app: FastifyInstance, opts: InvitationsR
   // Öffentlich (keine Authentifizierung) — die eingeladene Person kennt
   // ihre Rolle/ihren Verein noch nicht und ist naturgemäß noch nicht
   // eingeloggt, wenn sie den Link öffnet.
-  app.get<{ Params: { token: string } }>('/api/invitations/preview/:token', async (request, reply) => {
-    try {
-      const preview = await invitationsService.preview(request.params.token);
-      return reply.code(200).send(preview);
-    } catch (err) {
-      // Einzige Abweichung von der zentralen Fehler-Registry (siehe
-      // plugins/httpErrorHandler.ts): dort liefert InvitationNotFoundError
-      // 404 (der Fall in revoke() unten), hier bewusst 410 — für eine
-      // Einladungsvorschau sind "nicht gefunden"/"abgelaufen"/"bereits
-      // verwendet"/"widerrufen" ein und dieselbe Nutzerbotschaft ("dieser
-      // Link funktioniert nicht mehr"). Die übrigen drei
-      // Invitation*Error-Klassen landen bereits über die Registry korrekt
-      // bei 410 und brauchen hier keine Sonderbehandlung mehr.
-      if (err instanceof InvitationNotFoundError) {
-        return reply.code(410).send({ error: 'invalid_invitation', message: err.message });
+  //
+  // Sicherheitskorrektur (Sicherheitsreview 2026-08, Befund M3): bewusst
+  // POST mit Token im Body statt GET mit Token als URL-Pfadparameter
+  // (siehe InvitationPreviewRequestSchema-Kommentar in
+  // packages/shared-types/src/invitation.ts) — verhindert, dass das Token
+  // über Fastifys req.url-Logging in Zugriffs-/Anwendungslogs landet. Der
+  // geteilte Einladungslink selbst ändert sich dadurch NICHT (bleibt
+  // #/accept-invite/<token> im URL-Fragment, siehe buildInviteUrl() in
+  // invitations.service.ts) — nur der interne API-Aufruf, den das
+  // Frontend beim Öffnen dieses Links macht.
+  //
+  // Zusätzlich rate-limitiert (statt nur des globalen 100/min aus
+  // plugins/security.ts) — verhindert automatisiertes Durchprobieren von
+  // Einladungs-Tokens über diesen einzigen unauthentifizierten Endpunkt.
+  app.post(
+    '/api/invitations/preview',
+    { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
+    async (request, reply) => {
+      const body = parseInput(InvitationPreviewRequestSchema, request.body, reply);
+      if (!body) return;
+      try {
+        const preview = await invitationsService.preview(body.token);
+        return reply.code(200).send(preview);
+      } catch (err) {
+        // Einzige Abweichung von der zentralen Fehler-Registry (siehe
+        // plugins/httpErrorHandler.ts): dort liefert InvitationNotFoundError
+        // 404 (der Fall in revoke() unten), hier bewusst 410 — für eine
+        // Einladungsvorschau sind "nicht gefunden"/"abgelaufen"/"bereits
+        // verwendet"/"widerrufen" ein und dieselbe Nutzerbotschaft ("dieser
+        // Link funktioniert nicht mehr"). Die übrigen drei
+        // Invitation*Error-Klassen landen bereits über die Registry korrekt
+        // bei 410 und brauchen hier keine Sonderbehandlung mehr.
+        if (err instanceof InvitationNotFoundError) {
+          return reply.code(410).send({ error: 'invalid_invitation', message: err.message });
+        }
+        throw err;
       }
-      throw err;
-    }
-  });
+    },
+  );
 
   app.post(
     '/api/clubs',

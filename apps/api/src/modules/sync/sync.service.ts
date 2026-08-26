@@ -276,6 +276,36 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
         // update()-Zweig statt insert-as-new/create() gewählt wird.
         const existing = await deps.gateway.findById(store, event.entityId, requester.clubId);
 
+        // Zeilenebene, ergänzend zur Store-Ebene oben (Sicherheitsreview
+        // 2026-08, Befund N1): "results" steht laut STORE_PERMISSIONS als
+        // "shared" für Rolle "athlete" store-weit auf Schreiben — wird hier
+        // NICHT eingeschränkt (das würde die kollaborative Nutzung durch
+        // times.js für ALLE Rollen brechen), sondern zusätzlich auf die
+        // EIGENEN Ergebnisse verengt: ohne diese Prüfung könnte jedes
+        // Athlet:innen-Konto per direktem POST /api/sync/push die
+        // Ergebnisse ANDERER Vereinsmitglieder anlegen, überschreiben oder
+        // löschen. "plans" bleibt hier bewusst UNVERÄNDERT geteilt — anders
+        // als "results" (ResultSchema.athleteId) hat PlanSchema keine
+        // Eigentümer:in auf Personenebene, sondern nur groupId; ein
+        // Trainingsplan ist konzeptionell ein Team-/Gruppendokument, kein
+        // individueller Datensatz, dem sich "eigene athleteId" sinnvoll
+        // zuordnen ließe.
+        if (store === 'results' && requester.role === 'athlete') {
+          const ownAthleteId = requester.athleteId;
+          const existingAthleteId = (existing as { athleteId?: unknown } | null)?.athleteId;
+          if (existing && existingAthleteId !== ownAthleteId) {
+            results.push({ eventId: event.id, status: 'error', message: 'Athlet:innen dürfen nur eigene Ergebnisse ändern oder löschen.' });
+            continue;
+          }
+          if (event.action !== 'delete') {
+            const payloadAthleteId = (validatedPayload as { athleteId?: unknown } | null)?.athleteId;
+            if (payloadAthleteId !== ownAthleteId) {
+              results.push({ eventId: event.id, status: 'error', message: 'Athlet:innen dürfen nur eigene Ergebnisse anlegen oder ändern.' });
+              continue;
+            }
+          }
+        }
+
         const decision = resolveConflict(
           store,
           { clientUpdatedAt: event.clientUpdatedAt },

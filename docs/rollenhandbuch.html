@@ -470,7 +470,7 @@
           <tr><td class="path">POST /api/invitations</td><td><span class="roletag">superadmin</span><span class="roletag">admin</span></td><td>Einladung ausstellen (Admin: <code>clubId</code> serverseitig auf eigenen Verein erzwungen)</td></tr>
           <tr><td class="path">GET /api/invitations</td><td><span class="roletag">superadmin</span><span class="roletag">admin</span></td><td>Offene/verwendete Einladungen einsehen</td></tr>
           <tr><td class="path">DELETE /api/invitations/:id</td><td><span class="roletag">superadmin</span><span class="roletag">admin</span></td><td>Einladung widerrufen</td></tr>
-          <tr><td class="path">GET /api/invitations/preview/:token</td><td><span class="roletag pub">öffentlich</span></td><td>Verein/Rolle einer Einladung vor dem Registrieren anzeigen</td></tr>
+          <tr><td class="path">POST /api/invitations/preview</td><td><span class="roletag pub">öffentlich</span></td><td>Verein/Rolle einer Einladung vor dem Registrieren anzeigen (Token im Body, nicht im URL-Pfad)</td></tr>
           <tr><td class="path">POST /auth/register</td><td><span class="roletag pub">Token erforderlich</span></td><td>Konto per Einladungs-Token anlegen — keine offene Selbstregistrierung</td></tr>
           <tr><td class="path">GET /api/users</td><td><span class="roletag">admin</span><span class="roletag">superadmin</span></td><td>Vereinsmitglieder auflisten (Admin: eigener Verein automatisch, Superadmin: <code>?clubId=</code> Pflicht)</td></tr>
           <tr><td class="path">POST /api/sync/push · pull</td><td><span class="roletag">trainer</span><span class="roletag">admin</span><span class="roletag">athlete</span></td><td>Fachliche Offline-Änderungen synchronisieren — Superadmin hat keine fachlichen Daten</td></tr>

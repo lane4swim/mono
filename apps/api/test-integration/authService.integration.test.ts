@@ -18,7 +18,7 @@
 import { describe, it, expect, afterEach, afterAll } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { createAuthService, EmailAlreadyRegisteredError, AthleteAlreadyLinkedError } from '../src/modules/auth/auth.service.js';
-import { PrismaUserRepository, PrismaRefreshTokenRepository } from '../src/modules/auth/auth.repository.js';
+import { PrismaUserRepository, PrismaRefreshTokenRepository, PrismaPasswordResetTokenRepository } from '../src/modules/auth/auth.repository.js';
 import { createInvitationsService } from '../src/modules/invitations/invitations.service.js';
 import { PrismaClubRepository, PrismaInvitationRepository, PrismaAthleteRepository } from '../src/modules/invitations/invitations.repository.js';
 import { PrismaProfileDataGateway } from '../src/modules/profile/profile.repository.js';
@@ -48,6 +48,10 @@ function makeServices() {
     clubs,
     dataErasureRetentionDays: 30,
     keyPair: generateFreshKeyPair(),
+    passwordResetTokens: new PrismaPasswordResetTokenRepository(prisma),
+    mailer: new InMemoryMailSender(),
+    frontendBaseUrl: 'https://app.example.org',
+    passwordResetTtlMinutes: 60,
     accessTtlSeconds: 900,
     refreshTtlDays: 30,
   });

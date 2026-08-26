@@ -37,10 +37,16 @@ export const ClubWithCountsSchema = ClubSchema.extend({
 });
 export type ClubWithCounts = z.infer<typeof ClubWithCountsSchema>;
 
+// `.max(200)` (Sicherheitsreview 2026-08, Befund N2): analog zu den
+// entsprechenden Namensfeldern in entities.ts — Fastifys 1-MB-Bodylimit
+// begrenzt den Schaden zwar auf HTTP-Ebene, aber ein einzelnes, absichtlich
+// riesiges Feld hätte trotzdem unbemerkt akzeptiert und dauerhaft
+// gespeichert werden können. `Club.name` wird zusätzlich in den
+// E-Mail-Betreff geschrieben (siehe mail/mailer.ts).
 export const CreateClubRequestSchema = z.object({
-  name: z.string().min(1),
+  name: z.string().min(1).max(200),
   adminEmail: z.string().email(),
-  adminName: z.string().min(1),
+  adminName: z.string().min(1).max(200),
   // Default: alle Module aktiv — das Anlegen-Formular (clubForm.js) schickt
   // dieses Feld zwar immer explizit, andere/künftige Aufrufer sollen aber
   // nicht versehentlich einen Verein ohne jedes Modul anlegen.
@@ -106,6 +112,20 @@ export const InvitationSummarySchema = z.object({
 });
 export type InvitationSummary = z.infer<typeof InvitationSummarySchema>;
 
+// Sicherheitskorrektur (Sicherheitsreview 2026-08, Befund M3): das Token
+// wurde zuvor als URL-Pfadparameter übertragen (GET /api/invitations/
+// preview/:token) — Fastify protokolliert req.url für jede Anfrage, das
+// Token landete dadurch im Klartext in Zugriffs-/Anwendungslogs. Als
+// Body eines POST-Requests wird es nicht mitgeloggt. Der geteilte
+// Einladungslink selbst (#/accept-invite/<token>, siehe
+// invitations.service.ts: buildInviteUrl()) ist davon unberührt — das
+// Token steht dort im URL-FRAGMENT, das der Browser nie an einen Server
+// sendet; erst der Client liest es aus und schickt es hierüber weiter.
+export const InvitationPreviewRequestSchema = z.object({
+  token: z.string().min(1),
+});
+export type InvitationPreviewRequest = z.infer<typeof InvitationPreviewRequestSchema>;
+
 // Öffentlicher, nicht-authentifizierter Abruf vor dem Registrieren — zeigt
 // der eingeladenen Person, für welchen Verein/welche Rolle die Einladung
 // gilt, ohne interne IDs preiszugeben.
@@ -119,8 +139,16 @@ export type InvitationPreview = z.infer<typeof InvitationPreviewSchema>;
 
 export const AcceptInvitationRequestSchema = z.object({
   token: z.string().min(1),
-  name: z.string().min(1),
-  password: z.string().min(8, 'Passwort muss mindestens 8 Zeichen lang sein'),
+  // `.max(200)` (Sicherheitsreview 2026-08, Befund N2) — siehe Begründung
+  // bei CreateClubRequestSchema oben. `User.name` wird in jeder
+  // Mitgliederliste gerendert.
+  name: z.string().min(1).max(200),
+  // `.max(200)` (Sicherheitsreview 2026-08, Befund N7): argon2id
+  // verarbeitet beliebig lange Eingaben — bei 64 MiB Speicherkosten pro
+  // Hashing-Versuch wäre ein unbegrenztes Feld ein unnötiger DoS-
+  // Verstärker. 200 Zeichen liegt weit über jeder realistischen
+  // Passphrase (siehe auth.passwordHint im Frontend).
+  password: z.string().min(8, 'Passwort muss mindestens 8 Zeichen lang sein').max(200),
   consent: z
     .literal(true)
     .refine((v) => v === true, { message: 'Die Einwilligung zur Datenverarbeitung ist erforderlich.' }),

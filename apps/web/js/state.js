@@ -89,6 +89,18 @@ export async function acceptInvitation(token, name, password, consent) {
   return user;
 }
 
+// "Passwort vergessen" (Sicherheitsreview 2026-08, Befund M5) — meldet die
+// Person bei Erfolg direkt an, analog zu login()/acceptInvitation() oben
+// (der Server liefert bereits ein volles Token-Paar, siehe
+// apiClient.js: resetPassword()).
+export async function resetPassword(token, newPassword) {
+  const user = await api.resetPassword({ token, newPassword });
+  current = user;
+  setLocale(user.locale || detectInitialLocale());
+  emit();
+  return user;
+}
+
 // demo.html: übernimmt eines der beiden festen Konten aus demoMode.js als
 // "aktuellen Nutzer" — ohne Backend-Aufruf, analog zu login()/
 // acceptInvitation() oben, nur ohne den Netzwerk-Umweg. Kopiert das
@@ -144,6 +156,18 @@ export async function updateProfile(patch) {
   if (IS_DEMO) { current = { ...current, ...patch }; emit(); return current; }
   current = await api.updateMe(patch);
   emit();
+  return current;
+}
+
+// Passwortwechsel für die AKTUELL eingeloggte Person (Sicherheitsreview
+// 2026-08, Befund M5) — genutzt vom "Mein Profil"-Modul. Anders als
+// updateProfile() oben KEIN emit(): kein angezeigtes Feld ändert sich
+// (Name/E-Mail/Rolle bleiben gleich, nur der Passwort-Hash), ein erneutes
+// Rendern der abhängigen UI wäre unnötig — analog zur Begründung bei
+// setUserLocale() oben.
+export async function changePassword(currentPassword, newPassword) {
+  if (!current) return null;
+  current = await api.changePassword({ currentPassword, newPassword });
   return current;
 }
 

@@ -4,10 +4,13 @@
 // Phase 4: echte Sitzung statt lokalem Profil-Umschalter. Boot-Ablauf:
 //   1. Ist die URL ein Einladungslink (#/accept-invite/<token>)? -> immer
 //      den Annahme-Bildschirm zeigen, unabhängig vom Sitzungsstatus.
-//   2. Sonst: versuchen, eine bestehende Sitzung wiederherzustellen
+//   2. Ist die URL ein Passwort-Zurücksetzen-Link
+//      (#/reset-password/<token>, Sicherheitsreview 2026-08, Befund M5)?
+//      -> analog immer den Zurücksetzen-Bildschirm zeigen.
+//   3. Sonst: versuchen, eine bestehende Sitzung wiederherzustellen
 //      (state.restoreSession(), nutzt das gespeicherte Refresh Token).
-//   3. Erfolgreich -> normale App-Shell (Nav/Ansicht) starten.
-//   4. Keine Sitzung -> Login-Bildschirm zeigen.
+//   4. Erfolgreich -> normale App-Shell (Nav/Ansicht) starten.
+//   5. Keine Sitzung -> Login-Bildschirm zeigen.
 //
 // Automatische Hintergrund-Synchronisation (neu):
 //   Bisher wurde nur manuell über den Button in der Sync-Warteschlange
@@ -34,7 +37,7 @@ import { currentRoute, onRouteChange } from './router.js';
 import { toast } from './ui.js';
 import { confirmAction } from './modal.js';
 import { t, onLocaleChange } from './i18n.js';
-import { renderLoginScreen, renderAcceptInvitationScreen } from './modules/authScreens.js';
+import { renderLoginScreen, renderAcceptInvitationScreen, renderResetPasswordScreen } from './modules/authScreens.js';
 import { runSync } from './syncClient.js';
 import { buildNav, renderRoute, populateLanguageSelect, updateSyncBadge, setupSettingsModal } from './shell.js';
 import { registerAllModules } from './moduleRegistry.js';
@@ -70,6 +73,16 @@ async function boot() {
     await renderAcceptInvitationScreen(authScreenEl, route.params[0], startAuthenticatedApp);
     return;
   }
+  // "Passwort vergessen" (Sicherheitsreview 2026-08, Befund M5) — der per
+  // E-Mail zugestellte Link (#/reset-password/<token>) muss wie
+  // #/accept-invite oben IMMER den entsprechenden Bildschirm zeigen,
+  // unabhängig vom Sitzungsstatus (die Person könnte z. B. in einem
+  // anderen Tab bereits eingeloggt sein).
+  if (route.routeId === 'reset-password' && route.params[0]) {
+    showAuthScreen();
+    await renderResetPasswordScreen(authScreenEl, route.params[0], startAuthenticatedApp);
+    return;
+  }
 
   const user = await restoreSession();
   if (!user) {
@@ -88,7 +101,7 @@ function showAuthScreen() {
 async function startAuthenticatedApp() {
   authScreenEl.hidden = true;
   appShellEl.hidden = false;
-  if (location.hash.startsWith('#/accept-invite')) location.hash = '#/dashboard';
+  if (location.hash.startsWith('#/accept-invite') || location.hash.startsWith('#/reset-password')) location.hash = '#/dashboard';
 
   // Läuft VOR dem ersten Sync-Zyklus unten (startBackgroundSync()): räumt
   // lokale Demo-Daten weg, falls noch vorhanden — heute i. d. R. ein No-op

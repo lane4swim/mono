@@ -12,7 +12,7 @@
 // vollständig ohne Datenbank testbar.
 import type { LoginRequest, AcceptInvitationRequest, AccessTokenClaims } from '@lane1/shared-types';
 import { CURRENT_CONSENT_VERSION } from '@lane1/shared-types';
-import type { UserRepository, RefreshTokenRepository, UserRecord } from './auth.repository.js';
+import type { UserRepository, RefreshTokenRepository, UserRecord, PasswordResetTokenRepository } from './auth.repository.js';
 import type { InvitationRecord } from '../invitations/invitations.repository.js';
 import {
   InvitationNotFoundError,
@@ -22,8 +22,9 @@ import {
 } from '../invitations/invitations.service.js';
 import type { ProfileDataGateway } from '../profile/profile.repository.js';
 import { hashPassword, verifyPassword } from '../../auth/password.js';
-import { signAccessToken, generateRefreshToken, hashRefreshToken } from '../../auth/tokens.js';
+import { signAccessToken, generateRefreshToken, hashRefreshToken, generatePasswordResetToken, hashPasswordResetToken } from '../../auth/tokens.js';
 import type { KeyPair } from '../../auth/keys.js';
+import type { MailSender } from '../../mail/mailer.js';
 
 // Fest einprogrammierter, gültig kodierter argon2id-Hash für ein beliebiges
 // Dummy-Passwort — dient AUSSCHLIESSLICH dazu, login() bei einer unbekannten
@@ -78,6 +79,26 @@ export class ClubIdRequiredError extends Error {
   }
 }
 
+// Sicherheitsreview 2026-08, Befund M5 ("Passwort vergessen" +
+// Passwortwechsel).
+export class InvalidCurrentPasswordError extends Error {
+  constructor() {
+    super('Das aktuelle Passwort ist nicht korrekt.');
+  }
+}
+// Bewusst EIN gemeinsamer Fehlertyp für "Token existiert nicht" /
+// "bereits verwendet" / "abgelaufen" — analog zu InvalidInvitationError
+// oben bzw. InvalidRefreshTokenError: für den Aufrufer (die Person, die
+// gerade einen Reset-Link öffnet) ist die Botschaft in allen drei Fällen
+// dieselbe ("dieser Link funktioniert nicht mehr"), eine feinere
+// Unterscheidung wäre zudem ein Informationsleck (ließe z. B. erkennen,
+// ob ein Token je gültig war).
+export class InvalidOrExpiredResetTokenError extends Error {
+  constructor() {
+    super('Der Link zum Zurücksetzen des Passworts ist ungültig, abgelaufen oder wurde bereits verwendet.');
+  }
+}
+
 export interface AuthTokens {
   accessToken: string;
   refreshToken: string;
@@ -118,6 +139,17 @@ export interface AuthServiceDeps {
   keyPair: KeyPair;
   accessTtlSeconds: number;
   refreshTtlDays: number;
+  // "Passwort vergessen" (Sicherheitsreview 2026-08, Befund M5).
+  passwordResetTokens: PasswordResetTokenRepository;
+  mailer: MailSender;
+  frontendBaseUrl: string;
+  passwordResetTtlMinutes: number;
+}
+
+// Analog zu buildInviteUrl() in invitations.service.ts: die Annahme-/
+// Zurücksetzen-Seite liegt im normalen Frontend, NICHT unter "/admin".
+function buildPasswordResetUrl(frontendBaseUrl: string, token: string): string {
+  return `${frontendBaseUrl.replace(/\/+$/, '')}/#/reset-password/${token}`;
 }
 
 export function toPublicUser(user: UserRecord) {
@@ -339,6 +371,105 @@ export function createAuthService(deps: AuthServiceDeps) {
       // Logout ist idempotent: ein bereits ungültiges/unbekanntes Token
       // führt nicht zu einem Fehler — der Effekt ("nicht mehr eingeloggt")
       // ist ohnehin bereits erreicht.
+    },
+
+    // "Passwort vergessen" (Sicherheitsreview 2026-08, Befund M5). Liefert
+    // IMMER denselben Effekt nach außen (kein Fehler, keine Information
+    // darüber, ob die E-Mail-Adresse zu einem Konto gehört) — verhindert
+    // User-Enumeration über diesen öffentlichen, nicht authentifizierten
+    // Endpunkt, analog zum generischen InvalidCredentialsError bei login().
+    // Anders als bei login() wird hier bewusst NICHT auf einen
+    // Dummy-Arbeitsaufwand für den "nicht gefunden"-Fall gesetzt: die
+    // eigentlich variable, potenziell verräterische Zeitkomponente ist
+    // hier nicht ein Passwort-Hash-Vergleich (konstant teuer, einfach
+    // anzugleichen), sondern der E-Mail-Versand (SMTP-Netzwerklatenz, von
+    // Natur aus stark schwankend) — sendPasswordResetEmail() wird daher
+    // bewusst NICHT awaited (siehe unten), sodass die Antwortzeit für
+    // "gefunden" und "nicht gefunden" ähnlich schnell (dominiert von der
+    // DB-Abfrage) bleibt, statt für den "gefunden"-Fall um einen vollen
+    // SMTP-Roundtrip zu wachsen.
+    async requestPasswordReset(email: string): Promise<void> {
+      const user = await deps.users.findByEmail(email); // liefert nie gelöschte Konten
+      if (!user) return;
+
+      const { plainToken, tokenHash, expiresAt } = generatePasswordResetToken(deps.passwordResetTtlMinutes);
+      await deps.passwordResetTokens.create(user.id, tokenHash, expiresAt);
+
+      // Bewusst ohne await: siehe Kommentar oben. Ein Fehlschlag (z. B.
+      // SMTP kurzzeitig nicht erreichbar) darf die generische Antwort an
+      // die aufrufende Person nicht verändern (die längst verschickt ist,
+      // wenn dieser Promise sich auflöst) — wird daher nur serverseitig
+      // geloggt, nie an den Client durchgereicht.
+      deps.mailer
+        .sendPasswordResetEmail({
+          to: user.email,
+          recipientName: user.name,
+          resetUrl: buildPasswordResetUrl(deps.frontendBaseUrl, plainToken),
+          expiresAt,
+          locale: user.locale,
+        })
+        .catch((err) => {
+          console.error('[auth] Fehler beim Versand der Passwort-Zurücksetzen-E-Mail:', err);
+        });
+    },
+
+    // Löst ein per E-Mail zugestelltes Reset-Token ein. Wie
+    // acceptInvitation() meldet sich die Person danach direkt an (issueTokens()
+    // unten) — sie hat mit dem Öffnen des Links bereits Zugriff auf das
+    // E-Mail-Postfach nachgewiesen, ein zusätzlicher manueller Login-Schritt
+    // böte keinen echten Sicherheitsgewinn, nur schlechtere UX.
+    //
+    // Sicherheitsmaßnahme: ALLE bestehenden Sitzungen (Refresh Tokens)
+    // werden vor der Neuausstellung widerrufen — ein zurückgesetztes
+    // Passwort deutet typischerweise auf einen (vermuteten) Kontokompromiss
+    // hin; jedes andere angemeldete Gerät muss sich danach mit dem neuen
+    // Passwort neu anmelden, analog zur Reuse-Detection in refresh().
+    async resetPassword(plainToken: string, newPassword: string) {
+      const tokenHash = hashPasswordResetToken(plainToken);
+      const existing = await deps.passwordResetTokens.findByHash(tokenHash);
+      if (!existing) throw new InvalidOrExpiredResetTokenError();
+      if (existing.usedAt) throw new InvalidOrExpiredResetTokenError();
+      if (existing.expiresAt.getTime() < Date.now()) throw new InvalidOrExpiredResetTokenError();
+
+      const user = await deps.users.findById(existing.userId);
+      if (!user) throw new InvalidOrExpiredResetTokenError(); // Konto zwischenzeitlich gelöscht
+
+      const passwordHash = await hashPassword(newPassword);
+      const updated = await deps.users.update(user.id, { passwordHash });
+      await deps.passwordResetTokens.markUsed(existing.id);
+      await deps.refreshTokens.revokeAllForUser(user.id);
+
+      const tokens = await issueTokens(updated);
+      const enabledModules = await resolveEnabledModules(deps.clubs, updated.clubId);
+      return { ...tokens, user: toPublicUser(updated), enabledModules };
+    },
+
+    // Passwortwechsel für die AKTUELL eingeloggte Person (Sicherheitsreview
+    // 2026-08, Befund M5) — verlangt zusätzlich das aktuelle Passwort
+    // (verhindert, dass ein kurzzeitig entwendeter Access Token allein zur
+    // dauerhaften Kontoübernahme reicht: ohne diese Prüfung könnte ein
+    // gestohlenes, noch gültiges Access Token genutzt werden, um die
+    // eigentliche Besitzerin/den eigentlichen Besitzer per neuem Passwort
+    // dauerhaft auszusperren).
+    //
+    // Widerruft — wie resetPassword() oben — ALLE bestehenden Sitzungen und
+    // stellt danach sofort ein frisches Token-Paar aus: die AKTUELLE
+    // Sitzung bleibt dadurch nahtlos angemeldet, jede ANDERE (z. B. ein
+    // verlorenes/gestohlenes Gerät) wird abgemeldet.
+    async changePassword(userId: string, currentPassword: string, newPassword: string) {
+      const user = await deps.users.findById(userId);
+      if (!user) throw new UserNotFoundError();
+
+      const currentPasswordOk = await verifyPassword(currentPassword, user.passwordHash);
+      if (!currentPasswordOk) throw new InvalidCurrentPasswordError();
+
+      const passwordHash = await hashPassword(newPassword);
+      const updated = await deps.users.update(userId, { passwordHash });
+      await deps.refreshTokens.revokeAllForUser(userId);
+
+      const tokens = await issueTokens(updated);
+      const enabledModules = await resolveEnabledModules(deps.clubs, updated.clubId);
+      return { ...tokens, user: toPublicUser(updated), enabledModules };
     },
 
     async getMe(userId: string) {

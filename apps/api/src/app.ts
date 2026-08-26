@@ -18,7 +18,7 @@ import { authRoutes } from './modules/auth/auth.route.js';
 import { syncRoutes, type ClubModulesLookup } from './modules/sync/sync.route.js';
 import { invitationsRoutes } from './modules/invitations/invitations.route.js';
 import { createAuthService, type AuthService } from './modules/auth/auth.service.js';
-import { PrismaUserRepository, PrismaRefreshTokenRepository } from './modules/auth/auth.repository.js';
+import { PrismaUserRepository, PrismaRefreshTokenRepository, PrismaPasswordResetTokenRepository } from './modules/auth/auth.repository.js';
 import { createInvitationsService, type InvitationsService } from './modules/invitations/invitations.service.js';
 import { PrismaClubRepository, PrismaInvitationRepository, PrismaAthleteRepository } from './modules/invitations/invitations.repository.js';
 import { createSyncService, type SyncService } from './modules/sync/sync.service.js';
@@ -45,6 +45,10 @@ export interface BuildAppOverrides {
 // gemacht werden, z. B. über env.ts, falls gewünscht).
 const CLUB_INVITATION_TTL_DAYS = 14; // Admin-Einladungen: etwas großzügiger
 const MEMBER_INVITATION_TTL_DAYS = 7; // Trainer:in-/Athlet:in-Einladungen
+// "Passwort vergessen" (Sicherheitsreview 2026-08, Befund M5) — bewusst
+// deutlich kürzer als jede Einladungs-TTL oben (siehe auth/tokens.ts:
+// generatePasswordResetToken()-Kommentar für die Begründung).
+const PASSWORD_RESET_TTL_MINUTES = 60;
 
 function resolveMailer(env: Env): MailSender {
   if (!env.SMTP_HOST) return new ConsoleMailSender();
@@ -62,6 +66,18 @@ function resolveMailer(env: Env): MailSender {
 export async function buildApp(env: Env, overrides: BuildAppOverrides = {}): Promise<FastifyInstance> {
   const app = Fastify({
     logger: env.NODE_ENV !== 'test',
+    // Sicherheitskorrektur (Sicherheitsreview 2026-08, Befund H2): ohne
+    // trustProxy ignoriert Fastify den von allen Deployment-Anleitungen
+    // gesetzten "X-Forwarded-For"-Header — request.ip ist dann für JEDE
+    // Anfrage die Adresse des vorgeschalteten Nginx (siehe docs/deployment*.md),
+    // nicht die des tatsächlichen Clients. Die drei IP-basierten
+    // Rate-Limits (global in plugins/security.ts, sowie /auth/refresh und
+    // /auth/logout in auth.route.ts) kollabierten dadurch auf einen
+    // EINZIGEN, geteilten Zähler für die gesamte Installation — ein
+    // einzelner Client konnte damit alle anderen aussperren. trustProxy:
+    // true wertet "X-Forwarded-For" aus; request.ip zeigt danach wieder
+    // die tatsächliche Client-Adresse.
+    trustProxy: true,
   });
 
   await registerSecurityPlugins(app, env);
@@ -115,6 +131,14 @@ export async function buildApp(env: Env, overrides: BuildAppOverrides = {}): Pro
       clubs: new PrismaClubRepository(getPrisma()),
       dataErasureRetentionDays: env.DATA_ERASURE_RETENTION_DAYS,
       keyPair,
+      // "Passwort vergessen" (Sicherheitsreview 2026-08, Befund M5) —
+      // dieselbe mailer-Instanz wie invitationsService oben (nicht ein
+      // zweiter resolveMailer()-Aufruf, der z. B. bei SmtpMailSender einen
+      // zweiten, unnötigen Verbindungspool aufbauen würde).
+      passwordResetTokens: new PrismaPasswordResetTokenRepository(getPrisma()),
+      mailer,
+      frontendBaseUrl: env.FRONTEND_BASE_URL,
+      passwordResetTtlMinutes: PASSWORD_RESET_TTL_MINUTES,
       accessTtlSeconds: env.JWT_ACCESS_TTL_SECONDS,
       refreshTtlDays: env.JWT_REFRESH_TTL_DAYS,
     });

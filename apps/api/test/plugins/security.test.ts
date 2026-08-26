@@ -9,7 +9,7 @@ import { buildApp } from '../../src/app.js';
 import { parseCorsOrigin } from '../../src/plugins/security.js';
 import { loadEnv } from '../../src/config/env.js';
 import { createAuthService } from '../../src/modules/auth/auth.service.js';
-import { InMemoryUserRepository, InMemoryRefreshTokenRepository } from '../../src/modules/auth/auth.repository.memory.js';
+import { InMemoryUserRepository, InMemoryRefreshTokenRepository, InMemoryPasswordResetTokenRepository } from '../../src/modules/auth/auth.repository.memory.js';
 import { createInvitationsService } from '../../src/modules/invitations/invitations.service.js';
 import { InMemoryClubRepository, InMemoryInvitationRepository, InMemoryAthleteRepository } from '../../src/modules/invitations/invitations.repository.memory.js';
 import { generateFreshKeyPair } from '../../src/auth/keys.js';
@@ -46,6 +46,10 @@ async function buildTestApp(): Promise<FastifyInstance> {
     clubs: { findById: async () => null },
     dataErasureRetentionDays: 30,
     keyPair,
+    passwordResetTokens: new InMemoryPasswordResetTokenRepository(),
+    mailer: new InMemoryMailSender(),
+    frontendBaseUrl: 'https://app.example.org',
+    passwordResetTtlMinutes: 60,
     accessTtlSeconds: 900,
     refreshTtlDays: 30,
   });
@@ -114,6 +118,10 @@ describe('Security-Header (Helmet) — Produktionsmodus', () => {
       clubs: { findById: async () => null },
       dataErasureRetentionDays: 30,
       keyPair,
+      passwordResetTokens: new InMemoryPasswordResetTokenRepository(),
+      mailer: new InMemoryMailSender(),
+      frontendBaseUrl: 'https://app.example.org',
+      passwordResetTtlMinutes: 60,
       accessTtlSeconds: 900,
       refreshTtlDays: 30,
     });
@@ -136,6 +144,43 @@ describe('Security-Header (Helmet) — Produktionsmodus', () => {
 // funktionierten) matchte @fastify/cors dadurch KEINE davon, da ein
 // einzelner String als exakter Vergleichswert behandelt wird, nicht als
 // Liste.
+// Regressionstest für Sicherheitsreview 2026-08, Befund H2: ohne
+// trustProxy ignoriert Fastify "X-Forwarded-For" komplett — request.ip
+// wäre dann für JEDE Anfrage die Adresse des vorgeschalteten Nginx (siehe
+// docs/deployment*.md), nicht die des tatsächlichen Clients. Alle drei
+// IP-basierten Rate-Limits (global sowie /auth/refresh, /auth/logout)
+// kollabierten dadurch auf einen einzigen, geteilten Zähler für die
+// gesamte Installation.
+describe('trustProxy — Rate-Limit-Buckets folgen X-Forwarded-For, nicht der Proxy-Adresse', () => {
+  let app: FastifyInstance;
+
+  beforeAll(async () => { app = await buildTestApp(); });
+  afterAll(async () => { await app.close(); });
+
+  it('zwei unterschiedliche X-Forwarded-For-Clients teilen sich NICHT dasselbe /auth/refresh-Budget (10/min)', async () => {
+    // Ohne trustProxy wäre request.ip für jede injizierte Anfrage identisch
+    // (die Fastify-Inject-Standardadresse) — die 10 Versuche des ersten
+    // "Clients" hätten dann bereits das Budget des zweiten mitverbraucht,
+    // und dessen erster Versuch wäre fälschlich schon 429.
+    const attempt = (ip: string) =>
+      app.inject({
+        method: 'POST',
+        url: '/auth/refresh',
+        headers: { 'x-forwarded-for': ip },
+        payload: { refreshToken: 'ungueltiges-token-fuer-rate-limit-test' },
+      });
+
+    const clientA = [];
+    for (let i = 0; i < 10; i++) clientA.push(await attempt('203.0.113.10'));
+    expect(clientA.every((r) => r.statusCode === 401)).toBe(true);
+    // Client A ist jetzt bei seinem 10/10-Limit — der 11. eigene Versuch
+    // würde 429 liefern (siehe "Rate-Limiting auf /auth/refresh" oben).
+
+    const clientB = await attempt('203.0.113.20');
+    expect(clientB.statusCode).toBe(401);
+  });
+});
+
 describe('parseCorsOrigin()', () => {
   it('gibt eine einzelne Origin unverändert als 1-elementiges Array zurück', () => {
     expect(parseCorsOrigin('https://training.example.org')).toEqual(['https://training.example.org']);
@@ -189,6 +234,10 @@ describe('CORS — mehrere kommagetrennte Origins (End-to-End)', () => {
       clubs: { findById: async () => null },
       dataErasureRetentionDays: 30,
       keyPair,
+      passwordResetTokens: new InMemoryPasswordResetTokenRepository(),
+      mailer: new InMemoryMailSender(),
+      frontendBaseUrl: 'https://app.example.org',
+      passwordResetTtlMinutes: 60,
       accessTtlSeconds: 900,
       refreshTtlDays: 30,
     });

@@ -29,11 +29,51 @@ function installLocalStorageStub() {
 }
 installLocalStorageStub();
 
+// Node kennt (wie `localStorage` oben) auch kein globales `location` —
+// ein minimaler, beschreibbarer Ersatz reicht, um Befund N3
+// (Origin-Gating des `lane1-api-base-url`-Overrides) zu testen. Startwert
+// "localhost", da die übrigen Tests in dieser Datei den Override nicht
+// verwenden und daher unabhängig vom Origin funktionieren müssen.
+globalThis.location = { hostname: 'localhost' };
+
 const api = await import('../js/apiClient.js');
 
 beforeEach(() => {
   globalThis.localStorage.clear();
+  globalThis.location.hostname = 'localhost';
   api.clearTokens();
+});
+
+// Sicherheitsreview 2026-08, Befund N3: der `lane1-api-base-url`-Override
+// betrifft ALLE Requests inkl. Authorization-Header — ohne Origin-Gating
+// hätte ein per XSS gesetzter Schlüssel sämtliche Tokens an einen fremden
+// Host umgeleitet. getApiBaseUrl()/setApiBaseUrl() berücksichtigen den
+// Override deshalb nur noch auf einem lokalen Entwicklungs-Origin.
+describe('getApiBaseUrl()/setApiBaseUrl() — Origin-Gating (Befund N3)', () => {
+  it('berücksichtigt den Override auf localhost', () => {
+    globalThis.location.hostname = 'localhost';
+    api.setApiBaseUrl('http://localhost:3000');
+    expect(api.getApiBaseUrl()).toBe('http://localhost:3000');
+  });
+
+  it('ignoriert einen bereits gesetzten Override auf einem Produktions-Origin, obwohl der Schlüssel im localStorage steht', () => {
+    globalThis.location.hostname = 'localhost';
+    api.setApiBaseUrl('http://localhost:3000');
+    globalThis.location.hostname = 'training.mein-verein.de';
+    expect(api.getApiBaseUrl()).toBe('');
+  });
+
+  it('lehnt setApiBaseUrl() auf einem Produktions-Origin ab — der Schlüssel wird gar nicht erst geschrieben', () => {
+    globalThis.location.hostname = 'training.mein-verein.de';
+    api.setApiBaseUrl('http://böser-host.example');
+    expect(globalThis.localStorage.getItem('lane1-api-base-url')).toBeNull();
+  });
+
+  it('berücksichtigt den Override auf 127.0.0.1 (weiterer anerkannter lokaler Origin)', () => {
+    globalThis.location.hostname = '127.0.0.1';
+    api.setApiBaseUrl('http://localhost:3000');
+    expect(api.getApiBaseUrl()).toBe('http://localhost:3000');
+  });
 });
 
 describe('refreshTokens() — Single-Flight (Befund S4)', () => {
