@@ -1040,6 +1040,31 @@ describe('syncService — Rollen-Scopierung für "athlete" (Sicherheitsregressio
     expect(JSON.stringify(result.changes[0])).not.toContain('fremde Notiz');
   });
 
+  // Sicherheitsregression (Sicherheitsreview 2026-08, Befund M1):
+  // "trainerNote" ist ein freies, coach-internes Notizfeld (siehe
+  // apps/web/js/modules/sessions.js) und wurde bislang unverändert an
+  // Rolle "athlete" ausgeliefert, obwohl kein athletenseitiges Modul es
+  // je anzeigt.
+  it('PULL für Rolle "athlete": "trainerNote" wird redigiert, auch wenn die Person selbst an der Einheit teilnahm', async () => {
+    const { service, gateway } = makeService();
+    const payload = makeSessionPayload({ trainerNote: 'GEHEIM: Elterngespräch nötig' });
+    gateway.seed('sessions', { ...payload, updatedAt: new Date(payload.updatedAt), createdAt: new Date(payload.createdAt), deletedAt: null });
+
+    const result = await service.pull({}, asAthlete(CLUB_A, '55555555-5555-5555-5555-555555555555'));
+    expect(result.changes).toHaveLength(1);
+    expect((result.changes[0]!.payload as Record<string, unknown>).trainerNote).toBe('');
+    expect(JSON.stringify(result.changes[0])).not.toContain('Elterngespräch');
+  });
+
+  it('trainer/admin sehen "trainerNote" weiterhin unredigiert', async () => {
+    const { service, gateway } = makeService();
+    const payload = makeSessionPayload({ trainerNote: 'Gute Energie heute' });
+    gateway.seed('sessions', { ...payload, updatedAt: new Date(payload.updatedAt), createdAt: new Date(payload.createdAt), deletedAt: null });
+
+    const result = await service.pull({}, asTrainer(CLUB_A));
+    expect((result.changes[0]!.payload as Record<string, unknown>).trainerNote).toBe('Gute Energie heute');
+  });
+
   it('PULL für Rolle "athlete": eine "sessions"-Einheit, an der die Person gar nicht teilnahm, wird komplett ausgeblendet', async () => {
     const { service, gateway } = makeService();
     const payload = makeSessionPayload({
@@ -1096,14 +1121,61 @@ describe('syncService — "Athlete.notes"-Redaktion für Rolle "athlete" (Sicher
 
     const result = await service.pull({}, asAthlete(CLUB_A, '55555555-5555-5555-5555-555555555555'));
     expect(result.changes).toHaveLength(2);
-    result.changes.forEach((change) => {
-      expect((change.payload as Record<string, unknown>).notes).toBe('');
-    });
-    // Der Rest des Datensatzes (Name, Gruppe, …) bleibt sichtbar — nur
-    // "notes" wird entfernt, nicht der ganze Datensatz.
+    // Eigener Datensatz: "notes" explizit redigiert (leerer String, Feld
+    // bleibt vorhanden), der Rest (Name, Gruppe, …) bleibt sichtbar.
     const ownChange = result.changes.find((c) => c.entityId === own.id);
+    expect((ownChange!.payload as Record<string, unknown>).notes).toBe('');
     expect((ownChange!.payload as Record<string, unknown>).firstName).toBe('Mara');
+    // Fremder Datensatz: "notes" ist gar nicht erst Teil der Allowlist
+    // (siehe TEAM_VISIBLE_ATHLETE_FIELDS in sync.athleteScope.ts) — das
+    // Feld fehlt komplett, statt nur geleert zu sein.
+    const foreignChange = result.changes.find((c) => c.entityId === foreign.id);
+    expect(foreignChange!.payload).not.toHaveProperty('notes');
     expect(JSON.stringify(result.changes)).not.toContain('Sensible');
+  });
+
+  // Sicherheitsregression (Sicherheitsreview 2026-08, Befund M2):
+  // "birthdate"/"gender"/"joinDate" gingen bislang für JEDEN Athletendatensatz
+  // unverändert heraus — auch für fremde Personen, obwohl kein team-weites
+  // Modul diese Felder je liest (nur apps/web/js/modules/athletes.js,
+  // roles: ['trainer','admin']).
+  it('PULL: "birthdate"/"gender"/"joinDate" werden für FREMDE Athletendatensätze nicht mehr ausgeliefert', async () => {
+    const { service, gateway } = makeService();
+    const foreign = makeAthletePayload({ id: '66666666-6666-6666-6666-666666666661', birthdate: '2011-05-20T00:00:00.000Z', gender: 'm', joinDate: '2021-01-01T00:00:00.000Z' });
+    gateway.seed('athletes', { ...foreign, birthdate: new Date(foreign.birthdate as string), joinDate: new Date(foreign.joinDate as string), updatedAt: new Date(foreign.updatedAt as string), createdAt: new Date(foreign.createdAt as string), deletedAt: null });
+
+    const result = await service.pull({}, asAthlete(CLUB_A, '55555555-5555-5555-5555-555555555555'));
+    expect(result.changes).toHaveLength(1);
+    const payload = result.changes[0]!.payload as Record<string, unknown>;
+    expect(payload).not.toHaveProperty('birthdate');
+    expect(payload).not.toHaveProperty('gender');
+    expect(payload).not.toHaveProperty('joinDate');
+    // Die team-weit tatsächlich genutzten Felder bleiben erhalten.
+    expect(payload.id).toBe(foreign.id);
+    expect(payload.firstName).toBe('Mara');
+    expect(payload.groupId).toBeNull();
+    expect(payload.active).toBe(true);
+  });
+
+  // Regressionsschutz: das EIGENE, verknüpfte Athletenprofil darf NICHT
+  // auf die Allowlist reduziert werden — apps/web/js/modules/profile.js'
+  // collectMyData() nutzt genau diesen lokal gesynchten Datensatz als
+  // Offline-Ausweichlösung für den DSGVO-Auskunftsexport (Art. 15) der
+  // eigenen Person und braucht dafür die eigenen Personendaten vollständig.
+  it('PULL: "birthdate"/"gender"/"joinDate" bleiben am EIGENEN Athletendatensatz erhalten', async () => {
+    const { service, gateway } = makeService();
+    const own = makeAthletePayload({ id: '55555555-5555-5555-5555-555555555555', birthdate: '2009-03-14T00:00:00.000Z', gender: 'w', joinDate: '2019-08-01T00:00:00.000Z' });
+    gateway.seed('athletes', { ...own, birthdate: new Date(own.birthdate as string), joinDate: new Date(own.joinDate as string), updatedAt: new Date(own.updatedAt as string), createdAt: new Date(own.createdAt as string), deletedAt: null });
+
+    const result = await service.pull({}, asAthlete(CLUB_A, own.id as string));
+    const payload = result.changes[0]!.payload as Record<string, unknown>;
+    // InMemorySyncGateway liefert Datumsfelder als native Date-Objekte
+    // zurück (erst die HTTP-Schicht/Fastify serialisiert sie zu ISO-
+    // Strings, siehe sync.gateway.ts) — hier zählt nur, dass die Werte
+    // überhaupt noch vorhanden sind (nicht von der Allowlist entfernt).
+    expect(new Date(payload.birthdate as string | Date).toISOString()).toBe('2009-03-14T00:00:00.000Z');
+    expect(payload.gender).toBe('w');
+    expect(new Date(payload.joinDate as string | Date).toISOString()).toBe('2019-08-01T00:00:00.000Z');
   });
 
   it('trainer/admin sehen "notes" weiterhin unredigiert', async () => {

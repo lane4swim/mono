@@ -28,8 +28,8 @@ Schweregrade: **Hoch** = vor dem nächsten Produktivbetrieb beheben,
 |---|---|---|---|
 | H1 | Standard-Superadmin `admin@test.de` / `pwd12345` bei `NODE_ENV=production` | `scripts/setup-codespace.sh` | Hoch — **behoben** |
 | H2 | Kein `trustProxy`: Rate-Limiting kollabiert hinter Nginx auf einen globalen Eimer | `apps/api/src/app.ts` | Hoch — **behoben** |
-| M1 | `trainerNote` erreicht Athlet:innen-Konten (bestätigt) | `sync.athleteScope.ts` | Mittel |
-| M2 | Geburtsdatum/Geschlecht fremder Athlet:innen an Athlet:innen-Konten | `sync.athleteScope.ts` | Mittel |
+| M1 | `trainerNote` erreicht Athlet:innen-Konten (bestätigt) | `sync.athleteScope.ts` | Mittel — **behoben** |
+| M2 | Geburtsdatum/Geschlecht fremder Athlet:innen an Athlet:innen-Konten | `sync.athleteScope.ts` | Mittel — **behoben** |
 | M3 | Einladungs-Token landet im Klartext in Zugriffs-/Anwendungslogs | `invitations.route.ts`, `app.ts`, `mailer.ts` | Mittel |
 | M4 | SMTP ohne `requireTLS` — stille Klartext-Zustellung möglich | `mail/mailer.ts` | Mittel |
 | M5 | Kein Passwortwechsel und keine Passwort-Wiederherstellung | `modules/auth/*` | Mittel |
@@ -133,14 +133,22 @@ unterschiedliche `request.ip`-Werte nachweist.
 
 ## Mittel
 
-### M1 — `trainerNote` erreicht Athlet:innen-Konten
+### M1 — `trainerNote` erreicht Athlet:innen-Konten — **behoben**
 
+**Fix:** `apps/api/src/modules/sync/sync.athleteScope.ts:75-90` setzt
+`trainerNote: ''` im `sessions`-Zweig, analog zur bestehenden
+`notes`-Redaktion beim Store `athletes`. Regressionstests in
+`apps/api/test/sync/sync.service.test.ts` (zwei neue Fälle: Redaktion für
+Rolle `athlete` auch am eigenen Teilnahme-Eintrag, unverändertes Verhalten
+für `trainer`/`admin`).
+
+Ursprünglicher Befund, Fundstelle zum Zeitpunkt der Analyse:
 `apps/api/src/modules/sync/sync.athleteScope.ts:43-52`
 
-`scopeChangeForAthlete()` reduziert für die Rolle `athlete` beim Store
-`sessions` das `attendance`-Array korrekt auf den eigenen Eintrag — reicht
+`scopeChangeForAthlete()` reduzierte für die Rolle `athlete` beim Store
+`sessions` das `attendance`-Array korrekt auf den eigenen Eintrag — reichte
 `trainerNote` aber unverändert durch. Empirisch bestätigt (Funktion direkt
-gegen einen realistischen Payload ausgeführt):
+gegen einen realistischen Payload ausgeführt, vor dem Fix):
 
 ```
 SESSION -> {
@@ -155,27 +163,45 @@ bis 5.000 Zeichen). Die Oberfläche behandelt es konsequent als coach-intern:
 `apps/web/js/modules/sessions.js:81` rendert es ausschließlich in
 `renderDetail()`, und `render()` verzweigt für `role === 'athlete'` vorher nach
 `renderAthleteView()`, das die Notiz nicht anzeigt. Über `GET /api/sync/pull`
-landet sie dennoch in der lokalen IndexedDB jedes Athleten-Geräts und ist über
-die DevTools oder einen direkten API-Aufruf im Klartext lesbar.
+landete sie dennoch in der lokalen IndexedDB jedes Athleten-Geräts und war
+über die DevTools oder einen direkten API-Aufruf im Klartext lesbar.
 
-Das ist exakt dieselbe Konstellation, für die derselbe Codepfad wenige Zeilen
-weiter unten `athletes.notes` bewusst redigiert — mit einer Begründung, die
-wortgleich auf `trainerNote` zutrifft („freies Trainer:innen-Notizfeld … das
-einzige Modul, das dieses Feld überhaupt anzeigt, ist auf
-`roles: ['trainer','admin']` beschränkt"). Die Redaktion wurde beim Store
-`sessions` schlicht nicht mitgezogen.
-
-**Empfehlung:** Im `sessions`-Zweig `trainerNote: ''` setzen, analog zu
-`notes` beim Store `athletes`.
+Das war exakt dieselbe Konstellation, für die derselbe Codepfad wenige Zeilen
+weiter unten `athletes.notes` bereits bewusst redigierte — mit einer
+Begründung, die wortgleich auf `trainerNote` zutraf („freies
+Trainer:innen-Notizfeld … das einzige Modul, das dieses Feld überhaupt
+anzeigt, ist auf `roles: ['trainer','admin']` beschränkt"). Die Redaktion war
+beim Store `sessions` schlicht nicht mitgezogen worden — siehe **Fix** oben.
 
 ---
 
-### M2 — Geburtsdatum und Geschlecht fremder Athlet:innen an Athlet:innen-Konten
+### M2 — Geburtsdatum und Geschlecht fremder Athlet:innen an Athlet:innen-Konten — **behoben**
 
+**Fix:** `apps/api/src/modules/sync/sync.athleteScope.ts:92-119`. Beim
+Implementieren zeigte sich, dass die ursprünglich vorgeschlagene pauschale
+Allowlist zu weit gegriffen hätte: `apps/web/js/modules/profile.js`
+(`collectMyData()`) nutzt den lokal gesynchten, eigenen Athletendatensatz als
+Offline-Ausweichlösung für den DSGVO-Auskunftsexport (Art. 15) — dafür werden
+`birthdate`/`gender`/`joinDate` der **eigenen** Person tatsächlich gebraucht.
+Der Fix unterscheidet daher nach Eigentümerschaft (`payload.id === athleteId`):
+- **Eigener Datensatz:** bleibt vollständig sichtbar, nur `notes` redigiert
+  (unverändert zum bisherigen Verhalten).
+- **Fremder Datensatz:** auf `TEAM_VISIBLE_ATHLETE_FIELDS` reduziert (`id`,
+  `clubId`, `firstName`, `lastName`, `groupId`, `active`, `createdAt`,
+  `updatedAt`) — `birthdate`/`gender`/`joinDate`/`notes` fehlen dort komplett,
+  statt nur geleert zu sein.
+
+Drei Regressionstests in `apps/api/test/sync/sync.service.test.ts`: `notes`
+fehlt am fremden Datensatz vollständig (statt `''`), `birthdate`/`gender`/
+`joinDate` fehlen am fremden Datensatz, dieselben drei Felder bleiben am
+eigenen Datensatz erhalten.
+
+Ursprünglicher Befund, Fundstelle zum Zeitpunkt der Analyse:
 `apps/api/src/modules/sync/sync.athleteScope.ts:53-66`
 
-Beim Store `athletes` wird für die Rolle `athlete` nur `notes` redigiert; der
-übrige Datensatz geht vollständig heraus. Ebenfalls empirisch bestätigt:
+Beim Store `athletes` wurde für die Rolle `athlete` nur `notes` redigiert;
+der übrige Datensatz ging vollständig heraus. Ebenfalls empirisch bestätigt
+(vor dem Fix):
 
 ```
 ATHLETE -> {
@@ -187,25 +213,18 @@ ATHLETE -> {
 ```
 
 Die Begründung im Code — der Restdatensatz werde „für Team-weite Ansichten wie
-Zeiten/Trainingspläne gebraucht (siehe `times.js`/`plans.js`)" — trifft auf
+Zeiten/Trainingspläne gebraucht (siehe `times.js`/`plans.js`)" — traf auf
 `firstName`/`lastName`/`groupId`/`id` zu, nicht auf `birthdate`, `gender` und
-`joinDate`. Eine Suche über das gesamte Frontend zeigt, dass diese drei Felder
-**ausschließlich** in `apps/web/js/modules/athletes.js` gelesen werden
-(Zeilen 79, 123, 131, 134, 135, 174-202) — einem Modul mit
-`roles: ['trainer', 'admin']`.
+`joinDate`. Eine Suche über das gesamte Frontend zeigte, dass diese drei
+Felder **ausschließlich** in `apps/web/js/modules/athletes.js` gelesen
+wurden — einem Modul mit `roles: ['trainer', 'admin']`.
 
-Im Kontext eines Schwimmvereins sind das überwiegend Geburtsdaten
-Minderjähriger, die an jedes Athlet:innen-Gerät des Vereins repliziert werden,
-ohne dass eine einzige Ansicht sie dort verwendet. Datenschutzrechtlich ist das
-ein Verstoß gegen die Datenminimierung (Art. 5 Abs. 1 lit. c DSGVO), technisch
-schlicht überflüssige Angriffsfläche.
-
-**Empfehlung:** Für die Rolle `athlete` beim Store `athletes` auf die
-tatsächlich genutzten Felder reduzieren (Allowlist statt Denylist —
-konsistent zum Whitelist-Prinzip in `sync.permissions.ts`), z. B.
-`id`, `clubId`, `firstName`, `lastName`, `groupId`, `active`, `createdAt`,
-`updatedAt`. Eine Allowlist hat zusätzlich den Vorteil, dass ein künftig neu
-hinzugefügtes Athletenfeld nicht automatisch mit herausgeht.
+Im Kontext eines Schwimmvereins waren das überwiegend Geburtsdaten
+Minderjähriger, die an jedes Athlet:innen-Gerät des Vereins repliziert
+wurden, ohne dass eine einzige Ansicht sie dort verwendete — ein Verstoß
+gegen die Datenminimierung (Art. 5 Abs. 1 lit. c DSGVO) und unnötige
+Angriffsfläche. Siehe **Fix** oben für die tatsächlich umgesetzte,
+eigentümerschaftsbewusste Lösung.
 
 ---
 
@@ -476,12 +495,13 @@ sind sauber:
 
 ## Empfohlene Reihenfolge
 
-1. **H1** — `scripts/setup-codespace.sh`: Default-Zugangsdaten entfernen.
-   Einzeiler, größte Wirkung.
-2. **H2** — `trustProxy` setzen. Ebenfalls ein Einzeiler, stellt drei
-   Rate-Limits gleichzeitig wieder her.
-3. **M1/M2** — `sync.athleteScope.ts` auf eine Feld-Allowlist umstellen. Beide
-   Befunde in einer Änderung, mit Tests gegen die konkreten Payloads.
+1. ~~**H1** — `scripts/setup-codespace.sh`: Default-Zugangsdaten entfernen.~~
+   **Behoben.**
+2. ~~**H2** — `trustProxy` setzen.~~ **Behoben.**
+3. ~~**M1/M2** — `sync.athleteScope.ts` auf eine Feld-Allowlist umstellen.~~
+   **Behoben** (M2 mit einer Verfeinerung gegenüber dem ursprünglichen
+   Vorschlag — siehe dortiger **Fix**-Abschnitt: Allowlist nur für fremde
+   Datensätze, das eigene Athletenprofil bleibt vollständig).
 4. **M3/M4** — Token aus den Logs (`redact` oder POST-Vorschau),
    `SMTP_HOST` in Produktion erzwingen, `requireTLS: true`.
 5. **M5** — Passwortwechsel nachziehen.
