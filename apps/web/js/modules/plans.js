@@ -173,33 +173,37 @@ function equipmentDescCell(entry, exercises) {
       wrap.appendChild(el('div', { class: 'pill-group', style: 'margin-top:3px' },
         ex.equipment.map(eq => badge(trLabel(EQUIPMENT_ITEMS, eq, 'equipment'), 'pb'))));
     }
-    const hint = ex && exerciseCommentsHint(ex);
-    if (hint) wrap.appendChild(el('div', { style: 'margin-top:3px' }, hint));
+    if (ex) wrap.appendChild(el('div', { style: 'margin-top:3px' }, exerciseCommentsHint(ex)));
   }
   return wrap;
 }
 
 // Small "📝 N" hint shown next to the exercise description whenever the
-// linked catalog exercise has comments — only rendered when comments
-// exist, so it doubles as the "there's something to read here" notice.
-// Opens the same comment-thread widget the catalog's edit modal uses, so
-// added/removed comments here persist straight back onto the exercise.
+// linked catalog exercise has comments — hidden while there are none, so
+// it doubles as the "there's something to read here" notice. Opens the
+// same comment-thread widget the catalog's edit modal uses; the label
+// (and its visibility) updates immediately after every add/delete instead
+// of waiting for the page's next full re-render.
 function exerciseCommentsHint(ex) {
-  const count = (ex.comments || []).length;
-  if (count === 0) return null;
-  return el('button', {
-    type: 'button',
-    class: 'btn btn-ghost btn-sm',
-    title: t('comments.exerciseCommentsTitle'),
-    onclick: () => {
-      const body = el('div');
-      openModal({ title: t('comments.exerciseCommentsTitle'), bodyNode: body });
-      renderCommentThread(body, ex.comments, async (nextComments) => {
-        ex.comments = nextComments;
-        await put('exercises', { ...ex });
-      });
-    },
-  }, t('comments.exerciseHintButton', { count }));
+  const btn = el('button', { type: 'button', class: 'btn btn-ghost btn-sm', title: t('comments.exerciseCommentsTitle') });
+
+  function updateLabel() {
+    const count = (ex.comments || []).length;
+    btn.textContent = t('comments.exerciseHintButton', { count });
+    btn.style.display = count === 0 ? 'none' : '';
+  }
+  updateLabel();
+
+  btn.addEventListener('click', () => {
+    const body = el('div');
+    openModal({ title: t('comments.exerciseCommentsTitle'), bodyNode: body });
+    renderCommentThread(body, ex.comments, async (nextComments) => {
+      ex.comments = nextComments;
+      await put('exercises', { ...ex });
+      updateLabel();
+    });
+  });
+  return btn;
 }
 
 function renderBlockBox(block, exercises, plan) {
