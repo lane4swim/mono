@@ -30,8 +30,8 @@ Schweregrade: **Hoch** = vor dem nächsten Produktivbetrieb beheben,
 | H2 | Kein `trustProxy`: Rate-Limiting kollabiert hinter Nginx auf einen globalen Eimer | `apps/api/src/app.ts` | Hoch — **behoben** |
 | M1 | `trainerNote` erreicht Athlet:innen-Konten (bestätigt) | `sync.athleteScope.ts` | Mittel — **behoben** |
 | M2 | Geburtsdatum/Geschlecht fremder Athlet:innen an Athlet:innen-Konten | `sync.athleteScope.ts` | Mittel — **behoben** |
-| M3 | Einladungs-Token landet im Klartext in Zugriffs-/Anwendungslogs | `invitations.route.ts`, `app.ts`, `mailer.ts` | Mittel |
-| M4 | SMTP ohne `requireTLS` — stille Klartext-Zustellung möglich | `mail/mailer.ts` | Mittel |
+| M3 | Einladungs-Token landet im Klartext in Zugriffs-/Anwendungslogs | `invitations.route.ts`, `app.ts`, `mailer.ts` | Mittel — **behoben** |
+| M4 | SMTP ohne `requireTLS` — stille Klartext-Zustellung möglich | `mail/mailer.ts` | Mittel — **behoben** |
 | M5 | Kein Passwortwechsel und keine Passwort-Wiederherstellung | `modules/auth/*` | Mittel |
 | N1 | Rolle `athlete` darf `results`/`plans` vereinsweit schreiben und löschen | `sync.permissions.ts` | Niedrig |
 | N2 | Namensfelder ohne Längenbegrenzung | `packages/shared-types/src/{auth,invitation}.ts` | Niedrig |
@@ -228,49 +228,83 @@ eigentümerschaftsbewusste Lösung.
 
 ---
 
-### M3 — Einladungs-Token im Klartext in den Logs
+### M3 — Einladungs-Token im Klartext in den Logs — **behoben**
 
+**Fix.** Zwei unabhängige Leckpfade, zwei unabhängige Korrekturen — beide
+unter der Vorgabe umgesetzt, dass der "Link kopieren"-Weg zum Teilen einer
+Einladung über einen anderen Kanal als E-Mail (z. B. WhatsApp) ausdrücklich
+erhalten bleiben muss:
+
+1. **Vorschau-Route** (`apps/api/src/modules/invitations/invitations.route.ts:41-65`):
+   von `GET /api/invitations/preview/:token` auf
+   `POST /api/invitations/preview` mit Token im Body umgestellt (neues
+   `InvitationPreviewRequestSchema` in `packages/shared-types/src/invitation.ts`),
+   zusätzlich mit einem eigenen Rate-Limit (20/min) versehen. Der geteilte
+   Einladungslink selbst ändert sich dadurch NICHT — er transportiert das
+   Token weiterhin im URL-**Fragment** (`#/accept-invite/<token>`), das nie
+   an den Server gesendet wird; nur der interne API-Aufruf, den das
+   Frontend beim Öffnen dieses Links macht (`apps/web/js/apiClient.js:
+   getInvitationPreview()`), läuft jetzt über POST. `apps/api/test/invitations/
+   invitations.route.test.ts` entsprechend angepasst.
+
+2. **`ConsoleMailSender`** (`apps/api/src/mail/mailer.ts:200-223`): protokolliert
+   nicht mehr den vollständigen Link inkl. Token, sondern nur noch
+   Empfänger/Verein/Rolle plus einen Hinweis auf den "Link kopieren"-Button.
+   Bewusst **keine** Pflicht zu `SMTP_HOST` in Produktion ergänzt (ursprünglich
+   als Option 2 vorgeschlagen) — das hätte den dokumentierten, unterstützten
+   Betrieb ohne eigenen Mailserver gebrochen (`deployment-github-codespaces.md`/
+   `deployment-macos.md`: Einladungen werden dort bewusst manuell geteilt statt
+   per E-Mail versendet). Da `admin/admin.js`s Vereinserstellung (anders als
+   `modules/userManagement.js`) den frisch erzeugten Link bislang gar nicht
+   anzeigte — der jetzt redigierte Server-Log war dort die EINZIGE Quelle für
+   den allerersten Admin-Einladungslink ohne SMTP —, zeigt `admin.js` den Link
+   jetzt zusätzlich in einem eigenen "Link kopieren"-Dialog an
+   (`showInviteLinkModal()`, analog zu `userManagement.js`), robust gegen den
+   abweichenden URL-Pfad von `/admin` gegenüber der Haupt-App.
+
+Regressionstests: `apps/api/test/mail/mailer.test.ts` (`ConsoleMailSender`
+loggt Empfänger/Verein, aber weder Token noch `inviteUrl`).
+
+Ursprünglicher Befund, Fundstellen zum Zeitpunkt der Analyse:
 `apps/api/src/modules/invitations/invitations.route.ts:27`,
 `apps/api/src/app.ts:58`, `apps/api/src/mail/mailer.ts:190-197`
 
-Der Einladungslink transportiert das Token korrekt im URL-**Fragment**
+Der Einladungslink transportierte das Token korrekt im URL-**Fragment**
 (`#/accept-invite/<token>`, `invitations.service.ts:buildInviteUrl`) — das
-Fragment wird nicht an den Server gesendet, das ist richtig gelöst. Die
-Vorschau-Route legt es dann aber wieder offen:
+Fragment wird nicht an den Server gesendet, das war richtig gelöst. Die
+Vorschau-Route legte es dann aber wieder offen:
 
 ```ts
 app.get<{ Params: { token: string } }>('/api/invitations/preview/:token', ...)
 ```
 
 Fastify läuft in Produktion mit `logger: true` und protokolliert für jede
-Anfrage `req.url` — das Klartext-Token steht damit in den Anwendungslogs, in
+Anfrage `req.url` — das Klartext-Token stand damit in den Anwendungslogs, in
 `pm2`-Logfiles und (über die Nginx-Setups aller Deployment-Anleitungen)
 zusätzlich im Nginx-Access-Log. Ein Token gilt 7 bzw. 14 Tage, ist nicht an
 den Empfänger gebunden und erzeugt beim Einlösen ein Konto mit der in der
 Einladung hinterlegten Rolle — bei einer Admin-Einladung also Vollzugriff auf
 den Verein. Wer Leserechte auf Logs hat (Log-Aggregation, Backups,
-Support-Zugänge), kann eine noch nicht eingelöste Einladung übernehmen.
+Support-Zugänge), hätte eine noch nicht eingelöste Einladung übernehmen
+können.
 
-Zweiter Pfad zum selben Ergebnis: `ConsoleMailSender` protokolliert den
-vollständigen Einladungslink inklusive Token. `SMTP_HOST` ist in
-`config/env.ts` optional und wird für `NODE_ENV=production` **nicht** erzwungen
-— eine Produktivinstallation ohne SMTP-Konfiguration schreibt also
-sämtliche Einladungs-Token ins Log, statt sie zu versenden.
-
-**Empfehlung:**
-1. Vorschau auf `POST /api/invitations/preview` mit Token im Body umstellen
-   (Body wird nicht geloggt), oder das Token per `redact`-Option des
-   Fastify-Loggers aus `req.url` entfernen.
-2. In `loadEnv()` analog zu `JWT_PRIVATE_KEY`/`CORS_ORIGIN` abbrechen, wenn
-   `NODE_ENV=production` und `SMTP_HOST` leer ist — `ConsoleMailSender` ist
-   ausdrücklich als Entwicklungshilfe gedacht.
-3. Die Route zusätzlich mit einem eigenen Rate-Limit versehen (derzeit greift
-   nur das globale Limit, siehe H2).
+Zweiter Pfad zum selben Ergebnis: `ConsoleMailSender` protokollierte den
+vollständigen Einladungslink inklusive Token, unabhängig von `NODE_ENV`.
 
 ---
 
-### M4 — SMTP ohne `requireTLS`: stille Klartext-Zustellung möglich
+### M4 — SMTP ohne `requireTLS`: stille Klartext-Zustellung möglich — **behoben**
 
+**Fix:** `apps/api/src/mail/mailer.ts:179` setzt jetzt
+`requireTLS: !this.config.secure` beim `nodemailer.createTransport()`-Aufruf
+— im dokumentierten Standardfall (`SMTP_SECURE=false`, Port 587) wird
+STARTTLS damit erzwungen statt nur optional angeboten; bei `secure: true`
+(Port 465, implizites TLS) bleibt die Option unnötig/wirkungslos und wird
+folgerichtig nicht gesetzt. Zwei Regressionstests in
+`apps/api/test/mail/mailer.test.ts` (`requireTLS: true` bei `secure: false`,
+`requireTLS: false` bei `secure: true`).
+
+Ursprünglicher Befund, Fundstelle zum Zeitpunkt der Analyse:
 `apps/api/src/mail/mailer.ts:162-170`
 
 ```ts
@@ -281,18 +315,14 @@ nodemailer.createTransport({
 })
 ```
 
-Der dokumentierte Standardfall ist `SMTP_SECURE=false` auf Port 587, also
-STARTTLS. Nodemailer behandelt STARTTLS in dieser Konfiguration
-**opportunistisch**: Bietet der Server kein `STARTTLS` an — sei es durch
+Der dokumentierte Standardfall war `SMTP_SECURE=false` auf Port 587, also
+STARTTLS. Nodemailer behandelte STARTTLS in dieser Konfiguration
+**opportunistisch**: Bot der Server kein `STARTTLS` an — sei es durch
 Fehlkonfiguration oder durch einen aktiven Angreifer, der die
 Server-Capabilities aus der Antwort streicht (klassischer
-STARTTLS-Stripping-Angriff) —, wird unverschlüsselt weitergesendet, ohne
-Fehler und ohne Hinweis. Übertragen werden dabei die SMTP-Zugangsdaten
+STARTTLS-Stripping-Angriff) —, wurde unverschlüsselt weitergesendet, ohne
+Fehler und ohne Hinweis. Übertragen worden wären dabei die SMTP-Zugangsdaten
 (`SMTP_USER`/`SMTP_PASSWORD`) sowie der Einladungslink samt Token.
-
-**Empfehlung:** `requireTLS: true` ergänzen, wenn `secure === false`. Das
-erzwingt STARTTLS und lässt den Versand mit einem Fehler scheitern, statt
-still ins Klartext-Fallback zu fallen.
 
 ---
 
@@ -502,7 +532,9 @@ sind sauber:
    **Behoben** (M2 mit einer Verfeinerung gegenüber dem ursprünglichen
    Vorschlag — siehe dortiger **Fix**-Abschnitt: Allowlist nur für fremde
    Datensätze, das eigene Athletenprofil bleibt vollständig).
-4. **M3/M4** — Token aus den Logs (`redact` oder POST-Vorschau),
-   `SMTP_HOST` in Produktion erzwingen, `requireTLS: true`.
+4. ~~**M3/M4** — Token aus den Logs, `requireTLS: true`.~~ **Behoben** (M3
+   ohne die ursprünglich vorgeschlagene SMTP_HOST-Pflicht in Produktion —
+   siehe dortiger **Fix**-Abschnitt: hätte den dokumentierten
+   E-Mail-losen Betrieb mit manuellem Link-Teilen gebrochen).
 5. **M5** — Passwortwechsel nachziehen.
 6. Niedrig eingestufte Befunde bei nächster Berührung.

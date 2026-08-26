@@ -211,8 +211,16 @@ export async function logoutRemote() {
   catch { /* best effort — lokales Aufräumen erfolgt in jedem Fall */ }
 }
 
+// POST statt GET mit Token als URL-Pfadparameter (Sicherheitsreview
+// 2026-08, Befund M3) — verhindert, dass das Token über Server-seitiges
+// Zugriffs-/Anwendungslogging (req.url) im Klartext landet. Der geteilte
+// Einladungslink selbst (#/accept-invite/<token>, per "Link kopieren" in
+// modules/userManagement.js z. B. für den Versand per WhatsApp) bleibt
+// unverändert — das Token steht dort im URL-Fragment, das der Browser nie
+// an einen Server sendet; erst dieser Aufruf hier (nachdem der Client es
+// bereits aus dem Fragment gelesen hat) schickt es weiter, jetzt im Body.
 export function getInvitationPreview(token) {
-  return request(`/api/invitations/preview/${encodeURIComponent(token)}`, {}, { allowRefreshRetry: false });
+  return postJson('/api/invitations/preview', { token }, { allowRefreshRetry: false });
 }
 
 // ---- Eigenes Profil ----------------------------------------------------

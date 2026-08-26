@@ -1,7 +1,7 @@
 // apps/api/test/mail/mailer.test.ts
 import { describe, it, expect, vi } from 'vitest';
 import { InMemoryMailSender } from '../../src/mail/mailer.memory.js';
-import { buildHtmlBody, buildTextBody, buildSubject, SmtpMailSender } from '../../src/mail/mailer.js';
+import { buildHtmlBody, buildTextBody, buildSubject, SmtpMailSender, ConsoleMailSender } from '../../src/mail/mailer.js';
 
 // Fake statt echtem SMTP-Handshake: sendMail() als Spy, createTransport()
 // ebenfalls, damit die Tests zu Befund P4 unten prüfen können, WIE OFT der
@@ -36,6 +36,38 @@ describe('InMemoryMailSender', () => {
     await mailer.sendInvitationEmail({ to: 'a@x.de', role: 'admin', clubName: 'A', inviteUrl: 'u1', expiresAt: new Date() });
     await mailer.sendInvitationEmail({ to: 'b@x.de', role: 'athlete', clubName: 'B', inviteUrl: 'u2', expiresAt: new Date() });
     expect(mailer.sentEmails.map((m) => m.to)).toEqual(['a@x.de', 'b@x.de']);
+  });
+});
+
+// Sicherheitsregression (Sicherheitsreview 2026-08, Befund M3):
+// ConsoleMailSender protokollierte zuvor den vollständigen Einladungslink
+// inklusive Klartext-Token — jede Einladung landete dadurch dauerhaft im
+// Server-Log. Das Token ist genauso sicherheitskritisch wie ein Passwort
+// (siehe auth/tokens.ts: Refresh-/Einladungs-Tokens werden serverseitig
+// nur gehasht gespeichert) und darf daher nicht im Klartext protokolliert
+// werden — der "Link kopieren"-Button in der Nutzerverwaltungs-Oberfläche
+// bleibt der vorgesehene Weg, den Link ohne SMTP zu teilen.
+describe('ConsoleMailSender — kein Token/Link im Server-Log (Sicherheitsregression)', () => {
+  it('protokolliert Empfänger/Verein/Rolle, aber NICHT die inviteUrl', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const mailer = new ConsoleMailSender();
+      await mailer.sendInvitationEmail({
+        to: 'trainer@example.org',
+        role: 'trainer',
+        clubName: 'SV Wasserfreunde',
+        inviteUrl: 'https://app.example.org/#/accept-invite/GEHEIMES-TOKEN-abc123',
+        expiresAt: new Date('2026-08-01T00:00:00.000Z'),
+      });
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      const logged = warnSpy.mock.calls[0]!.join(' ');
+      expect(logged).toContain('trainer@example.org');
+      expect(logged).toContain('SV Wasserfreunde');
+      expect(logged).not.toContain('GEHEIMES-TOKEN-abc123');
+      expect(logged).not.toContain('accept-invite');
+    } finally {
+      warnSpy.mockRestore();
+    }
   });
 });
 
@@ -214,5 +246,40 @@ describe('SmtpMailSender — Transport-Wiederverwendung (Befund P4)', () => {
 
     expect(createTransportMock).toHaveBeenCalledTimes(1);
     expect(sendMailMock).toHaveBeenCalledTimes(3);
+  });
+});
+
+// Sicherheitsregression (Sicherheitsreview 2026-08, Befund M4): ohne
+// requireTLS behandelt nodemailer STARTTLS (secure: false, der
+// dokumentierte Standardfall auf Port 587) opportunistisch — bietet der
+// Server es nicht an, wird klaglos unverschlüsselt gesendet. requireTLS:
+// true erzwingt STARTTLS.
+describe('SmtpMailSender — requireTLS (Befund M4)', () => {
+  const payload = {
+    to: 'trainer@example.org',
+    role: 'trainer' as const,
+    clubName: 'SV Wasserfreunde',
+    inviteUrl: 'https://app.example.org/#/accept-invite/abc123',
+    expiresAt: new Date('2026-08-01T00:00:00.000Z'),
+  };
+
+  it('erzwingt requireTLS: true, wenn secure: false konfiguriert ist (Port 587/STARTTLS)', async () => {
+    createTransportMock.mockClear();
+    const mailer = new SmtpMailSender({
+      host: 'smtp.example.org', port: 587, secure: false,
+      fromEmail: 'noreply@example.org', fromName: 'Lane 1',
+    });
+    await mailer.sendInvitationEmail(payload);
+    expect(createTransportMock).toHaveBeenCalledWith(expect.objectContaining({ secure: false, requireTLS: true }));
+  });
+
+  it('setzt requireTLS NICHT, wenn secure: true konfiguriert ist (Port 465/implizites TLS)', async () => {
+    createTransportMock.mockClear();
+    const mailer = new SmtpMailSender({
+      host: 'smtp.example.org', port: 465, secure: true,
+      fromEmail: 'noreply@example.org', fromName: 'Lane 1',
+    });
+    await mailer.sendInvitationEmail(payload);
+    expect(createTransportMock).toHaveBeenCalledWith(expect.objectContaining({ secure: true, requireTLS: false }));
   });
 });

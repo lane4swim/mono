@@ -95,5 +95,13 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
       'CORS_ORIGIN darf in Produktion nicht "*" sein (kombiniert mit credentials: true unsicher) — bitte die konkrete(n) Frontend-Origin(s) angeben (siehe .env.example).',
     );
   }
+  // Sicherheitsreview 2026-08, Befund M3 — bewusst KEIN Zwang zu SMTP_HOST
+  // in Produktion: das würde den dokumentierten und unterstützten Betrieb
+  // ohne eigenen Mailserver brechen (siehe deployment-github-codespaces.md/
+  // deployment-macos.md — Einladungen werden dort bewusst NICHT per E-Mail,
+  // sondern über den "Link kopieren"-Button versendet, z. B. per WhatsApp).
+  // Die eigentliche Sicherheitslücke — ConsoleMailSender protokollierte den
+  // Klartext-Link inkl. Token — ist stattdessen direkt in mail/mailer.ts
+  // behoben (kein Token mehr im Log, unabhängig von NODE_ENV).
   return env;
 }

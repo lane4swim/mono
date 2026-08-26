@@ -163,6 +163,20 @@ export class SmtpMailSender implements MailSender {
           host: this.config.host,
           port: this.config.port,
           secure: this.config.secure,
+          // Sicherheitskorrektur (Sicherheitsreview 2026-08, Befund M4):
+          // ohne secure (Port 587/STARTTLS, der dokumentierte Standardfall
+          // — siehe .env.example) behandelt nodemailer STARTTLS bislang
+          // OPPORTUNISTISCH: bietet der Server es nicht an (Fehlkonfiguration
+          // oder ein aktiver STARTTLS-Stripping-Angreifer, der die
+          // Server-Capabilities aus der Antwort entfernt), sendet
+          // nodemailer klaglos unverschlüsselt weiter — inklusive der
+          // SMTP-Zugangsdaten (SMTP_USER/SMTP_PASSWORD) und des
+          // Einladungslinks samt Token. requireTLS: true erzwingt STARTTLS
+          // — fehlt es, schlägt der Versand mit einem Fehler fehl, statt
+          // still auf Klartext zurückzufallen. Bei secure: true (Port 465,
+          // implizites TLS von Verbindungsaufbau an) ist die Option
+          // wirkungslos/nicht anwendbar, daher nur im STARTTLS-Fall gesetzt.
+          requireTLS: !this.config.secure,
           auth: this.config.user ? { user: this.config.user, pass: this.config.password } : undefined,
           pool: true,
         }),
@@ -184,14 +198,26 @@ export class SmtpMailSender implements MailSender {
 }
 
 // Ausweichlösung, wenn kein SMTP konfiguriert ist (z. B. lokale
-// Entwicklung ohne eigenen Mailserver): protokolliert die Einladung statt
-// sie zu versenden, damit der Ablauf trotzdem end-to-end funktioniert und
-// der Einladungslink zumindest im Server-Log sichtbar ist.
+// Entwicklung ohne eigenen Mailserver, oder ein bewusst mailserver-loser
+// Betrieb — siehe deployment-github-codespaces.md/deployment-macos.md):
+// protokolliert, DASS eine Einladung ansteht, ohne sie tatsächlich zu
+// versenden, damit der Ablauf trotzdem end-to-end funktioniert.
+//
+// Sicherheitskorrektur (Sicherheitsreview 2026-08, Befund M3): protokollierte
+// zuvor den VOLLSTÄNDIGEN Einladungslink inklusive Klartext-Token — jede
+// Einladung (Admin-Konten eingeschlossen) landete dadurch dauerhaft im
+// Server-Log, unabhängig von NODE_ENV. Das Token wird jetzt bewusst NICHT
+// mehr geloggt: der Einladungslink ist über den "Link kopieren"-Button in
+// der Nutzerverwaltungs-Oberfläche (apps/web/js/modules/userManagement.js:
+// showInviteLinkModal()) ohnehin bereits verfügbar — genau der dafür
+// vorgesehene Weg, eine Einladung z. B. per WhatsApp statt per E-Mail zu
+// teilen, bleibt davon unberührt.
 export class ConsoleMailSender implements MailSender {
   async sendInvitationEmail(payload: InvitationMailPayload): Promise<void> {
     console.warn(
-      `[mail] Kein SMTP konfiguriert — Einladung wird nur protokolliert:\n` +
-        `  An: ${payload.to}\n  Verein: ${payload.clubName}\n  Rolle: ${payload.role}\n  Link: ${payload.inviteUrl}`,
+      `[mail] Kein SMTP konfiguriert — Einladung wird nicht per E-Mail versendet:\n` +
+        `  An: ${payload.to}\n  Verein: ${payload.clubName}\n  Rolle: ${payload.role}\n` +
+        `  Der Einladungslink lässt sich über "Link kopieren" in der Nutzerverwaltung abrufen und z. B. manuell teilen.`,
     );
   }
 }

@@ -93,6 +93,20 @@ export const InvitationSummarySchema = z.object({
 });
 export type InvitationSummary = z.infer<typeof InvitationSummarySchema>;
 
+// Sicherheitskorrektur (Sicherheitsreview 2026-08, Befund M3): das Token
+// wurde zuvor als URL-Pfadparameter übertragen (GET /api/invitations/
+// preview/:token) — Fastify protokolliert req.url für jede Anfrage, das
+// Token landete dadurch im Klartext in Zugriffs-/Anwendungslogs. Als
+// Body eines POST-Requests wird es nicht mitgeloggt. Der geteilte
+// Einladungslink selbst (#/accept-invite/<token>, siehe
+// invitations.service.ts: buildInviteUrl()) ist davon unberührt — das
+// Token steht dort im URL-FRAGMENT, das der Browser nie an einen Server
+// sendet; erst der Client liest es aus und schickt es hierüber weiter.
+export const InvitationPreviewRequestSchema = z.object({
+  token: z.string().min(1),
+});
+export type InvitationPreviewRequest = z.infer<typeof InvitationPreviewRequestSchema>;
+
 // Öffentlicher, nicht-authentifizierter Abruf vor dem Registrieren — zeigt
 // der eingeladenen Person, für welchen Verein/welche Rolle die Einladung
 // gilt, ohne interne IDs preiszugeben.
