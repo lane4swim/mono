@@ -130,7 +130,12 @@ export const AcceptInvitationRequestSchema = z.object({
   // bei CreateClubRequestSchema oben. `User.name` wird in jeder
   // Mitgliederliste gerendert.
   name: z.string().min(1).max(200),
-  password: z.string().min(8, 'Passwort muss mindestens 8 Zeichen lang sein'),
+  // `.max(200)` (Sicherheitsreview 2026-08, Befund N7): argon2id
+  // verarbeitet beliebig lange Eingaben — bei 64 MiB Speicherkosten pro
+  // Hashing-Versuch wäre ein unbegrenztes Feld ein unnötiger DoS-
+  // Verstärker. 200 Zeichen liegt weit über jeder realistischen
+  // Passphrase (siehe auth.passwordHint im Frontend).
+  password: z.string().min(8, 'Passwort muss mindestens 8 Zeichen lang sein').max(200),
   consent: z
     .literal(true)
     .refine((v) => v === true, { message: 'Die Einwilligung zur Datenverarbeitung ist erforderlich.' }),

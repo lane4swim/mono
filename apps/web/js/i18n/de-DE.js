@@ -20,7 +20,12 @@ export default {
     noAccountHint: 'Noch kein Konto? Du benötigst einen Einladungslink von deinem Verein.',
     acceptInviteTitle: 'Einladung annehmen',
     acceptInviteIntro: 'Du wurdest als {role} für "{club}" eingeladen ({email}). Bitte lege ein Passwort fest, um dein Konto zu aktivieren.',
-    yourName: 'Dein Name', chooseNewPassword: 'Neues Passwort', passwordHint: 'Mindestens 8 Zeichen.',
+    yourName: 'Dein Name', chooseNewPassword: 'Neues Passwort',
+    // Sicherheitsreview 2026-08, Befund N7: Hinweis auf Passphrasen statt
+    // erzwungener Komplexitätsregeln (Zahlen/Sonderzeichen) — eine längere
+    // Passphrase aus mehreren Wörtern ist leichter zu merken und mindestens
+    // ebenso sicher.
+    passwordHint: 'Mindestens 8 Zeichen. Eine längere Passphrase aus mehreren Wörtern ist eine gute Wahl.',
     acceptInviteButton: 'Konto aktivieren', acceptInviteSuccess: 'Willkommen, {name}!',
     invitationInvalid: 'Diese Einladung ist ungültig, abgelaufen oder wurde bereits verwendet.',
     backToLogin: 'Zurück zur Anmeldung', noClubYetLabel: 'wird noch angelegt',

@@ -35,6 +35,12 @@ describe('LoginRequestSchema', () => {
   it('lehnt eine leere E-Mail ab', () => {
     expect(LoginRequestSchema.safeParse({ email: '', password: 'x', consent: true }).success).toBe(false);
   });
+  // Sicherheitsreview 2026-08, Befund N7: argon2id verarbeitet beliebig
+  // lange Eingaben — verifyPassword() hasht das übermittelte Passwort bei
+  // JEDEM Login-Versuch, ein unbegrenztes Feld wäre ein DoS-Verstärker.
+  it('lehnt ein zu langes Passwort ab (> 200 Zeichen)', () => {
+    expect(LoginRequestSchema.safeParse({ email: 'a@b.de', password: 'x'.repeat(201), consent: true }).success).toBe(false);
+  });
 });
 
 describe('UpdateMeRequestSchema', () => {
@@ -106,6 +112,10 @@ describe('ResetPasswordRequestSchema', () => {
   it('lehnt ein leeres Token ab', () => {
     expect(ResetPasswordRequestSchema.safeParse({ token: '', newPassword: 'ein-sicheres-passwort' }).success).toBe(false);
   });
+  // Sicherheitsreview 2026-08, Befund N7.
+  it('lehnt ein zu langes neues Passwort ab (> 200 Zeichen)', () => {
+    expect(ResetPasswordRequestSchema.safeParse({ token: 'abc123', newPassword: 'x'.repeat(201) }).success).toBe(false);
+  });
 });
 
 describe('ChangePasswordRequestSchema', () => {
@@ -117,5 +127,12 @@ describe('ChangePasswordRequestSchema', () => {
   });
   it('lehnt ein leeres aktuelles Passwort ab', () => {
     expect(ChangePasswordRequestSchema.safeParse({ currentPassword: '', newPassword: 'ein-sicheres-passwort' }).success).toBe(false);
+  });
+  // Sicherheitsreview 2026-08, Befund N7.
+  it('lehnt ein zu langes neues Passwort ab (> 200 Zeichen)', () => {
+    expect(ChangePasswordRequestSchema.safeParse({ currentPassword: 'alt', newPassword: 'x'.repeat(201) }).success).toBe(false);
+  });
+  it('lehnt ein zu langes aktuelles Passwort ab (> 200 Zeichen)', () => {
+    expect(ChangePasswordRequestSchema.safeParse({ currentPassword: 'x'.repeat(201), newPassword: 'ein-sicheres-passwort' }).success).toBe(false);
   });
 });

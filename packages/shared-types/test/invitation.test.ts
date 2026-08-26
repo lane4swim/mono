@@ -84,6 +84,13 @@ describe('AcceptInvitationRequestSchema', () => {
     const req = { token: 'abc123', name: 'X'.repeat(201), password: 'ein-sicheres-passwort', consent: true };
     expect(AcceptInvitationRequestSchema.safeParse(req).success).toBe(false);
   });
+  // Sicherheitsreview 2026-08, Befund N7: argon2id verarbeitet beliebig
+  // lange Eingaben — bei 64 MiB Speicherkosten pro Hashing-Versuch wäre
+  // ein unbegrenztes Passwortfeld ein unnötiger DoS-Verstärker.
+  it('lehnt ein zu langes Passwort ab (> 200 Zeichen)', () => {
+    const req = { token: 'abc123', name: 'Neue Person', password: 'x'.repeat(201), consent: true };
+    expect(AcceptInvitationRequestSchema.safeParse(req).success).toBe(false);
+  });
   it('erfordert weder clubId noch role/email vom Client (kommen aus der Einladung selbst)', () => {
     const req = { token: 'abc123', name: 'X', password: 'lang-genug-passwort', consent: true };
     const parsed = AcceptInvitationRequestSchema.safeParse(req);

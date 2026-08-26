@@ -39,7 +39,7 @@ Schweregrade: **Hoch** = vor dem nächsten Produktivbetrieb beheben,
 | N4 | Soft-gelöschtes Konto behält Zugriff bis zum Ablauf des Access Tokens | `plugins/authenticate.ts` | Niedrig — **bewusst akzeptiert, dokumentiert** |
 | N5 | Hard-Purge lässt `Comment.authorName` stehen | `jobs/erasure.repository.ts` | Niedrig — **behoben** |
 | N6 | Superadmin-Passwort als Kommandozeilenargument | `scripts/createSuperAdmin.ts` | Niedrig |
-| N7 | Passwortrichtlinie: nur Mindestlänge 8 | `packages/shared-types/src/invitation.ts` | Niedrig |
+| N7 | Passwortrichtlinie: nur Mindestlänge 8 | `packages/shared-types/src/invitation.ts` | Niedrig — **behoben** |
 
 ---
 
@@ -628,8 +628,38 @@ demselben Host über `ps aux` sichtbar sowie in der Shell-History. Für ein
 Bootstrapping-Skript vertretbar, aber eine Abfrage über `stdin` (verdeckt) oder
 eine Umgebungsvariable wäre sauberer.
 
-### N7 — Passwortrichtlinie nur über die Mindestlänge
+### N7 — Passwortrichtlinie nur über die Mindestlänge — **behoben**
 
+**Fix:** `.max(200)` ergänzt bei allen Passwortfeldern — nicht nur beim in
+der Analyse genannten `AcceptInvitationRequestSchema.password`
+(`invitation.ts`), sondern konsequent auch bei `newPasswordField`
+(gemeinsam genutzt von `ResetPasswordRequestSchema.newPassword` und
+`ChangePasswordRequestSchema.newPassword`), `LoginRequestSchema.password`
+und `ChangePasswordRequestSchema.currentPassword` (beide seit
+Sicherheitsreview 2026-08, Befund M5 hinzugekommen — `verifyPassword()`
+hasht sowohl beim Login als auch bei der aktuelles-Passwort-Prüfung das
+übermittelte Passwort gegen den gespeicherten Hash und ist damit demselben
+DoS-Verstärkungsrisiko ausgesetzt wie das Passwort-Setzen selbst). 200
+Zeichen liegt weit über jeder realistischen Passphrase.
+
+Den zweiten Teil der Empfehlung („ein Hinweis auf Passphrasen im
+Frontend") gibt es bereits an genau einer Stelle für alle drei
+Passwort-Setzen-Bildschirme (Einladung annehmen, Passwort per Link
+zurücksetzen, Passwort im Profil ändern — alle drei nutzen denselben
+`t('auth.passwordHint')`-Text): „Mindestens 8 Zeichen. Eine längere
+Passphrase aus mehreren Wörtern ist eine gute Wahl." (`de-DE.js`/
+`en-US.js`).
+
+Kein Abgleich gegen bekannte Kompromittierungen (z. B. Have I Been
+Pwned/k-Anonymity) wurde ergänzt — das bliebe eine externe
+Netzwerkabhängigkeit bei jedem Passwort-Setzen und war in der ursprünglichen
+Empfehlung nicht enthalten; ggf. separat zu bewerten.
+
+Regressionstests: `packages/shared-types/test/{auth,invitation}.test.ts`
+(je ein 201-Zeichen-Passwort wird an jedem betroffenen Feld abgelehnt, ein
+gültiges Passwort bleibt weiterhin akzeptiert).
+
+Ursprünglicher Befund, Fundstelle zum Zeitpunkt der Analyse:
 `packages/shared-types/src/invitation.ts:110`
 
 `password: z.string().min(8)` ist die einzige Anforderung — keine Obergrenze
@@ -710,7 +740,6 @@ sind sauber:
 5. ~~**M5** — Passwortwechsel nachziehen.~~ **Behoben** (siehe dortiger
    **Fix**-Abschnitt).
 6. ~~Niedrig eingestufte Befunde bei nächster Berührung.~~ **N1, N2, N3
-   (teilweise), N5 behoben; N4 bewusst akzeptiert und dokumentiert** (siehe
-   jeweiliger **Fix**-/**Entscheidung**-Abschnitt). Noch offen: **N6**
-   (Superadmin-Passwort als CLI-Argument), **N7** (Passwortrichtlinie nur
-   Mindestlänge).
+   (teilweise), N5, N7 behoben; N4 bewusst akzeptiert und dokumentiert**
+   (siehe jeweiliger **Fix**-/**Entscheidung**-Abschnitt). Noch offen:
+   **N6** (Superadmin-Passwort als CLI-Argument).
