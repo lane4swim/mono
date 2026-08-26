@@ -16,7 +16,7 @@
 import * as api from './apiClient.js';
 import { setLocale, detectInitialLocale } from './i18n.js';
 import { IS_DEMO } from './demoMode.js';
-import { wipeAll } from './db.js';
+import { wipeAll, setClubIdProvider } from './db.js';
 
 // Muss inhaltlich mit CURRENT_CONSENT_VERSION im Backend
 // (packages/shared-types/src/auth.ts) übereinstimmen — nur zur Anzeige
@@ -49,6 +49,13 @@ export async function restoreSession() {
 }
 
 export function getCurrentUser() { return current; }
+
+// db.js kennt state.js bewusst nicht (siehe dortiger Kommentar zum
+// Import-Zyklus) — put() dort braucht für neu angelegte, vereins-
+// gescopte Datensätze trotzdem die clubId der aktuell eingeloggten
+// Person. Diese Registrierung liefert sie ihm, ohne dass db.js selbst
+// von state.js abhängen muss.
+setClubIdProvider(() => getCurrentUser()?.clubId);
 // Fällt bei fehlender Sitzung auf `null` zurück, NICHT auf eine konkrete
 // Rolle (vormals 'trainer') — ein Default-Wert sollte im Zweifel
 // zusperren, nicht öffnen. 'trainer' hätte defensiv aufgerufenen

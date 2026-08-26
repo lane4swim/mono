@@ -16,7 +16,7 @@
 // database), so there's nothing to guard against.
 // ============================================================
 import { bulkPut, wipeAll, getAll, uid } from './db.js';
-import { todayISO, isoAddDays, startOfWeek, toIsoDateTime } from './utils.js';
+import { todayISO, isoAddDays, startOfWeek, toIsoDateTime } from './dates.js';
 import { DEMO_CLUB_ID, DEMO_ATHLETE_ID_MAYA } from './demoMode.js';
 
 function id() { return uid('demo'); }

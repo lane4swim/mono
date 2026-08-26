@@ -5,11 +5,13 @@
 // ungetestet. Deckt insbesondere Befund P7 (Code-Review) ab.
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-vi.mock('../js/state.js', () => ({ getCurrentUser: vi.fn(() => ({ clubId: 'club-1' })) }));
+const CLUB_ID = '11111111-1111-4111-8111-111111111111'; // UUID-Form, damit gespeicherte Datensätze zusätzlich gegen die Entity-Schemas geprüft werden können (siehe Test weiter unten)
+vi.mock('../js/state.js', () => ({ getCurrentUser: vi.fn(() => ({ clubId: CLUB_ID })) }));
 vi.mock('../js/demoMode.js', () => ({ IS_DEMO: false }));
 
 import * as db from '../js/db.js';
 import { importLibrary, LIBRARY_EXPORT_FORMAT } from '../js/modules/libraryTransfer.js';
+import { ExerciseSchema, TemplateSchema } from '../../../packages/shared-types/src/entities.js';
 
 beforeEach(async () => {
   await db.wipeAll();
@@ -29,15 +31,36 @@ describe('importLibrary()', () => {
     const savedExercises = await db.getAll('exercises');
     expect(savedExercises).toHaveLength(1);
     expect(savedExercises[0].id).not.toBe('orig-ex-1'); // neu vergeben, nicht die exportierte id
-    expect(savedExercises[0].clubId).toBe('club-1');
+    expect(savedExercises[0].clubId).toBe(CLUB_ID);
     expect(savedExercises[0].name).toBe('Kraul-Beinschlag');
 
     const savedTemplates = await db.getAll('templates');
     expect(savedTemplates).toHaveLength(1);
-    expect(savedTemplates[0].clubId).toBe('club-1');
+    expect(savedTemplates[0].clubId).toBe(CLUB_ID);
     // exerciseId im Vorlagen-Satz zeigt auf die NEU vergebene Übungs-id,
     // nicht mehr auf die exportierte "orig-ex-1".
     expect(savedTemplates[0].sets[0].exerciseId).toBe(savedExercises[0].id);
+  });
+
+  // exercises.id/templates.id müssen `z.string().uuid()`-Form haben (siehe
+  // ExerciseSchema/TemplateSchema) — ein Datensatz mit einer anderen id-
+  // Form scheitert dauerhaft am Sync-Push. Die vorigen Assertions prüfen
+  // nur, DASS eine neue id vergeben wurde, nicht IN WELCHEM Format; dieser
+  // Test prüft deshalb direkt gegen dasselbe Zod-Schema, das der Server
+  // anwendet.
+  it('vergibt für exercises.id/templates.id serverseitig gültige UUIDs', async () => {
+    const dump = {
+      format: LIBRARY_EXPORT_FORMAT,
+      exercises: [{ id: 'orig-ex-1', name: 'Kraul-Beinschlag', category: 'Technik', tags: [], equipment: [] }],
+      templates: [{ id: 'orig-tpl-1', name: 'Einschwimmen', tags: [], sets: [] }],
+    };
+    await importLibrary(dump);
+
+    const [savedExercise] = await db.getAll('exercises');
+    const [savedTemplate] = await db.getAll('templates');
+
+    expect(ExerciseSchema.safeParse(savedExercise).success).toBe(true);
+    expect(TemplateSchema.safeParse(savedTemplate).success).toBe(true);
   });
 
   it('reiht für jede importierte Übung/Vorlage ein "create"-Sync-Event ein', async () => {

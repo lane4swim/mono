@@ -8,18 +8,16 @@ import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import type { Env } from '../config/env.js';
 
-// CORS_ORIGIN trägt bislang IMMER genau eine Origin, obwohl die
-// Fehlermeldung von loadEnv() (siehe env.ts) bereits von "Origin(s)"
-// spricht — @fastify/cors erhielt den rohen String unverändert, was bei
-// mehreren, kommagetrennt eingetragenen Origins (z. B. Produktions- und
-// Staging-Frontend desselben Vereins) NICHTS davon tatsächlich matchte, da
-// @fastify/cors einen einzelnen String als exakten Vergleichswert
-// behandelt, nicht als Liste. "*" bleibt bewusst ein Sonderfall: als
-// rohe Zeichenkette an @fastify/cors weitergereicht aktiviert sie dessen
+// @fastify/cors behandelt einen einzelnen String als exakten
+// Vergleichswert, nicht als Liste — CORS_ORIGIN muss daher bei mehreren,
+// kommagetrennt eingetragenen Origins (z. B. Produktions- und
+// Staging-Frontend desselben Vereins) in ein Array aufgeteilt werden.
+// "*" ist ein Sonderfall und wird vor dem Aufteilen abgefangen: als rohe
+// Zeichenkette an @fastify/cors weitergereicht aktiviert sie dessen
 // eingebaute Wildcard-Behandlung (Access-Control-Allow-Origin: *); ein
 // Array, das nur den String "*" enthält, würde @fastify/cors dagegen als
 // (nie zutreffenden) exakten Origin-Vergleichswert behandeln, nicht als
-// Wildcard — dieser Sonderfall wird daher vor dem Aufteilen abgefangen.
+// Wildcard.
 export function parseCorsOrigin(raw: string): string | string[] {
   const trimmed = raw.trim();
   if (trimmed === '*') return '*';
@@ -31,17 +29,17 @@ export function parseCorsOrigin(raw: string): string | string[] {
 
 export async function registerSecurityPlugins(app: FastifyInstance, env: Env) {
   await app.register(helmet, {
-    // Explizite CSP statt Helmets Default-Policy (siehe Sicherheitsreview,
-    // Punkt 4). Diese API liefert ausschließlich JSON aus — es gibt
-    // keinen legitimen Grund für Skripte, Styles oder eingebettete Frames
-    // von irgendeiner Quelle, auch nicht "self". Die Policy ist bewusst
-    // maximal restriktiv (Default-Deny), nicht auf das Frontend
-    // zugeschnitten: apps/web wird separat ausgeliefert (eigener
-    // Webserver/Hosting, siehe docs/backend-plan.md) und bekommt seine
-    // eigene, für sein Markup passende CSP von dort — nicht von dieser
-    // API. Diese Policy schützt lediglich diese API-Antworten selbst
-    // (z. B. falls durch einen Fehlerfall doch einmal HTML statt JSON
-    // ausgeliefert würde) als zusätzliche Verteidigungsschicht.
+    // Explizite CSP statt Helmets Default-Policy: Diese API liefert
+    // ausschließlich JSON aus — es gibt keinen legitimen Grund für
+    // Skripte, Styles oder eingebettete Frames von irgendeiner Quelle,
+    // auch nicht "self". Die Policy ist bewusst maximal restriktiv
+    // (Default-Deny), nicht auf das Frontend zugeschnitten: apps/web wird
+    // separat ausgeliefert (eigener Webserver/Hosting, siehe
+    // docs/backend-plan.md) und bekommt seine eigene, für sein Markup
+    // passende CSP von dort — nicht von dieser API. Diese Policy schützt
+    // lediglich diese API-Antworten selbst (z. B. falls durch einen
+    // Fehlerfall doch einmal HTML statt JSON ausgeliefert würde) als
+    // zusätzliche Verteidigungsschicht.
     contentSecurityPolicy: {
       // useDefaults: false ist entscheidend — sonst mischt Helmet seine
       // eigenen Standard-Direktiven (u. a. "script-src-attr" und
@@ -80,20 +78,19 @@ export async function registerSecurityPlugins(app: FastifyInstance, env: Env) {
   await app.register(rateLimit, {
     max: 100,
     timeWindow: '1 minute',
-    // Bewusst 'preHandler' statt des Standards 'onRequest' (Code-Review):
-    // @fastify/rate-limit hängt seinen Zähl-Hook an die HIER angegebene
+    // Bewusst 'preHandler' statt des Standards 'onRequest': @fastify/
+    // rate-limit hängt seinen Zähl-Hook an die HIER angegebene
     // Lifecycle-Stufe — global für alle Routen, pro Route nicht
     // überschreibbar (siehe @fastify/rate-limit-Doku, Abschnitt "hook").
     // Zum Zeitpunkt von 'onRequest' ist der Request-Body noch nicht
-    // geparst; auth.route.ts' Login-`keyGenerator` (IP + E-Mail) las dort
-    // also IMMER `request.body === undefined` und limitierte de facto nur
-    // nach IP — ein Verein hinter NAT (Vereinsheim-WLAN o. Ä.) hätte sich
-    // dadurch nach 5 Anmeldungen/Minute selbst ausgesperrt, unabhängig
-    // davon, wie viele unterschiedliche Konten dahinter stehen. 'preHandler'
-    // läuft nach der Body-Parsing-Stufe, aber weiterhin VOR jedem
-    // route-eigenen preHandler (z. B. app.authenticate) — der Body steht
-    // dem keyGenerator damit zur Verfügung, ohne dass Rate-Limiting später
-    // greift als bisher.
+    // geparst; auth.route.ts' Login-`keyGenerator` (IP + E-Mail) braucht
+    // ihn aber, um nach IP+E-Mail statt nur nach IP zu limitieren — sonst
+    // sperrt sich ein Verein hinter NAT (Vereinsheim-WLAN o. Ä.) nach 5
+    // Anmeldungen/Minute selbst aus, unabhängig davon, wie viele
+    // unterschiedliche Konten dahinter stehen. 'preHandler' läuft nach der
+    // Body-Parsing-Stufe, aber weiterhin VOR jedem route-eigenen
+    // preHandler (z. B. app.authenticate) — der Body steht dem
+    // keyGenerator damit zur Verfügung.
     hook: 'preHandler',
   });
 }

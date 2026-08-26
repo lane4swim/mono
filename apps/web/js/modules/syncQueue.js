@@ -12,9 +12,9 @@ import { getSyncQueue, updateSyncEvent, clearSyncedEvents, remove } from '../db.
 import { runSync } from '../syncClient.js';
 import { ApiError, NetworkError } from '../apiClient.js';
 import { IS_DEMO } from '../demoMode.js';
-import {
-  el, clear, badge, emptyState, laneWave, toast, confirmAction, beginRender, statCard,
-} from '../utils.js';
+import { el, clear, beginRender } from '../dom.js';
+import { badge, emptyState, laneWave, toast, statCard } from '../ui.js';
+import { confirmAction } from '../modal.js';
 import { t, getLocale } from '../i18n.js';
 
 const ENTITY_KEYS = {

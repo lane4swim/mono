@@ -2,10 +2,12 @@
 // modules/stats.js — Statistiken und Auswertungen
 // ============================================================
 import { getAll } from '../db.js';
-import {
-  el, clear, field, selectInput, badge, emptyState, laneWave, fullName,
-  groupBy, average, secToTime, svgBarChart, svgLineChart, fmtDateShort, beginRender,
-} from '../utils.js';
+import { el, clear, beginRender } from '../dom.js';
+import { fmtDateShort } from '../dates.js';
+import { secToTime } from '../swimTime.js';
+import { badge, emptyState, laneWave, fullName, groupBy, average } from '../ui.js';
+import { field, selectInput } from '../forms.js';
+import { svgBarChart, svgLineChart } from '../charts.js';
 import { EVENTS } from '../refdata.js';
 import { t, trOptionsFlat } from '../i18n.js';
 

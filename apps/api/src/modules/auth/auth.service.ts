@@ -129,6 +129,19 @@ export function createAuthService(deps: AuthServiceDeps) {
     return { accessToken, refreshToken: refresh.plainToken, expiresIn: deps.accessTtlSeconds };
   }
 
+  // Code-Review, Befund R9: listClubMembers() und listAssignableTrainers()
+  // teilten sich zuvor Abruf, Sortierung und toPublicUser()-Mapping als
+  // Kopie und unterschieden sich nur in Filter und Sortierkriterium.
+  async function listMembers(
+    clubId: string,
+    { filter, compare }: { filter?: (user: UserRecord) => boolean; compare: (a: UserRecord, b: UserRecord) => number },
+  ) {
+    const users = await deps.users.listByClub(clubId);
+    const scoped = filter ? users.filter(filter) : users;
+    const sorted = [...scoped].sort(compare);
+    return sorted.map(toPublicUser);
+  }
+
   return {
     // Ersetzt das frühere offene register(): ein Konto entsteht nur durch
     // Einlösen einer gültigen Einladung. Name und Passwort kommen vom
@@ -352,13 +365,13 @@ export function createAuthService(deps: AuthServiceDeps) {
       const clubId = requester.role === 'superadmin' ? requestedClubId : requester.clubId;
       if (!clubId) throw new ClubIdRequiredError();
 
-      const users = await deps.users.listByClub(clubId);
       const rolePriority: Record<string, number> = { admin: 0, trainer: 1, athlete: 2, superadmin: 3 };
-      const sorted = [...users].sort((a, b) => {
-        const roleDiff = (rolePriority[a.role] ?? 9) - (rolePriority[b.role] ?? 9);
-        return roleDiff !== 0 ? roleDiff : a.name.localeCompare(b.name);
+      return listMembers(clubId, {
+        compare: (a, b) => {
+          const roleDiff = (rolePriority[a.role] ?? 9) - (rolePriority[b.role] ?? 9);
+          return roleDiff !== 0 ? roleDiff : a.name.localeCompare(b.name);
+        },
       });
-      return sorted.map(toPublicUser);
     },
 
     // GET /api/users/trainers — mögliche Zuständige für ein Handlungsfeld
@@ -372,10 +385,10 @@ export function createAuthService(deps: AuthServiceDeps) {
     async listAssignableTrainers(requester: { clubId: string | null }) {
       if (!requester.clubId) throw new ClubIdRequiredError();
 
-      const users = await deps.users.listByClub(requester.clubId);
-      const assignable = users.filter((u) => u.role === 'trainer' || u.role === 'admin');
-      const sorted = [...assignable].sort((a, b) => a.name.localeCompare(b.name));
-      return sorted.map(toPublicUser);
+      return listMembers(requester.clubId, {
+        filter: (u) => u.role === 'trainer' || u.role === 'admin',
+        compare: (a, b) => a.name.localeCompare(b.name),
+      });
     },
   };
 }

@@ -3,10 +3,11 @@
 // Handlungsfeldern (Entwicklungsschwerpunkte pro Athlet:in)
 // ============================================================
 import { getAll, put, remove } from '../db.js';
-import {
-  el, clear, field, textInput, selectInput, dateInput, openModal, confirmAction, toast, badge,
-  emptyState, laneWave, fmtDateShort, todayISO, toIsoDateTime, fullName, beginRender,
-} from '../utils.js';
+import { el, clear, beginRender } from '../dom.js';
+import { fmtDateShort, todayISO, toIsoDateTime } from '../dates.js';
+import { badge, emptyState, laneWave, fullName, toast } from '../ui.js';
+import { openModal, confirmAction } from '../modal.js';
+import { field, textInput, selectInput, dateInput, formActions } from '../forms.js';
 import { ACTION_CATEGORIES, ACTION_STATUS } from '../refdata.js';
 import { getRole, getCurrentUser } from '../state.js';
 import { navigate } from '../router.js';
@@ -181,10 +182,7 @@ export function openItemModal(item, athletes, trainers, onSaved, presetAthleteId
   form.appendChild(field(t('actionitems.formAssignedTrainer'), fTrainer));
   form.appendChild(field(t('actionitems.formDue'), fDue));
   form.appendChild(field(t('actionitems.formDescription'), fDesc, { span2: true }));
-  form.appendChild(el('div', { class: 'form-actions', style: 'grid-column:1/-1' }, [
-    el('button', { type: 'button', class: 'btn btn-ghost', onclick: () => close() }, t('common.cancel')),
-    el('button', { type: 'submit', class: 'btn btn-primary' }, isEdit ? t('common.save') : t('common.create')),
-  ]));
+  form.appendChild(formActions({ onCancel: () => close(), submitLabel: isEdit ? t('common.save') : t('common.create') }).row);
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     if (!fTitle.value.trim()) { toast(t('actionitems.validationTitle'), 'error'); return; }

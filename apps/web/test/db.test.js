@@ -1,21 +1,24 @@
 // apps/web/test/db.test.js
 //
 // Testet js/db.js — den generischen IndexedDB-Wrapper inkl. der
-// Sync-Warteschlange (Outbox-Pattern), bislang völlig ungetestet (Code-
-// Review, Befund 15). state.js wird gemockt, um getCurrentUser() ohne den
-// echten Login-Fluss (Netzwerk, apiClient.js) steuern zu können — db.js
-// braucht davon nur die aktuell eingeloggte clubId (siehe put(): fügt
-// clubId für neu angelegte, vereins-gescopte Datensätze automatisch hinzu).
+// Sync-Warteschlange (Outbox-Pattern). db.js kennt state.js bewusst
+// nicht (siehe dortiger Kommentar zum vormaligen Import-Zyklus zwischen
+// beiden Modulen) — put() braucht für neu angelegte, vereins-gescopte
+// Datensätze trotzdem die clubId der aktuell eingeloggten Person; dafür
+// injiziert dieser Test sie direkt über setClubIdProvider(), ohne
+// state.js oder dessen Abhängigkeiten (apiClient.js, Netzwerk) zu mocken.
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-vi.mock('../js/state.js', () => ({ getCurrentUser: vi.fn(() => null) }));
 vi.mock('../js/demoMode.js', () => ({ IS_DEMO: false }));
 
-import { getCurrentUser } from '../js/state.js';
 import * as db from '../js/db.js';
+import { ENTITY_STORE_NAMES } from '../../../packages/shared-types/src/entities.js';
+
+let currentClubId = null;
+db.setClubIdProvider(() => currentClubId);
 
 beforeEach(async () => {
-  vi.mocked(getCurrentUser).mockReturnValue(null);
+  currentClubId = null;
   await db.wipeAll();
 });
 
@@ -44,19 +47,19 @@ describe('put()', () => {
   // angelegten Datensatzes IMMER, da das Formular selbst die eingeloggte
   // clubId nicht kennt.
   it('ergänzt clubId automatisch für einen vereins-gescopten Store, wenn eine Person eingeloggt ist', async () => {
-    vi.mocked(getCurrentUser).mockReturnValue({ clubId: 'club-123' });
+    currentClubId = 'club-123';
     const saved = await db.put('athletes', { firstName: 'Mara', lastName: 'Vogel' });
     expect(saved.clubId).toBe('club-123');
   });
 
   it('überschreibt eine bereits vorhandene clubId NICHT', async () => {
-    vi.mocked(getCurrentUser).mockReturnValue({ clubId: 'club-neu' });
+    currentClubId = 'club-neu';
     const saved = await db.put('athletes', { firstName: 'Mara', lastName: 'Vogel', clubId: 'club-alt' });
     expect(saved.clubId).toBe('club-alt');
   });
 
   it('ergänzt keine clubId für einen NICHT vereins-gescopten Store (z. B. "meta")', async () => {
-    vi.mocked(getCurrentUser).mockReturnValue({ clubId: 'club-123' });
+    currentClubId = 'club-123';
     const saved = await db.put('meta', { id: 'x', value: 1 });
     expect(saved.clubId).toBeUndefined();
   });
@@ -260,5 +263,20 @@ describe('bulkPut()/exportAll()/importAll()/wipeAll()', () => {
     for (const store of db.STORES) {
       expect(await db.getAll(store)).toEqual([]);
     }
+  });
+});
+
+// apps/web ist bewusst build-frei (Vanilla-ESM, kein Bundler) und kann
+// packages/shared-types deshalb zur Laufzeit nicht importieren —
+// CLUB_SCOPED_STORES in db.js ist dadurch eine von Hand gepflegte Kopie
+// der zehn fachlichen Stores, unabhängig von der kanonischen Liste
+// (ENTITY_STORE_NAMES, aus ENTITY_SCHEMAS abgeleitet), die die generische
+// Sync-API serverseitig verwendet. Ein TEST darf shared-types aber laden
+// (nur die ausgelieferte App nicht) — dieser Test schließt die Lücke dort,
+// wo sie sonst unbemerkt bliebe: ein Store, der hier fehlt oder zu viel
+// hat, weicht sofort sichtbar von der Server-Wahrheit ab.
+describe('CLUB_SCOPED_STORES', () => {
+  it('deckt sich exakt mit den fachlichen Stores der generischen Sync-API (ENTITY_STORE_NAMES)', () => {
+    expect([...db.CLUB_SCOPED_STORES].sort()).toEqual([...ENTITY_STORE_NAMES].sort());
   });
 });

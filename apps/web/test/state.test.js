@@ -9,7 +9,7 @@ import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('../js/demoMode.js', () => ({ IS_DEMO: false }));
 vi.mock('../js/apiClient.js', () => ({}));
-vi.mock('../js/db.js', () => ({ wipeAll: vi.fn() }));
+vi.mock('../js/db.js', () => ({ wipeAll: vi.fn(), setClubIdProvider: vi.fn() }));
 vi.mock('../js/i18n.js', () => ({ setLocale: vi.fn(), detectInitialLocale: vi.fn(() => 'de-DE') }));
 
 import { getRole, getCurrentUser, isLoggedIn, isTrainerOrAdmin, isAdmin, isSuperAdmin, isAdminOrSuperAdmin } from '../js/state.js';

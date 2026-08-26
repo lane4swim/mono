@@ -2,7 +2,10 @@
 // modules/dashboard.js
 // ============================================================
 import { getAll } from '../db.js';
-import { el, clear, fmtDateLong, todayISO, fullName, statCard, badge, laneWave, groupBy, average, secToTime, beginRender } from '../utils.js';
+import { el, clear, beginRender } from '../dom.js';
+import { fmtDateLong, todayISO } from '../dates.js';
+import { secToTime } from '../swimTime.js';
+import { fullName, statCard, badge, laneWave, groupBy, average } from '../ui.js';
 import { getRole, getCurrentUser } from '../state.js';
 import { navigate } from '../router.js';
 import { totalDistance } from './setEditor.js';

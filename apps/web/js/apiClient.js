@@ -19,6 +19,7 @@
 //     zeitgleich abläuft) auf GENAU einen tatsächlichen
 //     POST /auth/refresh-Aufruf.
 // ============================================================
+import { t } from './i18n.js';
 
 const API_BASE_URL_KEY = 'lane1-api-base-url';
 const REFRESH_TOKEN_KEY = 'lane1-refresh-token';
@@ -63,10 +64,6 @@ export function clearTokens() {
   accessTokenExpiresAt = 0;
   localStorage.removeItem(REFRESH_TOKEN_KEY);
 }
-export function hasAccessToken() {
-  return !!accessToken;
-}
-
 export class ApiError extends Error {
   constructor(status, body) {
     super(body?.message || `API-Fehler (${status})`);
@@ -80,6 +77,23 @@ export class ApiError extends Error {
 // unterschiedliche Meldungen zeigen kann ("kein Internet" vs. "falsches
 // Passwort").
 export class NetworkError extends Error {}
+
+// Übersetzt einen ApiError/NetworkError in eine anzeigbare Meldung — vormals
+// dreimal wortgleich (bis auf drei parallele Schlüsselpaare in beiden
+// Sprachdateien) in profile.js, userManagement.js und admin/admin.js
+// dupliziert. `on401Message`, wenn gesetzt, überschreibt `err.message` für
+// einen 401 (admin.js: zeigt dort bewusst
+// t('auth.errorInvalidCredentials') statt der rohen Serverantwort — die
+// einzige tatsächliche Abweichung zwischen den drei ursprünglichen
+// Kopien, alles andere war bereits identisch).
+export function describeError(err, { on401Message } = {}) {
+  if (err instanceof NetworkError) return t('common.errorNetwork');
+  if (err instanceof ApiError) {
+    if (err.status === 401 && on401Message) return on401Message;
+    return err.message;
+  }
+  return t('common.errorUnknown');
+}
 
 async function rawRequest(path, options = {}) {
   const url = `${getApiBaseUrl()}${path}`;

@@ -2,7 +2,10 @@
 // modules/templates.js — wiederverwendbare Trainingsplan-Vorlagen
 // ============================================================
 import { getAll, put, remove } from '../db.js';
-import { el, clear, field, textInput, openModal, confirmAction, toast, badge, emptyState, laneWave, beginRender } from '../utils.js';
+import { el, clear, beginRender } from '../dom.js';
+import { badge, emptyState, laneWave, toast } from '../ui.js';
+import { openModal, confirmAction } from '../modal.js';
+import { field, textInput, formActions } from '../forms.js';
 import { renderSetEditor, totalDistance, cloneItems, collectEquipment } from './setEditor.js';
 import { EQUIPMENT_ITEMS } from '../refdata.js';
 import { t, trLabel } from '../i18n.js';
@@ -97,10 +100,7 @@ function openTemplateModal(template, exercises, onSaved) {
   form.appendChild(setsWrap);
   renderSetEditor(setsHost, data.sets, exercises);
 
-  form.appendChild(el('div', { class: 'form-actions' }, [
-    el('button', { type: 'button', class: 'btn btn-ghost', onclick: () => close() }, t('common.cancel')),
-    el('button', { type: 'submit', class: 'btn btn-primary' }, isEdit ? t('common.save') : t('common.create')),
-  ]));
+  form.appendChild(formActions({ onCancel: () => close(), submitLabel: isEdit ? t('common.save') : t('common.create'), spanFull: false }).row);
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     if (!fName.value.trim()) { toast(t('templates.validationName'), 'error'); return; }

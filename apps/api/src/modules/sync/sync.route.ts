@@ -9,6 +9,7 @@ import type { FastifyInstance } from 'fastify';
 import { SyncPushRequestSchema, SyncPullQuerySchema } from '@lane1/shared-types';
 import type { SyncService, SyncRequester } from './sync.service.js';
 import { requireRole } from '../../plugins/authorize.js';
+import { parseInput } from '../../plugins/parseInput.js';
 
 export interface SyncRoutesOptions {
   syncService: SyncService;
@@ -31,11 +32,9 @@ export async function syncRoutes(app: FastifyInstance, opts: SyncRoutesOptions) 
   const syncGuard = [app.authenticate, requireRole('trainer', 'admin', 'athlete')];
 
   app.post('/api/sync/push', { preHandler: syncGuard }, async (request, reply) => {
-    const parsed = SyncPushRequestSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.code(400).send({ error: 'validation_failed', issues: parsed.error.issues });
-    }
-    const results = await syncService.push(parsed.data.events, requesterFrom(request));
+    const body = parseInput(SyncPushRequestSchema, request.body, reply);
+    if (!body) return;
+    const results = await syncService.push(body.events, requesterFrom(request));
     return reply.code(200).send({ results });
   });
 
@@ -43,16 +42,13 @@ export async function syncRoutes(app: FastifyInstance, opts: SyncRoutesOptions) 
     '/api/sync/pull',
     { preHandler: syncGuard },
     async (request, reply) => {
-      // Bislang die einzige Route ohne Eingabevalidierung (siehe
-      // Code-Review) — ein ungültiger "cursor"/"since"-Wert (z. B.
-      // "?cursor=abc") erzeugte in syncService.pull() ein `Invalid Date`,
+      // Ohne diese Prüfung erzeugte ein ungültiger "cursor"/"since"-Wert
+      // (z. B. "?cursor=abc") in syncService.pull() ein `Invalid Date`,
       // das die Datenbankabfrage mit einem ungefangenen Fehler statt einer
       // regulären 400-Antwort quittierte.
-      const parsed = SyncPullQuerySchema.safeParse(request.query);
-      if (!parsed.success) {
-        return reply.code(400).send({ error: 'validation_failed', issues: parsed.error.issues });
-      }
-      const result = await syncService.pull(parsed.data, requesterFrom(request));
+      const query = parseInput(SyncPullQuerySchema, request.query, reply);
+      if (!query) return;
+      const result = await syncService.pull(query, requesterFrom(request));
       return reply.code(200).send(result);
     },
   );

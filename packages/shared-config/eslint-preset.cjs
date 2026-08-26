@@ -28,6 +28,16 @@ module.exports = [
       '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
       '@typescript-eslint/no-explicit-any': 'warn',
       'no-console': 'off',
+      // Kein legitimer Anwendungsfall für echte Bitoperationen in dieser
+      // Codebasis (kein Bitmasking, keine Low-Level-Protokolle) — fängt
+      // stattdessen `&`/`|` als versehentlichen Ersatz für `&&`/`||` bzw.
+      // für zwei nacheinander auszuführende Anweisungen (siehe
+      // `() => f() & g()`, das beide Seiten auswertet, aber nur zufällig
+      // die richtige Reihenfolge/Semantik hat, statt sie zu garantieren).
+      // Gilt für `.ts` genauso wie für `.js` — TypeScripts `|`/`&` in
+      // Typausdrücken (Union/Intersection Types) sind ein eigener
+      // Syntaxknoten und von dieser Regel nicht betroffen.
+      'no-bitwise': 'error',
     },
   },
   // `.cjs`-Dateien (Konfigurationslader wie diese Datei und die

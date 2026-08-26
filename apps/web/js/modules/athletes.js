@@ -2,15 +2,15 @@
 // modules/athletes.js — Athleten-, Team- und Gruppenverwaltung
 // ============================================================
 import { getAll, put, remove } from '../db.js';
-import {
-  el, clear, fullName, ageFromBirthdate, fmtDateShort, todayISO, toIsoDateTime,
-  field, textInput, selectInput, dateInput, openModal, confirmAction, toast, badge,
-  emptyState, laneWave, groupBy, secToTime, statCard,
-} from '../utils.js';
+import { el, clear, beginRender } from '../dom.js';
+import { ageFromBirthdate, fmtDateShort, todayISO, toIsoDateTime } from '../dates.js';
+import { secToTime } from '../swimTime.js';
+import { fullName, badge, emptyState, laneWave, groupBy, statCard, toast } from '../ui.js';
+import { openModal, confirmAction } from '../modal.js';
+import { field, textInput, selectInput, dateInput, formActions } from '../forms.js';
 import { isAdminOrSuperAdmin } from '../state.js';
 import { navigate } from '../router.js';
 import { t, trCode } from '../i18n.js';
-import { beginRender } from '../utils.js';
 
 export const athletesModule = {
   id: 'athletes',
@@ -113,7 +113,7 @@ async function renderDetail(container, athleteId, athletes, groups) {
       el('h1', { class: 'mt-0' }, fullName(athlete)),
     ]),
     el('div', { class: 'page-actions' }, isAdminOrSuperAdmin() ? [
-      el('button', { class: 'btn btn-ghost', onclick: () => openAthleteModal(athlete, groups, () => navigate('athletes', athleteId) & location.reload()) }, t('common.edit')),
+      el('button', { class: 'btn btn-ghost', onclick: () => openAthleteModal(athlete, groups, () => { navigate('athletes', athleteId); location.reload(); }) }, t('common.edit')),
       el('button', { class: 'btn btn-danger', onclick: () => confirmAction(t('athletes.deleteConfirm', { name: fullName(athlete) }), async () => { await remove('athletes', athleteId); toast(t('athletes.deleted')); navigate('athletes'); }) }, t('common.delete')),
     ] : []),
   ]));
@@ -192,10 +192,7 @@ function openAthleteModal(athlete, groups, onSaved) {
   const activeField = field(t('athletes.formStatus'), el('div', { class: 'flex items-center gap-8' }, [fActive, el('span', { class: 'text-sm' }, t('athletes.formActiveLabel'))]), { span2: true });
   form.appendChild(activeField);
 
-  form.appendChild(el('div', { class: 'form-actions span-2', style: 'grid-column:1/-1' }, [
-    el('button', { type: 'button', class: 'btn btn-ghost', onclick: () => close() }, t('common.cancel')),
-    el('button', { type: 'submit', class: 'btn btn-primary' }, isEdit ? t('common.save') : t('common.create')),
-  ]));
+  form.appendChild(formActions({ onCancel: () => close(), submitLabel: isEdit ? t('common.save') : t('common.create'), extraClass: 'span-2' }).row);
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();

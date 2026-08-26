@@ -3,7 +3,25 @@
 // Testet js/i18n.js::t() — bislang ungetestet. Deckt Befund C6
 // (Code-Review) ab.
 import { describe, it, expect } from 'vitest';
-import { t } from '../js/i18n.js';
+import { t, LOCALES } from '../js/i18n.js';
+
+// Flacht ein verschachteltes Wörterbuch (wie de-DE.js/en-US.js) zu einer
+// Liste von Punkt-Pfaden ab, z. B. { athletes: { title: 'X' } } ->
+// ['athletes.title']. Arrays (z. B. help.gdprDataList) gelten dabei als
+// EIN Blattwert, nicht als weitere Verschachtelungsebene — dieselbe
+// Unterscheidung, die lookup() in i18n.js selbst trifft.
+function flattenKeys(dict, prefix = '') {
+  const keys = [];
+  for (const [key, value] of Object.entries(dict)) {
+    const path = prefix ? `${prefix}.${key}` : key;
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      keys.push(...flattenKeys(value, path));
+    } else {
+      keys.push(path);
+    }
+  }
+  return keys;
+}
 
 describe('t() — Platzhalter-Ersetzung', () => {
   it('setzt einen einfachen Wert für {name} ein', () => {
@@ -44,4 +62,26 @@ describe('t() — Platzhalter-Ersetzung', () => {
       'Du wurdest als Trainer:in für "SV Wasserfreunde" eingeladen ({email}). Bitte lege ein Passwort fest, um dein Konto zu aktivieren.',
     );
   });
+});
+
+// t() fällt bei einem in der aktiven Locale fehlenden Schlüssel still auf
+// Deutsch zurück (siehe i18n.js: lookup()) — ein in de-DE.js ergänzter,
+// in en-US.js vergessener Schlüssel fiele dadurch NIRGENDS als Fehler
+// auf, sondern erschiene der englischen Oberfläche einfach als
+// deutscher Text. Dieser Test schließt genau diese Lücke: er prüft für
+// JEDE registrierte Locale (nicht nur für en-US — automatisch auch für
+// eine künftige dritte Sprache), dass ihr Wörterbuch exakt dieselben
+// Schlüssel trägt wie 'de-DE', das app-eigene Referenz-/Fallback-Gebietsschema.
+describe('Vollständigkeit der Sprachdateien', () => {
+  const referenceLocale = 'de-DE';
+  const referenceKeys = flattenKeys(LOCALES[referenceLocale].dict).sort();
+
+  for (const locale of Object.keys(LOCALES)) {
+    if (locale === referenceLocale) continue;
+
+    it(`${locale} hat exakt dieselben Schlüssel wie ${referenceLocale}`, () => {
+      const keys = flattenKeys(LOCALES[locale].dict).sort();
+      expect(keys).toEqual(referenceKeys);
+    });
+  }
 });

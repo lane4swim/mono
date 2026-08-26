@@ -5,17 +5,9 @@
 import type { FastifyInstance } from 'fastify';
 import { CreateClubRequestSchema, CreateInvitationRequestSchema } from '@lane1/shared-types';
 import type { InvitationsService } from './invitations.service.js';
-import {
-  ForbiddenError,
-  ClubNotFoundError,
-  AthleteNotFoundError,
-  AthleteClubMismatchError,
-  InvitationNotFoundError,
-  InvitationExpiredError,
-  InvitationAlreadyUsedError,
-  InvitationRevokedError,
-} from './invitations.service.js';
+import { InvitationNotFoundError } from './invitations.service.js';
 import { requireRole } from '../../plugins/authorize.js';
+import { parseInput } from '../../plugins/parseInput.js';
 
 export interface InvitationsRoutesOptions {
   invitationsService: InvitationsService;
@@ -37,12 +29,15 @@ export async function invitationsRoutes(app: FastifyInstance, opts: InvitationsR
       const preview = await invitationsService.preview(request.params.token);
       return reply.code(200).send(preview);
     } catch (err) {
-      if (
-        err instanceof InvitationNotFoundError ||
-        err instanceof InvitationExpiredError ||
-        err instanceof InvitationAlreadyUsedError ||
-        err instanceof InvitationRevokedError
-      ) {
+      // Einzige Abweichung von der zentralen Fehler-Registry (siehe
+      // plugins/httpErrorHandler.ts): dort liefert InvitationNotFoundError
+      // 404 (der Fall in revoke() unten), hier bewusst 410 — für eine
+      // Einladungsvorschau sind "nicht gefunden"/"abgelaufen"/"bereits
+      // verwendet"/"widerrufen" ein und dieselbe Nutzerbotschaft ("dieser
+      // Link funktioniert nicht mehr"). Die übrigen drei
+      // Invitation*Error-Klassen landen bereits über die Registry korrekt
+      // bei 410 und brauchen hier keine Sonderbehandlung mehr.
+      if (err instanceof InvitationNotFoundError) {
         return reply.code(410).send({ error: 'invalid_invitation', message: err.message });
       }
       throw err;
@@ -53,10 +48,10 @@ export async function invitationsRoutes(app: FastifyInstance, opts: InvitationsR
     '/api/clubs',
     { preHandler: [app.authenticate, requireRole('superadmin')] },
     async (request, reply) => {
-      const parsed = CreateClubRequestSchema.safeParse(request.body);
-      if (!parsed.success) return reply.code(400).send({ error: 'validation_failed', issues: parsed.error.issues });
+      const body = parseInput(CreateClubRequestSchema, request.body, reply);
+      if (!body) return;
 
-      const result = await invitationsService.createClub(parsed.data, requesterFrom(request));
+      const result = await invitationsService.createClub(body, requesterFrom(request));
       return reply.code(201).send(result);
     },
   );
@@ -70,19 +65,14 @@ export async function invitationsRoutes(app: FastifyInstance, opts: InvitationsR
     '/api/invitations',
     { preHandler: [app.authenticate, requireRole('superadmin', 'admin')] },
     async (request, reply) => {
-      const parsed = CreateInvitationRequestSchema.safeParse(request.body);
-      if (!parsed.success) return reply.code(400).send({ error: 'validation_failed', issues: parsed.error.issues });
+      const body = parseInput(CreateInvitationRequestSchema, request.body, reply);
+      if (!body) return;
 
-      try {
-        const invitation = await invitationsService.createInvitation(parsed.data, requesterFrom(request));
-        return reply.code(201).send(invitation);
-      } catch (err) {
-        if (err instanceof ForbiddenError) return reply.code(403).send({ error: 'forbidden', message: err.message });
-        if (err instanceof ClubNotFoundError) return reply.code(404).send({ error: 'club_not_found', message: err.message });
-        if (err instanceof AthleteNotFoundError) return reply.code(404).send({ error: 'athlete_not_found', message: err.message });
-        if (err instanceof AthleteClubMismatchError) return reply.code(400).send({ error: 'athlete_club_mismatch', message: err.message });
-        throw err;
-      }
+      // ForbiddenError/ClubNotFoundError/AthleteNotFoundError/
+      // AthleteClubMismatchError: alle vier über die zentrale
+      // Fehler-Registry abgedeckt (siehe plugins/httpErrorHandler.ts).
+      const invitation = await invitationsService.createInvitation(body, requesterFrom(request));
+      return reply.code(201).send(invitation);
     },
   );
 
@@ -99,14 +89,12 @@ export async function invitationsRoutes(app: FastifyInstance, opts: InvitationsR
     '/api/invitations/:id',
     { preHandler: [app.authenticate, requireRole('superadmin', 'admin')] },
     async (request, reply) => {
-      try {
-        await invitationsService.revoke(request.params.id, requesterFrom(request));
-        return reply.code(204).send();
-      } catch (err) {
-        if (err instanceof ForbiddenError) return reply.code(403).send({ error: 'forbidden', message: err.message });
-        if (err instanceof InvitationNotFoundError) return reply.code(404).send({ error: 'not_found', message: err.message });
-        throw err;
-      }
+      // ForbiddenError/InvitationNotFoundError: beide über die zentrale
+      // Fehler-Registry abgedeckt — InvitationNotFoundError landet hier
+      // (anders als bei preview() oben) korrekt bei deren Standard-
+      // Zuordnung (404), keine Sonderbehandlung nötig.
+      await invitationsService.revoke(request.params.id, requesterFrom(request));
+      return reply.code(204).send();
     },
   );
 }

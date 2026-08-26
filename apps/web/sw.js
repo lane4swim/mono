@@ -7,7 +7,7 @@
 // Bump CACHE_VERSION whenever any cached file changes so clients
 // pick up the new version instead of serving stale assets.
 // ============================================================
-const CACHE_VERSION = 'lane1-v27';
+const CACHE_VERSION = 'lane1-v28';
 const PRECACHE_URLS = [
   './',
   './index.html',
@@ -20,6 +20,8 @@ const PRECACHE_URLS = [
   './help/help.css',
   './js/app.js',
   './js/app-demo.js',
+  './js/shell.js',
+  './js/moduleRegistry.js',
   './js/apiClient.js',
   './js/syncClient.js',
   './js/db.js',
@@ -27,7 +29,16 @@ const PRECACHE_URLS = [
   './js/demoSeed.js',
   './js/state.js',
   './js/router.js',
-  './js/utils.js',
+  // Code-Review, Befund L4: js/utils.js (ein 360-Zeilen-Sammelmodul) wurde
+  // aufgeteilt — die sieben Nachfolgedateien ersetzen den einen Eintrag,
+  // den diese Liste zuvor dafür trug.
+  './js/dom.js',
+  './js/dates.js',
+  './js/swimTime.js',
+  './js/ui.js',
+  './js/modal.js',
+  './js/forms.js',
+  './js/charts.js',
   './js/refdata.js',
   './js/seed.js',
   './js/i18n.js',
@@ -36,6 +47,8 @@ const PRECACHE_URLS = [
   './js/modules/dashboard.js',
   './js/modules/athletes.js',
   './js/modules/competitions.js',
+  './js/modules/competitionLive.js',
+  './js/modules/stopwatch.js',
   './js/modules/times.js',
   './js/modules/plans.js',
   './js/modules/templates.js',
@@ -51,6 +64,7 @@ const PRECACHE_URLS = [
   './js/modules/profile.js',
   './js/modules/authScreens.js',
   './js/modules/userManagement.js',
+  './js/modules/clubForm.js',
   './js/modules/info.js',
   './icons/icon.svg',
   './icons/icon-192.png',

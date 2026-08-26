@@ -54,7 +54,14 @@ export class InMemorySyncGateway implements SyncGateway {
     return record;
   }
 
-  async create(store: EntityStoreName, payload: Record<string, unknown>): Promise<void> {
+  // Code-Review, Befund L5: create()/update()/softDelete()/
+  // markEventProcessed() sind keine SyncGateway-Interfacemethoden mehr
+  // (siehe SyncGatewayTestSurface-Kommentar in sync.gateway.ts) — kein
+  // Aufrufer außerhalb dieser Klasse benötigt sie einzeln, applyAndMarkProcessed()
+  // unten ist der einzige Aufrufer. Bewusst weiterhin PRIVATE Methoden
+  // (statt in applyAndMarkProcessed() hineinkopiert) für die Lesbarkeit —
+  // sie spiegeln je eine der drei Schreiboperationen von PrismaSyncGateway.
+  private async create(store: EntityStoreName, payload: Record<string, unknown>): Promise<void> {
     this.assertReferencedEntityExists(payload);
     // Spiegelt Prismas Unique-Constraint auf der Primärspalte "id": ein
     // real generierter Prisma-Client würde bei create() mit bereits
@@ -83,7 +90,7 @@ export class InMemorySyncGateway implements SyncGateway {
     this.table(store).set(id, this.normalizeDates({ ...payload, createdAt: payload.createdAt ?? now, updatedAt: now }));
   }
 
-  async update(store: EntityStoreName, id: string, clubId: string, payload: Record<string, unknown>): Promise<void> {
+  private async update(store: EntityStoreName, id: string, clubId: string, payload: Record<string, unknown>): Promise<void> {
     const current = this.table(store).get(id);
     // Vereins-Scoping analog zu PrismaSyncGateway.update()/softDelete():
     // existiert der Datensatz, gehört aber einem anderen Verein, wird das
@@ -131,7 +138,7 @@ export class InMemorySyncGateway implements SyncGateway {
     return normalized as SyncRecord;
   }
 
-  async softDelete(store: EntityStoreName, id: string, clubId: string): Promise<void> {
+  private async softDelete(store: EntityStoreName, id: string, clubId: string): Promise<void> {
     const existing = this.table(store).get(id);
     if (existing && existing.clubId === clubId) {
       this.table(store).set(id, { ...existing, deletedAt: new Date() });
@@ -166,7 +173,7 @@ export class InMemorySyncGateway implements SyncGateway {
     return this.processedEvents.get(eventId) === clubId;
   }
 
-  async markEventProcessed(eventId: string, clubId: string): Promise<void> {
+  private async markEventProcessed(eventId: string, clubId: string): Promise<void> {
     this.processedEvents.set(eventId, clubId);
   }
 

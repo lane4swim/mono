@@ -12,9 +12,11 @@
 // alles andere. Diese Datei bündelt genau den geteilten Teil; app.js und
 // app-demo.js rufen sie auf und behalten nur ihre eigene Logik.
 import { pendingSyncCount } from './db.js';
-import { getRole } from './state.js';
+import { getRole, getCurrentUser } from './state.js';
 import { visibleModules, navigate, getModule, currentRoute } from './router.js';
-import { el, clear, toast, openModal, beginRender, icon } from './utils.js';
+import { el, clear, beginRender, icon } from './dom.js';
+import { toast } from './ui.js';
+import { openModal } from './modal.js';
 import { t, getLocale, getAvailableLocales } from './i18n.js';
 
 const GROUP_ICON_TRAINING = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 7c1.4 1.3 2.8 1.3 4.2 0s2.8-1.3 4.2 0 2.8 1.3 4.2 0 2.8-1.3 4.2 0"/><path d="M2 12.5c1.4 1.3 2.8 1.3 4.2 0s2.8-1.3 4.2 0 2.8 1.3 4.2 0 2.8-1.3 4.2 0"/><path d="M2 18c1.4 1.3 2.8 1.3 4.2 0s2.8-1.3 4.2 0 2.8 1.3 4.2 0 2.8-1.3 4.2 0"/></svg>';
@@ -172,12 +174,9 @@ export async function renderRoute(viewEl, route) {
   let mod = getModule(route.routeId);
   if (!mod || (mod.roles && !mod.roles.includes(role))) mod = defaultModuleFor(role);
   markActive(mod.id);
-  // Code-Review, Befund W11: zuvor per Template-Literal direkt auf
-  // viewEl.innerHTML geschrieben — ein unauffälliger, unbenannter HTML-
-  // Sink neben dem sonst in dieser Datei konsequent verwendeten
-  // el()/clear()-Baukasten (der aktuelle Inhalt, t('common.loading'), ist
-  // zwar unkritisch, aber genau diese Sonderstellung sollte bei jedem
-  // künftigen Audit nicht erneut geprüft werden müssen).
+  // Über el()/clear() statt eines Template-Literals auf viewEl.innerHTML
+  // — konsistent mit dem sonst in dieser Datei konsequent verwendeten
+  // DOM-Baukasten, kein unbenannter HTML-Sink für ein künftiges Audit.
   clear(viewEl);
   viewEl.appendChild(el('div', { class: 'empty-state' }, t('common.loading')));
   try {
@@ -218,4 +217,51 @@ export function downloadExportJSON(dump, filenamePrefix) {
   a.download = `${filenamePrefix}-${new Date().toISOString().slice(0, 10)}.json`;
   a.click();
   toast(t('settings.exportStarted'));
+}
+
+// Das "Einstellungen"-Modal (Konto-/Speicherhinweis + Export-Button) —
+// vormals in app.js/app-demo.js wortgleich bis auf den Hinweistext, den
+// Export-Dateinamen und app-demo.js' zusätzlichen "Demo zurücksetzen"-
+// Button ausgeschrieben. Bindet den Klick auf #btn-settings gleich mit,
+// da beide Aufrufer dafür ohnehin identischen Code hatten.
+//   - storageNoteKey: i18n-Schlüssel für den Hinweistext unter den
+//     Kontodaten (app.js: 'settings.storageNote'; app-demo.js:
+//     'topbar.demoBadge') — bewusst der SCHLÜSSEL, nicht der bereits
+//     übersetzte Text: erst bei jedem Öffnen übersetzt (wie zuvor),
+//     damit ein zwischenzeitlicher Sprachwechsel sich auch hier
+//     niederschlägt, statt beim Registrieren einmalig eingefroren zu
+//     werden.
+//   - exportPrefix/getExportData: an downloadExportJSON() durchgereicht;
+//     getExportData() liefert den zu exportierenden Datensatz (app.js
+//     lädt db.js dafür bewusst erst hier per dynamischem Import, siehe
+//     dortiger Kommentar — app-demo.js hat exportAll() ohnehin schon
+//     statisch importiert).
+//   - extraActions: Fabrikfunktion für weitere Buttons nach "Export"
+//     (app-demo.js: der "Demo zurücksetzen"-Button; app.js braucht
+//     keine) — bewusst eine Funktion, nicht ein fertiges Array: baut die
+//     Knoten bei JEDEM Öffnen neu, aus demselben Grund wie
+//     storageNoteKey oben (sonst blieben Beschriftung und die darin
+//     eingebetteten t()-Aufrufe der confirmAction() nach einem
+//     Sprachwechsel auf der beim Registrieren aktiven Sprache hängen).
+export function setupSettingsModal({ storageNoteKey, exportPrefix, getExportData, extraActions = () => [] }) {
+  const btn = document.getElementById('btn-settings');
+  btn.addEventListener('click', openSettings);
+
+  function openSettings() {
+    btn.textContent = t('topbar.settings');
+    const user = getCurrentUser();
+    const body = el('div');
+    body.appendChild(el('h3', { class: 'mt-0' }, t('settings.accounts')));
+    if (user) body.appendChild(el('p', { class: 'text-sm' }, `${user.name} — ${t('settings.roleLabel')}: ${t(`settings.role_${user.role}`)}`));
+    body.appendChild(el('p', { class: 'hint' }, t(storageNoteKey)));
+    body.appendChild(el('div', { class: 'form-actions', style: 'justify-content:flex-start;margin-top:20px' }, [
+      el('button', { class: 'btn btn-ghost', onclick: exportData }, t('settings.exportButton')),
+      ...extraActions(),
+    ]));
+    openModal({ title: t('settings.title'), bodyNode: body, wide: true });
+  }
+
+  async function exportData() {
+    downloadExportJSON(await getExportData(), exportPrefix);
+  }
 }

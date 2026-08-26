@@ -92,9 +92,9 @@ function buildInviteUrl(frontendBaseUrl: string, token: string): string {
 // Die eingeladene Person hat noch kein Konto und damit keine eigene
 // Locale — die Sprache der einladenden Person (User.locale) ist die
 // einzige zu diesem Zeitpunkt bekannte, plausible Wahl für die
-// Einladungs-E-Mail (Code-Review, Befund W9). mailer.ts fällt bei einer
-// unbekannten/fehlenden Locale ohnehin auf Deutsch zurück, daher hier
-// bewusst kein weiterer Fallback nötig.
+// Einladungs-E-Mail. mailer.ts fällt bei einer unbekannten/fehlenden
+// Locale ohnehin auf Deutsch zurück, daher hier bewusst kein weiterer
+// Fallback nötig.
 async function resolveRequesterLocale(users: UserRepository, requesterId: string): Promise<string | undefined> {
   const requesterUser = await users.findById(requesterId);
   return requesterUser?.locale;
@@ -104,13 +104,11 @@ async function resolveRequesterLocale(users: UserRepository, requesterId: string
 // tatsächlichen Registrieren (acceptInvitation) genutzt, damit beide
 // Stellen exakt dieselbe Definition von "gültig" verwenden. Als
 // eigenständige Funktion (statt Methode auf dem von
-// createInvitationsService() zurückgegebenen Objekt) definiert: preview()
-// unten rief sie zuvor als `this.findValidByToken(...)` auf — die einzige
-// Stelle im ganzen Service, an der eine Methode von einer korrekten
-// `this`-Bindung abhing, während jede andere Stelle ausschließlich über
-// `deps` auf Abhängigkeiten zugreift. Das bricht lautlos bei
-// Destrukturierung (`const { preview } = service`) oder Weitergabe als
-// Callback (Code-Review, Befund W10).
+// createInvitationsService() zurückgegebenen Objekt) definiert, damit sie
+// unabhängig von `this`-Bindung funktioniert — anders als eine Methode
+// bricht eine freie Funktion, die ausschließlich über `deps` auf
+// Abhängigkeiten zugreift, nicht lautlos bei Destrukturierung
+// (`const { preview } = service`) oder Weitergabe als Callback.
 async function findValidByToken(deps: InvitationsServiceDeps, plainToken: string): Promise<InvitationRecord> {
   const tokenHash = hashInvitationToken(plainToken);
   const invitation = await deps.invitations.findByTokenHash(tokenHash);
