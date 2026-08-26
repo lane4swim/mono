@@ -92,16 +92,28 @@ export function renderCommentThread(hostNode, initialComments, persist) {
 // Convenience: a small "💬 N" button that opens a modal containing the
 // comment thread for `comments`. Used wherever showing the thread inline
 // would be too heavy (e.g. one button per set-row in a plan's table).
-export function commentsButton(comments, { title, persist }) {
-  const count = (comments || []).length;
-  return el('button', {
-    type: 'button',
-    class: 'btn btn-ghost btn-sm',
-    title: t('comments.title'),
-    onclick: () => {
-      const body = el('div');
-      openModal({ title, bodyNode: body });
-      renderCommentThread(body, comments, persist);
-    },
-  }, count > 0 ? t('comments.countButton', { count }) : t('comments.countButtonEmpty'));
+//
+// The button's own label is a snapshot taken when the row was drawn, so
+// it re-labels itself after every add/delete in the modal instead of
+// waiting for the host page's next full re-render (which previously only
+// happened on reload).
+export function commentsButton(initialComments, { title, persist }) {
+  let comments = initialComments || [];
+  const btn = el('button', { type: 'button', class: 'btn btn-ghost btn-sm', title: t('comments.title') });
+
+  function updateLabel() {
+    btn.textContent = comments.length > 0 ? t('comments.countButton', { count: comments.length }) : t('comments.countButtonEmpty');
+  }
+  updateLabel();
+
+  btn.addEventListener('click', () => {
+    const body = el('div');
+    openModal({ title, bodyNode: body });
+    renderCommentThread(body, comments, async (nextComments) => {
+      comments = nextComments;
+      await persist(nextComments);
+      updateLabel();
+    });
+  });
+  return btn;
 }
