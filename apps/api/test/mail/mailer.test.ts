@@ -1,7 +1,16 @@
 // apps/api/test/mail/mailer.test.ts
 import { describe, it, expect, vi } from 'vitest';
 import { InMemoryMailSender } from '../../src/mail/mailer.memory.js';
-import { buildHtmlBody, buildTextBody, buildSubject, SmtpMailSender, ConsoleMailSender } from '../../src/mail/mailer.js';
+import {
+  buildHtmlBody,
+  buildTextBody,
+  buildSubject,
+  buildPasswordResetSubject,
+  buildPasswordResetTextBody,
+  buildPasswordResetHtmlBody,
+  SmtpMailSender,
+  ConsoleMailSender,
+} from '../../src/mail/mailer.js';
 
 // Fake statt echtem SMTP-Handshake: sendMail() als Spy, createTransport()
 // ebenfalls, damit die Tests zu Befund P4 unten prüfen können, WIE OFT der
@@ -176,6 +185,86 @@ describe('Lokalisierung (Befund W9)', () => {
     const en = buildTextBody({ ...basePayload, locale: 'en-US' });
     expect(de).toContain('1. August 2026');
     expect(en).toContain('August 1, 2026');
+  });
+});
+
+// Sicherheitsreview 2026-08, Befund M5 ("Passwort vergessen").
+describe('ConsoleMailSender — Passwort-Reset-E-Mail: kein Token/Link im Server-Log', () => {
+  it('protokolliert die Empfänger-Adresse, aber NICHT die resetUrl', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const mailer = new ConsoleMailSender();
+      await mailer.sendPasswordResetEmail({
+        to: 'trainer@example.org',
+        resetUrl: 'https://app.example.org/#/reset-password/GEHEIMES-TOKEN-abc123',
+        expiresAt: new Date('2026-08-01T00:00:00.000Z'),
+      });
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      const logged = warnSpy.mock.calls[0]!.join(' ');
+      expect(logged).toContain('trainer@example.org');
+      expect(logged).not.toContain('GEHEIMES-TOKEN-abc123');
+      expect(logged).not.toContain('reset-password');
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+});
+
+describe('buildPasswordResetHtmlBody() — HTML-Escaping', () => {
+  it('escaped recipientName', () => {
+    const html = buildPasswordResetHtmlBody({
+      to: 'x@example.org',
+      recipientName: '<script>alert(1)</script>',
+      resetUrl: 'https://app.example.org/#/reset-password/abc123',
+      expiresAt: new Date('2026-08-01T00:00:00.000Z'),
+    });
+    expect(html).not.toContain('<script>alert(1)</script>');
+    expect(html).toContain('&lt;script&gt;');
+  });
+
+  it('escaped resetUrl (analog zur inviteUrl-Korrektur oben)', () => {
+    const html = buildPasswordResetHtmlBody({
+      to: 'x@example.org',
+      resetUrl: 'https://boese.example.org/"><script>alert(1)</script>',
+      expiresAt: new Date('2026-08-01T00:00:00.000Z'),
+    });
+    expect(html).not.toContain('"><script>alert(1)</script>');
+    expect(html).toContain('&quot;&gt;&lt;script&gt;');
+  });
+
+  it('behält eine normale resetUrl unverändert nutzbar als href', () => {
+    const html = buildPasswordResetHtmlBody({
+      to: 'x@example.org',
+      resetUrl: 'https://app.example.org/#/reset-password/abc123',
+      expiresAt: new Date('2026-08-01T00:00:00.000Z'),
+    });
+    expect(html).toContain('href="https://app.example.org/#/reset-password/abc123"');
+  });
+});
+
+describe('Passwort-Reset-E-Mail — Lokalisierung', () => {
+  const basePayload = {
+    to: 'x@example.org',
+    resetUrl: 'https://app.example.org/#/reset-password/abc123',
+    expiresAt: new Date('2026-08-01T00:00:00.000Z'),
+  };
+
+  it('baut Betreff/Text auf Deutsch, wenn locale fehlt (Fallback)', () => {
+    expect(buildPasswordResetSubject(basePayload)).toBe('Passwort bei Lane 1 zurücksetzen');
+    expect(buildPasswordResetTextBody(basePayload)).toContain('Zurücksetzen des Passworts');
+  });
+
+  it('baut Betreff/Text auf Englisch für locale "en-US"', () => {
+    const payload = { ...basePayload, locale: 'en-US' };
+    expect(buildPasswordResetSubject(payload)).toBe('Reset your Lane 1 password');
+    const text = buildPasswordResetTextBody(payload);
+    expect(text).toContain('reset your Lane 1 password');
+    expect(text).not.toContain('Passwort');
+  });
+
+  it('enthält den Hinweis, dass eine nicht angeforderte Mail ignoriert werden kann (beide Sprachen)', () => {
+    expect(buildPasswordResetTextBody(basePayload)).toContain('nicht angefordert');
+    expect(buildPasswordResetTextBody({ ...basePayload, locale: 'en-US' })).toContain("didn't request this");
   });
 });
 

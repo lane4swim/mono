@@ -166,6 +166,26 @@ export async function acceptInvitation({ token, name, password, consent }) {
   return result.user;
 }
 
+// "Passwort vergessen" (Sicherheitsreview 2026-08, Befund M5). Liefert
+// serverseitig IMMER dieselbe generische Antwort (siehe
+// auth.service.ts: requestPasswordReset()) — verrät nicht, ob die
+// E-Mail-Adresse zu einem Konto gehört. allowRefreshRetry: false wie bei
+// login()/acceptInvitation() — vor einer Sitzung gibt es kein Access
+// Token, das per 401-Retry erneuert werden könnte.
+export function forgotPassword(email) {
+  return postJson('/auth/forgot-password', { email }, { allowRefreshRetry: false });
+}
+
+// Löst das per E-Mail zugestellte Reset-Token ein — meldet bei Erfolg
+// direkt an, analog zu login()/acceptInvitation() oben (der serverseitige
+// Endpunkt liefert bereits ein volles Token-Paar, siehe
+// auth.service.ts: resetPassword()).
+export async function resetPassword({ token, newPassword }) {
+  const result = await postJson('/auth/reset-password', { token, newPassword }, { allowRefreshRetry: false });
+  setTokens(result);
+  return result.user;
+}
+
 // Code-Review, Befund S4: refreshTokens() bündelt gleichzeitige Aufrufer
 // auf GENAU einen In-Flight-Versuch. Ohne dieses Bündeln lösten mehrere
 // parallel abgesetzte Requests (typischerweise runSync()'s push()+pull(),
@@ -229,6 +249,16 @@ export function getMe() {
 }
 export function updateMe(patch) {
   return request('/api/me', { method: 'PATCH', body: JSON.stringify(patch) });
+}
+// Passwortwechsel für die eigene, eingeloggte Person (Sicherheitsreview
+// 2026-08, Befund M5). Liefert wie login() ein frisches Token-Paar —
+// die aktuelle Sitzung bleibt dadurch nahtlos angemeldet, während der
+// Server alle ANDEREN Sitzungen widerruft (siehe auth.service.ts:
+// changePassword()).
+export async function changePassword({ currentPassword, newPassword }) {
+  const result = await request('/api/me/password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) });
+  setTokens(result);
+  return result.user;
 }
 // Art. 15 DSGVO — Recht auf Auskunft: bündelt alle zum eigenen Konto
 // gespeicherten Daten.

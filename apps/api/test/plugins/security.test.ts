@@ -9,7 +9,7 @@ import { buildApp } from '../../src/app.js';
 import { parseCorsOrigin } from '../../src/plugins/security.js';
 import { loadEnv } from '../../src/config/env.js';
 import { createAuthService } from '../../src/modules/auth/auth.service.js';
-import { InMemoryUserRepository, InMemoryRefreshTokenRepository } from '../../src/modules/auth/auth.repository.memory.js';
+import { InMemoryUserRepository, InMemoryRefreshTokenRepository, InMemoryPasswordResetTokenRepository } from '../../src/modules/auth/auth.repository.memory.js';
 import { createInvitationsService } from '../../src/modules/invitations/invitations.service.js';
 import { InMemoryClubRepository, InMemoryInvitationRepository, InMemoryAthleteRepository } from '../../src/modules/invitations/invitations.repository.memory.js';
 import { generateFreshKeyPair } from '../../src/auth/keys.js';
@@ -45,6 +45,10 @@ async function buildTestApp(): Promise<FastifyInstance> {
     profileGateway: new InMemoryProfileDataGateway({ users: [], athletes: [], results: [], entries: [], actionItems: [], sessions: [] }),
     dataErasureRetentionDays: 30,
     keyPair,
+    passwordResetTokens: new InMemoryPasswordResetTokenRepository(),
+    mailer: new InMemoryMailSender(),
+    frontendBaseUrl: 'https://app.example.org',
+    passwordResetTtlMinutes: 60,
     accessTtlSeconds: 900,
     refreshTtlDays: 30,
   });
@@ -112,6 +116,10 @@ describe('Security-Header (Helmet) — Produktionsmodus', () => {
       profileGateway: new InMemoryProfileDataGateway({ users: [], athletes: [], results: [], entries: [], actionItems: [], sessions: [] }),
       dataErasureRetentionDays: 30,
       keyPair,
+      passwordResetTokens: new InMemoryPasswordResetTokenRepository(),
+      mailer: new InMemoryMailSender(),
+      frontendBaseUrl: 'https://app.example.org',
+      passwordResetTtlMinutes: 60,
       accessTtlSeconds: 900,
       refreshTtlDays: 30,
     });
@@ -223,6 +231,10 @@ describe('CORS — mehrere kommagetrennte Origins (End-to-End)', () => {
       profileGateway: new InMemoryProfileDataGateway({ users: [], athletes: [], results: [], entries: [], actionItems: [], sessions: [] }),
       dataErasureRetentionDays: 30,
       keyPair,
+      passwordResetTokens: new InMemoryPasswordResetTokenRepository(),
+      mailer: new InMemoryMailSender(),
+      frontendBaseUrl: 'https://app.example.org',
+      passwordResetTtlMinutes: 60,
       accessTtlSeconds: 900,
       refreshTtlDays: 30,
     });

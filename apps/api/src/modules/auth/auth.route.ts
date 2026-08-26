@@ -9,6 +9,9 @@ import {
   RefreshRequestSchema,
   LogoutRequestSchema,
   UpdateMeRequestSchema,
+  ForgotPasswordRequestSchema,
+  ResetPasswordRequestSchema,
+  ChangePasswordRequestSchema,
 } from '@lane1/shared-types';
 import type { AuthService } from './auth.service.js';
 import { requireRole } from '../../plugins/authorize.js';
@@ -103,6 +106,66 @@ export async function authRoutes(app: FastifyInstance, opts: { authService: Auth
     },
   );
 
+  // "Passwort vergessen" (Sicherheitsreview 2026-08, Befund M5) —
+  // öffentlich (keine Authentifizierung, die Person hat ja gerade ihr
+  // Passwort vergessen). Liefert IMMER dieselbe generische 200-Antwort,
+  // unabhängig davon, ob die E-Mail-Adresse zu einem Konto gehört (siehe
+  // authService.requestPasswordReset() — verhindert User-Enumeration).
+  //
+  // Rate-Limit analog zu /auth/login (IP + E-Mail kombiniert — verhindert
+  // sowohl das Fluten EINER Person mit Reset-E-Mails als auch das
+  // Durchprobieren vieler E-Mail-Adressen von einer IP), aber strenger
+  // (3 statt 5 pro Minute) und mit einem deutlich längeren Zeitfenster:
+  // anders als ein fehlgeschlagener Login-Versuch löst ein Treffer hier
+  // tatsächlich einen E-Mail-Versand aus — spürbar teurer zu missbrauchen
+  // (SMTP-Kosten/-Reputation, Störung der betroffenen Person) als ein
+  // weiterer Login-Fehlversuch.
+  app.post(
+    '/auth/forgot-password',
+    {
+      config: {
+        rateLimit: {
+          max: 3,
+          timeWindow: '15 minutes',
+          keyGenerator: (request) => {
+            const email = (request.body as { email?: string } | undefined)?.email ?? 'unknown';
+            return `${request.ip}:${email}`;
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const body = parseInput(ForgotPasswordRequestSchema, request.body, reply);
+      if (!body) return;
+
+      await authService.requestPasswordReset(body.email);
+      return reply.code(200).send({
+        message: 'Falls ein Konto mit dieser E-Mail-Adresse existiert, wurde eine E-Mail zum Zurücksetzen des Passworts versendet.',
+      });
+    },
+  );
+
+  // Löst das per E-Mail zugestellte Reset-Token ein — meldet die Person
+  // bei Erfolg direkt an (siehe authService.resetPassword()-Kommentar).
+  // Rate-Limit analog zu /auth/refresh: nur nach IP (kein sinnvoller
+  // Nutzer-Bezug vor der Anmeldung), verhindert automatisiertes
+  // Durchprobieren erratener/gestohlener Reset-Tokens — das Token selbst
+  // ist mit 256 Bit Entropie zwar praktisch nicht erratbar, dies ist
+  // zusätzliche Tiefenverteidigung, analog zu /auth/refresh.
+  app.post(
+    '/auth/reset-password',
+    { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } },
+    async (request, reply) => {
+      const body = parseInput(ResetPasswordRequestSchema, request.body, reply);
+      if (!body) return;
+
+      // InvalidOrExpiredResetTokenError: über die zentrale Fehler-Registry
+      // abgedeckt (siehe plugins/httpErrorHandler.ts).
+      const result = await authService.resetPassword(body.token, body.newPassword);
+      return reply.code(200).send(result);
+    },
+  );
+
   // Nutzerverwaltung: bestehende Vereinsmitglieder anzeigen, sortiert
   // nach Rolle (admin -> trainer -> athlete) und danach nach Namen (siehe
   // authService.listClubMembers()). Nur admin/superadmin — admin sieht
@@ -145,6 +208,37 @@ export async function authRoutes(app: FastifyInstance, opts: { authService: Auth
     const user = await authService.updateMe(request.user!.sub, body);
     return reply.code(200).send(user);
   });
+
+  // Passwortwechsel für die eigene, eingeloggte Person (Sicherheitsreview
+  // 2026-08, Befund M5) — verlangt zusätzlich das aktuelle Passwort (siehe
+  // authService.changePassword()-Kommentar für die Begründung). Liefert
+  // wie login()/resetPassword() ein frisches Token-Paar, damit die
+  // AKTUELLE Sitzung ohne erneuten Login weiterläuft, während alle
+  // ANDEREN Sitzungen widerrufen werden.
+  //
+  // Rate-Limit bewusst nur nach IP (nicht IP + Nutzer:in wie bei
+  // /auth/login): der globale Rate-Limit-Hook läuft (siehe
+  // plugins/security.ts: hook: 'preHandler') VOR jedem route-eigenen
+  // preHandler — also auch vor app.authenticate unten —, request.user ist
+  // im keyGenerator zu diesem Zeitpunkt daher noch NICHT gesetzt. Analog zu
+  // /auth/refresh: verhindert dennoch automatisiertes Durchprobieren des
+  // aktuellen Passworts mit einem entwendeten, noch gültigen Access Token.
+  app.post(
+    '/api/me/password',
+    {
+      preHandler: app.authenticate,
+      config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
+    },
+    async (request, reply) => {
+      const body = parseInput(ChangePasswordRequestSchema, request.body, reply);
+      if (!body) return;
+
+      // InvalidCurrentPasswordError: über die zentrale Fehler-Registry
+      // abgedeckt (siehe plugins/httpErrorHandler.ts).
+      const result = await authService.changePassword(request.user!.sub, body.currentPassword, body.newPassword);
+      return reply.code(200).send(result);
+    },
+  );
 
   // Art. 15 DSGVO — Recht auf Auskunft: bündelt sämtliche zum eigenen
   // Konto gespeicherten Daten als JSON.

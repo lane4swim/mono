@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { buildApp } from '../../src/app.js';
 import { loadEnv } from '../../src/config/env.js';
 import { createAuthService } from '../../src/modules/auth/auth.service.js';
-import { InMemoryUserRepository, InMemoryRefreshTokenRepository } from '../../src/modules/auth/auth.repository.memory.js';
+import { InMemoryUserRepository, InMemoryRefreshTokenRepository, InMemoryPasswordResetTokenRepository } from '../../src/modules/auth/auth.repository.memory.js';
 import { createInvitationsService } from '../../src/modules/invitations/invitations.service.js';
 import { InMemoryClubRepository, InMemoryInvitationRepository, InMemoryAthleteRepository } from '../../src/modules/invitations/invitations.repository.memory.js';
 import { createSyncService } from '../../src/modules/sync/sync.service.js';
@@ -40,6 +40,10 @@ async function buildTestApp() {
     profileGateway: new InMemoryProfileDataGateway({ users: [], athletes: [], results: [], entries: [], actionItems: [], sessions: [] }),
     dataErasureRetentionDays: 30,
     keyPair,
+    passwordResetTokens: new InMemoryPasswordResetTokenRepository(),
+    mailer: new InMemoryMailSender(),
+    frontendBaseUrl: 'https://app.example.org',
+    passwordResetTtlMinutes: 60,
     accessTtlSeconds: 900,
     refreshTtlDays: 30,
   });

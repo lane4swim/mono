@@ -42,6 +42,12 @@ export interface UpdateUserInput {
   consentGivenAt?: Date;
   consentVersion?: string;
   deletedAt?: Date | null;
+  // Sicherheitsreview 2026-08, Befund M5 (Passwortwechsel/-Reset) — beide
+  // Flüsse (auth.service.ts: changePassword()/resetPassword()) rufen
+  // update() erst NACH bereits erfolgter Verifikation (aktuelles Passwort
+  // bzw. gültiges Reset-Token) auf; diese Methode selbst prüft nichts,
+  // sie schreibt nur den bereits gehashten Wert.
+  passwordHash?: string;
 }
 
 export interface UserRepository {
@@ -71,6 +77,24 @@ export interface RefreshTokenRepository {
   findByHash(tokenHash: string): Promise<RefreshTokenRecord | null>;
   revoke(id: string): Promise<void>;
   revokeAllForUser(userId: string): Promise<void>;
+}
+
+// "Passwort vergessen"-Flow (Sicherheitsreview 2026-08, Befund M5) — siehe
+// schema.prisma: PasswordResetToken für die Begründung (kurzlebig,
+// einmalig einlösbar, analog zu RefreshToken/Invitation).
+export interface PasswordResetTokenRecord {
+  id: string;
+  userId: string;
+  tokenHash: string;
+  expiresAt: Date;
+  usedAt: Date | null;
+  createdAt: Date;
+}
+
+export interface PasswordResetTokenRepository {
+  create(userId: string, tokenHash: string, expiresAt: Date): Promise<PasswordResetTokenRecord>;
+  findByHash(tokenHash: string): Promise<PasswordResetTokenRecord | null>;
+  markUsed(id: string): Promise<void>;
 }
 
 // ---- Prisma-Implementierungen (Produktionsbetrieb) ------------------------
@@ -137,5 +161,19 @@ export class PrismaRefreshTokenRepository implements RefreshTokenRepository {
   }
   async revokeAllForUser(userId: string): Promise<void> {
     await this.prisma.refreshToken.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } });
+  }
+}
+
+export class PrismaPasswordResetTokenRepository implements PasswordResetTokenRepository {
+  constructor(private readonly prisma: PrismaClient) {}
+
+  async create(userId: string, tokenHash: string, expiresAt: Date): Promise<PasswordResetTokenRecord> {
+    return this.prisma.passwordResetToken.create({ data: { userId, tokenHash, expiresAt } });
+  }
+  async findByHash(tokenHash: string): Promise<PasswordResetTokenRecord | null> {
+    return this.prisma.passwordResetToken.findUnique({ where: { tokenHash } });
+  }
+  async markUsed(id: string): Promise<void> {
+    await this.prisma.passwordResetToken.update({ where: { id }, data: { usedAt: new Date() } });
   }
 }

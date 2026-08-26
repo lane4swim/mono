@@ -18,7 +18,7 @@ import { authRoutes } from './modules/auth/auth.route.js';
 import { syncRoutes } from './modules/sync/sync.route.js';
 import { invitationsRoutes } from './modules/invitations/invitations.route.js';
 import { createAuthService, type AuthService } from './modules/auth/auth.service.js';
-import { PrismaUserRepository, PrismaRefreshTokenRepository } from './modules/auth/auth.repository.js';
+import { PrismaUserRepository, PrismaRefreshTokenRepository, PrismaPasswordResetTokenRepository } from './modules/auth/auth.repository.js';
 import { createInvitationsService, type InvitationsService } from './modules/invitations/invitations.service.js';
 import { PrismaClubRepository, PrismaInvitationRepository, PrismaAthleteRepository } from './modules/invitations/invitations.repository.js';
 import { createSyncService, type SyncService } from './modules/sync/sync.service.js';
@@ -40,6 +40,10 @@ export interface BuildAppOverrides {
 // gemacht werden, z. B. über env.ts, falls gewünscht).
 const CLUB_INVITATION_TTL_DAYS = 14; // Admin-Einladungen: etwas großzügiger
 const MEMBER_INVITATION_TTL_DAYS = 7; // Trainer:in-/Athlet:in-Einladungen
+// "Passwort vergessen" (Sicherheitsreview 2026-08, Befund M5) — bewusst
+// deutlich kürzer als jede Einladungs-TTL oben (siehe auth/tokens.ts:
+// generatePasswordResetToken()-Kommentar für die Begründung).
+const PASSWORD_RESET_TTL_MINUTES = 60;
 
 function resolveMailer(env: Env): MailSender {
   if (!env.SMTP_HOST) return new ConsoleMailSender();
@@ -117,6 +121,14 @@ export async function buildApp(env: Env, overrides: BuildAppOverrides = {}): Pro
       profileGateway: new PrismaProfileDataGateway(getPrisma()),
       dataErasureRetentionDays: env.DATA_ERASURE_RETENTION_DAYS,
       keyPair,
+      // "Passwort vergessen" (Sicherheitsreview 2026-08, Befund M5) —
+      // dieselbe mailer-Instanz wie invitationsService oben (nicht ein
+      // zweiter resolveMailer()-Aufruf, der z. B. bei SmtpMailSender einen
+      // zweiten, unnötigen Verbindungspool aufbauen würde).
+      passwordResetTokens: new PrismaPasswordResetTokenRepository(getPrisma()),
+      mailer,
+      frontendBaseUrl: env.FRONTEND_BASE_URL,
+      passwordResetTtlMinutes: PASSWORD_RESET_TTL_MINUTES,
       accessTtlSeconds: env.JWT_ACCESS_TTL_SECONDS,
       refreshTtlDays: env.JWT_REFRESH_TTL_DAYS,
     });

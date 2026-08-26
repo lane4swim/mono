@@ -20,8 +20,24 @@ export interface InvitationMailPayload {
   locale?: string;
 }
 
+// "Passwort vergessen"-E-Mail (Sicherheitsreview 2026-08, Befund M5) —
+// eigener Payload-Typ statt Wiederverwendung von InvitationMailPayload:
+// keine Rolle/kein Verein (der Reset betrifft ein bereits bestehendes
+// Konto), dafür "resetUrl" statt "inviteUrl".
+export interface PasswordResetMailPayload {
+  to: string;
+  recipientName?: string | null;
+  resetUrl: string;
+  expiresAt: Date;
+  // Locale der EIGENEN Person (anders als bei InvitationMailPayload, wo
+  // die eingeladene Person noch kein Konto hat) — auth.service.ts gibt
+  // hier user.locale mit, nicht die einer einladenden dritten Person.
+  locale?: string;
+}
+
 export interface MailSender {
   sendInvitationEmail(payload: InvitationMailPayload): Promise<void>;
+  sendPasswordResetEmail(payload: PasswordResetMailPayload): Promise<void>;
 }
 
 type SupportedLocale = 'de-DE' | 'en-US';
@@ -115,6 +131,71 @@ export function buildHtmlBody(payload: InvitationMailPayload): string {
   `.trim();
 }
 
+// "Passwort vergessen"-E-Mail (Sicherheitsreview 2026-08, Befund M5) —
+// dieselbe Struktur (exportierte, einzeln testbare Subject/Text/HTML-
+// Builder) wie bei der Einladungs-E-Mail oben, aus demselben Grund
+// (Lokalisierung direkt gegen die tatsächliche Ausgabe testbar).
+export function buildPasswordResetSubject(payload: PasswordResetMailPayload): string {
+  const locale = resolveLocale(payload.locale);
+  return locale === 'en-US' ? 'Reset your Lane 1 password' : 'Passwort bei Lane 1 zurücksetzen';
+}
+
+export function buildPasswordResetTextBody(payload: PasswordResetMailPayload): string {
+  const locale = resolveLocale(payload.locale);
+  const expires = payload.expiresAt.toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short' });
+  if (locale === 'en-US') {
+    return [
+      payload.recipientName ? `Hi ${payload.recipientName},` : 'Hi,',
+      '',
+      'We received a request to reset your Lane 1 password. Open the following link to choose a new one:',
+      payload.resetUrl,
+      '',
+      `This link is valid until ${expires} and can only be used once.`,
+      '',
+      "If you didn't request this, you can safely ignore this email — your password stays unchanged.",
+      '',
+      'Best regards,',
+      'The Lane 1 team',
+    ].join('\n');
+  }
+  return [
+    payload.recipientName ? `Hallo ${payload.recipientName},` : 'Hallo,',
+    '',
+    'Für Ihr Lane-1-Konto wurde eine Anfrage zum Zurücksetzen des Passworts gestellt. Öffnen Sie den folgenden Link, um ein neues Passwort zu vergeben:',
+    payload.resetUrl,
+    '',
+    `Dieser Link ist gültig bis ${expires} und nur einmal verwendbar.`,
+    '',
+    'Falls Sie das nicht angefordert haben, können Sie diese E-Mail ignorieren — Ihr Passwort bleibt unverändert.',
+    '',
+    'Sportliche Grüße,',
+    'Ihr Lane-1-Team',
+  ].join('\n');
+}
+
+export function buildPasswordResetHtmlBody(payload: PasswordResetMailPayload): string {
+  const locale = resolveLocale(payload.locale);
+  const expires = payload.expiresAt.toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short' });
+  if (locale === 'en-US') {
+    return `
+      <p>${payload.recipientName ? `Hi ${escapeHtml(payload.recipientName)},` : 'Hi,'}</p>
+      <p>We received a request to reset your Lane 1 password.</p>
+      <p><a href="${escapeHtml(payload.resetUrl)}">Choose a new password</a></p>
+      <p style="color:#5B7A85;font-size:13px">This link is valid until ${expires} and can only be used once.</p>
+      <p style="color:#5B7A85;font-size:13px">If you didn't request this, you can safely ignore this email — your password stays unchanged.</p>
+      <p>Best regards,<br>The Lane 1 team</p>
+    `.trim();
+  }
+  return `
+    <p>${payload.recipientName ? `Hallo ${escapeHtml(payload.recipientName)},` : 'Hallo,'}</p>
+    <p>Für Ihr Lane-1-Konto wurde eine Anfrage zum Zurücksetzen des Passworts gestellt.</p>
+    <p><a href="${escapeHtml(payload.resetUrl)}">Neues Passwort vergeben</a></p>
+    <p style="color:#5B7A85;font-size:13px">Dieser Link ist gültig bis ${expires} und nur einmal verwendbar.</p>
+    <p style="color:#5B7A85;font-size:13px">Falls Sie das nicht angefordert haben, können Sie diese E-Mail ignorieren — Ihr Passwort bleibt unverändert.</p>
+    <p>Sportliche Grüße,<br>Ihr Lane-1-Team</p>
+  `.trim();
+}
+
 // Sicherheitskorrektur (Code-Review, Befund S8): escapte bislang keine
 // einfachen Anführungszeichen. Heute folgenlos, da jedes Attribut in
 // buildHtmlBody() doppelt gequotet ist (ein `'` bricht ein `"`-delimitiertes
@@ -195,6 +276,17 @@ export class SmtpMailSender implements MailSender {
       html: buildHtmlBody(payload),
     });
   }
+
+  async sendPasswordResetEmail(payload: PasswordResetMailPayload): Promise<void> {
+    const transport = await this.getTransport();
+    await transport.sendMail({
+      from: `"${this.config.fromName}" <${this.config.fromEmail}>`,
+      to: payload.to,
+      subject: buildPasswordResetSubject(payload),
+      text: buildPasswordResetTextBody(payload),
+      html: buildPasswordResetHtmlBody(payload),
+    });
+  }
 }
 
 // Ausweichlösung, wenn kein SMTP konfiguriert ist (z. B. lokale
@@ -218,6 +310,22 @@ export class ConsoleMailSender implements MailSender {
       `[mail] Kein SMTP konfiguriert — Einladung wird nicht per E-Mail versendet:\n` +
         `  An: ${payload.to}\n  Verein: ${payload.clubName}\n  Rolle: ${payload.role}\n` +
         `  Der Einladungslink lässt sich über "Link kopieren" in der Nutzerverwaltung abrufen und z. B. manuell teilen.`,
+    );
+  }
+
+  // Anders als bei sendInvitationEmail() oben gibt es hier BEWUSST KEINEN
+  // Ausweg über eine UI (kein "Link kopieren"-Äquivalent): ein Passwort-
+  // Reset-Link autorisiert direkt einen Kontoübernahme-fähigen Login für
+  // eine BELIEBIGE dritte Person, die ihn erhält — anders als ein
+  // Einladungslink (den ein Admin bewusst an eine bekannte Zielperson
+  // weiterreicht) gibt es hier keinen legitimen "manuell teilen"-Anwendungsfall.
+  // Ohne SMTP-Konfiguration bleibt "Passwort vergessen" daher schlicht nicht
+  // nutzbar — das Token wird NICHT geloggt (Sicherheitsreview 2026-08,
+  // Befund M5, analog zur M3-Korrektur bei Einladungen).
+  async sendPasswordResetEmail(payload: PasswordResetMailPayload): Promise<void> {
+    console.warn(
+      `[mail] Kein SMTP konfiguriert — Passwort-Zurücksetzen-E-Mail an ${payload.to} konnte nicht versendet werden. ` +
+        `Ohne SMTP-Konfiguration ist "Passwort vergessen" nicht nutzbar (kein alternativer Zustellweg für einen derart sicherheitskritischen Link).`,
     );
   }
 }

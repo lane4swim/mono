@@ -1,6 +1,13 @@
 // packages/shared-types/test/auth.test.ts
 import { describe, it, expect } from 'vitest';
-import { LoginRequestSchema, UpdateMeRequestSchema, AccessTokenClaimsSchema } from '../src/auth.js';
+import {
+  LoginRequestSchema,
+  UpdateMeRequestSchema,
+  AccessTokenClaimsSchema,
+  ForgotPasswordRequestSchema,
+  ResetPasswordRequestSchema,
+  ChangePasswordRequestSchema,
+} from '../src/auth.js';
 
 describe('LoginRequestSchema', () => {
   it('akzeptiert gültige Zugangsdaten inkl. Einwilligung', () => {
@@ -71,5 +78,40 @@ describe('AccessTokenClaimsSchema', () => {
       athleteId: null,
     };
     expect(AccessTokenClaimsSchema.safeParse(claims).success).toBe(true);
+  });
+});
+
+// Sicherheitsreview 2026-08, Befund M5 ("Passwort vergessen" +
+// Passwortwechsel).
+describe('ForgotPasswordRequestSchema', () => {
+  it('akzeptiert eine gültige E-Mail-Adresse', () => {
+    expect(ForgotPasswordRequestSchema.safeParse({ email: 'a@b.de' }).success).toBe(true);
+  });
+  it('lehnt eine ungültige E-Mail ab', () => {
+    expect(ForgotPasswordRequestSchema.safeParse({ email: 'keine-email' }).success).toBe(false);
+  });
+});
+
+describe('ResetPasswordRequestSchema', () => {
+  it('akzeptiert Token + ein ausreichend langes neues Passwort', () => {
+    expect(ResetPasswordRequestSchema.safeParse({ token: 'abc123', newPassword: 'ein-sicheres-passwort' }).success).toBe(true);
+  });
+  it('lehnt ein zu kurzes neues Passwort ab (< 8 Zeichen)', () => {
+    expect(ResetPasswordRequestSchema.safeParse({ token: 'abc123', newPassword: 'kurz' }).success).toBe(false);
+  });
+  it('lehnt ein leeres Token ab', () => {
+    expect(ResetPasswordRequestSchema.safeParse({ token: '', newPassword: 'ein-sicheres-passwort' }).success).toBe(false);
+  });
+});
+
+describe('ChangePasswordRequestSchema', () => {
+  it('akzeptiert aktuelles + ein ausreichend langes neues Passwort', () => {
+    expect(ChangePasswordRequestSchema.safeParse({ currentPassword: 'alt', newPassword: 'ein-sicheres-passwort' }).success).toBe(true);
+  });
+  it('lehnt ein zu kurzes neues Passwort ab (< 8 Zeichen)', () => {
+    expect(ChangePasswordRequestSchema.safeParse({ currentPassword: 'alt', newPassword: 'kurz' }).success).toBe(false);
+  });
+  it('lehnt ein leeres aktuelles Passwort ab', () => {
+    expect(ChangePasswordRequestSchema.safeParse({ currentPassword: '', newPassword: 'ein-sicheres-passwort' }).success).toBe(false);
   });
 });

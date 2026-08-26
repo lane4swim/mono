@@ -32,7 +32,7 @@ Schweregrade: **Hoch** = vor dem nächsten Produktivbetrieb beheben,
 | M2 | Geburtsdatum/Geschlecht fremder Athlet:innen an Athlet:innen-Konten | `sync.athleteScope.ts` | Mittel — **behoben** |
 | M3 | Einladungs-Token landet im Klartext in Zugriffs-/Anwendungslogs | `invitations.route.ts`, `app.ts`, `mailer.ts` | Mittel — **behoben** |
 | M4 | SMTP ohne `requireTLS` — stille Klartext-Zustellung möglich | `mail/mailer.ts` | Mittel — **behoben** |
-| M5 | Kein Passwortwechsel und keine Passwort-Wiederherstellung | `modules/auth/*` | Mittel |
+| M5 | Kein Passwortwechsel und keine Passwort-Wiederherstellung | `modules/auth/*` | Mittel — **behoben** |
 | N1 | Rolle `athlete` darf `results`/`plans` vereinsweit schreiben und löschen | `sync.permissions.ts` | Niedrig |
 | N2 | Namensfelder ohne Längenbegrenzung | `packages/shared-types/src/{auth,invitation}.ts` | Niedrig |
 | N3 | Refresh-Token im `localStorage`; API-Basis-URL ebenfalls aus `localStorage` | `apps/web/js/apiClient.js` | Niedrig |
@@ -326,8 +326,74 @@ Fehler und ohne Hinweis. Übertragen worden wären dabei die SMTP-Zugangsdaten
 
 ---
 
-### M5 — Kein Passwortwechsel, keine Wiederherstellung
+### M5 — Kein Passwortwechsel, keine Wiederherstellung — **behoben**
 
+**Fix:** Drei neue Endpunkte in `apps/api/src/modules/auth/auth.route.ts`,
+abgesichert über die bestehende opake-Token-Infrastruktur
+(`generateOpaqueToken`, nur der SHA-256-Hash landet in der DB, analog zu
+Refresh- und Einladungs-Tokens):
+
+* **`POST /auth/forgot-password`** — nimmt eine E-Mail-Adresse entgegen und
+  antwortet **immer** mit 200 und derselben generischen Meldung, unabhängig
+  davon, ob ein Konto existiert (kein User-Enumeration-Vektor). Existiert das
+  Konto, wird ein `PasswordResetToken` (neue Tabelle
+  `password_reset_tokens`, 60 Minuten TTL, Migration
+  `20260826130713_add_password_reset_tokens`) erzeugt und der Versand der
+  Reset-Mail bewusst **ohne `await`** angestoßen
+  (`auth.service.ts:requestPasswordReset`) — sonst wäre die
+  SMTP-Round-Trip-Zeit ein Timing-Seitenkanal, über den sich "Konto
+  existiert" von "Konto existiert nicht" unterscheiden ließe.
+  Rate-Limit: **3 Anfragen / 15 Minuten** je IP+E-Mail — enger als der
+  Login, weil ein Treffer hier tatsächlich einen kostenpflichtigen
+  Mail-Versand auslöst.
+* **`POST /auth/reset-password`** — validiert das Token (nicht gefunden,
+  bereits benutzt und abgelaufen laufen bewusst in **einen** gemeinsamen
+  Fehler `InvalidOrExpiredResetTokenError`, analog zu
+  `InvalidInvitationError`, um keine der drei Ursachen nach außen zu
+  unterscheiden), setzt das neue Passwort, ruft anschließend
+  `revokeAllForUser()` auf (ein Passwort-Reset gilt als mögliches
+  Kompromittierungssignal — alle bestehenden Sitzungen werden beendet) und
+  loggt die anfragende Seite direkt ein (`issueTokens()`, analog zum
+  bestehenden `acceptInvitation()`-Verhalten). Rate-Limit: 10/Minute je IP,
+  wie `/auth/refresh`.
+* **`POST /api/me/password`** — authentifiziert, verifiziert das aktuelle
+  Passwort (`InvalidCurrentPasswordError` bei Fehlschlag), setzt danach
+  ebenfalls `revokeAllForUser()` **gefolgt von** einem frischen
+  `issueTokens()` für die aktuelle Sitzung — andere Geräte/Sitzungen werden
+  abgemeldet, das aktuell genutzte Gerät bleibt eingeloggt. Rate-Limit:
+  5/Minute, bewusst **nur nach IP** statt IP+Nutzer-ID: die
+  `@fastify/rate-limit`-Hook läuft global mit `hook: 'preHandler'` und damit
+  **vor** jedem routen-eigenen `preHandler` wie `app.authenticate`
+  (`apps/api/src/plugins/security.ts`) — `request.user` ist im
+  `keyGenerator` zu diesem Zeitpunkt noch nicht gesetzt; ein Zugriff darauf
+  hätte jede Anfrage auf diese Route zum Absturz gebracht.
+
+Frontend (`apps/web/js/modules/authScreens.js`, `profile.js`): ein
+„Passwort vergessen?“-Link auf dem Login-Bildschirm führt zu einem
+E-Mail-Formular, dessen gesamter Inhalt nach dem Absenden durch eine
+generische Bestätigung ersetzt wird (kein Doppel-Submit, keine
+unterscheidbare Antwort). Der Link aus der E-Mail
+(`#/reset-password/<token>`) öffnet ein Formular für ein neues Passwort
+(mit Client-seitigem Abgleich der Wiederholung) und loggt nach Erfolg
+automatisch ein. Im Profil-Modul ergänzt eine neue Karte
+„Passwort ändern“ mit aktuellem/neuem/Wiederholungs-Passwort; ein falsches
+aktuelles Passwort wird sichtbar zurückgemeldet, die laufende Sitzung bleibt
+nach einem erfolgreichen Wechsel erhalten.
+
+Vollständig end-to-end gegen eine echte Postgres-Instanz und einen
+laufenden Dev-Server im Browser verifiziert (Login → „Passwort
+vergessen?" → Formular → generische Bestätigung → Reset-Link →
+neues Passwort → Auto-Login → Abmelden/Neu-Login mit dem neuen Passwort;
+Profil → Passwort ändern → falsches aktuelles Passwort abgelehnt →
+korrekter Wechsel → Sitzung bleibt erhalten → Abmelden/Neu-Login mit dem
+geänderten Passwort). Testabdeckung: neue Unit-Tests in
+`auth.service.test.ts`, `tokens.test.ts`, `mailer.test.ts`,
+`shared-types/test/auth.test.ts`; neue Routen-Tests inkl. Rate-Limits in
+`auth.route.test.ts`; Integrationstest in
+`test-integration/authService.integration.test.ts` gegen die echte
+Prisma-Implementierung.
+
+Ursprünglicher Befund, Fundstellen zum Zeitpunkt der Analyse:
 `apps/api/src/modules/auth/auth.route.ts`, `packages/shared-types/src/auth.ts`
 
 `UpdateMeRequestSchema` erlaubt `name`, `email`, `locale` — kein Passwort. Eine
@@ -536,5 +602,6 @@ sind sauber:
    ohne die ursprünglich vorgeschlagene SMTP_HOST-Pflicht in Produktion —
    siehe dortiger **Fix**-Abschnitt: hätte den dokumentierten
    E-Mail-losen Betrieb mit manuellem Link-Teilen gebrochen).
-5. **M5** — Passwortwechsel nachziehen.
+5. ~~**M5** — Passwortwechsel nachziehen.~~ **Behoben** (siehe dortiger
+   **Fix**-Abschnitt).
 6. Niedrig eingestufte Befunde bei nächster Berührung.

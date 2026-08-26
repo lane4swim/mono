@@ -63,6 +63,43 @@ export const UpdateMeRequestSchema = z
   .refine((v) => Object.keys(v).length > 0, { message: 'Mindestens ein Feld muss angegeben werden.' });
 export type UpdateMeRequest = z.infer<typeof UpdateMeRequestSchema>;
 
+// ---- "Passwort vergessen" / Passwortwechsel (Sicherheitsreview 2026-08,
+// Befund M5) ----------------------------------------------------------
+//
+// Dieselbe Mindestlänge wie AcceptInvitationRequestSchema.password
+// (packages/shared-types/src/invitation.ts) — bewusst hier erneut
+// definiert statt importiert: unterschiedliche Datei/Domäne (Einladung
+// vs. Auth), die Konstante ist eine einzige Zeile, ein Import würde hier
+// mehr Kopplung stiften als die Duplikation vermeidet.
+const newPasswordField = z.string().min(8, 'Passwort muss mindestens 8 Zeichen lang sein');
+
+// POST /auth/forgot-password — öffentlich (kein Login nötig). Liefert
+// IMMER dieselbe generische Antwort, unabhängig davon, ob ein Konto mit
+// dieser E-Mail-Adresse existiert (verhindert User-Enumeration, siehe
+// auth.service.ts: requestPasswordReset()).
+export const ForgotPasswordRequestSchema = z.object({
+  email: z.string().email(),
+});
+export type ForgotPasswordRequest = z.infer<typeof ForgotPasswordRequestSchema>;
+
+// POST /auth/reset-password — öffentlich, aber nur mit einem gültigen,
+// per E-Mail zugestellten Token nutzbar (siehe auth/tokens.ts:
+// generatePasswordResetToken()).
+export const ResetPasswordRequestSchema = z.object({
+  token: z.string().min(1),
+  newPassword: newPasswordField,
+});
+export type ResetPasswordRequest = z.infer<typeof ResetPasswordRequestSchema>;
+
+// POST /api/me/password — authentifiziert, verlangt zusätzlich das
+// aktuelle Passwort (verhindert, dass ein kurzzeitig entwendeter Access
+// Token allein zur dauerhaften Kontoübernahme per Passwortwechsel reicht).
+export const ChangePasswordRequestSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: newPasswordField,
+});
+export type ChangePasswordRequest = z.infer<typeof ChangePasswordRequestSchema>;
+
 // Claims im Access Token (siehe Abschnitt 5.3 des Backend-Entwicklungsplans).
 export const AccessTokenClaimsSchema = z.object({
   sub: z.string().uuid(),

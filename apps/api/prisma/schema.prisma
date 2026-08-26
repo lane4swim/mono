@@ -90,6 +90,7 @@ model User {
   sentInvitations   Invitation[] @relation("InvitationSender")
   deletionRequest   DataDeletionRequest?
   assignedActionItems ActionItem[] @relation("ActionItemAssignedTrainer")
+  passwordResetTokens PasswordResetToken[]
 
   @@map("users")
 }
@@ -129,6 +130,28 @@ model RefreshToken {
 
   @@index([userId])
   @@map("refresh_tokens")
+}
+
+// "Passwort vergessen"-Flow (Sicherheitsreview 2026-08, Befund M5): analog
+// zu Invitation/RefreshToken ein opakes, serverseitig nur gehasht
+// gespeichertes Zufalls-Token (siehe auth/tokens.ts:
+// generatePasswordResetToken()/hashPasswordResetToken()). Kurzlebig
+// (Standard: 60 Minuten, siehe app.ts: PASSWORD_RESET_TTL_MINUTES) und
+// EINMALIG einlösbar (usedAt) — deutlich kürzer als ein Einladungs-Token,
+// da es ein bereits bestehendes Konto autorisiert, statt eine
+// Erstregistrierung zu ermöglichen. onDelete: Cascade (wie RefreshToken):
+// ein gelöschtes Konto braucht keine offenen Reset-Anfragen mehr.
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@map("password_reset_tokens")
 }
 
 model Invitation {
