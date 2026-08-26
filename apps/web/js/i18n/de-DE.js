@@ -241,6 +241,7 @@ export default {
     planCommentsTitle: 'Kommentare zum Plan',
     exerciseCommentsTitle: 'Kommentare zur Übung',
     setCommentsTitle: 'Kommentare zu diesem Satz',
+    exerciseHintButton: '📝 Übungskommentare ({count})',
   },
   sessions: {
     eyebrow: '{count} Einheiten', title: 'Trainingseinheiten & Feedback', addSession: '+ Einheit erfassen',
