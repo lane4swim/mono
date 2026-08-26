@@ -9,7 +9,9 @@
 - [x] Import/Export von Übungen via JSON
 - [x] Einladungen als kopierfähigen Link
 - [x] Kommentare bei Übungen anzeigen
-- 
+- [ ] Module zubuchbar gestalten
+- [ ] CD-fähig je Verein (Logo, Farben)
+
 # Zukünftige Entwicklungen
 
 ## Push Nachrichten
