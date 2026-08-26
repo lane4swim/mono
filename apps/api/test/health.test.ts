@@ -27,8 +27,9 @@ const testEnv = loadEnv({
 async function buildTestApp(): Promise<FastifyInstance> {
   const keyPair = generateFreshKeyPair();
   const invitations = new InMemoryInvitationRepository();
+  const clubs = new InMemoryClubRepository();
   const invitationsService = createInvitationsService({
-    clubs: new InMemoryClubRepository(),
+    clubs,
     invitations,
     athletes: new InMemoryAthleteRepository(),
     users: new InMemoryUserRepository(),
@@ -42,6 +43,7 @@ async function buildTestApp(): Promise<FastifyInstance> {
     refreshTokens: new InMemoryRefreshTokenRepository(),
     invitations: invitationsService,
     profileGateway: new InMemoryProfileDataGateway({ users: [], athletes: [], results: [], entries: [], actionItems: [], sessions: [] }),
+    clubs,
     dataErasureRetentionDays: 30,
     keyPair,
     passwordResetTokens: new InMemoryPasswordResetTokenRepository(),
@@ -52,7 +54,7 @@ async function buildTestApp(): Promise<FastifyInstance> {
     refreshTtlDays: 30,
   });
   const syncService = createSyncService({ gateway: new InMemorySyncGateway() });
-  return buildApp(testEnv, { authService, invitationsService, syncService, keyPair });
+  return buildApp(testEnv, { authService, invitationsService, syncService, clubs, keyPair });
 }
 
 describe('GET /health', () => {

@@ -32,8 +32,9 @@ function makeService() {
   // Validierungslogik. clubs/athletes/mailer erreicht acceptInvitation()
   // selbst nicht (nur findValidByToken()/markUsed()), bekommen aber der
   // Vollständigkeit halber echte In-Memory-Implementierungen.
+  const clubs = new InMemoryClubRepository();
   const invitationsService = createInvitationsService({
-    clubs: new InMemoryClubRepository(),
+    clubs,
     invitations,
     athletes: new InMemoryAthleteRepository(),
     users,
@@ -54,11 +55,11 @@ function makeService() {
   const passwordResetTokens = new InMemoryPasswordResetTokenRepository();
   const mailer = new InMemoryMailSender();
   const service = createAuthService({
-    users, refreshTokens, invitations: invitationsService, profileGateway, dataErasureRetentionDays: 30,
+    users, refreshTokens, invitations: invitationsService, profileGateway, clubs, dataErasureRetentionDays: 30,
     passwordResetTokens, mailer, frontendBaseUrl: 'https://app.example.org', passwordResetTtlMinutes: 60,
     keyPair, accessTtlSeconds: 900, refreshTtlDays: 30,
   });
-  return { service, users, refreshTokens, invitations, keyPair, profileDb, passwordResetTokens, mailer };
+  return { service, users, refreshTokens, invitations, clubs, keyPair, profileDb, passwordResetTokens, mailer };
 }
 
 // Erzeugt eine gültige Trainer-Einladung und liefert das Klartext-Token,

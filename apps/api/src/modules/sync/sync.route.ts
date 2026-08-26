@@ -11,8 +11,17 @@ import type { SyncService, SyncRequester } from './sync.service.js';
 import { requireRole } from '../../plugins/authorize.js';
 import { parseInput } from '../../plugins/parseInput.js';
 
+// Minimale, für dieses Modul ausreichende Nachschlagemöglichkeit für die
+// Modul-Pakete eines Vereins — bewusst kein volles ClubRepository, um
+// keine Abhängigkeit auf das gesamte invitations-Modul einzuführen (siehe
+// AthleteLookup in invitations.repository.ts für dasselbe Prinzip).
+export interface ClubModulesLookup {
+  findById(clubId: string): Promise<{ enabledModules: string[] } | null>;
+}
+
 export interface SyncRoutesOptions {
   syncService: SyncService;
+  clubs: ClubModulesLookup;
 }
 
 // Sicherheitsreview 2026-08, Befund N4: push()/pull() vertrauen vollständig
@@ -27,20 +36,28 @@ export interface SyncRoutesOptions {
 // zusätzlich mitgegeben, damit der Service die Rollen-Scopierung für
 // "athlete" anwenden kann (siehe sync.service.ts). Analog zu requesterFrom()
 // in invitations.route.ts — eine Stelle statt einer Wiederholung dieses
-// Objekt-Literals in push()/pull().
-function requesterFrom(request: { user?: { role: SyncRequester['role']; clubId: string | null; athleteId: string | null } }): SyncRequester {
+// Objekt-Literals in push()/pull(). Lädt zusätzlich EINMAL pro Request die
+// gebuchten Module des Vereins — der JWT-Claim allein (request.user) kennt
+// sie nicht, da sich enabledModules jederzeit über die Superadmin-
+// Bearbeiten-Ansicht ändern kann, ohne dass ein neues Token ausgestellt
+// wird.
+async function requesterFrom(
+  request: { user?: { role: SyncRequester['role']; clubId: string | null; athleteId: string | null } },
+  clubs: ClubModulesLookup,
+): Promise<SyncRequester> {
   const user = request.user!;
-  return { clubId: user.clubId!, role: user.role, athleteId: user.athleteId };
+  const club = await clubs.findById(user.clubId!);
+  return { clubId: user.clubId!, role: user.role, athleteId: user.athleteId, enabledModules: club?.enabledModules ?? [] };
 }
 
 export async function syncRoutes(app: FastifyInstance, opts: SyncRoutesOptions) {
-  const { syncService } = opts;
+  const { syncService, clubs } = opts;
   const syncGuard = [app.authenticate, requireRole('trainer', 'admin', 'athlete')];
 
   app.post('/api/sync/push', { preHandler: syncGuard }, async (request, reply) => {
     const body = parseInput(SyncPushRequestSchema, request.body, reply);
     if (!body) return;
-    const results = await syncService.push(body.events, requesterFrom(request));
+    const results = await syncService.push(body.events, await requesterFrom(request, clubs));
     return reply.code(200).send({ results });
   });
 
@@ -54,7 +71,7 @@ export async function syncRoutes(app: FastifyInstance, opts: SyncRoutesOptions) 
       // regulären 400-Antwort quittierte.
       const query = parseInput(SyncPullQuerySchema, request.query, reply);
       if (!query) return;
-      const result = await syncService.pull(query, requesterFrom(request));
+      const result = await syncService.pull(query, await requesterFrom(request, clubs));
       return reply.code(200).send(result);
     },
   );

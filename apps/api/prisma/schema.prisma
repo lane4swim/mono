@@ -30,6 +30,12 @@ datasource db {
 model Club {
   id          String       @id @default(uuid())
   name        String
+  // Modul-Pakete (z. B. "competitions" fürs Wettkampfmodul), die dieser
+  // Verein gebucht hat — siehe packages/shared-types/src/modules.ts:
+  // MODULE_PACKAGES für die gültigen Keys und deren Bedeutung. Steuert
+  // sowohl die Frontend-Sichtbarkeit (apps/web/js/router.js) als auch
+  // die Sync-Durchsetzung (apps/api/src/modules/sync/sync.permissions.ts).
+  enabledModules String[]  @default([])
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
   users       User[]

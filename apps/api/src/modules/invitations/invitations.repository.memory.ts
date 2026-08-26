@@ -3,6 +3,7 @@
 // Test-Doubles für ClubRepository/InvitationRepository — siehe
 // modules/auth/auth.repository.memory.ts für dasselbe Prinzip.
 import { randomUUID } from 'node:crypto';
+import { MODULE_KEYS } from '@lane1/shared-types';
 import type {
   ClubRepository,
   ClubRecord,
@@ -40,7 +41,7 @@ export class InMemoryClubRepository implements ClubRepository {
 
   async create(input: CreateClubInput): Promise<ClubRecord> {
     const now = new Date();
-    const club: ClubRecord = { id: randomUUID(), name: input.name, createdAt: now, updatedAt: now };
+    const club: ClubRecord = { id: randomUUID(), name: input.name, enabledModules: [...(input.enabledModules ?? MODULE_KEYS)], createdAt: now, updatedAt: now };
     this.clubsById.set(club.id, club);
     return { ...club };
   }
@@ -68,6 +69,14 @@ export class InMemoryClubRepository implements ClubRepository {
   }
   async list(): Promise<ClubRecord[]> {
     return [...this.clubsById.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  async updateEnabledModules(clubId: string, enabledModules: string[]): Promise<ClubRecord> {
+    const existing = this.clubsById.get(clubId);
+    if (!existing) throw new Error(`InMemoryClubRepository.updateEnabledModules(): unbekannte clubId ${clubId}`);
+    const updated: ClubRecord = { ...existing, enabledModules: [...enabledModules], updatedAt: new Date() };
+    this.clubsById.set(clubId, updated);
+    return { ...updated };
   }
 
   async countMembersForClubs(clubIds: string[]): Promise<Map<string, ClubMemberCounts>> {

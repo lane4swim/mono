@@ -15,7 +15,7 @@ import { registerHttpErrorHandler } from './plugins/httpErrorHandler.js';
 import authenticatePlugin from './plugins/authenticate.js';
 import { healthRoutes } from './modules/health/health.route.js';
 import { authRoutes } from './modules/auth/auth.route.js';
-import { syncRoutes } from './modules/sync/sync.route.js';
+import { syncRoutes, type ClubModulesLookup } from './modules/sync/sync.route.js';
 import { invitationsRoutes } from './modules/invitations/invitations.route.js';
 import { createAuthService, type AuthService } from './modules/auth/auth.service.js';
 import { PrismaUserRepository, PrismaRefreshTokenRepository, PrismaPasswordResetTokenRepository } from './modules/auth/auth.repository.js';
@@ -32,6 +32,11 @@ export interface BuildAppOverrides {
   authService?: AuthService;
   invitationsService?: InvitationsService;
   syncService?: SyncService;
+  // Für sync.route.ts: lädt pro Request die gebuchten Module des Vereins
+  // (siehe requesterFrom() dort). Unabhängig von `syncService` überschreibbar,
+  // damit ein Test mit In-Memory-syncService trotzdem eine In-Memory-
+  // Club-Lookup mitgeben kann, ohne eine echte Datenbank zu brauchen.
+  clubs?: ClubModulesLookup;
   mailer?: MailSender;
   keyPair?: ReturnType<typeof resolveKeyPair>;
 }
@@ -93,7 +98,11 @@ export async function buildApp(env: Env, overrides: BuildAppOverrides = {}): Pro
 
   // getPrisma() wird bewusst erst HIER (lazy) aufgerufen, und nur, wenn kein
   // Test-Override übergeben wurde — dadurch braucht keine Testumgebung
-  // einen generierten Prisma Client oder eine echte Datenbank.
+  // einen generierten Prisma Client oder eine echte Datenbank. Jede
+  // `new PrismaClubRepository(getPrisma())`-Stelle unten steht bewusst
+  // hinter ihrem EIGENEN `??` (keine gemeinsam vorab konstruierte
+  // Instanz) — sonst würde bereits das bloße Bauen der App getPrisma()
+  // aufrufen, selbst wenn ein Test alle drei Stellen überschreibt.
   const invitationsService =
     overrides.invitationsService ??
     createInvitationsService({
@@ -119,6 +128,7 @@ export async function buildApp(env: Env, overrides: BuildAppOverrides = {}): Pro
       // AuthServiceDeps.invitations-Kommentar in auth.service.ts).
       invitations: invitationsService,
       profileGateway: new PrismaProfileDataGateway(getPrisma()),
+      clubs: new PrismaClubRepository(getPrisma()),
       dataErasureRetentionDays: env.DATA_ERASURE_RETENTION_DAYS,
       keyPair,
       // "Passwort vergessen" (Sicherheitsreview 2026-08, Befund M5) —
@@ -139,7 +149,7 @@ export async function buildApp(env: Env, overrides: BuildAppOverrides = {}): Pro
 
   await app.register(healthRoutes);
   await app.register(authRoutes, { authService });
-  await app.register(syncRoutes, { syncService });
+  await app.register(syncRoutes, { syncService, clubs: overrides.clubs ?? new PrismaClubRepository(getPrisma()) });
   await app.register(invitationsRoutes, { invitationsService });
 
   return app;

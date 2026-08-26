@@ -29,8 +29,9 @@ import { getTestPrisma, closeTestPrisma, truncateAll, createTestClub } from './h
 const prisma = getTestPrisma();
 
 function makeServices() {
+  const clubs = new PrismaClubRepository(prisma);
   const invitationsService = createInvitationsService({
-    clubs: new PrismaClubRepository(prisma),
+    clubs,
     invitations: new PrismaInvitationRepository(prisma),
     athletes: new PrismaAthleteRepository(prisma),
     users: new PrismaUserRepository(prisma),
@@ -44,6 +45,7 @@ function makeServices() {
     refreshTokens: new PrismaRefreshTokenRepository(prisma),
     invitations: invitationsService,
     profileGateway: new PrismaProfileDataGateway(prisma),
+    clubs,
     dataErasureRetentionDays: 30,
     keyPair: generateFreshKeyPair(),
     passwordResetTokens: new PrismaPasswordResetTokenRepository(prisma),

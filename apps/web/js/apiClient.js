@@ -175,16 +175,19 @@ function postJson(path, body, opts) {
 }
 
 // ---- Auth ------------------------------------------------------------
+// Gibt user + enabledModules zusammen zurück (nicht nur result.user) —
+// state.js legt daraus die vollständige `current`-Sitzung an, inklusive
+// der gebuchten Module des Vereins (siehe router.js: visibleModules()).
 export async function login({ email, password, consent }) {
   const result = await postJson('/auth/login', { email, password, consent }, { allowRefreshRetry: false });
   setTokens(result);
-  return result.user;
+  return { ...result.user, enabledModules: result.enabledModules };
 }
 
 export async function acceptInvitation({ token, name, password, consent }) {
   const result = await postJson('/auth/register', { token, name, password, consent }, { allowRefreshRetry: false });
   setTokens(result);
-  return result.user;
+  return { ...result.user, enabledModules: result.enabledModules };
 }
 
 // "Passwort vergessen" (Sicherheitsreview 2026-08, Befund M5). Liefert
@@ -204,7 +207,7 @@ export function forgotPassword(email) {
 export async function resetPassword({ token, newPassword }) {
   const result = await postJson('/auth/reset-password', { token, newPassword }, { allowRefreshRetry: false });
   setTokens(result);
-  return result.user;
+  return { ...result.user, enabledModules: result.enabledModules };
 }
 
 // Code-Review, Befund S4: refreshTokens() bündelt gleichzeitige Aufrufer
@@ -279,7 +282,7 @@ export function updateMe(patch) {
 export async function changePassword({ currentPassword, newPassword }) {
   const result = await request('/api/me/password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) });
   setTokens(result);
-  return result.user;
+  return { ...result.user, enabledModules: result.enabledModules };
 }
 // Art. 15 DSGVO — Recht auf Auskunft: bündelt alle zum eigenen Konto
 // gespeicherten Daten.
@@ -294,11 +297,16 @@ export function deleteMyAccount() {
 }
 
 // ---- Vereine & Einladungen (Nutzerverwaltung) --------------------------
-export function createClub({ name, adminEmail, adminName }) {
-  return postJson('/api/clubs', { name, adminEmail, adminName });
+export function createClub({ name, adminEmail, adminName, enabledModules }) {
+  return postJson('/api/clubs', { name, adminEmail, adminName, enabledModules });
 }
 export function listClubs() {
   return request('/api/clubs');
+}
+// Ändert nachträglich, welche Modul-Pakete ein bestehender Verein gebucht
+// hat (Superadmin-Bearbeiten-Ansicht, siehe admin.js). Antwort: { club }.
+export function updateClub(clubId, { enabledModules }) {
+  return request(`/api/clubs/${encodeURIComponent(clubId)}`, { method: 'PATCH', body: JSON.stringify({ enabledModules }) });
 }
 export function createInvitation({ email, role, clubId, athleteId }) {
   return postJson('/api/invitations', { email, role, clubId, athleteId });

@@ -4,3 +4,4 @@ export * from './syncEvent.js';
 export * from './auth.js';
 export * from './invitation.js';
 export * from './entities.js';
+export * from './modules.js';

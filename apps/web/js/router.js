@@ -14,8 +14,47 @@ export function getModule(routeId) {
   return MODULES.find(m => m.id === routeId);
 }
 
-export function visibleModules(role) {
-  return MODULES.filter(m => !m.roles || m.roles.includes(role));
+// Module pro Verein aktivierbar (z. B. das Wettkampfmodul nur für
+// bestimmte Vereine) — Kern-Module (Dashboard/Profil/Nutzerverwaltung/
+// Sync-Queue/Info) sind reine Infrastruktur ohne eigenen fachlichen
+// Sync-Store und bleiben immer sichtbar, unabhängig von enabledModules.
+export const CORE_MODULE_IDS = ['dashboard', 'profile', 'usermgmt', 'syncqueue', 'info'];
+
+// Route-ID (MODULES[*].id) -> Paket-Key. MUSS inhaltlich mit
+// packages/shared-types/src/modules.ts: MODULE_PACKAGES übereinstimmen —
+// apps/web lädt ohne Build-Schritt direkt als Browser-ES-Module (siehe
+// package.json) und kann dieses Backend-Paket daher nicht importieren.
+// Ein Paket kann mehrere Route-IDs bündeln (aktuell 1:1, siehe MODULE_
+// PACKAGES-Kommentar zu competitionLive.js/stopwatch.js) — deshalb dieser
+// Umweg statt enabledModules direkt gegen die Route-ID zu prüfen.
+const ROUTE_TO_PACKAGE = {
+  athletes: 'athletes',
+  competitions: 'competitions',
+  times: 'times',
+  plans: 'plans',
+  templates: 'templates',
+  catalog: 'catalog',
+  sessions: 'sessions',
+  actionitems: 'actionitems',
+  stats: 'stats',
+};
+
+// Alle togglebaren Paket-Keys — Default für `enabledModules`, wenn ein
+// Aufrufer (noch) keins übergibt (z. B. Demo-Modus/Tests vor deren
+// Anbindung), damit visibleModules() ohne zweiten Parameter weiterhin
+// alles zeigt statt fälschlich alles zu sperren.
+export const MODULE_KEYS = Object.keys(ROUTE_TO_PACKAGE);
+
+// Einzelmodul-Prüfung — von visibleModules() UND von shell.js (renderRoute()'s
+// Fallback bei direktem Hash-Aufruf einer gesperrten Route, defaultModuleFor())
+// genutzt, damit beide Stellen exakt dieselbe Sichtbarkeitsregel anwenden.
+export function isModuleVisible(mod, role, enabledModules = MODULE_KEYS) {
+  return (!mod.roles || mod.roles.includes(role)) &&
+    (CORE_MODULE_IDS.includes(mod.id) || enabledModules.includes(ROUTE_TO_PACKAGE[mod.id]));
+}
+
+export function visibleModules(role, enabledModules = MODULE_KEYS) {
+  return MODULES.filter(m => isModuleVisible(m, role, enabledModules));
 }
 
 export function currentRoute() {

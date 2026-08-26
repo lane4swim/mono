@@ -144,6 +144,7 @@ function toPublicInvitation(invitation: InvitationRecord): Omit<InvitationRecord
 const ACTION_ROLES = {
   createClub: new Set(['superadmin']),
   listClubs: new Set(['superadmin']),
+  updateClub: new Set(['superadmin']),
   issueAdminInvitation: new Set(['superadmin']),
   issueMemberInvitation: new Set(['admin', 'superadmin']),
 } as const satisfies Record<string, ReadonlySet<string>>;
@@ -184,7 +185,7 @@ function resolveTargetClubId(requester: RequesterContext, role: InvitationRole, 
 
 export function createInvitationsService(deps: InvitationsServiceDeps) {
   return {
-    async createClub(input: { name: string; adminEmail: string; adminName: string }, requester: RequesterContext) {
+    async createClub(input: { name: string; adminEmail: string; adminName: string; enabledModules?: string[] }, requester: RequesterContext) {
       requireActionRole(requester, ACTION_ROLES.createClub, 'Nur Superadministrator:innen dürfen Vereine anlegen.');
       const { plainToken, tokenHash, expiresAt } = generateInvitationToken(deps.clubInvitationTtlDays);
       // Atomar (Code-Review): Verein + erste Admin-Einladung entstehen in
@@ -197,7 +198,7 @@ export function createInvitationsService(deps: InvitationsServiceDeps) {
       // angelegten, gültigen Einladungs-Datensatz nicht rückgängig machen;
       // die Einladung bleibt über die Nutzerverwaltung erneut versendbar.
       const { club, invitation } = await deps.clubs.createWithAdminInvitation(
-        { name: input.name },
+        { name: input.name, enabledModules: input.enabledModules },
         (createdClub) => ({
           tokenHash,
           email: input.adminEmail,
@@ -333,6 +334,17 @@ export function createInvitationsService(deps: InvitationsServiceDeps) {
         ...club,
         memberCounts: counts.get(club.id) ?? { admin: 0, trainer: 0, athlete: 0 },
       }));
+    },
+
+    // Ändert nachträglich, welche Modul-Pakete ein bestehender Verein
+    // gebucht hat (Superadmin-Bearbeiten-Ansicht in admin.js). Anders als
+    // createClub() keine Transaktion mit einer Einladung nötig — nur ein
+    // reines Update auf dem bereits existierenden Club-Datensatz.
+    async updateClubModules(clubId: string, enabledModules: string[], requester: RequesterContext): Promise<ClubRecord> {
+      requireActionRole(requester, ACTION_ROLES.updateClub, 'Nur Superadministrator:innen dürfen die Module eines Vereins ändern.');
+      const club = await deps.clubs.findById(clubId);
+      if (!club) throw new ClubNotFoundError();
+      return deps.clubs.updateEnabledModules(clubId, enabledModules);
     },
   };
 }

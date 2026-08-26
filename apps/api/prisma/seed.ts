@@ -16,7 +16,7 @@
 //     Prisma in die Datenbank. Läuft über `npx prisma db seed` bzw.
 //     `npm run prisma:seed` — braucht eine echte Postgres-Verbindung.
 import { randomUUID } from 'node:crypto';
-import type { SetEntry } from '@lane1/shared-types';
+import { MODULE_KEYS, type SetEntry } from '@lane1/shared-types';
 
 function id(): string {
   return randomUUID();
@@ -161,7 +161,7 @@ async function main() {
   const data = buildDemoData();
 
   try {
-    await prisma.club.create({ data: { id: data.club.id, name: data.club.name } });
+    await prisma.club.create({ data: { id: data.club.id, name: data.club.name, enabledModules: MODULE_KEYS } });
     await prisma.group.createMany({ data: data.groups });
     await prisma.athlete.createMany({ data: data.athletes.map((a) => ({ ...a, birthdate: new Date(a.birthdate), joinDate: new Date(a.joinDate) })) });
 

@@ -38,6 +38,7 @@ async function buildTestApp() {
   const authService = createAuthService({
     users, refreshTokens, invitations: invitationsService,
     profileGateway: new InMemoryProfileDataGateway({ users: [], athletes: [], results: [], entries: [], actionItems: [], sessions: [] }),
+    clubs,
     dataErasureRetentionDays: 30,
     passwordResetTokens: new InMemoryPasswordResetTokenRepository(), mailer: new InMemoryMailSender(),
     frontendBaseUrl: 'https://app.example.org', passwordResetTtlMinutes: 60,
@@ -45,7 +46,7 @@ async function buildTestApp() {
   });
   const syncService = createSyncService({ gateway: new InMemorySyncGateway() });
 
-  const app = await buildApp(testEnv, { authService, invitationsService, syncService, keyPair });
+  const app = await buildApp(testEnv, { authService, invitationsService, syncService, clubs, keyPair });
   return { app, keyPair, clubs, invitations, athletes, mailer };
 }
 
@@ -102,6 +103,50 @@ describe('POST /api/clubs (nur superadmin)', () => {
       payload: { name: 'X', adminEmail: 'a@b.de', adminName: 'Y' },
     });
     expect(response.statusCode).toBe(401);
+    await app.close();
+  });
+});
+
+describe('PATCH /api/clubs/:id (nur superadmin — Module ändern)', () => {
+  it('superadmin kann die Module eines bestehenden Vereins ändern (200)', async () => {
+    const { app, keyPair, clubs } = await buildTestApp();
+    const club = await clubs.create({ name: 'Club A', enabledModules: ['athletes', 'competitions'] });
+    const token = await tokenFor(keyPair, 'superadmin', null);
+    const response = await app.inject({
+      method: 'PATCH',
+      url: `/api/clubs/${club.id}`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { enabledModules: ['athletes'] },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().club.enabledModules).toEqual(['athletes']);
+    await app.close();
+  });
+
+  it('admin darf die Module eines Vereins NICHT ändern (403)', async () => {
+    const { app, keyPair, clubs } = await buildTestApp();
+    const club = await clubs.create({ name: 'Club A' });
+    const token = await tokenFor(keyPair, 'admin', club.id);
+    const response = await app.inject({
+      method: 'PATCH',
+      url: `/api/clubs/${club.id}`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { enabledModules: [] },
+    });
+    expect(response.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it('unbekannte clubId: 404', async () => {
+    const { app, keyPair } = await buildTestApp();
+    const token = await tokenFor(keyPair, 'superadmin', null);
+    const response = await app.inject({
+      method: 'PATCH',
+      url: '/api/clubs/00000000-0000-0000-0000-000000000000',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { enabledModules: [] },
+    });
+    expect(response.statusCode).toBe(404);
     await app.close();
   });
 });

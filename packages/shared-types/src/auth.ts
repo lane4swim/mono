@@ -13,6 +13,7 @@
 // erfordern kann.
 import { z } from 'zod';
 import { RoleSchema, LocaleSchema, UserSchema } from './user.js';
+import { ModuleKeySchema } from './modules.js';
 
 export const CURRENT_CONSENT_VERSION = '2026-07-15';
 
@@ -57,8 +58,23 @@ export const AuthTokensResponseSchema = z.object({
   refreshToken: z.string(),
   expiresIn: z.number().int().positive(), // Sekunden bis Ablauf des Access Tokens
   user: PublicUserSchema,
+  // Modul-Pakete des Vereins der eingeloggten Person (siehe modules.ts:
+  // MODULE_PACKAGES) — leer für "superadmin", der zu keinem Verein gehört.
+  // Steuert die Sichtbarkeit der Fach-Module in der Navigation
+  // (apps/web/js/router.js: visibleModules()).
+  enabledModules: z.array(ModuleKeySchema),
 });
 export type AuthTokensResponse = z.infer<typeof AuthTokensResponseSchema>;
+
+// GET /api/me: derselbe Nutzer wie in AuthTokensResponse.user, ergänzt um
+// dasselbe enabledModules-Feld — separates Schema statt UserSchema selbst
+// zu erweitern, damit z. B. ClubMembersResponseSchema (Liste FREMDER
+// Vereinsmitglieder, siehe user.ts) dieses rein session-bezogene Feld
+// nicht unnötig mitführt.
+export const MeResponseSchema = PublicUserSchema.extend({
+  enabledModules: z.array(ModuleKeySchema),
+});
+export type MeResponse = z.infer<typeof MeResponseSchema>;
 
 export const UpdateMeRequestSchema = z
   .object({

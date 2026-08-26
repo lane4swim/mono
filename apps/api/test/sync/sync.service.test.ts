@@ -5,6 +5,7 @@ import { describeSyncError } from '../../src/modules/sync/sync.errors.js';
 import { splitAtSafeTimestampBoundary } from '../../src/modules/sync/sync.pagination.js';
 import { InMemorySyncGateway } from '../../src/modules/sync/sync.gateway.memory.js';
 import type { ChangedRecord } from '../../src/modules/sync/sync.gateway.js';
+import { MODULE_KEYS } from '@lane1/shared-types';
 
 const CLUB_A = '11111111-1111-1111-1111-111111111111';
 const CLUB_B = '22222222-2222-2222-2222-222222222222';
@@ -13,9 +14,12 @@ const CLUB_B = '22222222-2222-2222-2222-222222222222';
 // durchweg unrestringiertes Verhalten — dafür steht diese Requester-Form
 // mit role "trainer" (unbetroffen von den neuen athlete-Beschränkungen).
 // Die dedizierten athlete-Regressionstests weiter unten verwenden
-// stattdessen explizit { clubId, role: 'athlete', athleteId }.
+// stattdessen explizit { clubId, role: 'athlete', athleteId }. Alle drei
+// Requester-Helfer geben `enabledModules: MODULE_KEYS` mit (alle Module
+// gebucht) — diese Suite testet Rollen-/FK-/Konflikt-Verhalten, nicht das
+// Modul-Gating selbst (siehe sync.permissions.test.ts dafür).
 function asTrainer(clubId: string) {
-  return { clubId, role: 'trainer' as const, athleteId: null };
+  return { clubId, role: 'trainer' as const, athleteId: null, enabledModules: MODULE_KEYS };
 }
 
 function makeGroupPayload(overrides: Partial<Record<string, unknown>> = {}) {
@@ -51,7 +55,7 @@ function makeResultPayload(overrides: Partial<Record<string, unknown>> = {}) {
 }
 
 function asAthlete(clubId: string, athleteId: string | null) {
-  return { clubId, role: 'athlete' as const, athleteId };
+  return { clubId, role: 'athlete' as const, athleteId, enabledModules: MODULE_KEYS };
 }
 
 // "athletes" ist seit der Access-Konsistenz-Korrektur (siehe STORE_PERMISSIONS)
@@ -60,7 +64,7 @@ function asAthlete(clubId: string, athleteId: string | null) {
 // hier oben ein eigenes admin-Pendant für Tests, die ausschließlich die
 // Fremdschlüssel-/Feld-Logik prüfen wollen, unabhängig von der Rollensperre.
 function asAdmin(clubId: string) {
-  return { clubId, role: 'admin' as const, athleteId: null };
+  return { clubId, role: 'admin' as const, athleteId: null, enabledModules: MODULE_KEYS };
 }
 
 function makeActionItemPayload(overrides: Partial<Record<string, unknown>> = {}) {

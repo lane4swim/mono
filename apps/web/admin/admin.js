@@ -15,7 +15,7 @@ import { openModal } from '../js/modal.js';
 import { field, textInput } from '../js/forms.js';
 import { t, getLocale, setLocale, detectInitialLocale } from '../js/i18n.js';
 import { CURRENT_CONSENT_VERSION } from '../js/state.js';
-import { openCreateClubModal } from '../js/modules/clubForm.js';
+import { openCreateClubModal, openEditClubModulesModal } from '../js/modules/clubForm.js';
 
 // Diese Oberfläche zeigt bei einem 401 an JEDER Stelle (Login, Vereinsliste
 // laden, Verein anlegen) bewusst t('auth.errorInvalidCredentials') statt
@@ -199,6 +199,7 @@ async function renderClubsView() {
         el('th', { class: 'data' }, t('admin.colTrainers')),
         el('th', { class: 'data' }, t('admin.colAthletes')),
         el('th', {}, t('admin.colCreatedAt')),
+        el('th', {}, ''),
       ])));
       const tbody = el('tbody');
       clubs.forEach((club) => {
@@ -208,6 +209,10 @@ async function renderClubsView() {
           el('td', { class: 'data' }, String(club.memberCounts.trainer)),
           el('td', { class: 'data' }, String(club.memberCounts.athlete)),
           el('td', {}, new Date(club.createdAt).toLocaleDateString(getLocale())),
+          el('td', {}, el('button', { class: 'btn btn-ghost', onclick: () => openEditClubModulesModal({
+            club,
+            onSuccess: async () => { toast(t('usermgmt.clubModulesUpdated')); await renderClubsView(); },
+          }) }, t('usermgmt.editClub'))),
         ]));
       });
       table.appendChild(tbody);
