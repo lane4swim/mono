@@ -194,17 +194,34 @@ Test, der die Liste gegen `ENTITY_SCHEMAS` prüft.
 
 ### W3 — Kommentare sind zum Änderungsprotokoll geworden (Mittel)
 
-**Status: teilweise behoben, wie unten empfohlen fortlaufend.** Auf den vier in der Tabelle
-unten am dichtesten betroffenen Dateien (`sync.service.ts`, `security.ts`,
-`sync.gateway.ts`, `syncClient.js`) sowie punktuell in `utils.js`, `shell.js`,
-`invitations.service.ts` und `setEditor.js` sind die „Code-Review"/„Sicherheitsreview"/
-„Befund X"/„vormals"-Formulierungen durch Kommentare ersetzt, die den AKTUELLEN Code
-erklären, ohne die zugrunde liegende Begründung zu verlieren — `sync.service.ts` (das
-Beispiel unten) ist jetzt vollständig frei davon. Repo-weit sank die Zahl der Fundstellen
-(dieselbe Suche wie unten) von 239 auf 206. Die übrigen ~200, insbesondere in
-`jobs/erasure.repository.ts` und `config/env.ts` (beide unten in der Tabelle, noch nicht
-angefasst), bleiben bewusst offen — wie hier empfohlen, als fortlaufende Aufgabe bei
-nächster Berührung, kein Big-Bang.
+**Status: teilweise behoben, wie unten empfohlen fortlaufend — mit einem offen benannten
+Rückschritt durch die späteren Befund-Behebungen.** Auf den vier in der Tabelle unten am
+dichtesten betroffenen Dateien (`sync.service.ts`, `security.ts`, `sync.gateway.ts`,
+`syncClient.js`) sowie punktuell in `shell.js`, `invitations.service.ts`, `setEditor.js` und
+dem inzwischen aufgeteilten `utils.js` (heute `dom.js`/`dates.js`/… — siehe L4) sind die
+„Code-Review"/„Sicherheitsreview"/„Befund X"/„vormals"-Formulierungen durch Kommentare
+ersetzt, die den AKTUELLEN Code erklären, ohne die zugrunde liegende Begründung zu verlieren.
+Repo-weit sank die Zahl der Fundstellen (dieselbe Suche wie unten, gemessen über `src` +
+Tests) von 239 auf 206.
+
+**Nachtrag nach R1–R9/L1–L7 (ehrliche Korrektur zweier Aussagen dieses Status):** Die
+Behebung der übrigen Befunde hat diesen Punkt teilweise zurückgedreht. Die Fix-Commits haben
+**25 neue `Code-Review, Befund X`-Marker** eingeführt (Schwerpunkte: L4 mit 7, L2 mit 7, L3
+mit 3) — genau die Kommentargattung, die dieser Befund als eigentliche Einstiegshürde
+benennt. Zwei konkrete Aussagen oben sind dadurch überholt: `sync.service.ts` ist **nicht
+mehr** „vollständig frei davon" (L1 und L2 haben je einen Marker ergänzt), und `utils.js`
+existiert als Datei nicht mehr. Netto ist der Stand über den gesamten Branch ausgeglichen (35
+solcher Zeilen ergänzt, 37 entfernt; src-only heute 109 Fundstellen), der *qualitative*
+Rückschritt bleibt aber bestehen.
+
+Zur Einordnung, ohne ihn kleinzureden: die neuen Marker sind überwiegend von der besseren
+Sorte — sie erklären, **warum eine Datei so geschnitten ist** („diese Datei entstand aus der
+Aufteilung von X"), statt wie das Negativbeispiel unten eine gelöschte Codezeile
+nachzuerzählen. Trotzdem gilt für sie dieselbe Empfehlung wie für den Rest: bei nächster
+Berührung durch Kommentare ersetzen, die den aktuellen Zustand aus sich heraus erklären.
+Zusammen mit den übrigen offenen Stellen, insbesondere in `jobs/erasure.repository.ts` und
+`config/env.ts` (beide unten in der Tabelle, weiterhin nicht angefasst), bleibt W3 damit
+bewusst offen — als fortlaufende Aufgabe, kein Big-Bang.
 
 Der Vorgänger-Review hat das als **W1** benannt; es ist der einzige Befund von dort, zu dem
 sich kein Behebungs-Commit findet — und der Umfang ist seither gewachsen.
@@ -412,7 +429,8 @@ sie sparen).
 
 Tatsächlich **identisch** ist dagegen genau ein Baustein: der vierzeilige
 Abbrechen/Speichern-Knopfblock am Fußende. Der wurde extrahiert
-(`apps/web/js/utils.js: formActions({ onCancel, submitLabel, extraClass, spanFull })`, gibt
+(`formActions({ onCancel, submitLabel, extraClass, spanFull })` — damals in
+`apps/web/js/utils.js`, seit L4 in `apps/web/js/forms.js`; gibt
 zusätzlich zum fertigen Element den Submit-Button selbst zurück, für die drei Modals, die ihn
 während eines laufenden Speichervorgangs deaktivieren) und in **13 der 17** `openXModal()`-
 Funktionen im Frontend eingesetzt (die tatsächliche Gesamtzahl — vier davon sind gar keine
@@ -1085,7 +1103,7 @@ Damit die Befunde nicht den Blick verstellen — diese Entscheidungen sollten er
 | 7 | **W4** — Zyklus `db.js` ↔ `state.js` | ~2 Std. | `db.js` ohne Mock testbar | ✅ behoben |
 | 8 | **L2/L3/L4** — Dateien aufteilen | ~2 Tage | Rein mechanisch, kein Verhaltensrisiko | ✅ behoben |
 | 9 | **R3/R4/R5/R6/R7/R8/R9** — kleine Duplikate | je < 2 Std. | −150 Zeilen | ✅ behoben |
-| 10 | **W3** — Kommentar-Diät | fortlaufend | −1.200 bis −1.500 Zeilen; senkt die Einstiegshürde am stärksten | 🟡 begonnen (4 Dateien, 239→206 Fundstellen) |
+| 10 | **W3** — Kommentar-Diät | fortlaufend | −1.200 bis −1.500 Zeilen; senkt die Einstiegshürde am stärksten | 🟡 begonnen (4 Dateien, 239→206); durch R/L-Fixes 25 neue Befund-Marker ergänzt, siehe dortiger Nachtrag |
 | 11 | **W7** — `no-bitwise` in ESLint aufnehmen | 1 Zeile | Fängt beide `&`-Stellen und alle künftigen | ✅ behoben |
 | 12 | **L5** — `SyncGatewayTestSurface` abspalten | ~2 Std. | `SyncGateway`-Implementierungen müssen vier Test-Primitiven nicht mehr tragen | ✅ behoben |
 | 13 | **L6** — `buildAthleteCard`/`buildSetRow` trennen | ~2 Std. | Persistenz-/Widget-Logik einzeln lesbar von der DOM-Verdrahtung | ✅ behoben |
