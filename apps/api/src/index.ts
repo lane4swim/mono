@@ -7,7 +7,9 @@ async function main() {
   const app = await buildApp(env);
 
   try {
-    await app.listen({ host: '0.0.0.0', port: env.PORT });
+    // Sicherheitsreview 2026-08-27, Befund N7 — siehe HOST-Kommentar in
+    // config/env.ts. War zuvor fest auf '0.0.0.0' verdrahtet.
+    await app.listen({ host: env.HOST, port: env.PORT });
   } catch (err) {
     app.log.error(err);
     process.exit(1);

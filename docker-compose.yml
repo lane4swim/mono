@@ -32,6 +32,14 @@ services:
         condition: service_healthy
     environment:
       NODE_ENV: development
+      # Sicherheitsreview 2026-08-27, Befund N7: der Standardwert
+      # (127.0.0.1, siehe config/env.ts) bindet nur den Loopback — INNERHALB
+      # des Containers wäre das für den Host nicht erreichbar. 0.0.0.0 ist
+      # hier tatsächlich richtig, da der Zugriff über Dockers eigene
+      # Portweiterleitung läuft (siehe "ports" unten), nicht über einen im
+      # selben Netzwerk-Namespace laufenden Reverse Proxy wie bei den
+      # dokumentierten Deployments.
+      HOST: "0.0.0.0"
       PORT: 3000
       DATABASE_URL: "postgresql://lane1_app:lane1_dev_password@postgres:5432/lane1"
       # Kein JWT_*-Schlüsselpaar gesetzt: config/env.ts kennt in
@@ -40,6 +48,12 @@ services:
       # (siehe auth/keys.ts). Für Produktion siehe docs/deployment.md,
       # Abschnitt 7.2.
       CORS_ORIGIN: "http://localhost:5173"
+      # Sicherheitsreview 2026-08-27, Befund H1: TRUSTED_PROXY_IPS bleibt
+      # hier bewusst UNGESETZT (Standard: leer) — dieser lokale Aufbau hat
+      # keinen vorgeschalteten Reverse Proxy, der Client verbindet sich
+      # direkt mit dem veröffentlichten Port (siehe "ports" unten).
+      # NODE_ENV bleibt "development", daher erzwingt env.ts hier keinen
+      # gesetzten Wert (anders als in Produktion).
       # Basis-URL des Frontends — für den Einladungslink in der
       # Versand-E-Mail (siehe invitations.service.ts). Explizit statt dem
       # (zufällig identischen) Standardwert aus env.ts überlassen: dieser

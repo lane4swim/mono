@@ -129,3 +129,45 @@ describe('authService.acceptInvitation() — P2002-Regressionen (Code-Review)', 
     ).rejects.toBeInstanceOf(AthleteAlreadyLinkedError);
   });
 });
+
+// Sicherheitsreview 2026-08-27, Befund N3 (behoben zusammen mit H2):
+// derselbe P2002-Mechanismus wie oben bei acceptInvitation() (Befund 6),
+// jetzt für authService.changeEmail() — dort neu eingeführt, weil `email`
+// aus updateMe()/UpdateMeRequestSchema entfernt wurde (siehe H2). Auch
+// hier gilt: findByEmail() liefert für ein bereits soft-gelöschtes Konto
+// fälschlich `null`, der echte Unique-Constraint auf "users.email" greift
+// aber trotzdem — muss als EmailAlreadyRegisteredError (409) ankommen,
+// nicht als ungefangener 500. Lässt sich wie Befund 6 NUR gegen eine
+// echte Postgres-Instanz auslösen (InMemoryUserRepository.update() kennt
+// keinen echten Unique-Constraint, siehe auth.repository.memory.ts).
+describe('authService.changeEmail() — P2002-Regression (Sicherheitsreview 2026-08-27, Befund N3)', () => {
+  it('lehnt den Wechsel auf eine bereits soft-gelöschte, gleichnamige E-Mail-Adresse mit EmailAlreadyRegisteredError ab', async () => {
+    const club = await createTestClub();
+    const { authService, invitationsService } = makeServices();
+    const requester = await createTestSuperadmin();
+
+    // Erstes Konto: die E-Mail-Adresse, auf die später gewechselt werden
+    // soll — wird danach soft-gelöscht (Art. 17 DSGVO), die Adresse bleibt
+    // in der Datenbank aber weiterhin @unique belegt.
+    const firstInvitation = await invitationsService.createInvitation(
+      { email: 'lena.brandt@example.org', role: 'trainer', clubId: club.id },
+      requester,
+    );
+    await authService.acceptInvitation({ token: firstInvitation.token, name: 'Lena Brandt', password: 'ein-sicheres-passwort', consent: true });
+    await prisma.user.updateMany({ where: { email: 'lena.brandt@example.org' }, data: { deletedAt: new Date() } });
+
+    // Zweites, aktives Konto — versucht, auf die soeben freigewordene
+    // (aber weiterhin unique-belegte) Adresse zu wechseln.
+    const secondInvitation = await invitationsService.createInvitation(
+      { email: 'zweite-person@example.org', role: 'trainer', clubId: club.id },
+      requester,
+    );
+    const { user } = await authService.acceptInvitation({
+      token: secondInvitation.token, name: 'Zweite Person', password: 'ein-sicheres-passwort', consent: true,
+    });
+
+    await expect(
+      authService.changeEmail(user.id, 'ein-sicheres-passwort', 'lena.brandt@example.org'),
+    ).rejects.toBeInstanceOf(EmailAlreadyRegisteredError);
+  });
+});

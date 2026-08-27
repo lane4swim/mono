@@ -1,5 +1,5 @@
 // apps/api/src/jobs/erasure.repository.memory.ts
-import type { ErasureJobGateway, DueErasureRequest } from './erasure.repository.js';
+import { ANONYMIZED_INVITATION_EMAIL, type ErasureJobGateway, type DueErasureRequest } from './erasure.repository.js';
 import type { TombstoneRecord } from '../modules/sync/sync.gateway.js';
 import { anonymizePlanCommentAuthors, anonymizeExerciseCommentAuthors, anonymizeTemplateCommentAuthors } from './commentAnonymization.js';
 
@@ -15,6 +15,10 @@ export interface InMemoryErasureDatabase {
   plans?: Array<{ id: string; clubId: string; comments: unknown; days: unknown }>;
   exercises?: Array<{ id: string; clubId: string; comments: unknown }>;
   templates?: Array<{ id: string; clubId: string; sets: unknown }>;
+  // Optional (Sicherheitsreview 2026-08-27, Befund M1) — siehe
+  // erasure.repository.ts (Prisma-Pendant) für die ausführliche
+  // Begründung.
+  invitations?: Array<{ email: string; athleteId?: string | null; [key: string]: unknown }>;
   refreshTokens: Array<{ id: string; userId: string }>;
   // Kein `status`/`purgedAt` mehr (Code-Review, Befund R8) — analog zur
   // Prisma-Implementierung ist jede noch VORHANDENE Zeile implizit
@@ -74,23 +78,38 @@ export class InMemoryErasureJobGateway implements ErasureJobGateway {
     // bzw. commentAnonymization.ts. Bewusst NICHT an `user.athleteId`
     // gekoppelt (anders als der Block oben), da Kommentare ebenso von
     // Trainer:innen/Admins ohne athleteId stammen.
-    if (user.clubId && typeof user.name === 'string') {
+    //
+    // Sicherheitsreview 2026-08-27, Befund M2: Abgleich läuft jetzt über
+    // `authorId` (stabile User-ID) statt über den frei wählbaren
+    // `authorName` — siehe ausführliche Begründung im Prisma-Pendant.
+    if (user.clubId) {
       const clubId = user.clubId;
-      const authorName = user.name;
+      const author = { id: userId, name: typeof user.name === 'string' ? user.name : null };
       for (const plan of this.db.plans ?? []) {
         if (plan.clubId !== clubId) continue;
-        const { changed, comments, days } = anonymizePlanCommentAuthors(plan, authorName);
+        const { changed, comments, days } = anonymizePlanCommentAuthors(plan, author);
         if (changed) { plan.comments = comments; plan.days = days; }
       }
       for (const exercise of this.db.exercises ?? []) {
         if (exercise.clubId !== clubId) continue;
-        const { changed, comments } = anonymizeExerciseCommentAuthors(exercise, authorName);
+        const { changed, comments } = anonymizeExerciseCommentAuthors(exercise, author);
         if (changed) exercise.comments = comments;
       }
       for (const template of this.db.templates ?? []) {
         if (template.clubId !== clubId) continue;
-        const { changed, sets } = anonymizeTemplateCommentAuthors(template, authorName);
+        const { changed, sets } = anonymizeTemplateCommentAuthors(template, author);
         if (changed) template.sets = sets;
+      }
+    }
+
+    // Sicherheitsreview 2026-08-27, Befund M1 — siehe ausführliche
+    // Begründung im Prisma-Pendant (erasure.repository.ts).
+    if (typeof user.email === 'string') {
+      for (const invitation of this.db.invitations ?? []) {
+        if (invitation.email === user.email) {
+          invitation.email = ANONYMIZED_INVITATION_EMAIL;
+          invitation.athleteId = null;
+        }
       }
     }
 

@@ -277,6 +277,11 @@ JWT_PUBLIC_KEY="<mit openssl erzeugen, siehe unten>"
 CORS_ORIGIN="https://training.mein-verein.de"
 FRONTEND_BASE_URL="https://training.mein-verein.de"
 
+# Sicherheitsreview 2026-08-27, Befund H1 — Nginx (Abschnitt 9 unten)
+# läuft auf demselben Host und ist der einzige tatsächliche
+# Reverse-Proxy-Hop; PFLICHT bei NODE_ENV=production.
+TRUSTED_PROXY_IPS="127.0.0.1"
+
 # SMTP — nötig, damit Einladungs-E-Mails (Vereins-/Nutzerverwaltung,
 # siehe apps/web/help/admin.html) tatsächlich zugestellt werden. Bleibt
 # SMTP_HOST leer, wird die Einladung nur ins Server-Log geschrieben statt
@@ -310,6 +315,19 @@ Schlüssel nicht zusätzlich unverschlüsselt auf der Platte liegt:
 rm /tmp/jwt_private.pem /tmp/jwt_public.pem
 ```
 
+> **Hinweis TRUSTED_PROXY_IPS:** benennt die Adresse(n), denen die API den
+> Header `X-Forwarded-For` überhaupt glaubt (Fastifys `trustProxy`-Option)
+> — bei diesem Aufbau ausschließlich `127.0.0.1`, da Nginx auf demselben
+> Server läuft und die API nur über die Loopback-Adresse anspricht (siehe
+> Abschnitt 9). Dieser Wert ist die einzige Verteidigung gegen einen
+> Client, der selbst einen `X-Forwarded-For`-Header mitschickt, um Rate-
+> Limits zu umgehen — `trustProxy: true` (jede Adresse vertrauenswürdig)
+> wäre hier ein Sicherheitsproblem, kein Bind auf `trustProxy` (also gar
+> keine Proxy-Adresse eingetragen) ein anderes (alle Clients teilen sich
+> dasselbe Rate-Limit-Budget, da `request.ip` dann immer die
+> Nginx-Adresse ist). `env.ts` erzwingt deshalb einen gesetzten Wert,
+> sobald `NODE_ENV=production` ist.
+>
 > **Hinweis SMTP_SECURE:** `SMTP_SECURE=false` (Port 587/STARTTLS) oder
 > `SMTP_SECURE=true` (Port 465/implizites TLS) explizit setzen — beide
 > werden korrekt ausgewertet. Bleibt die Zeile ganz weg, gilt ebenfalls
@@ -641,6 +659,21 @@ sudo systemctl reload nginx
 > No-op ("No pending migrations to apply.") — der Schritt kann bei jedem
 > Update gefahrlos mitlaufen, unabhängig davon, ob dieses Update tatsächlich
 > eine Schemaänderung enthält.
+
+> **Update auf/nach Sicherheitsreview 2026-08-27, Befund H1:** Ab dieser
+> Version verlangt `apps/api/src/config/env.ts` bei `NODE_ENV=production`
+> zusätzlich die Variable `TRUSTED_PROXY_IPS` — ohne sie bricht `pm2
+> restart lane1-api` oben mit einer klaren Fehlermeldung ab (`pm2 logs
+> lane1-api --nostream` zeigt sie). Eine bereits bestehende `apps/api/.env`
+> wird von diesem Ablauf **nicht** automatisch angepasst (sie wurde beim
+> allerersten Einrichten einmalig erzeugt, siehe Abschnitt 7.2, und danach
+> nie wieder überschrieben). Vor dem ersten `pm2 restart` nach diesem
+> Update daher einmalig ergänzen:
+> ```bash
+> echo 'TRUSTED_PROXY_IPS="127.0.0.1"' >> apps/api/.env
+> ```
+> (Der Wert ist bei diesem Aufbau immer `127.0.0.1` — Nginx läuft auf
+> demselben Host, siehe Abschnitt 9.)
 
 ---
 

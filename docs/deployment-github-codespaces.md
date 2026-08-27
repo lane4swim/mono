@@ -43,13 +43,13 @@ bash scripts/setup-codespace.sh
 
 Vorausgesetzt sind die Abschnitte 1–3 (Codespace erstellen, Terminal öffnen) — das Script erwartet ein bereits geöffnetes Terminal im Projektordner. Es deckt dann genau ab: Abschnitt 4 (Node.js/PostgreSQL/Nginx/PM2 installieren), 5 (npm-Abhängigkeiten), 6 (`apps/api/.env` inkl. JWT-Schlüsseln, berechnet aus `$CODESPACE_NAME`), 7 (`prisma migrate deploy`), 8 (Backend bauen), 9 samt 9.1 (PM2 starten, ersten Superadmin anlegen) und 10 (Nginx konfigurieren) — mit denselben Befehlen und Begründungen (z. B. PostgreSQL-15-Schema-Grant, `/auth/`-Location-Sonderfall), die in den jeweiligen Abschnitten unten ausführlich erklärt sind.
 
-Der erste Superadmin wird dabei automatisch mit `admin@test.de` / `pwd12345` angelegt — überschreibbar über Umgebungsvariablen (Passwort muss mindestens 8 Zeichen haben):
+Der erste Superadmin wird dabei bei Schritt 9.1 **interaktiv** angelegt: das Script fragt — sofern nicht vorab per Umgebungsvariable gesetzt — im Terminal eine E-Mail-Adresse sowie (mit verdeckter Eingabe und Bestätigung, mindestens 8 Zeichen) ein Passwort ab. Es gibt bewusst **kein** Default-Passwort mehr (Sicherheitsreview 2026-08, Befund H1) — wer das Script ohne weitere Vorbereitung ausführt, wird also mitten im Lauf zur Eingabe aufgefordert, statt ein Konto mit öffentlich im Repository stehenden Zugangsdaten zu bekommen. Für einen nicht-interaktiven Lauf (z. B. um beide Werte vorab festzulegen, ohne bei Schritt 9.1 zu warten) lassen sich E-Mail und Passwort weiterhin per Umgebungsvariable vorgeben:
 
 ```bash
-SUPERADMIN_EMAIL=admin@verein.de SUPERADMIN_PASSWORD=eigenes-passwort bash scripts/setup-codespace.sh
+SUPERADMIN_EMAIL=admin@verein.de SUPERADMIN_PASSWORD='eigenes-sicheres-passwort' bash scripts/setup-codespace.sh
 ```
 
-Am Ende gibt das Script eine Zusammenfassung aus (Superadmin-Login, bei Erstlauf zusätzlich das generierte Datenbank-Passwort und die berechnete öffentliche Adresse). Es ist wiederholt ausführbar: bereits installierte Software, eine bestehende `.env` und ein bereits angelegter Superadmin werden übersprungen statt erneut angelegt/überschrieben, PM2 und Nginx werden bei einem erneuten Lauf einfach neu gestartet.
+Am Ende gibt das Script eine Zusammenfassung aus — ausschließlich die E-Mail-Adresse, nie das Passwort, plus bei Erstlauf zusätzlich das generierte Datenbank-Passwort und die berechnete öffentliche Adresse. Es ist wiederholt ausführbar: bereits installierte Software, eine bestehende `.env` und ein bereits angelegter Superadmin werden übersprungen statt erneut angelegt/überschrieben (ein erneuter Lauf fragt bei Schritt 9.1 also nur dann noch einmal nach Zugangsdaten, wenn bislang kein Superadmin existiert), PM2 und Nginx werden bei einem erneuten Lauf einfach neu gestartet.
 
 Danach direkt weiter mit **Abschnitt 11** (Port veröffentlichen) — die Abschnitte 4–10 sind damit erledigt. Wer stattdessen jeden Schritt einzeln nachvollziehen oder anpassen möchte, liest ab Abschnitt 1 wie gewohnt weiter.
 
@@ -190,8 +190,9 @@ JWT_PRIVATE_KEY="<mit openssl erzeugen, siehe unten>"
 JWT_PUBLIC_KEY="<mit openssl erzeugen, siehe unten>"
 CORS_ORIGIN="https://DEIN-CODESPACE-NAME-8080.app.github.dev"
 FRONTEND_BASE_URL="https://DEIN-CODESPACE-NAME-8080.app.github.dev"
+TRUSTED_PROXY_IPS="127.0.0.1"
 ```
-(`CORS_ORIGIN`/`FRONTEND_BASE_URL`: die oben berechnete Adresse einsetzen, **ohne** abschließenden Schrägstrich.)
+(`CORS_ORIGIN`/`FRONTEND_BASE_URL`: die oben berechnete Adresse einsetzen, **ohne** abschließenden Schrägstrich. `TRUSTED_PROXY_IPS`: Nginx — Schritt 10 unten — läuft auf demselben Codespace und ist der einzige tatsächliche Reverse-Proxy-Hop; PFLICHT, da `NODE_ENV=production` gesetzt ist, siehe Sicherheitsreview 2026-08-27, Befund H1, bzw. `deployment.md`, Abschnitt 7.2 für die ausführliche Begründung.)
 
 **SMTP (optional für einen reinen Test):** Ohne `SMTP_HOST` wird eine Einladung nur ins Server-Log geschrieben statt tatsächlich per E-Mail versendet — für einen Testlauf meist ausreichend (der Einladungslink lässt sich trotzdem direkt in der Nutzerverwaltungs-Oberfläche kopieren, siehe `apps/web/help/admin.html`). Soll der komplette Versandweg mitgetestet werden, denselben SMTP-Block wie in `deployment.md`, Abschnitt 7.2 eintragen. Ein Hinweis speziell für Cloud-Umgebungen wie Codespaces: Manche Cloud-Anbieter sperren ausgehende Verbindungen auf klassischen Mail-Ports (25/465) zur Spam-Prävention — Port 587 (wie im SMTP-Block vorgesehen) ist davon in aller Regel nicht betroffen; schlägt der Versand dennoch fehl, ist eine anbieterseitige Sperre eine mögliche Ursache.
 

@@ -339,20 +339,18 @@ describe('authService.getMe / updateMe', () => {
     expect(updated.name).toBe('Neuer Name');
   });
 
-  it('lehnt eine E-Mail-Änderung auf eine bereits vergebene Adresse ab', async () => {
-    const { service, invitations } = makeService();
-    const { user } = await registerViaInvitation(service, invitations, { email: 'erste@example.org' });
-    await registerViaInvitation(service, invitations, { email: 'andere@example.org' });
-    await expect(service.updateMe(user.id, { email: 'andere@example.org' })).rejects.toThrow(EmailAlreadyRegisteredError);
-  });
-
-  it('erlaubt es, die eigene E-Mail unverändert beizubehalten (kein Konflikt mit sich selbst)', async () => {
-    const { service, invitations } = makeService();
-    const { user } = await registerViaInvitation(service, invitations, { email: 'gleich@example.org' });
-    const updated = await service.updateMe(user.id, { email: 'gleich@example.org', name: 'Trotzdem geändert' });
-    expect(updated.email).toBe('gleich@example.org');
-    expect(updated.name).toBe('Trotzdem geändert');
-  });
+  // Sicherheitsreview 2026-08-27, Befund H2: `email` ist bewusst KEIN Feld
+  // von updateMe() mehr — der Typ von `patch` erzwingt das bereits zur
+  // Kompilierzeit für jeden Aufrufer innerhalb dieses Moduls. Die
+  // eigentliche Laufzeit-Absicherung gegen ein von einem manipulierten
+  // Client mitgeschicktes "email"-Feld sitzt eine Ebene höher, an der
+  // Zod/parseInput()-Grenze (siehe packages/shared-types/test/auth.test.ts:
+  // „entfernt ein mitgeschicktes 'email'-Feld …") bzw. end-to-end im
+  // Routentest „PATCH /api/me ignoriert ein mitgeschicktes 'email'-Feld"
+  // (auth.route.test.ts) — beide prüfen den tatsächlich erreichbaren
+  // Angriffspfad, ein weiterer Test auf dieser Service-Ebene wäre
+  // redundant. Siehe authService.changeEmail() weiter unten für den
+  // neuen, per aktuellem Passwort abgesicherten Endpunkt.
 
   // Regressionstest für Befund S5 (Code-Review): UserRepository.update()
   // filterte bislang — anders als findById()/findByEmail() — NICHT auf
@@ -519,6 +517,25 @@ describe('authService.resetPassword', () => {
 
     await expect(service.resetPassword(plainToken, 'ein-neues-passwort')).rejects.toThrow(InvalidOrExpiredResetTokenError);
   });
+
+  // Regressionstest für Sicherheitsreview 2026-08-27, Befund N4:
+  // markUsed(existing.id) allein invalidierte zuvor nur GENAU das
+  // eingelöste Token — ein zweiter, innerhalb der TTL angeforderter
+  // Reset-Link desselben Kontos blieb bis zu seinem eigenen Ablauf
+  // gültig, obwohl das Passwort bereits über den ersten Link geändert
+  // wurde.
+  it('invalidiert beim Einlösen ZUSÄTZLICH jeden ANDEREN, noch offenen Reset-Link desselben Kontos', async () => {
+    const { service, invitations, mailer } = makeService();
+    await registerViaInvitation(service, invitations, { email: 'zwei-links@example.org' });
+
+    const firstToken = await requestAndExtractToken(service, mailer, 'zwei-links@example.org');
+    const secondToken = await requestAndExtractToken(service, mailer, 'zwei-links@example.org');
+
+    // Der ERSTE (ältere) Link wird eingelöst — der ZWEITE, bislang noch
+    // ungenutzte Link darf danach nicht mehr funktionieren.
+    await service.resetPassword(firstToken, 'ein-neues-passwort');
+    await expect(service.resetPassword(secondToken, 'noch-ein-anderes-passwort')).rejects.toThrow(InvalidOrExpiredResetTokenError);
+  });
 });
 
 describe('authService.changePassword', () => {
@@ -571,5 +588,101 @@ describe('authService.changePassword', () => {
     // als Diebstahlsignal gilt. Deshalb bewusst als LETZTE Prüfung dieses
     // Tests, nicht vor der obigen.
     await expect(service.refresh(oldRefreshToken)).rejects.toThrow(InvalidRefreshTokenError);
+  });
+
+  // Regressionstest für Sicherheitsreview 2026-08-27, Befund N4: ein
+  // regulärer Passwortwechsel (mit Kenntnis des aktuellen Passworts) soll
+  // einen zuvor angeforderten, noch offenen "Passwort vergessen"-Link
+  // ebenfalls invalidieren — sonst bliebe dieser bis zu seinem eigenen
+  // Ablauf gültig, obwohl das Konto längst ein neues Passwort hat.
+  it('invalidiert einen zuvor angeforderten, noch offenen Passwort-Reset-Link', async () => {
+    const { service, invitations, mailer, passwordResetTokens } = makeService();
+    const { user } = await registerViaInvitation(service, invitations, { email: 'change-invalidiert-reset@example.org' });
+
+    const resetToken = await (async () => {
+      await service.requestPasswordReset('change-invalidiert-reset@example.org');
+      const url = mailer.sentPasswordResetEmails.at(-1)!.resetUrl;
+      return url.split('/reset-password/')[1]!;
+    })();
+
+    await service.changePassword(user.id, 'ein-sicheres-passwort', 'ein-noch-sichereres-passwort');
+
+    await expect(service.resetPassword(resetToken, 'ueber-den-alten-link')).rejects.toThrow(InvalidOrExpiredResetTokenError);
+    // Zur Kontrolle: das Token trägt jetzt tatsächlich ein usedAt (statt
+    // z. B. gelöscht/nicht mehr auffindbar zu sein).
+    const { hashPasswordResetToken } = await import('../../src/auth/tokens.js');
+    const stored = await passwordResetTokens.findByHash(hashPasswordResetToken(resetToken));
+    expect(stored?.usedAt).toBeTruthy();
+  });
+});
+
+describe('authService.changeEmail (Sicherheitsreview 2026-08-27, Befund H2)', () => {
+  it('ändert bei korrektem aktuellem Passwort die E-Mail-Adresse und liefert ein frisches Token-Paar', async () => {
+    const { service, invitations } = makeService();
+    const { user } = await registerViaInvitation(service, invitations, { email: 'alt@example.org' });
+
+    const result = await service.changeEmail(user.id, 'ein-sicheres-passwort', 'neu@example.org');
+    expect(result.user.email).toBe('neu@example.org');
+    expect(result.accessToken).toBeTruthy();
+
+    await expect(
+      service.login({ email: 'neu@example.org', password: 'ein-sicheres-passwort', consent: true }),
+    ).resolves.toBeTruthy();
+    await expect(
+      service.login({ email: 'alt@example.org', password: 'ein-sicheres-passwort', consent: true }),
+    ).rejects.toThrow(InvalidCredentialsError);
+  });
+
+  it('lehnt ein falsches aktuelles Passwort ab, ohne die E-Mail-Adresse zu ändern', async () => {
+    const { service, invitations } = makeService();
+    const { user } = await registerViaInvitation(service, invitations, { email: 'unveraendert@example.org' });
+
+    await expect(service.changeEmail(user.id, 'falsches-passwort', 'neu@example.org')).rejects.toThrow(InvalidCurrentPasswordError);
+
+    await expect(
+      service.login({ email: 'unveraendert@example.org', password: 'ein-sicheres-passwort', consent: true }),
+    ).resolves.toBeTruthy();
+  });
+
+  // Sicherheitsreview 2026-08-27, Befund H2 — der eigentliche Grund für
+  // diesen Endpunkt: verhindert, dass ein kurzzeitig entwendeter, noch
+  // gültiger Access Token allein (ohne Kenntnis des aktuellen Passworts)
+  // ausreicht, um die hinterlegte E-Mail-Adresse umzubiegen und
+  // anschließend über POST /auth/forgot-password einen Reset-Link an eine
+  // fremde Adresse zuzustellen.
+  it('widerruft ANDERE Sitzungen, stellt aber sofort ein NEUES gültiges Token-Paar für die aktuelle Sitzung aus', async () => {
+    const { service, invitations } = makeService();
+    const { user, refreshToken: oldRefreshToken } = await registerViaInvitation(service, invitations, { email: 'session-test@example.org' });
+
+    const result = await service.changeEmail(user.id, 'ein-sicheres-passwort', 'session-test-neu@example.org');
+
+    await expect(service.refresh(result.refreshToken)).resolves.toBeTruthy();
+    await expect(service.refresh(oldRefreshToken)).rejects.toThrow(InvalidRefreshTokenError);
+  });
+
+  it('erlaubt es, die eigene E-Mail-Adresse unverändert beizubehalten (kein Konflikt mit sich selbst)', async () => {
+    const { service, invitations } = makeService();
+    const { user } = await registerViaInvitation(service, invitations, { email: 'gleich@example.org' });
+
+    const result = await service.changeEmail(user.id, 'ein-sicheres-passwort', 'gleich@example.org');
+    expect(result.user.email).toBe('gleich@example.org');
+  });
+
+  // Sicherheitsreview 2026-08-27, Befund N3 (mitbehoben): der frühere
+  // updateMe()-Pfad prüfte NUR per findByEmail() vor, ob die Adresse
+  // bereits einem AKTIVEN Konto gehört — dieser Fall bleibt unverändert
+  // über denselben Vorab-Check abgedeckt. Der eigentliche N3-Fall (Adresse
+  // gehört einem bereits SOFT-gelöschten Konto, findByEmail() liefert dann
+  // fälschlich "nicht vergeben") lässt sich mit InMemoryUserRepository
+  // nicht auslösen (dessen update() kennt keinen echten Unique-Constraint,
+  // siehe auth.repository.memory.ts) — siehe stattdessen
+  // test-integration/authService.integration.test.ts für den Test gegen
+  // eine echte Postgres-Instanz.
+  it('lehnt eine bereits von einem AKTIVEN Konto verwendete E-Mail-Adresse ab', async () => {
+    const { service, invitations } = makeService();
+    const { user } = await registerViaInvitation(service, invitations, { email: 'erste@example.org' });
+    await registerViaInvitation(service, invitations, { email: 'andere@example.org' });
+
+    await expect(service.changeEmail(user.id, 'ein-sicheres-passwort', 'andere@example.org')).rejects.toThrow(EmailAlreadyRegisteredError);
   });
 });

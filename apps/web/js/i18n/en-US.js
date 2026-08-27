@@ -253,6 +253,7 @@ export default {
     deleteConfirm: 'Delete this comment?', deleted: 'Comment deleted', added: 'Comment added',
     countButton: '💬 {count}', countButtonEmpty: '💬 Comment',
     validationText: 'Please enter some text.',
+    validationNoIdentity: 'Cannot add a comment: your session is no longer valid. Please sign in again.',
     planCommentsTitle: 'Comments on this plan',
     exerciseCommentsTitle: 'Comments on this exercise',
     setCommentsTitle: 'Comments on this set',
@@ -415,6 +416,11 @@ export default {
     changePasswordButton: 'Change password',
     passwordChanged: 'Password changed successfully.',
     errorInvalidCurrentPassword: 'The current password is incorrect.',
+    // Email change (security review 2026-08-27, finding H2).
+    emailSectionTitle: 'Change email address',
+    newEmailLabel: 'New email address',
+    changeEmailButton: 'Change email address',
+    emailChanged: 'Email address changed successfully.',
   },
   setEditor: {
     colDistance: 'Dist. (m)', colDescription: 'Description', colReps: 'Reps', colRest: 'Rest (s)',

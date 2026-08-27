@@ -137,6 +137,11 @@ JWT_REFRESH_TTL_DAYS=30
 CORS_ORIGIN="${PUBLIC_URL}"
 FRONTEND_BASE_URL="${PUBLIC_URL}"
 
+# Sicherheitsreview 2026-08-27, Befund H1 — Nginx (Schritt 10 unten) läuft
+# auf demselben Host und ist der einzige tatsächliche Reverse-Proxy-Hop.
+# PFLICHT bei NODE_ENV=production (siehe apps/api/src/config/env.ts).
+TRUSTED_PROXY_IPS="127.0.0.1"
+
 SMTP_HOST=
 SMTP_PORT=587
 SMTP_USER=
@@ -293,7 +298,12 @@ log "Fertig bis einschließlich Schritt 10."
 # mitschneidet (z. B. CI-Logs bei einem automatisierten Lauf).
 echo "Superadmin-Login: ${SUPERADMIN_EMAIL} (Passwort wie eingegeben/vorgegeben — wird hier nicht wiederholt)"
 if [[ "$ENV_WAS_CREATED" == "1" ]]; then
-  echo "DB-Passwort (lane1_app, frisch erzeugt): ${DB_PASSWORD}"
+  # Sicherheitsreview 2026-08-27, Befund N1: dieselbe Begründung wie beim
+  # Superadmin-Passwort oben (H1 des Vorreviews) — das Klartext-Passwort
+  # landete hier unnötig im Terminal-Scrollback/CI-Log. Der Wert steht
+  # ohnehin bereits in apps/api/.env (dort ist er nötig), ein Verweis
+  # darauf genügt.
+  echo "Das erzeugte DB-Passwort steht in apps/api/.env unter DATABASE_URL."
   echo "Öffentliche Adresse (CORS_ORIGIN/FRONTEND_BASE_URL): ${PUBLIC_URL}"
 fi
 echo "Weiter geht es manuell mit Schritt 11 (Port veröffentlichen) in docs/deployment-github-codespaces.md."

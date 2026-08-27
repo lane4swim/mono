@@ -9,6 +9,7 @@ import {
   ForgotPasswordRequestSchema,
   ResetPasswordRequestSchema,
   ChangePasswordRequestSchema,
+  ChangeEmailRequestSchema,
 } from '../src/auth.js';
 
 describe('LoginRequestSchema', () => {
@@ -52,12 +53,35 @@ describe('UpdateMeRequestSchema', () => {
   it('akzeptiert eine reine Namensänderung', () => {
     expect(UpdateMeRequestSchema.safeParse({ name: 'Neuer Name' }).success).toBe(true);
   });
-  it('lehnt eine ungültige E-Mail ab', () => {
-    expect(UpdateMeRequestSchema.safeParse({ email: 'keine-email' }).success).toBe(false);
-  });
   // Sicherheitsreview 2026-08, Befund N2.
   it('lehnt einen zu langen Namen ab (> 200 Zeichen)', () => {
     expect(UpdateMeRequestSchema.safeParse({ name: 'X'.repeat(201) }).success).toBe(false);
+  });
+  // Regressionstest für Sicherheitsreview 2026-08-27, Befund H2: `email`
+  // ist bewusst KEIN Feld dieses Schemas mehr (siehe ChangeEmailRequestSchema
+  // unten) — ein mitgeschicktes `email`-Feld darf NICHT stillschweigend
+  // durchgereicht werden (Zods Default-Verhalten ohne `.strict()` wäre
+  // "unbekannte Schlüssel entfernen", was hier korrekt ist, aber explizit
+  // geprüft werden soll, statt sich implizit darauf zu verlassen).
+  it('entfernt ein mitgeschicktes "email"-Feld stillschweigend (kein Bestandteil mehr, wird nicht validiert)', () => {
+    const result = UpdateMeRequestSchema.safeParse({ name: 'X', email: 'keine-email' });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data).not.toHaveProperty('email');
+  });
+});
+
+describe('ChangeEmailRequestSchema (Sicherheitsreview 2026-08-27, Befund H2)', () => {
+  it('akzeptiert aktuelles Passwort + eine gültige neue E-Mail-Adresse', () => {
+    expect(ChangeEmailRequestSchema.safeParse({ currentPassword: 'alt', newEmail: 'neu@example.org' }).success).toBe(true);
+  });
+  it('lehnt eine ungültige neue E-Mail-Adresse ab', () => {
+    expect(ChangeEmailRequestSchema.safeParse({ currentPassword: 'alt', newEmail: 'keine-email' }).success).toBe(false);
+  });
+  it('lehnt ein leeres aktuelles Passwort ab', () => {
+    expect(ChangeEmailRequestSchema.safeParse({ currentPassword: '', newEmail: 'neu@example.org' }).success).toBe(false);
+  });
+  it('lehnt ein zu langes aktuelles Passwort ab (> 200 Zeichen)', () => {
+    expect(ChangeEmailRequestSchema.safeParse({ currentPassword: 'x'.repeat(201), newEmail: 'neu@example.org' }).success).toBe(false);
   });
 });
 

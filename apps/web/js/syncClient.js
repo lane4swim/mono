@@ -46,6 +46,23 @@ async function setCursor(cursor) {
   await put('meta', { id: META_CURSOR_KEY, cursor });
 }
 
+// Sicherheitsreview 2026-08-27, Befund N5: Der Cursor ist EIN globaler
+// Wasserstand für alle Stores zusammen, nicht pro Store — beim Erkennen
+// einer Modul-Abbestellung (siehe state.js: applyEnabledModules()) reicht
+// es daher nicht, nur die betroffenen Stores lokal zu leeren. Ohne diesen
+// Reset würde ein späteres Wieder-Zubuchen desselben Pakets die zuvor
+// entfernten Datensätze NICHT automatisch erneut ziehen — pull() liefert ab
+// dem gespeicherten Cursor nur noch Änderungen, die bereits gepullten,
+// unveränderten Altbestand also nie wieder. Ein Reset auf `null` erzwingt
+// beim nächsten pull() einen vollständigen Neuabzug ALLER Stores (auch der
+// von der Abbestellung nicht betroffenen) — etwas ineffizienter als ein
+// Reset nur für das betroffene Paket, aber ohne zusätzliche
+// Cursor-Buchführung je Store umsetzbar, und Modul-Abbestellungen sind
+// ein seltenes, administratives Ereignis statt ein häufiger Vorgang.
+export async function resetCursor() {
+  await setCursor(null);
+}
+
 // Übernimmt eine vom Server bei "insert-as-new" vergebene neue id in die
 // lokale Ablage: liest den Datensatz unter der alten (client-generierten)
 // id, speichert ihn unter der neuen id — OHNE ein neues Sync-Event zu

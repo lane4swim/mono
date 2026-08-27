@@ -139,9 +139,15 @@ JWT_PRIVATE_KEY="<mit openssl erzeugen, siehe unten>"
 JWT_PUBLIC_KEY="<mit openssl erzeugen, siehe unten>"
 CORS_ORIGIN="https://lane1.test"
 FRONTEND_BASE_URL="https://lane1.test"
+
+# Sicherheitsreview 2026-08-27, Befund H1 — Nginx (Abschnitt 9 unten)
+# läuft auf demselben Mac und ist der einzige tatsächliche
+# Reverse-Proxy-Hop; PFLICHT bei NODE_ENV=production (siehe Hinweis
+# unten).
+TRUSTED_PROXY_IPS="127.0.0.1"
 ```
 
-> **`NODE_ENV=production` auch hier?** Ja, bewusst — nur so entspricht die Testumgebung wirklich dem späteren Produktivbetrieb (u. a. sind `JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY` dann PFLICHT, siehe unten, statt automatisch generierter Wegwerf-Schlüssel wie bei `NODE_ENV=development`). Genau das ist der Sinn dieser Anleitung.
+> **`NODE_ENV=production` auch hier?** Ja, bewusst — nur so entspricht die Testumgebung wirklich dem späteren Produktivbetrieb (u. a. sind `JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY` sowie `TRUSTED_PROXY_IPS` dann PFLICHT, siehe unten bzw. `deployment.md`, Abschnitt 7.2, statt automatisch generierter Wegwerf-Schlüssel bzw. eines leeren Werts wie bei `NODE_ENV=development`). Genau das ist der Sinn dieser Anleitung.
 
 **SMTP (optional für eine reine Testumgebung):** Ohne `SMTP_HOST` wird eine Einladung nur ins Server-Log geschrieben statt tatsächlich per E-Mail versendet — für lokale Tests meist völlig ausreichend (der Einladungslink lässt sich trotzdem im Log bzw. direkt in der Nutzerverwaltungs-Oberfläche kopieren, siehe `apps/web/help/admin.html`). Soll der komplette Versandweg mitgetestet werden, denselben SMTP-Block wie in `deployment.md`, Abschnitt 7.2 eintragen.
 
@@ -403,6 +409,11 @@ npm run build --workspace=apps/api
 pm2 restart lane1-api
 sudo nginx -s reload
 ```
+
+> **Update auf/nach Sicherheitsreview 2026-08-27, Befund H1:** siehe
+> `deployment.md`, Abschnitt 13 — vor dem ersten `pm2 restart` nach diesem
+> Update einmalig `TRUSTED_PROXY_IPS="127.0.0.1"` an `apps/api/.env`
+> anhängen, sonst bricht der Neustart mit einer klaren Fehlermeldung ab.
 
 ---
 

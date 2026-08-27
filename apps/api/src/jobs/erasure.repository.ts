@@ -10,6 +10,19 @@
 import type { PrismaClient, Prisma } from '@prisma/client';
 import { anonymizePlanCommentAuthors, anonymizeExerciseCommentAuthors, anonymizeTemplateCommentAuthors } from './commentAnonymization.js';
 
+// Sicherheitsreview 2026-08-27, Befund M1: Platzhalter, auf den
+// `Invitation.email` beim Hard-Purge gesetzt wird (siehe
+// purgeUserAndDependents() unten) — analog zu `ANONYMIZED_COMMENT_AUTHOR`
+// in commentAnonymization.ts, nur für ein E-Mail- statt ein Namensfeld.
+// `.invalid` ist die von RFC 2606 exakt für diesen Zweck reservierte
+// Top-Level-Domain (garantiert nie real vergeben) — im Unterschied zu
+// z. B. "example.org" (dort bereits als Test-Fixture-Domain in Gebrauch,
+// siehe apps/api/test/**) macht das für Lesende sofort ersichtlich, dass
+// der Wert absichtlich unzustellbar ist, nicht nur zufällig unbenutzt.
+// In `erasure.repository.memory.ts` (InMemory-Testdouble) wiederverwendet,
+// damit beide Implementierungen exakt denselben Platzhalter schreiben.
+export const ANONYMIZED_INVITATION_EMAIL = 'geloeschtes-konto@geloescht.invalid';
+
 export interface DueErasureRequest {
   id: string;
   userId: string;
@@ -157,6 +170,15 @@ export class PrismaErasureJobGateway implements ErasureJobGateway {
       // `user.clubId`, damit ein Konto ohne Verein (z. B. Superadmin, das
       // ohnehin nie Kommentare verfasst) keinen club-weiten Scan auslöst.
       //
+      // Sicherheitsreview 2026-08-27, Befund M2: Abgleich läuft jetzt über
+      // `authorId` statt über den frei wählbaren `authorName` — CommentSchema
+      // trägt seither eine serverseitig durchgesetzte, stabile User-ID
+      // (siehe sync.commentAuthorship.ts). Die vormals hier geltende
+      // Einschränkung (Namensgleichheit mit einer anderen Person,
+      // nachträgliche Namensänderung, ein absichtlich abweichender Name
+      // entzieht den eigenen Kommentar der Anonymisierung) entfällt
+      // dadurch vollständig.
+      //
       // Wie bei der Anwesenheits-Bereinigung oben (Befund C4): erst per
       // gezielter SQL-Bedingung nur die TATSÄCHLICH betroffenen Zeilen
       // laden (Containment `@>` für die flache oberste Ebene,
@@ -166,19 +188,30 @@ export class PrismaErasureJobGateway implements ErasureJobGateway {
       // Block-/Set-Verschachtelung), statt alle Pläne/Übungen/Vorlagen des
       // Vereins zu laden und in JS zu filtern.
       if (user.clubId) {
+        // Die SQL-Bedingungen unten sind bewusst ETWAS breiter als die
+        // eigentliche Trefferregel: sie holen zusätzlich Zeilen, die den
+        // NAMEN der Person tragen (Altbestand ohne `authorId`, siehe
+        // commentAnonymization.ts). Welche Kommentare tatsächlich
+        // anonymisiert werden, entscheidet allein die dortige Funktion —
+        // eine zu viel geladene Zeile ergibt schlicht `changed: false`
+        // und wird nicht geschrieben. Das war schon vor Befund M2 so und
+        // ist der Grund, warum hier gefiltert statt exakt selektiert wird.
+        const author = { id: user.id, name: user.name };
+        const authorIdContainment = JSON.stringify([{ authorId: user.id }]);
         const authorNameContainment = JSON.stringify([{ authorName: user.name }]);
-        const pathVars = JSON.stringify({ name: user.name });
+        const pathVars = JSON.stringify({ id: user.id, name: user.name });
 
         const affectedPlans = await tx.$queryRaw<Array<{ id: string; comments: unknown; days: unknown }>>`
           SELECT id, comments, days FROM "plans"
           WHERE "clubId" = ${user.clubId}
             AND (
-              comments @> ${authorNameContainment}::jsonb
-              OR jsonb_path_exists(days, '$.**.comments[*] ? (@.authorName == $name)', ${pathVars}::jsonb)
+              comments @> ${authorIdContainment}::jsonb
+              OR comments @> ${authorNameContainment}::jsonb
+              OR jsonb_path_exists(days, '$.**.comments[*] ? (@.authorId == $id || @.authorName == $name)', ${pathVars}::jsonb)
             )
         `;
         for (const row of affectedPlans) {
-          const { changed, comments, days } = anonymizePlanCommentAuthors(row, user.name);
+          const { changed, comments, days } = anonymizePlanCommentAuthors(row, author);
           if (changed) {
             await tx.plan.update({
               where: { id: row.id },
@@ -190,10 +223,13 @@ export class PrismaErasureJobGateway implements ErasureJobGateway {
         const affectedExercises = await tx.$queryRaw<Array<{ id: string; comments: unknown }>>`
           SELECT id, comments FROM "exercises"
           WHERE "clubId" = ${user.clubId}
-            AND comments @> ${authorNameContainment}::jsonb
+            AND (
+              comments @> ${authorIdContainment}::jsonb
+              OR comments @> ${authorNameContainment}::jsonb
+            )
         `;
         for (const row of affectedExercises) {
-          const { changed, comments } = anonymizeExerciseCommentAuthors(row, user.name);
+          const { changed, comments } = anonymizeExerciseCommentAuthors(row, author);
           if (changed) {
             await tx.exercise.update({ where: { id: row.id }, data: { comments: comments as Prisma.InputJsonValue } });
           }
@@ -202,15 +238,53 @@ export class PrismaErasureJobGateway implements ErasureJobGateway {
         const affectedTemplates = await tx.$queryRaw<Array<{ id: string; sets: unknown }>>`
           SELECT id, sets FROM "templates"
           WHERE "clubId" = ${user.clubId}
-            AND jsonb_path_exists(sets, '$.**.comments[*] ? (@.authorName == $name)', ${pathVars}::jsonb)
+            AND jsonb_path_exists(sets, '$.**.comments[*] ? (@.authorId == $id || @.authorName == $name)', ${pathVars}::jsonb)
         `;
         for (const row of affectedTemplates) {
-          const { changed, sets } = anonymizeTemplateCommentAuthors(row, user.name);
+          const { changed, sets } = anonymizeTemplateCommentAuthors(row, author);
           if (changed) {
             await tx.template.update({ where: { id: row.id }, data: { sets: sets as Prisma.InputJsonValue } });
           }
         }
       }
+
+      // Sicherheitsreview 2026-08-27, Befund M1: `Invitation.email`
+      // (siehe schema.prisma) blieb bislang unangetastet — die
+      // E-Mail-Adresse der gelöschten Person überlebte in JEDER
+      // Einladung, die je AN sie ausgestellt wurde (angenommen,
+      // abgelaufen oder widerrufen), dauerhaft in der Datenbank und blieb
+      // über GET /api/invitations für admin/superadmin weiterhin
+      // einsehbar. Anders als bei Comment.authorName (Befund N5) gibt es
+      // hier keine Namensgleichheits-Unschärfe: `email` selbst ist der
+      // Abgleichswert, ein exakter Treffer betrifft garantiert nur
+      // Einladungen an GENAU diese Person.
+      //
+      // Bewusst NICHT auf `user.clubId` gescoped (anders als die
+      // Kommentar-Anonymisierung oben) — dieselbe E-Mail-Adresse kann
+      // über mehrere Vereine hinweg eingeladen worden sein (z. B. eine
+      // widerrufene Admin-Einladung, bevor die eigentliche
+      // Vereinszuordnung feststand); personenbezogene Daten sind nicht
+      // auf einen einzelnen Verein beschränkt.
+      //
+      // `Invitation.invitedById` (Einladungen, die diese Person selbst
+      // AUSGESTELLT hat) bleibt bewusst unverändert — das ist eine andere
+      // Beziehung ("von", nicht "an" diese Person) und bereits als
+      // gewollter historischer Datensatz behandelt (schema.prisma:
+      // onDelete: SetNull statt Cascade), nicht Teil dieses Befunds.
+      //
+      // `athleteId` wird auf den betroffenen Zeilen zusätzlich auf `null`
+      // gesetzt: die konkrete Athletenprofil-Verknüpfung ist nach der
+      // Anonymisierung der Zeile keine sinnvoll erhaltenswerte
+      // Information mehr — das referenzierte Profil (sofern es
+      // `user.athleteId` war) wurde im selben Zug oben bereits hart
+      // gelöscht. `Invitation.athleteId` trägt keine Fremdschlüssel-
+      // Beziehung im Schema (bewusst, siehe dortiger Kommentar), ein
+      // dangling Wert wäre also nicht durch einen DB-Constraint
+      // ausgeschlossen — Nullen schließt die Lücke aktiv.
+      await tx.invitation.updateMany({
+        where: { email: user.email },
+        data: { email: ANONYMIZED_INVITATION_EMAIL, athleteId: null },
+      });
 
       // Löscht in derselben Transaktion auch den zugehörigen
       // DataDeletionRequest-Datensatz (onDelete: Cascade im Schema).

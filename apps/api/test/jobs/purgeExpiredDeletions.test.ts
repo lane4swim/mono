@@ -29,20 +29,20 @@ describe('purgeExpiredDeletions — Comment.authorName-Anonymisierung (Befund N5
         {
           id: 'p1',
           clubId: 'club-1',
-          comments: [{ id: 'c1', authorName: 'Mara Vogel', text: 'Guter Plan', createdAt: NOW.toISOString() }],
+          comments: [{ id: 'c1', authorId: 'u1', authorName: 'Mara Vogel', text: 'Guter Plan', createdAt: NOW.toISOString() }],
           days: [
             {
               date: NOW.toISOString(),
-              sets: [{ kind: 'set', id: 's1', comments: [{ id: 'c2', authorName: 'Mara Vogel', text: 'Harte Serie', createdAt: NOW.toISOString() }] }],
+              sets: [{ kind: 'set', id: 's1', comments: [{ id: 'c2', authorId: 'u1', authorName: 'Mara Vogel', text: 'Harte Serie', createdAt: NOW.toISOString() }] }],
             },
           ],
         },
       ],
       exercises: [
-        { id: 'ex1', clubId: 'club-1', comments: [{ id: 'c3', authorName: 'Mara Vogel', text: 'Technik-Hinweis', createdAt: NOW.toISOString() }] },
+        { id: 'ex1', clubId: 'club-1', comments: [{ id: 'c3', authorId: 'u1', authorName: 'Mara Vogel', text: 'Technik-Hinweis', createdAt: NOW.toISOString() }] },
       ],
       templates: [
-        { id: 't1', clubId: 'club-1', sets: [{ kind: 'set', id: 's2', comments: [{ id: 'c4', authorName: 'Mara Vogel', text: 'Vorlagen-Hinweis', createdAt: NOW.toISOString() }] }] },
+        { id: 't1', clubId: 'club-1', sets: [{ kind: 'set', id: 's2', comments: [{ id: 'c4', authorId: 'u1', authorName: 'Mara Vogel', text: 'Vorlagen-Hinweis', createdAt: NOW.toISOString() }] }] },
       ],
     });
     const gateway = new InMemoryErasureJobGateway(db);
@@ -65,8 +65,8 @@ describe('purgeExpiredDeletions — Comment.authorName-Anonymisierung (Befund N5
       users: [{ id: 'u1', clubId: 'club-1', athleteId: null, name: 'Mara Vogel' }],
       deletionRequests: [{ id: 'req1', userId: 'u1', purgeAfter: PAST }],
       plans: [
-        { id: 'p1', clubId: 'club-1', comments: [{ id: 'c1', authorName: 'Jens Bauer', text: 'Nicht meins', createdAt: NOW.toISOString() }], days: [] },
-        { id: 'p2', clubId: 'club-2', comments: [{ id: 'c2', authorName: 'Mara Vogel', text: 'Anderer Verein', createdAt: NOW.toISOString() }], days: [] },
+        { id: 'p1', clubId: 'club-1', comments: [{ id: 'c1', authorId: 'u2', authorName: 'Jens Bauer', text: 'Nicht meins', createdAt: NOW.toISOString() }], days: [] },
+        { id: 'p2', clubId: 'club-2', comments: [{ id: 'c2', authorId: 'u1', authorName: 'Mara Vogel', text: 'Anderer Verein', createdAt: NOW.toISOString() }], days: [] },
       ],
     });
     const gateway = new InMemoryErasureJobGateway(db);
@@ -84,12 +84,70 @@ describe('purgeExpiredDeletions — Comment.authorName-Anonymisierung (Befund N5
     const db = makeDb({
       users: [{ id: 'u1', clubId: 'club-1', athleteId: null, name: 'Coach Nina' }],
       deletionRequests: [{ id: 'req1', userId: 'u1', purgeAfter: PAST }],
-      exercises: [{ id: 'ex1', clubId: 'club-1', comments: [{ id: 'c1', authorName: 'Coach Nina', text: 'Trainer-Hinweis', createdAt: NOW.toISOString() }] }],
+      exercises: [{ id: 'ex1', clubId: 'club-1', comments: [{ id: 'c1', authorId: 'u1', authorName: 'Coach Nina', text: 'Trainer-Hinweis', createdAt: NOW.toISOString() }] }],
     });
     const gateway = new InMemoryErasureJobGateway(db);
     await purgeExpiredDeletions(gateway, NOW);
 
     expect((db.exercises![0]!.comments as Array<{ authorName: string }>)[0]!.authorName).toBe('Gelöschtes Konto');
+  });
+});
+
+// Sicherheitsreview 2026-08-27, Befund M1: Invitation.email (die
+// E-Mail-Adresse, AN die eine Einladung ausgestellt wurde) wurde vom
+// Purge bislang gar nicht erfasst und blieb dauerhaft in der Datenbank
+// stehen — unabhängig davon, ob die Einladung angenommen, abgelaufen oder
+// widerrufen war.
+describe('purgeExpiredDeletions — Invitation.email-Anonymisierung (Befund M1)', () => {
+  it('anonymisiert JEDE Einladung an die E-Mail-Adresse der gelöschten Person und nullt deren athleteId', async () => {
+    const db = makeDb({
+      users: [{ id: 'u1', clubId: 'club-1', athleteId: 'ath-1', email: 'mara.vogel@example.org' }],
+      deletionRequests: [{ id: 'req1', userId: 'u1', purgeAfter: PAST }],
+      invitations: [
+        { id: 'inv1', email: 'mara.vogel@example.org', athleteId: 'ath-1', role: 'athlete' },
+        // Eine zweite, längst abgelaufene Einladung an dieselbe Adresse
+        // (z. B. weil die erste ursprünglich verpasst wurde) — MUSS
+        // ebenfalls erfasst werden, nicht nur die zuletzt angenommene.
+        { id: 'inv2', email: 'mara.vogel@example.org', athleteId: 'ath-1', role: 'athlete' },
+      ],
+    });
+    const gateway = new InMemoryErasureJobGateway(db);
+    await purgeExpiredDeletions(gateway, NOW);
+
+    for (const invitation of db.invitations!) {
+      expect(invitation.email).toBe('geloeschtes-konto@geloescht.invalid');
+      expect(invitation.athleteId).toBeNull();
+    }
+  });
+
+  it('lässt Einladungen an eine ANDERE E-Mail-Adresse unangetastet, inkl. solcher, die diese Person selbst AUSGESTELLT hat', async () => {
+    const db = makeDb({
+      users: [{ id: 'u1', clubId: 'club-1', athleteId: null, email: 'coach.nina@example.org' }],
+      deletionRequests: [{ id: 'req1', userId: 'u1', purgeAfter: PAST }],
+      invitations: [
+        { id: 'inv1', email: 'jemand-anderes@example.org', athleteId: null, role: 'trainer', invitedById: 'u1' },
+      ],
+    });
+    const gateway = new InMemoryErasureJobGateway(db);
+    await purgeExpiredDeletions(gateway, NOW);
+
+    // Die Einladung wurde von der gelöschten Person AUSGESTELLT (invitedById),
+    // nicht AN sie gerichtet (email) — bleibt bewusst unverändert (siehe
+    // Begründung in erasure.repository.ts).
+    expect(db.invitations![0]!.email).toBe('jemand-anderes@example.org');
+    expect(db.invitations![0]!.invitedById).toBe('u1');
+  });
+
+  it('funktioniert auch ohne verknüpftes Athletenprofil (z. B. eine Trainer:innen-Einladung)', async () => {
+    const db = makeDb({
+      users: [{ id: 'u1', clubId: 'club-1', athleteId: null, email: 'coach.nina@example.org' }],
+      deletionRequests: [{ id: 'req1', userId: 'u1', purgeAfter: PAST }],
+      invitations: [{ id: 'inv1', email: 'coach.nina@example.org', athleteId: null, role: 'trainer' }],
+    });
+    const gateway = new InMemoryErasureJobGateway(db);
+    await purgeExpiredDeletions(gateway, NOW);
+
+    expect(db.invitations![0]!.email).toBe('geloeschtes-konto@geloescht.invalid');
   });
 });
 
@@ -244,7 +302,7 @@ describe('purgeExpiredDeletions — Tombstones (Verbesserung: Löschungen bleibe
 
     await purgeExpiredDeletions(erasureGateway, NOW);
 
-    const pullResult = await syncService.pull({}, { clubId: 'club-1', role: 'trainer', athleteId: null, enabledModules: MODULE_KEYS });
+    const pullResult = await syncService.pull({}, { userId: 'u1', clubId: 'club-1', role: 'trainer', athleteId: null, enabledModules: MODULE_KEYS });
     expect(pullResult.changes).toContainEqual(
       expect.objectContaining({ store: 'athletes', entityId: 'ath-1', action: 'delete', payload: null }),
     );

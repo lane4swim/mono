@@ -30,10 +30,17 @@ import type { SyncGateway } from './sync.gateway.js';
 import { isKnownStore, canRead, canWrite } from './sync.permissions.js';
 import { assertForeignKeysWithinClub } from './sync.foreignKeys.js';
 import { scopeChangeForAthlete } from './sync.athleteScope.js';
+import { assertCommentAuthorship } from './sync.commentAuthorship.js';
 import { PULL_PAGE_SIZE, PULL_TIE_SAFETY_LIMIT, splitAtSafeTimestampBoundary } from './sync.pagination.js';
 import { describeSyncError } from './sync.errors.js';
 
 export interface SyncRequester {
+  // Sicherheitsreview 2026-08-27, Befund M2: die tatsächliche User-ID der
+  // anfragenden Person (request.user.sub) — bislang wurde nur clubId/
+  // role/athleteId durchgereicht. Wird für die Autor:innen-Prüfung
+  // eingebetteter Kommentare gebraucht (siehe sync.commentAuthorship.ts:
+  // ein neuer Kommentar muss userId === requester.userId tragen).
+  userId: string;
   clubId: string; // Superadmin (clubId: null) darf nicht synchronisieren — siehe sync.route.ts (requireRole).
   // Für die Rollen-Scopierung unten — clubId allein reicht nicht: ein
   // Athlet:innen-Konto darf zwar denselben Verein sehen wie
@@ -303,6 +310,31 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
               results.push({ eventId: event.id, status: 'error', message: 'Athlet:innen dürfen nur eigene Ergebnisse anlegen oder ändern.' });
               continue;
             }
+          }
+        }
+
+        // Sicherheitsreview 2026-08-27, Befund M2 — siehe
+        // sync.commentAuthorship.ts für die ausführliche Begründung.
+        // Analog zur "results"-Prüfung oben: zusätzlich zur Store-Ebene
+        // (STORE_PERMISSIONS erlaubt z. B. "plans" store-weit geteiltes
+        // Schreiben für alle drei Rollen), aber auf die eingebetteten
+        // Kommentar-Arrays verengt — ein NEU hinzugefügter Kommentar muss
+        // der eigenen Identität zugeordnet sein, ein BESTEHENDER
+        // Kommentar behält seine ursprüngliche Autor:innen-Zuordnung,
+        // unabhängig davon, wer den umgebenden Datensatz gerade
+        // bearbeitet. Braucht `existing` (oben bereits geladen) — deshalb
+        // hier inline statt als PUSH_GUARDS-Eintrag, analog zur
+        // "results"-Prüfung.
+        if (event.action !== 'delete') {
+          const authorshipError = assertCommentAuthorship(
+            store,
+            validatedPayload as Record<string, unknown>,
+            existing as Record<string, unknown> | null,
+            requester.userId,
+          );
+          if (authorshipError) {
+            results.push({ eventId: event.id, status: 'error', message: authorshipError });
+            continue;
           }
         }
 

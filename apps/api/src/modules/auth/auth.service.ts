@@ -184,14 +184,28 @@ export function createAuthService(deps: AuthServiceDeps) {
   // Code-Review, Befund R9: listClubMembers() und listAssignableTrainers()
   // teilten sich zuvor Abruf, Sortierung und toPublicUser()-Mapping als
   // Kopie und unterschieden sich nur in Filter und Sortierkriterium.
-  async function listMembers(
+  //
+  // Sicherheitsreview 2026-08-27, Befund N6: `project` zusätzlich
+  // parametrisiert (statt fest `toPublicUser()`) — `/api/users/trainers`
+  // (siehe listAssignableTrainers() unten) bedient ausschließlich ein
+  // Dropdown zur Auswahl der zuständigen Person für ein Handlungsfeld und
+  // brauchte dafür nie mehr als id/name/role; `toPublicUser()` lieferte
+  // dort bislang zusätzlich E-Mail-Adresse und DSGVO-Einwilligungs-
+  // Nachweisdaten (`consentGivenAt`/`consentVersion`), die in einem
+  // reinen Auswahl-Endpunkt nichts verloren haben. `listClubMembers()`
+  // (echte Mitgliederverwaltung, braucht tatsächlich mehr Felder) bleibt
+  // unverändert bei `toPublicUser()`.
+  async function listMembers<T>(
     clubId: string,
-    { filter, compare }: { filter?: (user: UserRecord) => boolean; compare: (a: UserRecord, b: UserRecord) => number },
-  ) {
+    opts: {
+      filter?: (user: UserRecord) => boolean;
+      compare: (a: UserRecord, b: UserRecord) => number;
+      project: (user: UserRecord) => T;
+    },
+  ): Promise<T[]> {
     const users = await deps.users.listByClub(clubId);
-    const scoped = filter ? users.filter(filter) : users;
-    const sorted = [...scoped].sort(compare);
-    return sorted.map(toPublicUser);
+    const scoped = opts.filter ? users.filter(opts.filter) : users;
+    return [...scoped].sort(opts.compare).map(opts.project);
   }
 
   return {
@@ -436,7 +450,17 @@ export function createAuthService(deps: AuthServiceDeps) {
 
       const passwordHash = await hashPassword(newPassword);
       const updated = await deps.users.update(user.id, { passwordHash });
-      await deps.passwordResetTokens.markUsed(existing.id);
+      // Sicherheitsreview 2026-08-27, Befund N4: markAllUsedForUser()
+      // statt nur markUsed(existing.id) — deckt das gerade eingelöste
+      // Token mit ab (dessen usedAt ist an dieser Stelle noch null) UND
+      // invalidiert zusätzlich jeden ANDEREN, noch offenen Reset-Link
+      // desselben Kontos (siehe Kommentar am Interface in
+      // auth.repository.ts). Ohne dies blieb z. B. bei mehreren innerhalb
+      // der TTL angeforderten Reset-Mails jeder weitere Link bis zu seinem
+      // eigenen Ablauf gültig und hätte unabhängig vom soeben gesetzten
+      // neuen Passwort erneut einen Passwortwechsel samt Auto-Login
+      // ausgelöst.
+      await deps.passwordResetTokens.markAllUsedForUser(user.id);
       await deps.refreshTokens.revokeAllForUser(user.id);
 
       const tokens = await issueTokens(updated);
@@ -465,6 +489,74 @@ export function createAuthService(deps: AuthServiceDeps) {
 
       const passwordHash = await hashPassword(newPassword);
       const updated = await deps.users.update(userId, { passwordHash });
+      // Sicherheitsreview 2026-08-27, Befund N4: ein regulärer
+      // Passwortwechsel (mit Kenntnis des aktuellen Passworts) soll einen
+      // zuvor angeforderten, noch nicht eingelösten "Passwort
+      // vergessen"-Link nicht überleben lassen — sonst bliebe dieser
+      // weiterhin bis zu seinem eigenen Ablauf gültig, obwohl das Konto
+      // längst ein neues Passwort hat.
+      await deps.passwordResetTokens.markAllUsedForUser(userId);
+      await deps.refreshTokens.revokeAllForUser(userId);
+
+      const tokens = await issueTokens(updated);
+      const enabledModules = await resolveEnabledModules(deps.clubs, updated.clubId);
+      return { ...tokens, user: toPublicUser(updated), enabledModules };
+    },
+
+    // E-Mail-Wechsel für die AKTUELL eingeloggte Person (Sicherheitsreview
+    // 2026-08-27, Befund H2) — verlangt wie changePassword() oben
+    // zusätzlich das aktuelle Passwort. `email` ist deshalb bewusst KEIN
+    // Feld von updateMe()/UpdateMeRequestSchema mehr (siehe dortiger
+    // Kommentar in packages/shared-types/src/auth.ts für die vollständige
+    // Begründung): ohne diese Prüfung hätte ein kurzzeitig entwendeter,
+    // noch gültiger Access Token gereicht, um die hinterlegte Adresse auf
+    // eine eigene umzubiegen und sich über POST /auth/forgot-password
+    // selbst einen Reset-Link zuzustellen — eine dauerhafte
+    // Kontoübernahme, bei der die rechtmäßige Person weder die neue
+    // E-Mail-Adresse noch das anschließend gesetzte Passwort kennt.
+    //
+    // Widerruft — wie changePassword() — ALLE bestehenden Sitzungen und
+    // stellt sofort ein frisches Token-Paar für die AKTUELLE Sitzung aus:
+    // jede künftige "Passwort vergessen"-Anfrage geht ab sofort an die
+    // NEUE Adresse, ein Wechsel ist damit ebenso sicherheitsrelevant wie
+    // ein Passwortwechsel.
+    async changeEmail(userId: string, currentPassword: string, newEmail: string) {
+      const user = await deps.users.findById(userId);
+      if (!user) throw new UserNotFoundError();
+
+      const currentPasswordOk = await verifyPassword(currentPassword, user.passwordHash);
+      if (!currentPasswordOk) throw new InvalidCurrentPasswordError();
+
+      // Schneller, klarer Vorab-Check für den häufigen Fall (Adresse
+      // gehört zu einem AKTIVEN Konto) — spart Passwort-Hashing-Aufwand
+      // und einen DB-Schreibversuch, der ohnehin scheitern würde. Kein
+      // Konflikt mit sich selbst (unverändert beibehaltene eigene Adresse).
+      if (newEmail !== user.email) {
+        const emailTaken = await deps.users.findByEmail(newEmail);
+        if (emailTaken) throw new EmailAlreadyRegisteredError();
+      }
+
+      let updated: UserRecord;
+      try {
+        updated = await deps.users.update(userId, { email: newEmail });
+      } catch (err) {
+        // Sicherheitsreview 2026-08-27, Befund N3 (behoben zusammen mit
+        // H2) — analog zum bestehenden P2002-Fang in acceptInvitation()
+        // (siehe dort für die ausführliche Begründung): findByEmail() oben
+        // liefert bewusst NUR aktive Konten, für eine E-Mail-Adresse eines
+        // bereits SOFT-gelöschten Kontos also fälschlich "nicht vergeben",
+        // obwohl `email` in der Datenbank weiterhin `@unique` ist. Ohne
+        // diesen Fang schlüge Prismas "P2002" hier als ungefangener 500
+        // durch, statt als derselbe, bereits vorhandene 409, den eine
+        // Adresse eines aktiven Kontos liefert — ein Existenz-Orakel
+        // (500 vs. 409 verriet, ob die Adresse zu einem — wenn auch
+        // gelöschten — Konto gehört).
+        if (err && typeof err === 'object' && 'code' in err && (err as { code?: string }).code === 'P2002') {
+          throw new EmailAlreadyRegisteredError();
+        }
+        throw err;
+      }
+
       await deps.refreshTokens.revokeAllForUser(userId);
 
       const tokens = await issueTokens(updated);
@@ -479,14 +571,13 @@ export function createAuthService(deps: AuthServiceDeps) {
       return { ...toPublicUser(user), enabledModules };
     },
 
-    async updateMe(userId: string, patch: { name?: string; email?: string; locale?: string }) {
+    // Sicherheitsreview 2026-08-27, Befund H2: `email` ist bewusst KEIN
+    // Feld dieses Patches mehr — siehe changeEmail() oben bzw. den
+    // Kommentar an UpdateMeRequestSchema (packages/shared-types/src/
+    // auth.ts) für die vollständige Begründung.
+    async updateMe(userId: string, patch: { name?: string; locale?: string }) {
       const current = await deps.users.findById(userId);
       if (!current) throw new UserNotFoundError();
-
-      if (patch.email && patch.email !== current.email) {
-        const emailTaken = await deps.users.findByEmail(patch.email);
-        if (emailTaken) throw new EmailAlreadyRegisteredError();
-      }
 
       const updated = await deps.users.update(userId, patch);
       // enabledModules mitgegeben (wie getMe()): state.js ersetzt `current`
@@ -531,6 +622,7 @@ export function createAuthService(deps: AuthServiceDeps) {
           const roleDiff = (rolePriority[a.role] ?? 9) - (rolePriority[b.role] ?? 9);
           return roleDiff !== 0 ? roleDiff : a.name.localeCompare(b.name);
         },
+        project: toPublicUser,
       });
     },
 
@@ -548,6 +640,9 @@ export function createAuthService(deps: AuthServiceDeps) {
       return listMembers(requester.clubId, {
         filter: (u) => u.role === 'trainer' || u.role === 'admin',
         compare: (a, b) => a.name.localeCompare(b.name),
+        // Sicherheitsreview 2026-08-27, Befund N6: schmale Projektion
+        // statt toPublicUser() — siehe Kommentar bei listMembers() oben.
+        project: (u) => ({ id: u.id, name: u.name, role: u.role }),
       });
     },
   };

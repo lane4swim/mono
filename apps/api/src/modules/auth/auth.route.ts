@@ -12,6 +12,7 @@ import {
   ForgotPasswordRequestSchema,
   ResetPasswordRequestSchema,
   ChangePasswordRequestSchema,
+  ChangeEmailRequestSchema,
 } from '@lane1/shared-types';
 import type { AuthService } from './auth.service.js';
 import { requireRole } from '../../plugins/authorize.js';
@@ -236,6 +237,39 @@ export async function authRoutes(app: FastifyInstance, opts: { authService: Auth
       // InvalidCurrentPasswordError: über die zentrale Fehler-Registry
       // abgedeckt (siehe plugins/httpErrorHandler.ts).
       const result = await authService.changePassword(request.user!.sub, body.currentPassword, body.newPassword);
+      return reply.code(200).send(result);
+    },
+  );
+
+  // E-Mail-Wechsel für die eigene, eingeloggte Person (Sicherheitsreview
+  // 2026-08-27, Befund H2) — verlangt zusätzlich das aktuelle Passwort
+  // (siehe authService.changeEmail()-Kommentar für die Begründung: ohne
+  // diese Prüfung hätte ein kurzzeitig entwendeter, noch gültiger Access
+  // Token gereicht, um kombiniert mit POST /auth/forgot-password eine
+  // dauerhafte Kontoübernahme zu erreichen). `email` ist deshalb bewusst
+  // NICHT mehr Teil von PATCH /api/me (siehe UpdateMeRequestSchema).
+  // Liefert wie /api/me/password ein frisches Token-Paar, damit die
+  // AKTUELLE Sitzung ohne erneuten Login weiterläuft, während alle
+  // ANDEREN Sitzungen widerrufen werden.
+  //
+  // Rate-Limit bewusst nur nach IP (nicht IP + Nutzer:in), aus demselben
+  // Grund wie /api/me/password oben: der globale Rate-Limit-Hook läuft
+  // (siehe plugins/security.ts: hook: 'preHandler') VOR jedem
+  // route-eigenen preHandler wie app.authenticate — request.user ist im
+  // keyGenerator zu diesem Zeitpunkt noch nicht gesetzt.
+  app.post(
+    '/api/me/email',
+    {
+      preHandler: app.authenticate,
+      config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
+    },
+    async (request, reply) => {
+      const body = parseInput(ChangeEmailRequestSchema, request.body, reply);
+      if (!body) return;
+
+      // InvalidCurrentPasswordError/EmailAlreadyRegisteredError: über die
+      // zentrale Fehler-Registry abgedeckt (siehe plugins/httpErrorHandler.ts).
+      const result = await authService.changeEmail(request.user!.sub, body.currentPassword, body.newEmail);
       return reply.code(200).send(result);
     },
   );

@@ -7,7 +7,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../../src/app.js';
 import { parseCorsOrigin } from '../../src/plugins/security.js';
-import { loadEnv } from '../../src/config/env.js';
+import { loadEnv, type Env } from '../../src/config/env.js';
 import { createAuthService } from '../../src/modules/auth/auth.service.js';
 import { InMemoryUserRepository, InMemoryRefreshTokenRepository, InMemoryPasswordResetTokenRepository } from '../../src/modules/auth/auth.repository.memory.js';
 import { createInvitationsService } from '../../src/modules/invitations/invitations.service.js';
@@ -25,7 +25,10 @@ const testEnv = loadEnv({
   CORS_ORIGIN: 'http://localhost:5173',
 });
 
-async function buildTestApp(): Promise<FastifyInstance> {
+// `env`-Parameter (statt fest `testEnv`) — der trustProxy-Testblock unten
+// (Sicherheitsreview 2026-08-27, Befund H1) braucht eine eigene, davon
+// abweichende TRUSTED_PROXY_IPS-Konfiguration.
+async function buildTestApp(env: Env = testEnv): Promise<FastifyInstance> {
   const keyPair = generateFreshKeyPair();
   const invitations = new InMemoryInvitationRepository();
   const invitationsService = createInvitationsService({
@@ -54,7 +57,7 @@ async function buildTestApp(): Promise<FastifyInstance> {
     refreshTtlDays: 30,
   });
   const syncService = createSyncService({ gateway: new InMemorySyncGateway() });
-  return buildApp(testEnv, { authService, invitationsService, syncService, clubs: { findById: async () => null }, keyPair });
+  return buildApp(env, { authService, invitationsService, syncService, clubs: { findById: async () => null }, keyPair });
 }
 
 describe('Security-Header (Helmet) — explizite CSP statt Defaults', () => {
@@ -97,6 +100,11 @@ describe('Security-Header (Helmet) — Produktionsmodus', () => {
           JWT_PRIVATE_KEY: 'dummy-private-key', // wird wegen keyPair-Override unten nie tatsächlich geparst
       JWT_PUBLIC_KEY: 'dummy-public-key',
       CORS_ORIGIN: 'https://app.lane1.example.org',
+      // Sicherheitsreview 2026-08-27, Befund H1: seit diesem Fix in
+      // Produktion Pflicht (siehe env.test.ts für die dedizierten Tests
+      // dieser Prüfung) — ohne diesen Wert würde bereits loadEnv() hier
+      // abbrechen.
+      TRUSTED_PROXY_IPS: '127.0.0.1',
     });
     const keyPair = generateFreshKeyPair();
     const invitations = new InMemoryInvitationRepository();
@@ -144,29 +152,54 @@ describe('Security-Header (Helmet) — Produktionsmodus', () => {
 // funktionierten) matchte @fastify/cors dadurch KEINE davon, da ein
 // einzelner String als exakter Vergleichswert behandelt wird, nicht als
 // Liste.
-// Regressionstest für Sicherheitsreview 2026-08, Befund H2: ohne
+// Regressionstests, Teil 1 — Sicherheitsreview 2026-08, Befund H2: ohne
 // trustProxy ignoriert Fastify "X-Forwarded-For" komplett — request.ip
 // wäre dann für JEDE Anfrage die Adresse des vorgeschalteten Nginx (siehe
-// docs/deployment*.md), nicht die des tatsächlichen Clients. Alle drei
-// IP-basierten Rate-Limits (global sowie /auth/refresh, /auth/logout)
-// kollabierten dadurch auf einen einzigen, geteilten Zähler für die
-// gesamte Installation.
-describe('trustProxy — Rate-Limit-Buckets folgen X-Forwarded-For, nicht der Proxy-Adresse', () => {
+// docs/deployment*.md), nicht die des tatsächlichen Clients. Alle
+// IP-basierten Rate-Limits kollabierten dadurch auf einen einzigen,
+// geteilten Zähler für die gesamte Installation.
+//
+// Regressionstests, Teil 2 — Sicherheitsreview 2026-08-27, Befund H1: der
+// damalige H2-Fix (`trustProxy: true`) vertraute JEDER Adresse in der
+// Kette — ein Client konnte damit über einen selbst gesetzten
+// "X-Forwarded-For"-Header sein eigenes request.ip frei bestimmen und so
+// jedes IP-basierte Rate-Limit umgehen. Dieser Testblock baut die App
+// jetzt mit einer KONKRETEN, korrekt konfigurierten Proxy-Adresse
+// (TRUSTED_PROXY_IPS statt `trustProxy: true`) und prüft beide Befunde
+// zusammen: echte, verschiedene Clients HINTER dem vertrauenswürdigen
+// Proxy bekommen weiterhin getrennte Budgets (H2 bleibt behoben), aber
+// eine Anfrage, die NICHT von der vertrauenswürdigen Proxy-Adresse kommt
+// — oder die (via des vom Client selbst voranstellbaren Präfixes, den
+// Nginx per `$proxy_add_x_forwarded_for` nur ANHÄNGT statt zu ersetzen)
+// einen frei erfundenen Wert vorschiebt — kann ihr Budget nicht mehr
+// durch einen gefälschten Header umgehen (H1 bleibt behoben).
+describe('trustProxy — nur die konfigurierte Proxy-Adresse wird vertraut (Sicherheitsreview 2026-08-27, Befund H1)', () => {
   let app: FastifyInstance;
 
-  beforeAll(async () => { app = await buildTestApp(); });
+  beforeAll(async () => {
+    const env = loadEnv({
+      NODE_ENV: 'test',
+      PORT: '3000',
+      DATABASE_URL: 'postgresql://test:test@localhost:5432/test',
+      CORS_ORIGIN: 'http://localhost:5173',
+      TRUSTED_PROXY_IPS: '127.0.0.1',
+    });
+    app = await buildTestApp(env);
+  });
   afterAll(async () => { await app.close(); });
 
-  it('zwei unterschiedliche X-Forwarded-For-Clients teilen sich NICHT dasselbe /auth/refresh-Budget (10/min)', async () => {
-    // Ohne trustProxy wäre request.ip für jede injizierte Anfrage identisch
-    // (die Fastify-Inject-Standardadresse) — die 10 Versuche des ersten
-    // "Clients" hätten dann bereits das Budget des zweiten mitverbraucht,
-    // und dessen erster Versuch wäre fälschlich schon 429.
-    const attempt = (ip: string) =>
+  it('zwei unterschiedliche Clients HINTER der vertrauenswürdigen Proxy-Adresse teilen sich NICHT dasselbe /auth/refresh-Budget (10/min)', async () => {
+    // remoteAddress simuliert die Verbindung von Nginx (die einzige
+    // vertrauenswürdige Adresse); ein einzelner Wert in "X-Forwarded-For"
+    // entspricht dem Normalfall (kein weiterer Hop davor) — das ist exakt
+    // das, was $proxy_add_x_forwarded_for für einen direkten Browser-
+    // Client erzeugt.
+    const attempt = (clientIp: string) =>
       app.inject({
         method: 'POST',
         url: '/auth/refresh',
-        headers: { 'x-forwarded-for': ip },
+        remoteAddress: '127.0.0.1',
+        headers: { 'x-forwarded-for': clientIp },
         payload: { refreshToken: 'ungueltiges-token-fuer-rate-limit-test' },
       });
 
@@ -178,6 +211,34 @@ describe('trustProxy — Rate-Limit-Buckets folgen X-Forwarded-For, nicht der Pr
 
     const clientB = await attempt('203.0.113.20');
     expect(clientB.statusCode).toBe(401);
+  });
+
+  it('Befund H1: ein vom Client selbst vorangestellter X-Forwarded-For-Wert wird ignoriert — nur der von Nginx angehängte, echte Wert zählt', async () => {
+    const attempt = (spoofedPrefix: string) =>
+      app.inject({
+        method: 'POST',
+        url: '/auth/refresh',
+        remoteAddress: '127.0.0.1', // die Verbindung kommt (korrekt) von Nginx
+        // Simuliert $proxy_add_x_forwarded_for: Nginx HÄNGT die echte
+        // Peer-Adresse an einen bereits vom Client mitgeschickten Wert an,
+        // statt ihn zu ersetzen — genau der in Befund H1 beschriebene
+        // Angriff.
+        headers: { 'x-forwarded-for': `${spoofedPrefix}, 198.51.100.50` },
+        payload: { refreshToken: 'ungueltiges-token-fuer-rate-limit-test' },
+      });
+
+    for (let i = 0; i < 10; i++) {
+      // Jeder Versuch behauptet fälschlich, von einer ANDEREN Adresse zu
+      // kommen — ohne den H1-Fix (`trustProxy: true`) bekäme jeder Versuch
+      // dadurch sein eigenes, frisches Budget und wäre weiterhin 401.
+      const res = await attempt(`203.0.113.${200 + i}`);
+      expect(res.statusCode).toBe(401);
+    }
+    // Mit dem Fix zählt ausschließlich die echte, gleichbleibende Adresse
+    // (198.51.100.50) — deren gemeinsames Budget ist nach zehn Versuchen
+    // erschöpft, unabhängig vom vorangestellten Fälschungswert.
+    const eleventh = await attempt('203.0.113.250');
+    expect(eleventh.statusCode).toBe(429);
   });
 });
 

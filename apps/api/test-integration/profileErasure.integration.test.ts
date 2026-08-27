@@ -202,6 +202,56 @@ describe('PrismaErasureJobGateway.purgeUserAndDependents()', () => {
     await expect(erasureGateway.purgeUserAndDependents(user.id)).resolves.toBeUndefined();
   });
 
+  // Sicherheitsreview 2026-08-27, Befund M1: Invitation.email (die
+  // E-Mail-Adresse, AN die eine Einladung ausgestellt wurde) blieb bislang
+  // dauerhaft in der Datenbank stehen. Anders als die N5-Anonymisierung
+  // unten ist hier kein Postgres-spezifischer Operator im Spiel (reines
+  // Feld-Update) — trotzdem hier statt nur im InMemory-Double geprüft, um
+  // die tatsächliche Prisma-Modell-/Tabellen-Zuordnung ("invitation" ->
+  // "invitations", siehe schema.prisma: @@map) end-to-end abzudecken, UND
+  // um das Zusammenspiel mit der bereits bestehenden,
+  // schema-eigenen `onDelete: SetNull`-Beziehung auf `invitedById` zu
+  // zeigen: beide Mechanismen wirken auf DERSELBEN Tabelle, aber auf
+  // unterschiedliche Zeilen/Felder, ohne sich zu stören.
+  it('anonymisiert Invitation.email für Einladungen AN die gelöschte Person, nullt deren athleteId (Befund M1)', async () => {
+    const club = await createTestClub();
+    const athleteForInvite = await prisma.athlete.create({ data: { clubId: club.id, firstName: 'Lena', lastName: 'Brandt' } });
+    const { user } = await seedAthleteUser(club.id);
+
+    // Zwei Einladungen AN die zu löschende Person (eine davon längst
+    // angenommen — invitedById zeigt hier bewusst auf die Person SELBST,
+    // um zusätzlich zu demonstrieren, dass die beiden Mechanismen
+    // unabhängig voneinander UND auf derselben Zeile korrekt greifen).
+    const invitationToDeletedPerson = await prisma.invitation.create({
+      data: {
+        tokenHash: randomUUID(), email: user.email, role: 'athlete', clubId: club.id,
+        athleteId: athleteForInvite.id, invitedById: user.id, expiresAt: new Date(Date.now() + 1000), usedAt: new Date(),
+      },
+    });
+    // Einladung, die die zu löschende Person selbst an eine ANDERE Person
+    // ausgestellt hat — invitedById zeigt auf sie, email jedoch nicht.
+    const invitationSentByDeletedPerson = await prisma.invitation.create({
+      data: {
+        tokenHash: randomUUID(), email: 'jemand-anderes@example.org', role: 'trainer', clubId: club.id,
+        invitedById: user.id, expiresAt: new Date(Date.now() + 1000),
+      },
+    });
+
+    await erasureGateway.purgeUserAndDependents(user.id);
+
+    const updatedInvitationToDeletedPerson = await prisma.invitation.findUnique({ where: { id: invitationToDeletedPerson.id } });
+    expect(updatedInvitationToDeletedPerson?.email).toBe('geloeschtes-konto@geloescht.invalid');
+    expect(updatedInvitationToDeletedPerson?.athleteId).toBeNull();
+
+    // Unverändert in der E-Mail-Adresse (nicht AN die gelöschte Person
+    // gerichtet) — invitedById wird aber, unabhängig von meiner Änderung,
+    // durch die bereits bestehende onDelete: SetNull-Beziehung auf null
+    // gesetzt, sobald der User-Datensatz gelöscht wird.
+    const updatedInvitationSentByDeletedPerson = await prisma.invitation.findUnique({ where: { id: invitationSentByDeletedPerson.id } });
+    expect(updatedInvitationSentByDeletedPerson?.email).toBe('jemand-anderes@example.org');
+    expect(updatedInvitationSentByDeletedPerson?.invitedById).toBeNull();
+  });
+
   // Code-Review, Befund C4: die Anwesenheits-Bereinigung lief vormals über
   // eine JS-Schleife, die ALLE Trainingseinheiten des Vereins lud und
   // einzeln per update() zurückschrieb — bei einer mehrjährigen
@@ -323,18 +373,18 @@ describe('PrismaErasureJobGateway.purgeUserAndDependents() — Comment.authorNam
         clubId: club.id,
         name: 'Wochenplan',
         weekStart: now,
-        comments: [{ id: 'c1', authorName: user.name, text: 'Guter Plan', createdAt: now.toISOString() }],
+        comments: [{ id: 'c1', authorId: user.id, authorName: user.name, text: 'Guter Plan', createdAt: now.toISOString() }],
         days: [
           {
             date: now.toISOString(),
             sets: [
-              { kind: 'set', id: 's1', description: '', distance: 100, reps: 4, intensity: 'GA1', restSec: 30, comments: [{ id: 'c2', authorName: user.name, text: 'Harte Serie', createdAt: now.toISOString() }] },
+              { kind: 'set', id: 's1', description: '', distance: 100, reps: 4, intensity: 'GA1', restSec: 30, comments: [{ id: 'c2', authorId: user.id, authorName: user.name, text: 'Harte Serie', createdAt: now.toISOString() }] },
               // Verschachtelt in einem Block — der rekursive
               // jsonb_path_exists-Abstieg (`$..comments`) muss auch hier
               // treffen, nicht nur auf der obersten Set-Ebene.
               {
                 kind: 'block', id: 'b1', label: '', repeatCount: 3,
-                sets: [{ kind: 'set', id: 's2', description: '', distance: 50, reps: 8, intensity: 'GA2', restSec: 15, comments: [{ id: 'c3', authorName: user.name, text: 'Im Block', createdAt: now.toISOString() }] }],
+                sets: [{ kind: 'set', id: 's2', description: '', distance: 50, reps: 8, intensity: 'GA2', restSec: 15, comments: [{ id: 'c3', authorId: user.id, authorName: user.name, text: 'Im Block', createdAt: now.toISOString() }] }],
               },
             ],
           },
@@ -342,10 +392,10 @@ describe('PrismaErasureJobGateway.purgeUserAndDependents() — Comment.authorNam
       },
     });
     const exercise = await prisma.exercise.create({
-      data: { clubId: club.id, name: 'Kraulbeine', category: 'kick', comments: [{ id: 'c4', authorName: user.name, text: 'Technik-Hinweis', createdAt: now.toISOString() }] },
+      data: { clubId: club.id, name: 'Kraulbeine', category: 'kick', comments: [{ id: 'c4', authorId: user.id, authorName: user.name, text: 'Technik-Hinweis', createdAt: now.toISOString() }] },
     });
     const template = await prisma.template.create({
-      data: { clubId: club.id, name: 'Standard-Vorlage', sets: [{ kind: 'set', id: 's3', description: '', distance: 200, reps: 1, intensity: 'GA1', restSec: 0, comments: [{ id: 'c5', authorName: user.name, text: 'Vorlagen-Hinweis', createdAt: now.toISOString() }] }] },
+      data: { clubId: club.id, name: 'Standard-Vorlage', sets: [{ kind: 'set', id: 's3', description: '', distance: 200, reps: 1, intensity: 'GA1', restSec: 0, comments: [{ id: 'c5', authorId: user.id, authorName: user.name, text: 'Vorlagen-Hinweis', createdAt: now.toISOString() }] }] },
     });
 
     await erasureGateway.purgeUserAndDependents(user.id);
@@ -362,6 +412,16 @@ describe('PrismaErasureJobGateway.purgeUserAndDependents() — Comment.authorNam
 
     const updatedTemplate = await prisma.template.findUnique({ where: { id: template.id } });
     expect((updatedTemplate?.sets as Array<Record<string, unknown>>)[0]).toMatchObject({ comments: [{ authorName: 'Gelöschtes Konto', text: 'Vorlagen-Hinweis' }] });
+
+    // Nachreview zu M2: `authorId` muss VOLLSTÄNDIG verschwinden, nicht
+    // nur der Anzeigename überschrieben werden — sonst überlebte den
+    // Art.-17-Purge ein stabiler personenbezogener Schlüssel, über den
+    // sich alle Kommentare derselben gelöschten Person wieder verketten
+    // ließen. toMatchObject() oben prüft nur die genannten Felder und
+    // würde ein zurückgebliebenes authorId nicht bemerken.
+    const remainingAuthorIds = JSON.stringify([updatedPlan?.comments, updatedPlan?.days, updatedExercise?.comments, updatedTemplate?.sets]);
+    expect(remainingAuthorIds).not.toContain(user.id);
+    expect(remainingAuthorIds).not.toContain('authorId');
   });
 
   it('lässt Kommentare ANDERER Personen und eines ANDEREN Vereins unangetastet', async () => {
@@ -371,10 +431,10 @@ describe('PrismaErasureJobGateway.purgeUserAndDependents() — Comment.authorNam
     const now = new Date();
 
     const foreignAuthorPlan = await prisma.plan.create({
-      data: { clubId: club.id, name: 'Plan A', weekStart: now, comments: [{ id: 'c1', authorName: 'Jens Bauer', text: 'Nicht meins', createdAt: now.toISOString() }], days: [] },
+      data: { clubId: club.id, name: 'Plan A', weekStart: now, comments: [{ id: 'c1', authorId: randomUUID(), authorName: 'Jens Bauer', text: 'Nicht meins', createdAt: now.toISOString() }], days: [] },
     });
     const otherClubPlan = await prisma.plan.create({
-      data: { clubId: otherClub.id, name: 'Plan B', weekStart: now, comments: [{ id: 'c2', authorName: user.name, text: 'Anderer Verein', createdAt: now.toISOString() }], days: [] },
+      data: { clubId: otherClub.id, name: 'Plan B', weekStart: now, comments: [{ id: 'c2', authorId: user.id, authorName: user.name, text: 'Anderer Verein', createdAt: now.toISOString() }], days: [] },
     });
 
     await erasureGateway.purgeUserAndDependents(user.id);
@@ -395,7 +455,7 @@ describe('PrismaErasureJobGateway.purgeUserAndDependents() — Comment.authorNam
       data: { clubId: club.id, name: 'Coach Nina', email: `nina-${randomUUID()}@example.org`, passwordHash: 'hash', role: 'trainer', athleteId: null },
     });
     const exercise = await prisma.exercise.create({
-      data: { clubId: club.id, name: 'Beinschlag', category: 'kick', comments: [{ id: 'c1', authorName: 'Coach Nina', text: 'Trainer-Hinweis', createdAt: now.toISOString() }] },
+      data: { clubId: club.id, name: 'Beinschlag', category: 'kick', comments: [{ id: 'c1', authorId: trainer.id, authorName: 'Coach Nina', text: 'Trainer-Hinweis', createdAt: now.toISOString() }] },
     });
 
     await erasureGateway.purgeUserAndDependents(trainer.id);

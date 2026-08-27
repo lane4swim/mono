@@ -40,14 +40,22 @@ export interface SyncRoutesOptions {
 // gebuchten Module des Vereins — der JWT-Claim allein (request.user) kennt
 // sie nicht, da sich enabledModules jederzeit über die Superadmin-
 // Bearbeiten-Ansicht ändern kann, ohne dass ein neues Token ausgestellt
-// wird.
+// wird. `sub` (Sicherheitsreview 2026-08-27, Befund M2) wird zusätzlich als
+// `userId` durchgereicht — für die Autor:innen-Prüfung eingebetteter
+// Kommentare (siehe sync.commentAuthorship.ts).
 async function requesterFrom(
-  request: { user?: { role: SyncRequester['role']; clubId: string | null; athleteId: string | null } },
+  request: { user?: { sub: string; role: SyncRequester['role']; clubId: string | null; athleteId: string | null } },
   clubs: ClubModulesLookup,
 ): Promise<SyncRequester> {
   const user = request.user!;
   const club = await clubs.findById(user.clubId!);
-  return { clubId: user.clubId!, role: user.role, athleteId: user.athleteId, enabledModules: club?.enabledModules ?? [] };
+  return {
+    userId: user.sub,
+    clubId: user.clubId!,
+    role: user.role,
+    athleteId: user.athleteId,
+    enabledModules: club?.enabledModules ?? [],
+  };
 }
 
 export async function syncRoutes(app: FastifyInstance, opts: SyncRoutesOptions) {
