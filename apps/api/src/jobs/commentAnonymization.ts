@@ -15,19 +15,17 @@
 // Nach einem vollständigen Art.-17-Purge blieben diese Namen samt
 // Kommentartext dauerhaft in der Datenbank.
 //
-// WICHTIG — Erkennungsgrenze: CommentSchema hat bewusst KEIN authorId
-// (siehe dortiger Kommentar in entities.ts — "keine serverseitige
-// Autor:innen-Verifikation, genau wie bei den übrigen freien
-// Textfeldern"). Ein Kommentar lässt sich der gelöschten Person daher nur
-// über den zum Löschzeitpunkt gültigen `User.name` zuordnen, nicht über
-// eine stabile ID — bei Namensgleichheit mit einer ANDEREN, weiterhin
-// aktiven Person würden auch deren Kommentare mit anonymisiert, und ein
-// zwischenzeitlich geänderter Anzeigename der gelöschten Person selbst
-// bliebe unter dem alten Namen stehen. Dieselbe Einschränkung gilt bereits
-// für die Anzeige (kein Abgleich gegen ein echtes Konto), diese
-// Anonymisierung kann also nicht genauer sein als das Datenmodell es
-// zulässt — vom Datenmodell absichtlich in Kauf genommen (siehe
-// entities.ts), hier nur konsequent zu Ende gedacht.
+// Sicherheitsreview 2026-08-27, Befund M2: gleicht seither gegen
+// `authorId` statt gegen `authorName` ab. CommentSchema trägt jetzt ein
+// `authorId` (die tatsächliche, stabile User-ID) — anders als der frei
+// wählbare `authorName` serverseitig durchgesetzt (siehe
+// sync.commentAuthorship.ts: ein neuer Kommentar muss `authorId ===
+// request.user.sub` tragen, ein bestehender behält seine ursprüngliche
+// Zuordnung). Die vormals hier dokumentierte Erkennungsgrenze
+// (Namensgleichheit mit einer anderen Person, nachträgliche
+// Namensänderung, ein absichtlich abweichender Name entzieht den eigenen
+// Kommentar der Anonymisierung) entfällt dadurch vollständig — `authorId`
+// ist ein exakter, eindeutiger und unveränderlicher Abgleichswert.
 //
 // Reine, DB-freie Funktionen — von erasure.repository.ts (Prisma) UND
 // erasure.repository.memory.ts (InMemory-Testdouble) gemeinsam genutzt,
@@ -48,11 +46,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 // Ein einzelnes Comment-Array (CommentSchema[]) — die flache Basisebene,
 // auf der "plans.comments", "exercises.comments" und die "comments" eines
 // einzelnen Sets/Blocks jeweils aufsetzen.
-export function anonymizeCommentArray(comments: unknown, matchAuthorName: string): AnonymizeResult<unknown> {
+export function anonymizeCommentArray(comments: unknown, matchAuthorId: string): AnonymizeResult<unknown> {
   if (!Array.isArray(comments)) return { changed: false, value: comments };
   let changed = false;
   const value = comments.map((entry) => {
-    if (isRecord(entry) && entry.authorName === matchAuthorName) {
+    if (isRecord(entry) && entry.authorId === matchAuthorId) {
       changed = true;
       return { ...entry, authorName: ANONYMIZED_COMMENT_AUTHOR };
     }
@@ -65,14 +63,14 @@ export function anonymizeCommentArray(comments: unknown, matchAuthorName: string
 // SetEntrySchema): ein "set" trägt sein eigenes comments-Array direkt, ein
 // "block" enthält stattdessen eine verschachtelte sets-Liste (keine
 // verschachtelten Blöcke laut Schema) — dort rekursiv weitersuchen.
-function anonymizeSetEntry(entry: unknown, matchAuthorName: string): AnonymizeResult<unknown> {
+function anonymizeSetEntry(entry: unknown, matchAuthorId: string): AnonymizeResult<unknown> {
   if (!isRecord(entry)) return { changed: false, value: entry };
   if (entry.kind === 'set') {
-    const { changed, value: comments } = anonymizeCommentArray(entry.comments, matchAuthorName);
+    const { changed, value: comments } = anonymizeCommentArray(entry.comments, matchAuthorId);
     return changed ? { changed: true, value: { ...entry, comments } } : { changed: false, value: entry };
   }
   if (entry.kind === 'block' && Array.isArray(entry.sets)) {
-    const { changed, value: sets } = anonymizeSetEntries(entry.sets, matchAuthorName);
+    const { changed, value: sets } = anonymizeSetEntries(entry.sets, matchAuthorId);
     return changed ? { changed: true, value: { ...entry, sets } } : { changed: false, value: entry };
   }
   return { changed: false, value: entry };
@@ -80,23 +78,23 @@ function anonymizeSetEntry(entry: unknown, matchAuthorName: string): AnonymizeRe
 
 // Eine SetEntry[]-Liste — verwendet sowohl für einen einzelnen Plan-Tag
 // (PlanDay.sets) als auch für Template.sets (identische Struktur).
-export function anonymizeSetEntries(entries: unknown, matchAuthorName: string): AnonymizeResult<unknown> {
+export function anonymizeSetEntries(entries: unknown, matchAuthorId: string): AnonymizeResult<unknown> {
   if (!Array.isArray(entries)) return { changed: false, value: entries };
   let changed = false;
   const value = entries.map((entry) => {
-    const result = anonymizeSetEntry(entry, matchAuthorName);
+    const result = anonymizeSetEntry(entry, matchAuthorId);
     if (result.changed) changed = true;
     return result.value;
   });
   return { changed, value };
 }
 
-function anonymizePlanDays(days: unknown, matchAuthorName: string): AnonymizeResult<unknown> {
+function anonymizePlanDays(days: unknown, matchAuthorId: string): AnonymizeResult<unknown> {
   if (!Array.isArray(days)) return { changed: false, value: days };
   let changed = false;
   const value = days.map((day) => {
     if (!isRecord(day)) return day;
-    const { changed: dayChanged, value: sets } = anonymizeSetEntries(day.sets, matchAuthorName);
+    const { changed: dayChanged, value: sets } = anonymizeSetEntries(day.sets, matchAuthorId);
     if (dayChanged) changed = true;
     return dayChanged ? { ...day, sets } : day;
   });
@@ -108,25 +106,25 @@ function anonymizePlanDays(days: unknown, matchAuthorName: string): AnonymizeRes
 // Aufrufer schreibt "comments"/"days" nur zurück, wenn `changed` true ist.
 export function anonymizePlanCommentAuthors(
   plan: { comments: unknown; days: unknown },
-  matchAuthorName: string,
+  matchAuthorId: string,
 ): { changed: boolean; comments: unknown; days: unknown } {
-  const comments = anonymizeCommentArray(plan.comments, matchAuthorName);
-  const days = anonymizePlanDays(plan.days, matchAuthorName);
+  const comments = anonymizeCommentArray(plan.comments, matchAuthorId);
+  const days = anonymizePlanDays(plan.days, matchAuthorId);
   return { changed: comments.changed || days.changed, comments: comments.value, days: days.value };
 }
 
 export function anonymizeExerciseCommentAuthors(
   exercise: { comments: unknown },
-  matchAuthorName: string,
+  matchAuthorId: string,
 ): { changed: boolean; comments: unknown } {
-  const comments = anonymizeCommentArray(exercise.comments, matchAuthorName);
+  const comments = anonymizeCommentArray(exercise.comments, matchAuthorId);
   return { changed: comments.changed, comments: comments.value };
 }
 
 export function anonymizeTemplateCommentAuthors(
   template: { sets: unknown },
-  matchAuthorName: string,
+  matchAuthorId: string,
 ): { changed: boolean; sets: unknown } {
-  const sets = anonymizeSetEntries(template.sets, matchAuthorName);
+  const sets = anonymizeSetEntries(template.sets, matchAuthorId);
   return { changed: sets.changed, sets: sets.value };
 }

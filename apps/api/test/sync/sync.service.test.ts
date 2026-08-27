@@ -10,6 +10,16 @@ import { MODULE_KEYS } from '@lane1/shared-types';
 const CLUB_A = '11111111-1111-1111-1111-111111111111';
 const CLUB_B = '22222222-2222-2222-2222-222222222222';
 
+// Feste userId je Rollen-Helfer (Sicherheitsreview 2026-08-27, Befund
+// M2) — SyncRequester.userId wird u. a. für die Autor:innen-Prüfung
+// eingebetteter Kommentare gebraucht (siehe sync.commentAuthorship.ts).
+// Als eigene Konstanten exportiert, damit die dedizierten M2-Tests weiter
+// unten Kommentare mit einer passenden bzw. bewusst abweichenden
+// authorId konstruieren können.
+export const TRAINER_USER_ID = '77777777-0000-0000-0000-000000000001';
+export const ATHLETE_USER_ID = '77777777-0000-0000-0000-000000000002';
+export const ADMIN_USER_ID = '77777777-0000-0000-0000-000000000003';
+
 // Bestehende Tests (vor der Rollen-Scopierung geschrieben) prüfen
 // durchweg unrestringiertes Verhalten — dafür steht diese Requester-Form
 // mit role "trainer" (unbetroffen von den neuen athlete-Beschränkungen).
@@ -19,7 +29,7 @@ const CLUB_B = '22222222-2222-2222-2222-222222222222';
 // gebucht) — diese Suite testet Rollen-/FK-/Konflikt-Verhalten, nicht das
 // Modul-Gating selbst (siehe sync.permissions.test.ts dafür).
 function asTrainer(clubId: string) {
-  return { clubId, role: 'trainer' as const, athleteId: null, enabledModules: MODULE_KEYS };
+  return { userId: TRAINER_USER_ID, clubId, role: 'trainer' as const, athleteId: null, enabledModules: MODULE_KEYS };
 }
 
 function makeGroupPayload(overrides: Partial<Record<string, unknown>> = {}) {
@@ -55,7 +65,7 @@ function makeResultPayload(overrides: Partial<Record<string, unknown>> = {}) {
 }
 
 function asAthlete(clubId: string, athleteId: string | null) {
-  return { clubId, role: 'athlete' as const, athleteId, enabledModules: MODULE_KEYS };
+  return { userId: ATHLETE_USER_ID, clubId, role: 'athlete' as const, athleteId, enabledModules: MODULE_KEYS };
 }
 
 // "athletes" ist seit der Access-Konsistenz-Korrektur (siehe STORE_PERMISSIONS)
@@ -64,7 +74,7 @@ function asAthlete(clubId: string, athleteId: string | null) {
 // hier oben ein eigenes admin-Pendant für Tests, die ausschließlich die
 // Fremdschlüssel-/Feld-Logik prüfen wollen, unabhängig von der Rollensperre.
 function asAdmin(clubId: string) {
-  return { clubId, role: 'admin' as const, athleteId: null, enabledModules: MODULE_KEYS };
+  return { userId: ADMIN_USER_ID, clubId, role: 'admin' as const, athleteId: null, enabledModules: MODULE_KEYS };
 }
 
 function makeActionItemPayload(overrides: Partial<Record<string, unknown>> = {}) {
@@ -363,7 +373,7 @@ describe('syncService.push — Mass-Assignment-Schutz (Sicherheitsregression, Pa
   it('akzeptiert und speichert Kommentare an einer Übung im Übungskatalog (neues Feature)', async () => {
     const { service, gateway } = makeService();
     const payload = makeExercisePayload({
-      comments: [{ id: 'c1', authorName: 'Jonas Beck', text: 'Auf Handstellung achten.', createdAt: new Date().toISOString() }],
+      comments: [{ id: 'c1', authorId: TRAINER_USER_ID, authorName: 'Jonas Beck', text: 'Auf Handstellung achten.', createdAt: new Date().toISOString() }],
     });
     const results = await service.push(
       [{ id: 'evt-exercise-comment', store: 'exercises', entityId: payload.id, action: 'create', payload, clientUpdatedAt: payload.updatedAt }],
@@ -377,7 +387,7 @@ describe('syncService.push — Mass-Assignment-Schutz (Sicherheitsregression, Pa
   it('lehnt einen Kommentar mit einem im Schema unbekannten Feld ab (z. B. eine mitgeschickte "authorUserId")', async () => {
     const { service } = makeService();
     const payload = makeExercisePayload({
-      comments: [{ id: 'c1', authorName: 'Jonas Beck', text: 'X', createdAt: new Date().toISOString(), authorUserId: 'sollte-nicht-erlaubt-sein' }],
+      comments: [{ id: 'c1', authorId: TRAINER_USER_ID, authorName: 'Jonas Beck', text: 'X', createdAt: new Date().toISOString(), authorUserId: 'sollte-nicht-erlaubt-sein' }],
     });
     const results = await service.push(
       [{ id: 'evt-exercise-bad-comment', store: 'exercises', entityId: payload.id, action: 'create', payload, clientUpdatedAt: payload.updatedAt }],
@@ -1327,6 +1337,216 @@ describe('syncService — "Athlete.notes"-Redaktion für Rolle "athlete" (Sicher
     expect(results[0]!.status).toBe('applied');
     const stored = await gateway.findById('athletes', original.id);
     expect((stored as Record<string, unknown>).notes).toBe('Neue Notiz von Admin');
+  });
+});
+
+describe('syncService.push — Kommentar-Autor:innen-Prüfung (Sicherheitsreview 2026-08-27, Befund M2)', () => {
+  // Vormals war Comment.authorName eine reine Client-Angabe ohne jede
+  // serverseitige Verifikation — jedes Vereinsmitglied konnte per push()
+  // einen Kommentar unter fremdem Namen hinterlassen. Der Fix führt
+  // Comment.authorId (User-ID) ein und prüft sie in sync.commentAuthorship.ts.
+  // Diese Suite deckt alle drei betroffenen Stores ab (exercises/plans/
+  // templates) sowie beide Regeln: neue Kommentare müssen der eigenen
+  // Identität zugeordnet sein, bestehende dürfen nachträglich nicht
+  // umgeschrieben werden.
+  function makePlanPayload(overrides: Partial<Record<string, unknown>> = {}) {
+    const now = new Date().toISOString();
+    return {
+      id: '99999999-6666-6666-6666-666666666661',
+      clubId: CLUB_A,
+      name: 'Trainingswoche',
+      weekStart: now,
+      groupId: null,
+      status: 'aktiv' as const,
+      days: [],
+      comments: [],
+      createdAt: now,
+      updatedAt: now,
+      ...overrides,
+    };
+  }
+
+  function makeTemplatePayload(overrides: Partial<Record<string, unknown>> = {}) {
+    const now = new Date().toISOString();
+    return {
+      id: '99999999-6666-6666-6666-666666666662',
+      clubId: CLUB_A,
+      name: 'Standard-Vorlage',
+      description: '',
+      tags: [],
+      sets: [],
+      createdAt: now,
+      updatedAt: now,
+      ...overrides,
+    };
+  }
+
+  it('akzeptiert einen NEUEN Kommentar an einer Übung, dessen authorId der eigenen Identität entspricht', async () => {
+    const { service, gateway } = makeService();
+    const payload = makeExercisePayload({
+      comments: [{ id: 'c1', authorId: TRAINER_USER_ID, authorName: 'Jonas Beck', text: 'Auf Handstellung achten.', createdAt: new Date().toISOString() }],
+    });
+    const results = await service.push(
+      [{ id: 'evt-m2-exercise-own', store: 'exercises', entityId: payload.id, action: 'create', payload, clientUpdatedAt: payload.updatedAt }],
+      asTrainer(CLUB_A),
+    );
+    expect(results[0]!.status).toBe('applied');
+    const stored = await gateway.findById('exercises', payload.id);
+    expect((stored as Record<string, unknown>).comments).toEqual(payload.comments);
+  });
+
+  it('lehnt einen NEUEN Kommentar an einer Übung ab, dessen authorId auf eine fremde Identität zeigt (Identitätsvortäuschung)', async () => {
+    const { service, gateway } = makeService();
+    const payload = makeExercisePayload({
+      comments: [{ id: 'c1', authorId: ADMIN_USER_ID, authorName: 'Vorgetäuschter Admin-Name', text: 'X', createdAt: new Date().toISOString() }],
+    });
+    const results = await service.push(
+      [{ id: 'evt-m2-exercise-spoof', store: 'exercises', entityId: payload.id, action: 'create', payload, clientUpdatedAt: payload.updatedAt }],
+      asTrainer(CLUB_A),
+    );
+    expect(results[0]!.status).toBe('error');
+    expect(await gateway.findById('exercises', payload.id)).toBeNull();
+  });
+
+  it('lehnt den nachträglichen Wechsel der authorId eines BESTEHENDEN Kommentars ab, selbst wenn eine andere Person den umgebenden Datensatz bearbeitet', async () => {
+    const { service, gateway } = makeService();
+    const commentCreatedAt = new Date().toISOString();
+    const original = makeExercisePayload({
+      comments: [{ id: 'c1', authorId: TRAINER_USER_ID, authorName: 'Jonas Beck', text: 'Ursprünglicher Text', createdAt: commentCreatedAt }],
+    });
+    const seedResult = await service.push(
+      [{ id: 'evt-m2-seed', store: 'exercises', entityId: original.id, action: 'create', payload: original, clientUpdatedAt: original.updatedAt }],
+      asTrainer(CLUB_A),
+    );
+    expect(seedResult[0]!.status).toBe('applied');
+
+    // "admin" bearbeitet den Übungskatalog-Eintrag und versucht dabei, den
+    // bestehenden Kommentar sich selbst zuzuschreiben.
+    const tampered = {
+      ...original,
+      comments: [{ id: 'c1', authorId: ADMIN_USER_ID, authorName: 'Jonas Beck', text: 'Ursprünglicher Text', createdAt: commentCreatedAt }],
+      updatedAt: new Date(Date.now() + 60_000).toISOString(),
+    };
+    const results = await service.push(
+      [{ id: 'evt-m2-tamper', store: 'exercises', entityId: original.id, action: 'update', payload: tampered, clientUpdatedAt: tampered.updatedAt }],
+      asAdmin(CLUB_A),
+    );
+    expect(results[0]!.status).toBe('error');
+    const stored = await gateway.findById('exercises', original.id);
+    expect(((stored as Record<string, unknown>).comments as Array<{ authorId: string }>)[0]!.authorId).toBe(TRAINER_USER_ID);
+  });
+
+  it('erlaubt es einer anderen Person weiterhin, dem selben Datensatz einen EIGENEN neuen Kommentar hinzuzufügen, ohne den bestehenden fremden Kommentar zu berühren', async () => {
+    const { service, gateway } = makeService();
+    const original = makeExercisePayload({
+      comments: [{ id: 'c1', authorId: TRAINER_USER_ID, authorName: 'Jonas Beck', text: 'Erster Kommentar', createdAt: new Date().toISOString() }],
+    });
+    await service.push(
+      [{ id: 'evt-m2-seed-2', store: 'exercises', entityId: original.id, action: 'create', payload: original, clientUpdatedAt: original.updatedAt }],
+      asTrainer(CLUB_A),
+    );
+
+    const updated = {
+      ...original,
+      comments: [
+        original.comments[0],
+        { id: 'c2', authorId: ADMIN_USER_ID, authorName: 'Admin-Kontoinhaber:in', text: 'Zweiter Kommentar', createdAt: new Date().toISOString() },
+      ],
+      updatedAt: new Date(Date.now() + 60_000).toISOString(),
+    };
+    const results = await service.push(
+      [{ id: 'evt-m2-add-second', store: 'exercises', entityId: original.id, action: 'update', payload: updated, clientUpdatedAt: updated.updatedAt }],
+      asAdmin(CLUB_A),
+    );
+    expect(results[0]!.status).toBe('applied');
+    const stored = await gateway.findById('exercises', original.id);
+    const comments = (stored as Record<string, unknown>).comments as Array<{ id: string; authorId: string }>;
+    expect(comments.find((c) => c.id === 'c1')!.authorId).toBe(TRAINER_USER_ID);
+    expect(comments.find((c) => c.id === 'c2')!.authorId).toBe(ADMIN_USER_ID);
+  });
+
+  it('prüft Plan-weite Kommentare UND verschachtelte Set-Kommentare (days[].sets[].comments, auch innerhalb eines Wiederholungsblocks)', async () => {
+    const { service } = makeService();
+    const payload = makePlanPayload({
+      comments: [{ id: 'plan-c1', authorId: ADMIN_USER_ID, authorName: 'Fremd', text: 'Fremd zugeordnet', createdAt: new Date().toISOString() }],
+    });
+    const results = await service.push(
+      [{ id: 'evt-m2-plan-comment-spoof', store: 'plans', entityId: payload.id, action: 'create', payload, clientUpdatedAt: payload.updatedAt }],
+      asTrainer(CLUB_A),
+    );
+    expect(results[0]!.status).toBe('error');
+
+    const nestedPayload = makePlanPayload({
+      id: '99999999-6666-6666-6666-666666666663',
+      days: [
+        {
+          date: new Date().toISOString(),
+          sets: [
+            {
+              kind: 'block',
+              id: 'b1',
+              label: '',
+              repeatCount: 2,
+              sets: [
+                {
+                  kind: 'set',
+                  id: 's1',
+                  description: '',
+                  distance: 100,
+                  reps: 4,
+                  intensity: 'ga1',
+                  restSec: 20,
+                  comments: [{ id: 'set-c1', authorId: ADMIN_USER_ID, authorName: 'Fremd', text: 'Fremd zugeordnet (verschachtelt)', createdAt: new Date().toISOString() }],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    const nestedResults = await service.push(
+      [{ id: 'evt-m2-plan-nested-spoof', store: 'plans', entityId: nestedPayload.id, action: 'create', payload: nestedPayload, clientUpdatedAt: nestedPayload.updatedAt }],
+      asTrainer(CLUB_A),
+    );
+    expect(nestedResults[0]!.status).toBe('error');
+  });
+
+  it('akzeptiert Kommentare in Template.sets, wenn die authorId der eigenen Identität entspricht', async () => {
+    const { service, gateway } = makeService();
+    const payload = makeTemplatePayload({
+      sets: [{ kind: 'set', id: 's1', description: '', distance: 200, reps: 1, intensity: 'ga1', restSec: 0, comments: [{ id: 'c1', authorId: TRAINER_USER_ID, authorName: 'Jonas Beck', text: 'Vorlagen-Hinweis', createdAt: new Date().toISOString() }] }],
+    });
+    const results = await service.push(
+      [{ id: 'evt-m2-template-own', store: 'templates', entityId: payload.id, action: 'create', payload, clientUpdatedAt: payload.updatedAt }],
+      asTrainer(CLUB_A),
+    );
+    expect(results[0]!.status).toBe('applied');
+    const stored = await gateway.findById('templates', payload.id);
+    expect((stored as Record<string, unknown>).sets).toEqual(payload.sets);
+  });
+
+  it('lehnt einen fremd zugeordneten neuen Kommentar in Template.sets ab', async () => {
+    const { service, gateway } = makeService();
+    const payload = makeTemplatePayload({
+      id: '99999999-6666-6666-6666-666666666664',
+      sets: [{ kind: 'set', id: 's1', description: '', distance: 200, reps: 1, intensity: 'ga1', restSec: 0, comments: [{ id: 'c1', authorId: ADMIN_USER_ID, authorName: 'Fremd', text: 'X', createdAt: new Date().toISOString() }] }],
+    });
+    const results = await service.push(
+      [{ id: 'evt-m2-template-spoof', store: 'templates', entityId: payload.id, action: 'create', payload, clientUpdatedAt: payload.updatedAt }],
+      asTrainer(CLUB_A),
+    );
+    expect(results[0]!.status).toBe('error');
+    expect(await gateway.findById('templates', payload.id)).toBeNull();
+  });
+
+  it('betrifft ausschließlich die drei Kommentar-tragenden Stores — ein Store ohne Kommentare bleibt unbeeinflusst', async () => {
+    const { service } = makeService();
+    const payload = makeGroupPayload();
+    const results = await service.push(
+      [{ id: 'evt-m2-unaffected-store', store: 'groups', entityId: payload.id, action: 'create', payload, clientUpdatedAt: payload.updatedAt }],
+      asTrainer(CLUB_A),
+    );
+    expect(results[0]!.status).toBe('applied');
   });
 });
 

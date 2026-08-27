@@ -78,22 +78,26 @@ export class InMemoryErasureJobGateway implements ErasureJobGateway {
     // bzw. commentAnonymization.ts. Bewusst NICHT an `user.athleteId`
     // gekoppelt (anders als der Block oben), da Kommentare ebenso von
     // Trainer:innen/Admins ohne athleteId stammen.
-    if (user.clubId && typeof user.name === 'string') {
+    //
+    // Sicherheitsreview 2026-08-27, Befund M2: Abgleich läuft jetzt über
+    // `authorId` (stabile User-ID) statt über den frei wählbaren
+    // `authorName` — siehe ausführliche Begründung im Prisma-Pendant.
+    if (user.clubId) {
       const clubId = user.clubId;
-      const authorName = user.name;
+      const authorId = userId;
       for (const plan of this.db.plans ?? []) {
         if (plan.clubId !== clubId) continue;
-        const { changed, comments, days } = anonymizePlanCommentAuthors(plan, authorName);
+        const { changed, comments, days } = anonymizePlanCommentAuthors(plan, authorId);
         if (changed) { plan.comments = comments; plan.days = days; }
       }
       for (const exercise of this.db.exercises ?? []) {
         if (exercise.clubId !== clubId) continue;
-        const { changed, comments } = anonymizeExerciseCommentAuthors(exercise, authorName);
+        const { changed, comments } = anonymizeExerciseCommentAuthors(exercise, authorId);
         if (changed) exercise.comments = comments;
       }
       for (const template of this.db.templates ?? []) {
         if (template.clubId !== clubId) continue;
-        const { changed, sets } = anonymizeTemplateCommentAuthors(template, authorName);
+        const { changed, sets } = anonymizeTemplateCommentAuthors(template, authorId);
         if (changed) template.sets = sets;
       }
     }

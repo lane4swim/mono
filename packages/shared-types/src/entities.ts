@@ -38,12 +38,28 @@ const nullableIsoDate = z.string().datetime().nullable();
 // im Übungskatalog (ExerciseSchema.comments). `id` ist bewusst kein UUID
 // (wie z. B. bei PlainSetSchema.id) — Kommentare sind Einträge in einer
 // eingebetteten Liste, keine eigenständig referenzierten Entitäten.
+//
 // `authorName` wird vom Frontend beim Anlegen aus dem eingeloggten Konto
-// übernommen (Anzeige-Zweck) — es gibt bewusst keine serverseitige
-// Autor:innen-Verifikation, genau wie bei den übrigen freien Textfeldern
-// dieses Datenmodells (z. B. Athlete.notes, TrainingSession.trainerNote).
+// übernommen (reiner Anzeige-Zweck, kann sich ändern, wenn die Person
+// später ihren Namen ändert — deshalb KEIN Abgleichsschlüssel).
+//
+// `authorId` (Sicherheitsreview 2026-08-27, Befund M2): bis hierhin gab
+// es überhaupt keine serverseitige Autor:innen-Verifikation — jedes
+// Vereinsmitglied konnte per direktem POST /api/sync/push einen
+// Kommentar unter einem beliebigen `authorName` hinterlassen
+// (Identitätsvortäuschung), und die Art.-17-Anonymisierung (Befund N5
+// des Vorreviews) ließ sich über einen bewusst abweichenden Namen gezielt
+// umgehen. `authorId` ist die tatsächliche, stabile User-ID — anders als
+// `authorName` NICHT frei wählbar: `sync.commentAuthorship.ts` erzwingt
+// beim Push, dass ein NEUER Kommentar `authorId === request.user.sub`
+// trägt und ein BESTEHENDER Kommentar seine ursprüngliche Zuordnung
+// behält (siehe dort). `jobs/commentAnonymization.ts` gleicht seither
+// gegen `authorId` statt gegen `authorName` ab — die dort zuvor
+// dokumentierte Unschärfe (Namensgleichheit, nachträgliche
+// Namensänderung) entfällt dadurch.
 export const CommentSchema = z.object({
   id: z.string().min(1),
+  authorId: z.string().uuid(),
   authorName: z.string().min(1).max(200),
   text: z.string().min(1).max(5000),
   createdAt: isoDate,

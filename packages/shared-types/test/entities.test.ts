@@ -129,7 +129,7 @@ describe('ResultSchema', () => {
 });
 
 describe('CommentSchema', () => {
-  const valid = { id: 'c1', authorName: 'Sabine Reuter', text: 'Bitte auf die Wende achten.', createdAt: now };
+  const valid = { id: 'c1', authorId: TRAINER_ID, authorName: 'Sabine Reuter', text: 'Bitte auf die Wende achten.', createdAt: now };
   it('akzeptiert einen gültigen Kommentar', () => {
     expect(CommentSchema.safeParse(valid).success).toBe(true);
   });
@@ -138,6 +138,15 @@ describe('CommentSchema', () => {
   });
   it('lehnt einen leeren Autorennamen ab', () => {
     expect(CommentSchema.safeParse({ ...valid, authorName: '' }).success).toBe(false);
+  });
+  // Regressionstest für Befund M2 (Sicherheitsreview 2026-08-27): authorId
+  // ist jetzt Pflichtfeld und muss eine gültige User-ID (UUID) sein.
+  it('lehnt eine fehlende authorId ab', () => {
+    const { authorId: _authorId, ...withoutAuthorId } = valid;
+    expect(CommentSchema.safeParse(withoutAuthorId).success).toBe(false);
+  });
+  it('lehnt eine ungültige authorId ab', () => {
+    expect(CommentSchema.safeParse({ ...valid, authorId: 'not-a-uuid' }).success).toBe(false);
   });
   it('lehnt unbekannte Zusatzfelder ab (.strict())', () => {
     expect(CommentSchema.safeParse({ ...valid, authorUserId: '123' }).success).toBe(false);
@@ -159,11 +168,11 @@ describe('ExerciseSchema', () => {
     if (parsed.success) expect(parsed.data.comments).toEqual([]);
   });
   it('akzeptiert Kommentare im Übungskatalog', () => {
-    const withComment = { ...valid, comments: [{ id: 'c1', authorName: 'Jonas Beck', text: 'Auf Handstellung achten.', createdAt: now }] };
+    const withComment = { ...valid, comments: [{ id: 'c1', authorId: TRAINER_ID, authorName: 'Jonas Beck', text: 'Auf Handstellung achten.', createdAt: now }] };
     expect(ExerciseSchema.safeParse(withComment).success).toBe(true);
   });
   it('lehnt einen fehlerhaften Kommentar ab (leerer Text)', () => {
-    const withBadComment = { ...valid, comments: [{ id: 'c1', authorName: 'Jonas Beck', text: '', createdAt: now }] };
+    const withBadComment = { ...valid, comments: [{ id: 'c1', authorId: TRAINER_ID, authorName: 'Jonas Beck', text: '', createdAt: now }] };
     expect(ExerciseSchema.safeParse(withBadComment).success).toBe(false);
   });
 
@@ -171,7 +180,7 @@ describe('ExerciseSchema', () => {
   it('lehnt mehr als 50 Tags/Ausrüstungsgegenstände sowie mehr als 500 Kommentare ab', () => {
     expect(ExerciseSchema.safeParse({ ...valid, tags: Array(51).fill('x') }).success).toBe(false);
     expect(ExerciseSchema.safeParse({ ...valid, equipment: Array(51).fill('x') }).success).toBe(false);
-    const manyComments = Array.from({ length: 501 }, (_, i) => ({ id: `c${i}`, authorName: 'X', text: 'x', createdAt: now }));
+    const manyComments = Array.from({ length: 501 }, (_, i) => ({ id: `c${i}`, authorId: TRAINER_ID, authorName: 'X', text: 'x', createdAt: now }));
     expect(ExerciseSchema.safeParse({ ...valid, comments: manyComments }).success).toBe(false);
   });
 });
@@ -199,18 +208,18 @@ describe('SetEntrySchema (Sätze & Wiederholungsblöcke)', () => {
     expect(SetEntrySchema.safeParse({ kind: 'unknown' }).success).toBe(false);
   });
   it('akzeptiert Kommentare an einem einzelnen Satz (auch innerhalb eines Blocks)', () => {
-    const set = { kind: 'set', id: 's1', description: '8x100 Freistil', distance: 100, reps: 8, intensity: 'ga1', restSec: 20, comments: [{ id: 'c1', authorName: 'Mara Vogel', text: 'War heute sehr anstrengend.', createdAt: now }] };
+    const set = { kind: 'set', id: 's1', description: '8x100 Freistil', distance: 100, reps: 8, intensity: 'ga1', restSec: 20, comments: [{ id: 'c1', authorId: TRAINER_ID, authorName: 'Mara Vogel', text: 'War heute sehr anstrengend.', createdAt: now }] };
     expect(SetEntrySchema.safeParse(set).success).toBe(true);
     const block = {
       kind: 'block', id: 'b1', label: 'Hauptserie', repeatCount: 3,
-      sets: [{ kind: 'set', id: 's1', description: 'Sprint', distance: 25, reps: 2, intensity: 'sprint', restSec: 30, comments: [{ id: 'c2', authorName: 'Trainer X', text: 'Guter Antritt.', createdAt: now }] }],
+      sets: [{ kind: 'set', id: 's1', description: 'Sprint', distance: 25, reps: 2, intensity: 'sprint', restSec: 30, comments: [{ id: 'c2', authorId: TRAINER_ID, authorName: 'Trainer X', text: 'Guter Antritt.', createdAt: now }] }],
     };
     expect(SetEntrySchema.safeParse(block).success).toBe(true);
   });
 
   // Regressionstest für Befund S7 (Code-Review).
   it('lehnt mehr als 200 Kommentare an einem Satz sowie mehr als 50 Sätze in einem Block ab', () => {
-    const manyComments = Array.from({ length: 201 }, (_, i) => ({ id: `c${i}`, authorName: 'X', text: 'x', createdAt: now }));
+    const manyComments = Array.from({ length: 201 }, (_, i) => ({ id: `c${i}`, authorId: TRAINER_ID, authorName: 'X', text: 'x', createdAt: now }));
     const setWithTooManyComments = { kind: 'set', id: 's1', description: 'X', distance: 100, reps: 1, intensity: 'ga1', restSec: 0, comments: manyComments };
     expect(SetEntrySchema.safeParse(setWithTooManyComments).success).toBe(false);
 
@@ -258,7 +267,7 @@ describe('PlanSchema', () => {
   it('akzeptiert Kommentare auf Planebene', () => {
     const plan = {
       id: ATHLETE_ID, clubId: CLUB_ID, name: 'Trainingswoche', weekStart: now, groupId: null, status: 'aktiv',
-      days: [], comments: [{ id: 'c1', authorName: 'Trainer X', text: 'Guter Wochenaufbau.', createdAt: now }],
+      days: [], comments: [{ id: 'c1', authorId: TRAINER_ID, authorName: 'Trainer X', text: 'Guter Wochenaufbau.', createdAt: now }],
       createdAt: now, updatedAt: now,
     };
     expect(PlanSchema.safeParse(plan).success).toBe(true);
@@ -273,7 +282,7 @@ describe('PlanSchema', () => {
     const oneDay = { date: now, sets: [] };
     expect(PlanSchema.safeParse({ ...base, days: Array(61).fill(oneDay), comments: [] }).success).toBe(false);
     expect(PlanSchema.safeParse({ ...base, days: Array(60).fill(oneDay), comments: [] }).success).toBe(true);
-    const manyComments = Array.from({ length: 501 }, (_, i) => ({ id: `c${i}`, authorName: 'X', text: 'x', createdAt: now }));
+    const manyComments = Array.from({ length: 501 }, (_, i) => ({ id: `c${i}`, authorId: TRAINER_ID, authorName: 'X', text: 'x', createdAt: now }));
     expect(PlanSchema.safeParse({ ...base, days: [], comments: manyComments }).success).toBe(false);
   });
 });

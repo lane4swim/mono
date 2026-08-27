@@ -29,20 +29,20 @@ describe('purgeExpiredDeletions — Comment.authorName-Anonymisierung (Befund N5
         {
           id: 'p1',
           clubId: 'club-1',
-          comments: [{ id: 'c1', authorName: 'Mara Vogel', text: 'Guter Plan', createdAt: NOW.toISOString() }],
+          comments: [{ id: 'c1', authorId: 'u1', authorName: 'Mara Vogel', text: 'Guter Plan', createdAt: NOW.toISOString() }],
           days: [
             {
               date: NOW.toISOString(),
-              sets: [{ kind: 'set', id: 's1', comments: [{ id: 'c2', authorName: 'Mara Vogel', text: 'Harte Serie', createdAt: NOW.toISOString() }] }],
+              sets: [{ kind: 'set', id: 's1', comments: [{ id: 'c2', authorId: 'u1', authorName: 'Mara Vogel', text: 'Harte Serie', createdAt: NOW.toISOString() }] }],
             },
           ],
         },
       ],
       exercises: [
-        { id: 'ex1', clubId: 'club-1', comments: [{ id: 'c3', authorName: 'Mara Vogel', text: 'Technik-Hinweis', createdAt: NOW.toISOString() }] },
+        { id: 'ex1', clubId: 'club-1', comments: [{ id: 'c3', authorId: 'u1', authorName: 'Mara Vogel', text: 'Technik-Hinweis', createdAt: NOW.toISOString() }] },
       ],
       templates: [
-        { id: 't1', clubId: 'club-1', sets: [{ kind: 'set', id: 's2', comments: [{ id: 'c4', authorName: 'Mara Vogel', text: 'Vorlagen-Hinweis', createdAt: NOW.toISOString() }] }] },
+        { id: 't1', clubId: 'club-1', sets: [{ kind: 'set', id: 's2', comments: [{ id: 'c4', authorId: 'u1', authorName: 'Mara Vogel', text: 'Vorlagen-Hinweis', createdAt: NOW.toISOString() }] }] },
       ],
     });
     const gateway = new InMemoryErasureJobGateway(db);
@@ -65,8 +65,8 @@ describe('purgeExpiredDeletions — Comment.authorName-Anonymisierung (Befund N5
       users: [{ id: 'u1', clubId: 'club-1', athleteId: null, name: 'Mara Vogel' }],
       deletionRequests: [{ id: 'req1', userId: 'u1', purgeAfter: PAST }],
       plans: [
-        { id: 'p1', clubId: 'club-1', comments: [{ id: 'c1', authorName: 'Jens Bauer', text: 'Nicht meins', createdAt: NOW.toISOString() }], days: [] },
-        { id: 'p2', clubId: 'club-2', comments: [{ id: 'c2', authorName: 'Mara Vogel', text: 'Anderer Verein', createdAt: NOW.toISOString() }], days: [] },
+        { id: 'p1', clubId: 'club-1', comments: [{ id: 'c1', authorId: 'u2', authorName: 'Jens Bauer', text: 'Nicht meins', createdAt: NOW.toISOString() }], days: [] },
+        { id: 'p2', clubId: 'club-2', comments: [{ id: 'c2', authorId: 'u1', authorName: 'Mara Vogel', text: 'Anderer Verein', createdAt: NOW.toISOString() }], days: [] },
       ],
     });
     const gateway = new InMemoryErasureJobGateway(db);
@@ -84,7 +84,7 @@ describe('purgeExpiredDeletions — Comment.authorName-Anonymisierung (Befund N5
     const db = makeDb({
       users: [{ id: 'u1', clubId: 'club-1', athleteId: null, name: 'Coach Nina' }],
       deletionRequests: [{ id: 'req1', userId: 'u1', purgeAfter: PAST }],
-      exercises: [{ id: 'ex1', clubId: 'club-1', comments: [{ id: 'c1', authorName: 'Coach Nina', text: 'Trainer-Hinweis', createdAt: NOW.toISOString() }] }],
+      exercises: [{ id: 'ex1', clubId: 'club-1', comments: [{ id: 'c1', authorId: 'u1', authorName: 'Coach Nina', text: 'Trainer-Hinweis', createdAt: NOW.toISOString() }] }],
     });
     const gateway = new InMemoryErasureJobGateway(db);
     await purgeExpiredDeletions(gateway, NOW);
@@ -302,7 +302,7 @@ describe('purgeExpiredDeletions — Tombstones (Verbesserung: Löschungen bleibe
 
     await purgeExpiredDeletions(erasureGateway, NOW);
 
-    const pullResult = await syncService.pull({}, { clubId: 'club-1', role: 'trainer', athleteId: null, enabledModules: MODULE_KEYS });
+    const pullResult = await syncService.pull({}, { userId: 'u1', clubId: 'club-1', role: 'trainer', athleteId: null, enabledModules: MODULE_KEYS });
     expect(pullResult.changes).toContainEqual(
       expect.objectContaining({ store: 'athletes', entityId: 'ath-1', action: 'delete', payload: null }),
     );

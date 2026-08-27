@@ -26,17 +26,17 @@ nachvollzogen. Ergebnis dieser Nachprüfung:
   Lücke geöffnet — siehe **H1** unten. Der zugehörige Regressionstest
   zementiert genau das verwundbare Verhalten als „korrekt".
 
-**Update (27. August 2026, im Anschluss an dieses Review).** In drei
+**Update (27. August 2026, im Anschluss an dieses Review).** In vier
 Schritten direkt im Anschluss an diese Prüfung behoben (siehe die
 jeweiligen **Fix**-Abschnitte unten): zuerst **H1** und **N7** — beide
 betreffen dieselbe Betriebsannahme (ein vorgeschalteter, co-lokalisierter
 Reverse Proxy) und wurden bewusst gemeinsam umgesetzt —, danach **H2**
 zusammen mit **N3** (N3s Fix wandert wie in dessen ursprünglicher
 Empfehlung vorgesehen direkt in den für H2 neu geschaffenen Endpunkt) und
-**N4**, zuletzt **M1**. Damit sind beide Hoch-Befunde, einer der beiden
-Mittel-Befunde sowie drei der sieben Niedrig-Befunde behoben; **M2** sowie
-**N1**, **N2**, **N5**, **N6** sind zum Zeitpunkt dieses Updates weiterhin
-offen.
+**N4**, danach **M1**, zuletzt **M2** zusammen mit **N6**. Damit sind
+beide Hoch-Befunde, beide Mittel-Befunde sowie fünf der sieben
+Niedrig-Befunde behoben; **N1**, **N2**, **N5** sind zum Zeitpunkt dieses
+Updates weiterhin offen.
 
 **Vorbemerkung.** Der Gesamteindruck des Vorreviews bestätigt sich: die
 Kernlogik ist überdurchschnittlich sorgfältig gebaut. argon2id mit
@@ -66,13 +66,13 @@ Schweregrade: **Hoch** = vor dem nächsten Produktivbetrieb beheben,
 | H1 | `trustProxy: true`: `X-Forwarded-For` ist vollständig client-kontrolliert — alle IP-Rate-Limits umgehbar | `apps/api/src/app.ts:80` | Hoch — **behoben** |
 | H2 | `PATCH /api/me` erlaubt unverifizierten E-Mail-Wechsel ohne Passwortprüfung → dauerhafte Kontoübernahme | `auth.route.ts:204`, `auth.service.ts:482` | Hoch — **behoben** |
 | M1 | Art.-17-Hard-Purge lässt die E-Mail-Adresse in `invitations` stehen | `jobs/erasure.repository.ts:43-217` | Mittel — **behoben** |
-| M2 | `Comment.authorName` ist reine Client-Angabe — Identitätsvortäuschung im Verein | `entities.ts:47`, `sync.permissions.ts:91` | Mittel |
+| M2 | `Comment.authorName` ist reine Client-Angabe — Identitätsvortäuschung im Verein | `entities.ts:47`, `sync.permissions.ts:91` | Mittel — **behoben** |
 | N1 | Frisch erzeugtes DB-Passwort landet im Klartext im Terminal/CI-Log | `scripts/setup-codespace.sh:296` | Niedrig |
 | N2 | Superadmin-Passwort als Kommandozeilenargument (**offen aus Vorreview N6**) | `scripts/createSuperAdmin.ts`, `setup-codespace.sh:221` | Niedrig |
 | N3 | E-Mail-Wechsel auf die Adresse eines soft-gelöschten Kontos → 500 statt 409 (Existenz-Orakel) | `auth.service.ts:486-488` | Niedrig — **behoben** |
 | N4 | `resetPassword()` invalidiert weitere offene Reset-Tokens desselben Kontos nicht | `auth.service.ts:427-445` | Niedrig — **behoben** |
 | N5 | Abbestelltes Modul entfernt bereits synchronisierte Daten nicht vom Gerät | `sync.service.ts:439`, `syncClient.js` | Niedrig |
-| N6 | `GET /api/users/trainers` liefert vollständige Nutzerdatensätze an jede Rolle `trainer` | `auth.service.ts:545` | Niedrig |
+| N6 | `GET /api/users/trainers` liefert vollständige Nutzerdatensätze an jede Rolle `trainer` | `auth.service.ts:545` | Niedrig — **behoben** |
 | N7 | API lauscht fest auf `0.0.0.0:3000`, nicht konfigurierbar | `apps/api/src/index.ts:10` | Niedrig — **behoben** |
 
 ---
@@ -424,8 +424,59 @@ dem Athletenprofil ohnehin gelöscht) können den Klarnamen enthalten.
 
 ---
 
-### M2 — `Comment.authorName` ist reine Client-Angabe
+### M2 — `Comment.authorName` ist reine Client-Angabe — **behoben**
 
+**Fix.** Umgesetzt wie in der Empfehlung beschrieben, mit einer bewussten
+Erweiterung über den ursprünglichen Vorschlag hinaus:
+
+* `CommentSchema` (`packages/shared-types/src/entities.ts`) trägt jetzt
+  zusätzlich `authorId: z.string().uuid()`.
+* `SyncRequester` (`sync.service.ts`) führt ein neues Feld `userId`
+  (`request.user.sub`, durchgereicht über `requesterFrom()` in
+  `sync.route.ts`).
+* Neue Datei `apps/api/src/modules/sync/sync.commentAuthorship.ts`:
+  `assertCommentAuthorship()` durchsucht für die drei Stores mit
+  eingebetteten Kommentar-Arrays (`exercises`, `plans`, `templates`,
+  inklusive der verschachtelten `days[].sets[].comments`/`sets[].comments`
+  bis in Wiederholungsblöcke hinein) alle Kommentar-Gruppen eines
+  validierten Payloads und erzwingt zwei Regeln, analog zur bestehenden
+  `results`-Zeilenprüfung inline in `push()` (nachdem `existing` geladen
+  wurde, da beide Regeln den bisherigen Datensatz zum Vergleich brauchen):
+  * ein **neuer** Kommentar (dessen `id` im bisherigen Datensatz noch nicht
+    vorkam) muss `authorId === requester.sub` tragen;
+  * ein **bestehender** Kommentar (die `id` existierte bereits) behält
+    seine ursprüngliche `authorId`-Zuordnung unveränderlich — unabhängig
+    davon, wer den umgebenden Datensatz gerade bearbeitet.
+
+  Die zweite Regel geht bewusst über die ursprüngliche Empfehlung hinaus
+  (die nur „neue/geänderte Kommentare" nannte): `plans` steht in
+  `STORE_PERMISSIONS` als `shared` — ohne diese zweite Regel könnte jedes
+  Vereinsmitglied beim Bearbeiten eines geteilten Plans die
+  Autor:innen-Zuordnung eines fremden, bereits bestehenden Kommentars
+  nachträglich umschreiben, ohne selbst einen neuen Kommentar anzulegen.
+* `jobs/commentAnonymization.ts` (N5-Fix des Vorreviews) gleicht jetzt auf
+  `authorId` statt auf `authorName` ab — die dort zuvor dokumentierte
+  Grenze (Namensgleichheit/-änderung als Unschärfequelle) entfällt damit
+  vollständig, ebenso in `erasure.repository.ts`/`.memory.ts` (Art.-17-Purge
+  übergibt jetzt `user.id` statt `user.name`).
+* Frontend (`apps/web/js/modules/comments.js`): `addComment()` setzt
+  `authorId: user?.id` beim Anlegen eines neuen Kommentars.
+
+Regressionstests: `packages/shared-types/test/entities.test.ts`
+(`authorId` als Pflichtfeld, lehnt fehlenden/ungültigen Wert ab);
+`apps/api/test/jobs/commentAnonymization.test.ts` (Abgleich erfolgt über
+`authorId`, ein abweichender `authorName` bei gleicher `authorId` umgeht
+die Anonymisierung nicht mehr — direkte Regression des vormals
+dokumentierten N5-Umgehungswegs); `apps/api/test/sync/sync.service.test.ts`
+(neuer Block „Kommentar-Autor:innen-Prüfung" — akzeptiert eigene neue
+Kommentare, lehnt fremd zugeordnete neue Kommentare in allen drei Stores
+ab inklusive verschachtelter Plan-Sets/-Blöcke, lehnt den nachträglichen
+`authorId`-Wechsel eines bestehenden Kommentars durch eine andere Person
+ab, erlaubt weiterhin das Hinzufügen eines eigenen neuen Kommentars neben
+einem fremden bestehenden im selben Datensatz, Stores ohne Kommentare
+bleiben unbeeinflusst).
+
+Ursprünglicher Befund, Fundstellen zum Zeitpunkt der Analyse:
 `packages/shared-types/src/entities.ts:41-50`,
 `apps/web/js/modules/comments.js:72`,
 `apps/api/src/modules/sync/sync.permissions.ts:91`
@@ -663,8 +714,25 @@ bereits eindeutig, und `db.js` hat mit `wipeAll()` die passende Mechanik in
 gröberer Form. Den Sync-Cursor dabei zurücksetzen, damit ein späteres
 Wieder-Zubuchen den Bestand erneut vollständig zieht.
 
-### N6 — `GET /api/users/trainers` liefert vollständige Nutzerdatensätze
+### N6 — `GET /api/users/trainers` liefert vollständige Nutzerdatensätze — **behoben**
 
+**Fix.** Umgesetzt wie in der Empfehlung beschrieben: `listMembers()`
+(`auth.service.ts`) nimmt jetzt zusätzlich einen verpflichtenden
+`project`-Parameter entgegen und wendet ihn nach Filter/Sortierung auf
+jeden Datensatz an, statt intern immer `toPublicUser()` zu fest zu
+verdrahten. `listClubMembers()` (bedient `GET /api/users`, braucht
+weiterhin die vollständige Ansicht) übergibt `project: toPublicUser`;
+`listAssignableTrainers()` (bedient `GET /api/users/trainers`) übergibt
+stattdessen `project: (u) => ({ id: u.id, name: u.name, role: u.role })`
+— exakt die drei Felder, die das Dropdown in `modules/actionItems.js`
+braucht, ohne E-Mail-Adresse, Einwilligungs-Metadaten oder sonstige
+DSGVO-Nachweisdaten.
+
+Regressionstests: `apps/api/test/auth/auth.route.test.ts` — ein Test
+bestätigt, dass `GET /api/users/trainers` ausschließlich `id`/`name`/`role`
+liefert und insbesondere kein `email`-Feld enthält.
+
+Ursprünglicher Befund, Fundstellen zum Zeitpunkt der Analyse:
 `apps/api/src/modules/auth/auth.service.ts:545-552`, `auth.route.ts:190-197`
 
 Der Endpunkt bedient laut Kommentar ausschließlich ein Dropdown zur
@@ -866,7 +934,12 @@ und sind sauber:
    Analogie zum bereits geleisteten N5-Fix, mit stabilerer Zuordnung.~~
    **Behoben** (`ANONYMIZED_INVITATION_EMAIL`, siehe dortiger
    **Fix**-Abschnitt).
-4. **M2** — `authorId` einführen oder die Entscheidung an `CommentSchema`
-   explizit dokumentieren. Größter verbleibender Befund.
-5. **N1, N2, N5, N6** bei nächster Berührung. ~~**N3**~~/~~**N4**~~/~~**N7**~~
-   **Behoben** (siehe jeweiliger **Fix**-Abschnitt).
+4. ~~**M2** — `authorId` einführen oder die Entscheidung an `CommentSchema`
+   explizit dokumentieren.~~ **Behoben** (`CommentSchema.authorId` +
+   `sync.commentAuthorship.ts`, siehe dortiger **Fix**-Abschnitt) —
+   zusammen mit **N6** umgesetzt.
+5. ~~**N6** — eigene Projektion für `/api/users/trainers`.~~ **Behoben**
+   (`listMembers()`-Parameter `project`, siehe dortiger **Fix**-Abschnitt).
+6. **N1, N2, N5** bei nächster Berührung, größter verbleibender Befund
+   dabei **N5**. ~~**N3**~~/~~**N4**~~/~~**N7**~~ **Behoben** (siehe
+   jeweiliger **Fix**-Abschnitt).

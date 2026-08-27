@@ -184,14 +184,28 @@ export function createAuthService(deps: AuthServiceDeps) {
   // Code-Review, Befund R9: listClubMembers() und listAssignableTrainers()
   // teilten sich zuvor Abruf, Sortierung und toPublicUser()-Mapping als
   // Kopie und unterschieden sich nur in Filter und Sortierkriterium.
-  async function listMembers(
+  //
+  // Sicherheitsreview 2026-08-27, Befund N6: `project` zusätzlich
+  // parametrisiert (statt fest `toPublicUser()`) — `/api/users/trainers`
+  // (siehe listAssignableTrainers() unten) bedient ausschließlich ein
+  // Dropdown zur Auswahl der zuständigen Person für ein Handlungsfeld und
+  // brauchte dafür nie mehr als id/name/role; `toPublicUser()` lieferte
+  // dort bislang zusätzlich E-Mail-Adresse und DSGVO-Einwilligungs-
+  // Nachweisdaten (`consentGivenAt`/`consentVersion`), die in einem
+  // reinen Auswahl-Endpunkt nichts verloren haben. `listClubMembers()`
+  // (echte Mitgliederverwaltung, braucht tatsächlich mehr Felder) bleibt
+  // unverändert bei `toPublicUser()`.
+  async function listMembers<T>(
     clubId: string,
-    { filter, compare }: { filter?: (user: UserRecord) => boolean; compare: (a: UserRecord, b: UserRecord) => number },
-  ) {
+    opts: {
+      filter?: (user: UserRecord) => boolean;
+      compare: (a: UserRecord, b: UserRecord) => number;
+      project: (user: UserRecord) => T;
+    },
+  ): Promise<T[]> {
     const users = await deps.users.listByClub(clubId);
-    const scoped = filter ? users.filter(filter) : users;
-    const sorted = [...scoped].sort(compare);
-    return sorted.map(toPublicUser);
+    const scoped = opts.filter ? users.filter(opts.filter) : users;
+    return [...scoped].sort(opts.compare).map(opts.project);
   }
 
   return {
@@ -608,6 +622,7 @@ export function createAuthService(deps: AuthServiceDeps) {
           const roleDiff = (rolePriority[a.role] ?? 9) - (rolePriority[b.role] ?? 9);
           return roleDiff !== 0 ? roleDiff : a.name.localeCompare(b.name);
         },
+        project: toPublicUser,
       });
     },
 
@@ -625,6 +640,9 @@ export function createAuthService(deps: AuthServiceDeps) {
       return listMembers(requester.clubId, {
         filter: (u) => u.role === 'trainer' || u.role === 'admin',
         compare: (a, b) => a.name.localeCompare(b.name),
+        // Sicherheitsreview 2026-08-27, Befund N6: schmale Projektion
+        // statt toPublicUser() — siehe Kommentar bei listMembers() oben.
+        project: (u) => ({ id: u.id, name: u.name, role: u.role }),
       });
     },
   };

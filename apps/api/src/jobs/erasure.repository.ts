@@ -170,6 +170,15 @@ export class PrismaErasureJobGateway implements ErasureJobGateway {
       // `user.clubId`, damit ein Konto ohne Verein (z. B. Superadmin, das
       // ohnehin nie Kommentare verfasst) keinen club-weiten Scan auslöst.
       //
+      // Sicherheitsreview 2026-08-27, Befund M2: Abgleich läuft jetzt über
+      // `authorId` statt über den frei wählbaren `authorName` — CommentSchema
+      // trägt seither eine serverseitig durchgesetzte, stabile User-ID
+      // (siehe sync.commentAuthorship.ts). Die vormals hier geltende
+      // Einschränkung (Namensgleichheit mit einer anderen Person,
+      // nachträgliche Namensänderung, ein absichtlich abweichender Name
+      // entzieht den eigenen Kommentar der Anonymisierung) entfällt
+      // dadurch vollständig.
+      //
       // Wie bei der Anwesenheits-Bereinigung oben (Befund C4): erst per
       // gezielter SQL-Bedingung nur die TATSÄCHLICH betroffenen Zeilen
       // laden (Containment `@>` für die flache oberste Ebene,
@@ -179,19 +188,19 @@ export class PrismaErasureJobGateway implements ErasureJobGateway {
       // Block-/Set-Verschachtelung), statt alle Pläne/Übungen/Vorlagen des
       // Vereins zu laden und in JS zu filtern.
       if (user.clubId) {
-        const authorNameContainment = JSON.stringify([{ authorName: user.name }]);
-        const pathVars = JSON.stringify({ name: user.name });
+        const authorIdContainment = JSON.stringify([{ authorId: user.id }]);
+        const pathVars = JSON.stringify({ id: user.id });
 
         const affectedPlans = await tx.$queryRaw<Array<{ id: string; comments: unknown; days: unknown }>>`
           SELECT id, comments, days FROM "plans"
           WHERE "clubId" = ${user.clubId}
             AND (
-              comments @> ${authorNameContainment}::jsonb
-              OR jsonb_path_exists(days, '$.**.comments[*] ? (@.authorName == $name)', ${pathVars}::jsonb)
+              comments @> ${authorIdContainment}::jsonb
+              OR jsonb_path_exists(days, '$.**.comments[*] ? (@.authorId == $id)', ${pathVars}::jsonb)
             )
         `;
         for (const row of affectedPlans) {
-          const { changed, comments, days } = anonymizePlanCommentAuthors(row, user.name);
+          const { changed, comments, days } = anonymizePlanCommentAuthors(row, user.id);
           if (changed) {
             await tx.plan.update({
               where: { id: row.id },
@@ -203,10 +212,10 @@ export class PrismaErasureJobGateway implements ErasureJobGateway {
         const affectedExercises = await tx.$queryRaw<Array<{ id: string; comments: unknown }>>`
           SELECT id, comments FROM "exercises"
           WHERE "clubId" = ${user.clubId}
-            AND comments @> ${authorNameContainment}::jsonb
+            AND comments @> ${authorIdContainment}::jsonb
         `;
         for (const row of affectedExercises) {
-          const { changed, comments } = anonymizeExerciseCommentAuthors(row, user.name);
+          const { changed, comments } = anonymizeExerciseCommentAuthors(row, user.id);
           if (changed) {
             await tx.exercise.update({ where: { id: row.id }, data: { comments: comments as Prisma.InputJsonValue } });
           }
@@ -215,10 +224,10 @@ export class PrismaErasureJobGateway implements ErasureJobGateway {
         const affectedTemplates = await tx.$queryRaw<Array<{ id: string; sets: unknown }>>`
           SELECT id, sets FROM "templates"
           WHERE "clubId" = ${user.clubId}
-            AND jsonb_path_exists(sets, '$.**.comments[*] ? (@.authorName == $name)', ${pathVars}::jsonb)
+            AND jsonb_path_exists(sets, '$.**.comments[*] ? (@.authorId == $id)', ${pathVars}::jsonb)
         `;
         for (const row of affectedTemplates) {
-          const { changed, sets } = anonymizeTemplateCommentAuthors(row, user.name);
+          const { changed, sets } = anonymizeTemplateCommentAuthors(row, user.id);
           if (changed) {
             await tx.template.update({ where: { id: row.id }, data: { sets: sets as Prisma.InputJsonValue } });
           }

@@ -69,6 +69,11 @@ export function renderCommentThread(hostNode, initialComments, persist) {
     const user = getCurrentUser();
     const next = [...comments, {
       id: localId('comment'),
+      // Sicherheitsreview 2026-08-27, Befund M2: authorId ist jetzt
+      // Pflichtfeld (siehe CommentSchema in entities.ts) und wird serverseitig
+      // gegen die eigene Identität geprüft (sync.commentAuthorship.ts) — ein
+      // fehlender/fremder Wert würde den Sync-Push ablehnen.
+      authorId: user?.id,
       authorName: user?.name || user?.email || '—',
       text,
       createdAt: new Date().toISOString(),

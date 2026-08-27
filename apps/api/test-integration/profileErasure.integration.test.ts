@@ -373,18 +373,18 @@ describe('PrismaErasureJobGateway.purgeUserAndDependents() — Comment.authorNam
         clubId: club.id,
         name: 'Wochenplan',
         weekStart: now,
-        comments: [{ id: 'c1', authorName: user.name, text: 'Guter Plan', createdAt: now.toISOString() }],
+        comments: [{ id: 'c1', authorId: user.id, authorName: user.name, text: 'Guter Plan', createdAt: now.toISOString() }],
         days: [
           {
             date: now.toISOString(),
             sets: [
-              { kind: 'set', id: 's1', description: '', distance: 100, reps: 4, intensity: 'GA1', restSec: 30, comments: [{ id: 'c2', authorName: user.name, text: 'Harte Serie', createdAt: now.toISOString() }] },
+              { kind: 'set', id: 's1', description: '', distance: 100, reps: 4, intensity: 'GA1', restSec: 30, comments: [{ id: 'c2', authorId: user.id, authorName: user.name, text: 'Harte Serie', createdAt: now.toISOString() }] },
               // Verschachtelt in einem Block — der rekursive
               // jsonb_path_exists-Abstieg (`$..comments`) muss auch hier
               // treffen, nicht nur auf der obersten Set-Ebene.
               {
                 kind: 'block', id: 'b1', label: '', repeatCount: 3,
-                sets: [{ kind: 'set', id: 's2', description: '', distance: 50, reps: 8, intensity: 'GA2', restSec: 15, comments: [{ id: 'c3', authorName: user.name, text: 'Im Block', createdAt: now.toISOString() }] }],
+                sets: [{ kind: 'set', id: 's2', description: '', distance: 50, reps: 8, intensity: 'GA2', restSec: 15, comments: [{ id: 'c3', authorId: user.id, authorName: user.name, text: 'Im Block', createdAt: now.toISOString() }] }],
               },
             ],
           },
@@ -392,10 +392,10 @@ describe('PrismaErasureJobGateway.purgeUserAndDependents() — Comment.authorNam
       },
     });
     const exercise = await prisma.exercise.create({
-      data: { clubId: club.id, name: 'Kraulbeine', category: 'kick', comments: [{ id: 'c4', authorName: user.name, text: 'Technik-Hinweis', createdAt: now.toISOString() }] },
+      data: { clubId: club.id, name: 'Kraulbeine', category: 'kick', comments: [{ id: 'c4', authorId: user.id, authorName: user.name, text: 'Technik-Hinweis', createdAt: now.toISOString() }] },
     });
     const template = await prisma.template.create({
-      data: { clubId: club.id, name: 'Standard-Vorlage', sets: [{ kind: 'set', id: 's3', description: '', distance: 200, reps: 1, intensity: 'GA1', restSec: 0, comments: [{ id: 'c5', authorName: user.name, text: 'Vorlagen-Hinweis', createdAt: now.toISOString() }] }] },
+      data: { clubId: club.id, name: 'Standard-Vorlage', sets: [{ kind: 'set', id: 's3', description: '', distance: 200, reps: 1, intensity: 'GA1', restSec: 0, comments: [{ id: 'c5', authorId: user.id, authorName: user.name, text: 'Vorlagen-Hinweis', createdAt: now.toISOString() }] }] },
     });
 
     await erasureGateway.purgeUserAndDependents(user.id);
@@ -421,10 +421,10 @@ describe('PrismaErasureJobGateway.purgeUserAndDependents() — Comment.authorNam
     const now = new Date();
 
     const foreignAuthorPlan = await prisma.plan.create({
-      data: { clubId: club.id, name: 'Plan A', weekStart: now, comments: [{ id: 'c1', authorName: 'Jens Bauer', text: 'Nicht meins', createdAt: now.toISOString() }], days: [] },
+      data: { clubId: club.id, name: 'Plan A', weekStart: now, comments: [{ id: 'c1', authorId: randomUUID(), authorName: 'Jens Bauer', text: 'Nicht meins', createdAt: now.toISOString() }], days: [] },
     });
     const otherClubPlan = await prisma.plan.create({
-      data: { clubId: otherClub.id, name: 'Plan B', weekStart: now, comments: [{ id: 'c2', authorName: user.name, text: 'Anderer Verein', createdAt: now.toISOString() }], days: [] },
+      data: { clubId: otherClub.id, name: 'Plan B', weekStart: now, comments: [{ id: 'c2', authorId: user.id, authorName: user.name, text: 'Anderer Verein', createdAt: now.toISOString() }], days: [] },
     });
 
     await erasureGateway.purgeUserAndDependents(user.id);
@@ -445,7 +445,7 @@ describe('PrismaErasureJobGateway.purgeUserAndDependents() — Comment.authorNam
       data: { clubId: club.id, name: 'Coach Nina', email: `nina-${randomUUID()}@example.org`, passwordHash: 'hash', role: 'trainer', athleteId: null },
     });
     const exercise = await prisma.exercise.create({
-      data: { clubId: club.id, name: 'Beinschlag', category: 'kick', comments: [{ id: 'c1', authorName: 'Coach Nina', text: 'Trainer-Hinweis', createdAt: now.toISOString() }] },
+      data: { clubId: club.id, name: 'Beinschlag', category: 'kick', comments: [{ id: 'c1', authorId: trainer.id, authorName: 'Coach Nina', text: 'Trainer-Hinweis', createdAt: now.toISOString() }] },
     });
 
     await erasureGateway.purgeUserAndDependents(trainer.id);

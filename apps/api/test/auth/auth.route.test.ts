@@ -816,6 +816,25 @@ describe('GET /api/users/trainers (mögliche Zuständige für ein Handlungsfeld)
     await app.close();
   });
 
+  // Regressionstest für Sicherheitsreview 2026-08-27, Befund N6: dieser
+  // Endpunkt bedient ausschließlich ein Dropdown (id + Anzeigename) —
+  // toPublicUser() lieferte bislang zusätzlich E-Mail-Adresse und DSGVO-
+  // Einwilligungs-Nachweisdaten, die hier nichts verloren haben.
+  it('liefert NUR id/name/role, insbesondere KEINE E-Mail-Adresse und keine DSGVO-Einwilligungs-Nachweisdaten', async () => {
+    const { app, invitations } = await buildTestApp();
+    const trainerToken = await seedInvitationToken(invitations, { email: 'schmal@example.org', role: 'trainer' });
+    const trainerReg = await app.inject({ method: 'POST', url: '/auth/register', payload: { token: trainerToken, name: 'Schmale Sicht', password: 'ein-sicheres-passwort', consent: true } });
+    const { accessToken } = trainerReg.json();
+
+    const response = await app.inject({ method: 'GET', url: '/api/users/trainers', headers: { authorization: `Bearer ${accessToken}` } });
+    expect(response.statusCode).toBe(200);
+    const { users } = response.json();
+    expect(users).toHaveLength(1);
+    expect(Object.keys(users[0]).sort()).toEqual(['id', 'name', 'role']);
+    expect(users[0].role).toBe('trainer');
+    await app.close();
+  });
+
   it('admin erhält ebenfalls Zugriff', async () => {
     const { app, invitations } = await buildTestApp();
     const adminToken = await seedInvitationToken(invitations, { email: 'admin@example.org', role: 'admin' });
