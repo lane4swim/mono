@@ -1,5 +1,5 @@
 // apps/api/src/jobs/erasure.repository.memory.ts
-import type { ErasureJobGateway, DueErasureRequest } from './erasure.repository.js';
+import { ANONYMIZED_INVITATION_EMAIL, type ErasureJobGateway, type DueErasureRequest } from './erasure.repository.js';
 import type { TombstoneRecord } from '../modules/sync/sync.gateway.js';
 import { anonymizePlanCommentAuthors, anonymizeExerciseCommentAuthors, anonymizeTemplateCommentAuthors } from './commentAnonymization.js';
 
@@ -15,6 +15,10 @@ export interface InMemoryErasureDatabase {
   plans?: Array<{ id: string; clubId: string; comments: unknown; days: unknown }>;
   exercises?: Array<{ id: string; clubId: string; comments: unknown }>;
   templates?: Array<{ id: string; clubId: string; sets: unknown }>;
+  // Optional (Sicherheitsreview 2026-08-27, Befund M1) — siehe
+  // erasure.repository.ts (Prisma-Pendant) für die ausführliche
+  // Begründung.
+  invitations?: Array<{ email: string; athleteId?: string | null; [key: string]: unknown }>;
   refreshTokens: Array<{ id: string; userId: string }>;
   // Kein `status`/`purgedAt` mehr (Code-Review, Befund R8) — analog zur
   // Prisma-Implementierung ist jede noch VORHANDENE Zeile implizit
@@ -91,6 +95,17 @@ export class InMemoryErasureJobGateway implements ErasureJobGateway {
         if (template.clubId !== clubId) continue;
         const { changed, sets } = anonymizeTemplateCommentAuthors(template, authorName);
         if (changed) template.sets = sets;
+      }
+    }
+
+    // Sicherheitsreview 2026-08-27, Befund M1 — siehe ausführliche
+    // Begründung im Prisma-Pendant (erasure.repository.ts).
+    if (typeof user.email === 'string') {
+      for (const invitation of this.db.invitations ?? []) {
+        if (invitation.email === user.email) {
+          invitation.email = ANONYMIZED_INVITATION_EMAIL;
+          invitation.athleteId = null;
+        }
       }
     }
 

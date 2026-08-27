@@ -202,6 +202,56 @@ describe('PrismaErasureJobGateway.purgeUserAndDependents()', () => {
     await expect(erasureGateway.purgeUserAndDependents(user.id)).resolves.toBeUndefined();
   });
 
+  // Sicherheitsreview 2026-08-27, Befund M1: Invitation.email (die
+  // E-Mail-Adresse, AN die eine Einladung ausgestellt wurde) blieb bislang
+  // dauerhaft in der Datenbank stehen. Anders als die N5-Anonymisierung
+  // unten ist hier kein Postgres-spezifischer Operator im Spiel (reines
+  // Feld-Update) — trotzdem hier statt nur im InMemory-Double geprüft, um
+  // die tatsächliche Prisma-Modell-/Tabellen-Zuordnung ("invitation" ->
+  // "invitations", siehe schema.prisma: @@map) end-to-end abzudecken, UND
+  // um das Zusammenspiel mit der bereits bestehenden,
+  // schema-eigenen `onDelete: SetNull`-Beziehung auf `invitedById` zu
+  // zeigen: beide Mechanismen wirken auf DERSELBEN Tabelle, aber auf
+  // unterschiedliche Zeilen/Felder, ohne sich zu stören.
+  it('anonymisiert Invitation.email für Einladungen AN die gelöschte Person, nullt deren athleteId (Befund M1)', async () => {
+    const club = await createTestClub();
+    const athleteForInvite = await prisma.athlete.create({ data: { clubId: club.id, firstName: 'Lena', lastName: 'Brandt' } });
+    const { user } = await seedAthleteUser(club.id);
+
+    // Zwei Einladungen AN die zu löschende Person (eine davon längst
+    // angenommen — invitedById zeigt hier bewusst auf die Person SELBST,
+    // um zusätzlich zu demonstrieren, dass die beiden Mechanismen
+    // unabhängig voneinander UND auf derselben Zeile korrekt greifen).
+    const invitationToDeletedPerson = await prisma.invitation.create({
+      data: {
+        tokenHash: randomUUID(), email: user.email, role: 'athlete', clubId: club.id,
+        athleteId: athleteForInvite.id, invitedById: user.id, expiresAt: new Date(Date.now() + 1000), usedAt: new Date(),
+      },
+    });
+    // Einladung, die die zu löschende Person selbst an eine ANDERE Person
+    // ausgestellt hat — invitedById zeigt auf sie, email jedoch nicht.
+    const invitationSentByDeletedPerson = await prisma.invitation.create({
+      data: {
+        tokenHash: randomUUID(), email: 'jemand-anderes@example.org', role: 'trainer', clubId: club.id,
+        invitedById: user.id, expiresAt: new Date(Date.now() + 1000),
+      },
+    });
+
+    await erasureGateway.purgeUserAndDependents(user.id);
+
+    const updatedInvitationToDeletedPerson = await prisma.invitation.findUnique({ where: { id: invitationToDeletedPerson.id } });
+    expect(updatedInvitationToDeletedPerson?.email).toBe('geloeschtes-konto@geloescht.invalid');
+    expect(updatedInvitationToDeletedPerson?.athleteId).toBeNull();
+
+    // Unverändert in der E-Mail-Adresse (nicht AN die gelöschte Person
+    // gerichtet) — invitedById wird aber, unabhängig von meiner Änderung,
+    // durch die bereits bestehende onDelete: SetNull-Beziehung auf null
+    // gesetzt, sobald der User-Datensatz gelöscht wird.
+    const updatedInvitationSentByDeletedPerson = await prisma.invitation.findUnique({ where: { id: invitationSentByDeletedPerson.id } });
+    expect(updatedInvitationSentByDeletedPerson?.email).toBe('jemand-anderes@example.org');
+    expect(updatedInvitationSentByDeletedPerson?.invitedById).toBeNull();
+  });
+
   // Code-Review, Befund C4: die Anwesenheits-Bereinigung lief vormals über
   // eine JS-Schleife, die ALLE Trainingseinheiten des Vereins lud und
   // einzeln per update() zurückschrieb — bei einer mehrjährigen

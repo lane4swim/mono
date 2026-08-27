@@ -93,6 +93,64 @@ describe('purgeExpiredDeletions — Comment.authorName-Anonymisierung (Befund N5
   });
 });
 
+// Sicherheitsreview 2026-08-27, Befund M1: Invitation.email (die
+// E-Mail-Adresse, AN die eine Einladung ausgestellt wurde) wurde vom
+// Purge bislang gar nicht erfasst und blieb dauerhaft in der Datenbank
+// stehen — unabhängig davon, ob die Einladung angenommen, abgelaufen oder
+// widerrufen war.
+describe('purgeExpiredDeletions — Invitation.email-Anonymisierung (Befund M1)', () => {
+  it('anonymisiert JEDE Einladung an die E-Mail-Adresse der gelöschten Person und nullt deren athleteId', async () => {
+    const db = makeDb({
+      users: [{ id: 'u1', clubId: 'club-1', athleteId: 'ath-1', email: 'mara.vogel@example.org' }],
+      deletionRequests: [{ id: 'req1', userId: 'u1', purgeAfter: PAST }],
+      invitations: [
+        { id: 'inv1', email: 'mara.vogel@example.org', athleteId: 'ath-1', role: 'athlete' },
+        // Eine zweite, längst abgelaufene Einladung an dieselbe Adresse
+        // (z. B. weil die erste ursprünglich verpasst wurde) — MUSS
+        // ebenfalls erfasst werden, nicht nur die zuletzt angenommene.
+        { id: 'inv2', email: 'mara.vogel@example.org', athleteId: 'ath-1', role: 'athlete' },
+      ],
+    });
+    const gateway = new InMemoryErasureJobGateway(db);
+    await purgeExpiredDeletions(gateway, NOW);
+
+    for (const invitation of db.invitations!) {
+      expect(invitation.email).toBe('geloeschtes-konto@geloescht.invalid');
+      expect(invitation.athleteId).toBeNull();
+    }
+  });
+
+  it('lässt Einladungen an eine ANDERE E-Mail-Adresse unangetastet, inkl. solcher, die diese Person selbst AUSGESTELLT hat', async () => {
+    const db = makeDb({
+      users: [{ id: 'u1', clubId: 'club-1', athleteId: null, email: 'coach.nina@example.org' }],
+      deletionRequests: [{ id: 'req1', userId: 'u1', purgeAfter: PAST }],
+      invitations: [
+        { id: 'inv1', email: 'jemand-anderes@example.org', athleteId: null, role: 'trainer', invitedById: 'u1' },
+      ],
+    });
+    const gateway = new InMemoryErasureJobGateway(db);
+    await purgeExpiredDeletions(gateway, NOW);
+
+    // Die Einladung wurde von der gelöschten Person AUSGESTELLT (invitedById),
+    // nicht AN sie gerichtet (email) — bleibt bewusst unverändert (siehe
+    // Begründung in erasure.repository.ts).
+    expect(db.invitations![0]!.email).toBe('jemand-anderes@example.org');
+    expect(db.invitations![0]!.invitedById).toBe('u1');
+  });
+
+  it('funktioniert auch ohne verknüpftes Athletenprofil (z. B. eine Trainer:innen-Einladung)', async () => {
+    const db = makeDb({
+      users: [{ id: 'u1', clubId: 'club-1', athleteId: null, email: 'coach.nina@example.org' }],
+      deletionRequests: [{ id: 'req1', userId: 'u1', purgeAfter: PAST }],
+      invitations: [{ id: 'inv1', email: 'coach.nina@example.org', athleteId: null, role: 'trainer' }],
+    });
+    const gateway = new InMemoryErasureJobGateway(db);
+    await purgeExpiredDeletions(gateway, NOW);
+
+    expect(db.invitations![0]!.email).toBe('geloeschtes-konto@geloescht.invalid');
+  });
+});
+
 const NOW = new Date('2026-07-20T00:00:00.000Z');
 const PAST = new Date('2026-07-01T00:00:00.000Z'); // vor NOW -> fällig
 const FUTURE = new Date('2026-08-01T00:00:00.000Z'); // nach NOW -> noch nicht fällig

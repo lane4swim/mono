@@ -26,16 +26,17 @@ nachvollzogen. Ergebnis dieser Nachprüfung:
   Lücke geöffnet — siehe **H1** unten. Der zugehörige Regressionstest
   zementiert genau das verwundbare Verhalten als „korrekt".
 
-**Update (27. August 2026, im Anschluss an dieses Review).** In zwei
+**Update (27. August 2026, im Anschluss an dieses Review).** In drei
 Schritten direkt im Anschluss an diese Prüfung behoben (siehe die
 jeweiligen **Fix**-Abschnitte unten): zuerst **H1** und **N7** — beide
 betreffen dieselbe Betriebsannahme (ein vorgeschalteter, co-lokalisierter
 Reverse Proxy) und wurden bewusst gemeinsam umgesetzt —, danach **H2**
 zusammen mit **N3** (N3s Fix wandert wie in dessen ursprünglicher
 Empfehlung vorgesehen direkt in den für H2 neu geschaffenen Endpunkt) und
-**N4**. Damit sind beide Hoch-Befunde sowie drei der sieben
-Niedrig-Befunde behoben; **M1**, **M2** sowie **N1**, **N2**, **N5**, **N6**
-sind zum Zeitpunkt dieses Updates weiterhin offen.
+**N4**, zuletzt **M1**. Damit sind beide Hoch-Befunde, einer der beiden
+Mittel-Befunde sowie drei der sieben Niedrig-Befunde behoben; **M2** sowie
+**N1**, **N2**, **N5**, **N6** sind zum Zeitpunkt dieses Updates weiterhin
+offen.
 
 **Vorbemerkung.** Der Gesamteindruck des Vorreviews bestätigt sich: die
 Kernlogik ist überdurchschnittlich sorgfältig gebaut. argon2id mit
@@ -64,7 +65,7 @@ Schweregrade: **Hoch** = vor dem nächsten Produktivbetrieb beheben,
 |---|--------|-----|---------|
 | H1 | `trustProxy: true`: `X-Forwarded-For` ist vollständig client-kontrolliert — alle IP-Rate-Limits umgehbar | `apps/api/src/app.ts:80` | Hoch — **behoben** |
 | H2 | `PATCH /api/me` erlaubt unverifizierten E-Mail-Wechsel ohne Passwortprüfung → dauerhafte Kontoübernahme | `auth.route.ts:204`, `auth.service.ts:482` | Hoch — **behoben** |
-| M1 | Art.-17-Hard-Purge lässt die E-Mail-Adresse in `invitations` stehen | `jobs/erasure.repository.ts:43-217` | Mittel |
+| M1 | Art.-17-Hard-Purge lässt die E-Mail-Adresse in `invitations` stehen | `jobs/erasure.repository.ts:43-217` | Mittel — **behoben** |
 | M2 | `Comment.authorName` ist reine Client-Angabe — Identitätsvortäuschung im Verein | `entities.ts:47`, `sync.permissions.ts:91` | Mittel |
 | N1 | Frisch erzeugtes DB-Passwort landet im Klartext im Terminal/CI-Log | `scripts/setup-codespace.sh:296` | Niedrig |
 | N2 | Superadmin-Passwort als Kommandozeilenargument (**offen aus Vorreview N6**) | `scripts/createSuperAdmin.ts`, `setup-codespace.sh:221` | Niedrig |
@@ -344,8 +345,34 @@ keine Absicherung.
 
 ## Mittel
 
-### M1 — Art.-17-Hard-Purge lässt die E-Mail-Adresse in `invitations` stehen
+### M1 — Art.-17-Hard-Purge lässt die E-Mail-Adresse in `invitations` stehen — **behoben**
 
+**Fix.** Umgesetzt wie in der Empfehlung beschrieben: `purgeUserAndDependents()`
+setzt jetzt, im selben Transaktionsblock und vor `tx.user.delete()`, für
+jede Einladung mit `email === user.email` sowohl `email` auf einen neuen
+Platzhalter (`ANONYMIZED_INVITATION_EMAIL = 'geloeschtes-konto@geloescht.invalid'`,
+analog zu `ANONYMIZED_COMMENT_AUTHOR` in `commentAnonymization.ts`, aber
+als eigene Konstante in `erasure.repository.ts` — kein freier
+Namensabgleich wie bei N5 nötig, da `email` selbst der exakte, eindeutige
+Abgleichswert ist) als auch `athleteId` auf `null`. Bewusst **nicht** auf
+`user.clubId` gescoped (anders als die Kommentar-Anonymisierung) — dieselbe
+Adresse kann über mehrere Vereine hinweg eingeladen worden sein.
+`Invitation.invitedById` (Einladungen, die diese Person selbst ausgestellt
+hat) bleibt unverändert, wie in der Empfehlung vorgesehen — das ist eine
+andere Beziehung und bereits über `onDelete: SetNull` als gewollter
+historischer Datensatz behandelt.
+
+Regressionstests: `apps/api/test/jobs/purgeExpiredDeletions.test.ts`
+(InMemory — mehrere Einladungen an dieselbe Adresse werden alle erfasst,
+eine Einladung an eine andere Adresse bzw. eine von der gelöschten Person
+selbst ausgestellte Einladung bleibt unangetastet, funktioniert auch ohne
+verknüpftes Athletenprofil) sowie ein Integrationstest in
+`test-integration/profileErasure.integration.test.ts` gegen eine echte
+Postgres-Instanz (bestätigt die tatsächliche Prisma-Modell-/
+Tabellenzuordnung und das korrekte Zusammenspiel mit der bereits
+bestehenden `onDelete: SetNull`-Beziehung auf derselben Tabelle).
+
+Ursprünglicher Befund, Fundstelle zum Zeitpunkt der Analyse:
 `apps/api/src/jobs/erasure.repository.ts:43-217`
 
 `purgeUserAndDependents()` ist beeindruckend gründlich: Refresh-Tokens,
@@ -835,10 +862,11 @@ und sind sauber:
    Schritt 4 dort Schritt 1 allein bereits als „die entscheidende Sperre"
    benannt hatte. **N3** direkt mitbehoben (wandert wie empfohlen in den
    neuen Endpunkt).
-3. **M1** — `Invitation.email` in den Hard-Purge aufnehmen; direkte
-   Analogie zum bereits geleisteten N5-Fix, mit stabilerer Zuordnung.
-   Größter verbleibender Befund.
+3. ~~**M1** — `Invitation.email` in den Hard-Purge aufnehmen; direkte
+   Analogie zum bereits geleisteten N5-Fix, mit stabilerer Zuordnung.~~
+   **Behoben** (`ANONYMIZED_INVITATION_EMAIL`, siehe dortiger
+   **Fix**-Abschnitt).
 4. **M2** — `authorId` einführen oder die Entscheidung an `CommentSchema`
-   explizit dokumentieren.
+   explizit dokumentieren. Größter verbleibender Befund.
 5. **N1, N2, N5, N6** bei nächster Berührung. ~~**N3**~~/~~**N4**~~/~~**N7**~~
    **Behoben** (siehe jeweiliger **Fix**-Abschnitt).
