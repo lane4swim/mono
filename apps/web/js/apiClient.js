@@ -284,6 +284,18 @@ export async function changePassword({ currentPassword, newPassword }) {
   setTokens(result);
   return { ...result.user, enabledModules: result.enabledModules };
 }
+// E-Mail-Wechsel für die eigene, eingeloggte Person (Sicherheitsreview
+// 2026-08-27, Befund H2) — verlangt wie changePassword() das aktuelle
+// Passwort. `email` ist deshalb bewusst NICHT mehr Teil von updateMe()/
+// PATCH /api/me (siehe dortiger Kommentar). Liefert wie changePassword()
+// ein frisches Token-Paar — die aktuelle Sitzung bleibt dadurch nahtlos
+// angemeldet, während der Server alle ANDEREN Sitzungen widerruft (siehe
+// auth.service.ts: changeEmail()).
+export async function changeEmail({ currentPassword, newEmail }) {
+  const result = await request('/api/me/email', { method: 'POST', body: JSON.stringify({ currentPassword, newEmail }) });
+  setTokens(result);
+  return { ...result.user, enabledModules: result.enabledModules };
+}
 // Art. 15 DSGVO — Recht auf Auskunft: bündelt alle zum eigenen Konto
 // gespeicherten Daten.
 export function exportMyData() {

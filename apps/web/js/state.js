@@ -147,10 +147,12 @@ export async function setUserLocale(locale) {
 }
 
 // Aktualisiert die eigenen persönlichen Daten der/des AKTUELL eingeloggten
-// Person (z. B. Name, E-Mail) — genutzt vom "Mein Profil"-Modul. Im
-// Demo-Modus gibt es kein Backend, gegen das gespeichert werden könnte —
-// die Änderung wird daher nur auf die Im-Speicher-Demo-Person angewendet
-// (siehe loginDemo() oben zur Begründung, warum das eine Kopie ist).
+// Person (z. B. Name) — genutzt vom "Mein Profil"-Modul. `email` ist
+// bewusst NICHT Teil dieses Patches (siehe changeEmail() unten,
+// Sicherheitsreview 2026-08-27, Befund H2). Im Demo-Modus gibt es kein
+// Backend, gegen das gespeichert werden könnte — die Änderung wird daher
+// nur auf die Im-Speicher-Demo-Person angewendet (siehe loginDemo() oben
+// zur Begründung, warum das eine Kopie ist).
 export async function updateProfile(patch) {
   if (!current) return null;
   if (IS_DEMO) { current = { ...current, ...patch }; emit(); return current; }
@@ -168,6 +170,20 @@ export async function updateProfile(patch) {
 export async function changePassword(currentPassword, newPassword) {
   if (!current) return null;
   current = await api.changePassword({ currentPassword, newPassword });
+  return current;
+}
+
+// E-Mail-Wechsel für die AKTUELL eingeloggte Person (Sicherheitsreview
+// 2026-08-27, Befund H2) — genutzt vom "Mein Profil"-Modul. Anders als
+// changePassword() MIT emit(): die E-Mail-Adresse ist (anders als der
+// Passwort-Hash) ein tatsächlich angezeigtes Feld (Kontodaten-Karte in
+// profile.js) — emit() löst über onUserChange() (siehe app.js) das
+// automatische Neu-Rendern der aktuellen Ansicht aus, das den neuen Wert
+// dort zeigt, analog zu updateProfile() oben.
+export async function changeEmail(currentPassword, newEmail) {
+  if (!current) return null;
+  current = await api.changeEmail({ currentPassword, newEmail });
+  emit();
   return current;
 }
 

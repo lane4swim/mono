@@ -419,6 +419,11 @@ export default {
     changePasswordButton: 'Passwort ändern',
     passwordChanged: 'Passwort erfolgreich geändert.',
     errorInvalidCurrentPassword: 'Das aktuelle Passwort ist nicht korrekt.',
+    // E-Mail-Wechsel (Sicherheitsreview 2026-08-27, Befund H2).
+    emailSectionTitle: 'E-Mail-Adresse ändern',
+    newEmailLabel: 'Neue E-Mail-Adresse',
+    changeEmailButton: 'E-Mail-Adresse ändern',
+    emailChanged: 'E-Mail-Adresse erfolgreich geändert.',
   },
   setEditor: {
     colDistance: 'Dist. (m)', colDescription: 'Beschreibung', colReps: 'Wdh.', colRest: 'Pause (s)',

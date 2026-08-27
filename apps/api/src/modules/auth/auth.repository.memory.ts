@@ -143,4 +143,14 @@ export class InMemoryPasswordResetTokenRepository implements PasswordResetTokenR
     const existing = this.tokensById.get(id);
     if (existing) this.tokensById.set(id, { ...existing, usedAt: new Date() });
   }
+
+  // Sicherheitsreview 2026-08-27, Befund N4 — siehe Kommentar am
+  // Interface in auth.repository.ts.
+  async markAllUsedForUser(userId: string): Promise<void> {
+    for (const [id, token] of this.tokensById.entries()) {
+      if (token.userId === userId && !token.usedAt) {
+        this.tokensById.set(id, { ...token, usedAt: new Date() });
+      }
+    }
+  }
 }

@@ -2,9 +2,14 @@
 // modules/profile.js — "Mein Profil" / "My Profile"
 //
 // Lets the currently signed-in account (trainer, admin, or athlete)
-// change their own personal data — name and email — plus their
-// preferred display language (same setting as the topbar dropdown,
-// surfaced here too since it's naturally "my personal data").
+// change their own personal data — name, plus their preferred display
+// language (same setting as the topbar dropdown, surfaced here too since
+// it's naturally "my personal data"). The email address is displayed
+// read-only in the account card; changing it lives in its own,
+// password-gated form further down (security review 2026-08-27, finding
+// H2 — an email change is as security-sensitive as a password change, so
+// it requires the same re-verification instead of riding along with a
+// plain profile-details save).
 //
 // Deliberately NOT restricted via `roles` on the module: every role
 // should be able to manage their own account. Athlete master-data
@@ -17,7 +22,7 @@ import { el, clear, beginRender } from '../dom.js';
 import { laneWave, badge, fullName, toast } from '../ui.js';
 import { openModal } from '../modal.js';
 import { field, textInput } from '../forms.js';
-import { getCurrentUser, updateProfile, setUserLocale, logout, changePassword } from '../state.js';
+import { getCurrentUser, updateProfile, setUserLocale, logout, changePassword, changeEmail } from '../state.js';
 import * as api from '../apiClient.js';
 import { NetworkError, describeError } from '../apiClient.js';
 import { t, getLocale, getAvailableLocales } from '../i18n.js';
@@ -126,6 +131,60 @@ function buildChangePasswordCard() {
   return card;
 }
 
+// Sicherheitsreview 2026-08-27, Befund H2 — E-Mail-Wechsel für die
+// aktuell eingeloggte Person, verlangt wie buildChangePasswordCard()
+// zusätzlich das aktuelle Passwort (siehe apps/api/src/modules/auth/
+// auth.service.ts: changeEmail() für die Begründung: ohne diese Prüfung
+// hätte ein kurzzeitig entwendeter, noch gültiger Access Token gereicht,
+// um kombiniert mit "Passwort vergessen" eine dauerhafte Kontoübernahme
+// zu erreichen). Bewusst ein eigenes Formular statt eines Feldes im
+// Kontodaten-Formular oben — dort ist die E-Mail-Adresse seither nur
+// noch eine reine Anzeige.
+function buildChangeEmailCard() {
+  const card = el('div', { class: 'card mb-16' }, [el('h3', { class: 'mt-0' }, t('profile.emailSectionTitle'))]);
+  const form = el('form', { class: 'form-grid' });
+  const fCurrentPassword = textInput('', { type: 'password', required: true, autocomplete: 'current-password' });
+  const fNewEmail = textInput('', { type: 'email', required: true, autocomplete: 'email' });
+  form.appendChild(field(t('profile.currentPasswordLabel'), fCurrentPassword, { span2: true }));
+  form.appendChild(field(t('profile.newEmailLabel'), fNewEmail, { span2: true }));
+
+  const errorBox = el('p', { class: 'form-error', style: 'grid-column:1/-1;display:none' });
+  form.appendChild(errorBox);
+
+  const submitBtn = el('button', { type: 'submit', class: 'btn btn-primary' }, t('profile.changeEmailButton'));
+  form.appendChild(el('div', { class: 'form-actions', style: 'grid-column:1/-1' }, [submitBtn]));
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    errorBox.style.display = 'none';
+    const newEmail = fNewEmail.value.trim();
+    if (!EMAIL_RE.test(newEmail)) {
+      errorBox.textContent = t('profile.validationEmail');
+      errorBox.style.display = 'block';
+      return;
+    }
+    submitBtn.disabled = true;
+    try {
+      await changeEmail(fCurrentPassword.value, newEmail);
+      toast(t('profile.emailChanged'));
+      // Felder leeren statt sie stehen zu lassen — analog zu
+      // buildChangePasswordCard() (sensible Werte sollen nicht länger als
+      // nötig im DOM/Formularzustand verbleiben). changeEmail() (state.js)
+      // löst über emit()/onUserChange bereits ein automatisches Neu-
+      // Rendern der Ansicht aus, das die Kontodaten-Anzeige aktualisiert.
+      fCurrentPassword.value = ''; fNewEmail.value = '';
+    } catch (err) {
+      errorBox.textContent = describeError(err, { on401Message: t('profile.errorInvalidCurrentPassword') });
+      errorBox.style.display = 'block';
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
+
+  card.appendChild(form);
+  return card;
+}
+
 function renderView(container, athletes, results, entries, actionItems, sessions) {
   const user = getCurrentUser();
   const wrap = el('div');
@@ -142,9 +201,17 @@ function renderView(container, athletes, results, entries, actionItems, sessions
   const card = el('div', { class: 'card mb-16' }, [el('h3', { class: 'mt-0' }, t('profile.accountSection'))]);
   const form = el('form', { class: 'form-grid' });
   const fName = textInput(user.name || '', { required: true });
-  const fEmail = textInput(user.email || '', { type: 'email', required: true });
   form.appendChild(field(t('profile.formName'), fName, { span2: true }));
-  form.appendChild(field(t('profile.formEmail'), fEmail, { span2: true }));
+
+  // Sicherheitsreview 2026-08-27, Befund H2: reine Anzeige statt eines
+  // editierbaren Feldes — ein Wechsel läuft ausschließlich über das
+  // eigene, per aktuellem Passwort abgesicherte Formular weiter unten
+  // (buildChangeEmailCard()), analog zu roleRow/athleteRow hier.
+  const emailRow = el('div', { class: 'field span-2' }, [
+    el('label', {}, t('profile.formEmail')),
+    el('div', {}, el('span', {}, user.email || '')),
+  ]);
+  form.appendChild(emailRow);
 
   const roleRow = el('div', { class: 'field span-2' }, [
     el('label', {}, t('profile.roleLabel')),
@@ -165,15 +232,17 @@ function renderView(container, athletes, results, entries, actionItems, sessions
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const name = fName.value.trim(), email = fEmail.value.trim();
+    const name = fName.value.trim();
     if (!name) { toast(t('profile.validationName'), 'error'); return; }
-    if (!EMAIL_RE.test(email)) { toast(t('profile.validationEmail'), 'error'); return; }
-    await updateProfile({ name, email });
+    await updateProfile({ name });
     toast(t('profile.saved'));
   });
 
   card.appendChild(form);
   wrap.appendChild(card);
+
+  // ---- E-Mail-Wechsel (Sicherheitsreview 2026-08-27, Befund H2) ----
+  wrap.appendChild(buildChangeEmailCard());
 
   // ---- Passwortwechsel (Sicherheitsreview 2026-08, Befund M5) ----
   wrap.appendChild(buildChangePasswordCard());

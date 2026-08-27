@@ -26,12 +26,16 @@ nachvollzogen. Ergebnis dieser Nachprüfung:
   Lücke geöffnet — siehe **H1** unten. Der zugehörige Regressionstest
   zementiert genau das verwundbare Verhalten als „korrekt".
 
-**Update (27. August 2026, im Anschluss an dieses Review).** **H1** und
-**N7** wurden direkt im Anschluss an diese Prüfung behoben (siehe die
-jeweiligen **Fix**-Abschnitte unten) — beide betreffen dieselbe
-Betriebsannahme (ein vorgeschalteter, co-lokalisierter Reverse Proxy) und
-wurden bewusst gemeinsam umgesetzt. **H2** sowie alle Mittel-/Niedrig-
-Befunde sind zum Zeitpunkt dieses Updates weiterhin offen.
+**Update (27. August 2026, im Anschluss an dieses Review).** In zwei
+Schritten direkt im Anschluss an diese Prüfung behoben (siehe die
+jeweiligen **Fix**-Abschnitte unten): zuerst **H1** und **N7** — beide
+betreffen dieselbe Betriebsannahme (ein vorgeschalteter, co-lokalisierter
+Reverse Proxy) und wurden bewusst gemeinsam umgesetzt —, danach **H2**
+zusammen mit **N3** (N3s Fix wandert wie in dessen ursprünglicher
+Empfehlung vorgesehen direkt in den für H2 neu geschaffenen Endpunkt) und
+**N4**. Damit sind beide Hoch-Befunde sowie drei der sieben
+Niedrig-Befunde behoben; **M1**, **M2** sowie **N1**, **N2**, **N5**, **N6**
+sind zum Zeitpunkt dieses Updates weiterhin offen.
 
 **Vorbemerkung.** Der Gesamteindruck des Vorreviews bestätigt sich: die
 Kernlogik ist überdurchschnittlich sorgfältig gebaut. argon2id mit
@@ -59,13 +63,13 @@ Schweregrade: **Hoch** = vor dem nächsten Produktivbetrieb beheben,
 | # | Befund | Ort | Schwere |
 |---|--------|-----|---------|
 | H1 | `trustProxy: true`: `X-Forwarded-For` ist vollständig client-kontrolliert — alle IP-Rate-Limits umgehbar | `apps/api/src/app.ts:80` | Hoch — **behoben** |
-| H2 | `PATCH /api/me` erlaubt unverifizierten E-Mail-Wechsel ohne Passwortprüfung → dauerhafte Kontoübernahme | `auth.route.ts:204`, `auth.service.ts:482` | Hoch |
+| H2 | `PATCH /api/me` erlaubt unverifizierten E-Mail-Wechsel ohne Passwortprüfung → dauerhafte Kontoübernahme | `auth.route.ts:204`, `auth.service.ts:482` | Hoch — **behoben** |
 | M1 | Art.-17-Hard-Purge lässt die E-Mail-Adresse in `invitations` stehen | `jobs/erasure.repository.ts:43-217` | Mittel |
 | M2 | `Comment.authorName` ist reine Client-Angabe — Identitätsvortäuschung im Verein | `entities.ts:47`, `sync.permissions.ts:91` | Mittel |
 | N1 | Frisch erzeugtes DB-Passwort landet im Klartext im Terminal/CI-Log | `scripts/setup-codespace.sh:296` | Niedrig |
 | N2 | Superadmin-Passwort als Kommandozeilenargument (**offen aus Vorreview N6**) | `scripts/createSuperAdmin.ts`, `setup-codespace.sh:221` | Niedrig |
-| N3 | E-Mail-Wechsel auf die Adresse eines soft-gelöschten Kontos → 500 statt 409 (Existenz-Orakel) | `auth.service.ts:486-488` | Niedrig |
-| N4 | `resetPassword()` invalidiert weitere offene Reset-Tokens desselben Kontos nicht | `auth.service.ts:427-445` | Niedrig |
+| N3 | E-Mail-Wechsel auf die Adresse eines soft-gelöschten Kontos → 500 statt 409 (Existenz-Orakel) | `auth.service.ts:486-488` | Niedrig — **behoben** |
+| N4 | `resetPassword()` invalidiert weitere offene Reset-Tokens desselben Kontos nicht | `auth.service.ts:427-445` | Niedrig — **behoben** |
 | N5 | Abbestelltes Modul entfernt bereits synchronisierte Daten nicht vom Gerät | `sync.service.ts:439`, `syncClient.js` | Niedrig |
 | N6 | `GET /api/users/trainers` liefert vollständige Nutzerdatensätze an jede Rolle `trainer` | `auth.service.ts:545` | Niedrig |
 | N7 | API lauscht fest auf `0.0.0.0:3000`, nicht konfigurierbar | `apps/api/src/index.ts:10` | Niedrig — **behoben** |
@@ -212,13 +216,53 @@ zurücksetzt.
 
 ---
 
-### H2 — `PATCH /api/me` erlaubt unverifizierten E-Mail-Wechsel ohne Passwortprüfung
+### H2 — `PATCH /api/me` erlaubt unverifizierten E-Mail-Wechsel ohne Passwortprüfung — **behoben**
 
+**Fix.** Umgesetzt wie in **Empfehlung** Punkt 1 beschrieben, plus N3 (siehe
+dort) direkt mitbehoben — bewusst **ohne** Punkt 2 (Double-Opt-In) und
+Punkt 3 (Benachrichtigung der alten Adresse), da Punkt 4 der ursprünglichen
+Empfehlung diese beiden explizit als optionale Verstärkung einordnet und
+Punkt 1 allein bereits als „die entscheidende Sperre" benannt ist:
+
+* `email` aus `UpdateMeRequestSchema` entfernt (`packages/shared-types/src/
+  auth.ts`) — `PATCH /api/me` akzeptiert nur noch `name`/`locale`; ein
+  trotzdem mitgeschicktes `email`-Feld wird von Zod stillschweigend
+  entfernt, bevor `authService.updateMe()` es zu Gesicht bekäme.
+* Neues `ChangeEmailRequestSchema` (`currentPassword` + `newEmail`, analog
+  zu `ChangePasswordRequestSchema`) und neuer Endpunkt
+  `POST /api/me/email` (`auth.route.ts`), rate-limitiert wie
+  `/api/me/password` (5/min, nur nach IP — der globale Rate-Limit-Hook
+  läuft vor `app.authenticate`, `request.user` ist im `keyGenerator` noch
+  nicht gesetzt).
+* Neue Methode `authService.changeEmail()`: verifiziert das aktuelle
+  Passwort (`InvalidCurrentPasswordError` bei Fehlschlag), prüft die neue
+  Adresse gegen `findByEmail()`, aktualisiert sie, widerruft anschließend
+  — wie `changePassword()` — alle bestehenden Sitzungen und stellt sofort
+  ein frisches Token-Paar für die aktuelle Sitzung aus (jede künftige
+  „Passwort vergessen"-Anfrage geht ab sofort an die neue Adresse; jedes
+  andere Gerät wird abgemeldet).
+* Frontend (`apps/web/js/modules/profile.js`): die E-Mail-Adresse im
+  Kontodaten-Formular ist jetzt eine reine Anzeige; ein neues, eigenes
+  „E-Mail-Adresse ändern"-Formular (aktuelles Passwort + neue Adresse,
+  analog zum bestehenden Passwortwechsel-Formular) übernimmt den
+  eigentlichen Wechsel.
+
+Regressionstests: `apps/api/test/auth/auth.service.test.ts`
+(`describe('authService.changeEmail …')` — korrektes Passwort ändert die
+Adresse und liefert ein frisches Token-Paar, falsches Passwort lehnt ab
+ohne zu ändern, andere Sitzungen werden widerrufen/aktuelle bleibt gültig,
+unveränderte eigene Adresse ist kein Konflikt, bereits von einem aktiven
+Konto verwendete Adresse wird abgelehnt); `apps/api/test/auth/
+auth.route.test.ts` (Route end-to-end inkl. 401/400/409 und Rate-Limit,
+plus ein Test, dass `PATCH /api/me` ein mitgeschicktes `email`-Feld
+ignoriert); `packages/shared-types/test/auth.test.ts` (Schema-Ebene).
+
+Ursprünglicher Befund, Fundstellen zum Zeitpunkt der Analyse:
 `apps/api/src/modules/auth/auth.route.ts:204-210`,
 `apps/api/src/modules/auth/auth.service.ts:482-498`,
 `packages/shared-types/src/auth.ts:79-88`
 
-`UpdateMeRequestSchema` erlaubt `{ name, email, locale }`; die Route ist
+`UpdateMeRequestSchema` erlaubte `{ name, email, locale }`; die Route war
 nur mit `app.authenticate` geschützt:
 
 ```ts
@@ -461,8 +505,30 @@ einer Warnung beibehalten oder ganz entfernen. Im Skript entsprechend
 `SUPERADMIN_PASSWORD="…" npm run create-superadmin -- --email=… --name=…`
 aufrufen.
 
-### N3 — E-Mail-Wechsel auf die Adresse eines soft-gelöschten Kontos → 500 statt 409
+### N3 — E-Mail-Wechsel auf die Adresse eines soft-gelöschten Kontos → 500 statt 409 — **behoben**
 
+**Fix.** Zusammen mit H2 umgesetzt (die Empfehlung dort traf bereits zu:
+„wandert diese Prüfung in den neuen E-Mail-Endpunkt"). Der neue
+`authService.changeEmail()` (siehe H2) fängt `P2002` beim eigentlichen
+`update()`-Aufruf ab und wirft dafür `EmailAlreadyRegisteredError` (409)
+— exakt derselbe Fang, den `acceptInvitation()` bereits für denselben
+Fall (`athleteId`/`email` eines soft-gelöschten Kontos) verwendet.
+`findByEmail()` bleibt zusätzlich als schneller Vorab-Check für den
+häufigen Fall (Adresse gehört zu einem aktiven Konto) erhalten — beide
+Fänge zusammen decken sowohl den einfachen als auch den hier
+ursprünglich gemeldeten Fall ab.
+
+Regressionstests: Der einfache Fall (aktives Konto) unit-getestet in
+`apps/api/test/auth/auth.service.test.ts`
+(`describe('authService.changeEmail …')`). Der eigentliche N3-Fall
+(Adresse gehört einem soft-gelöschten Konto) lässt sich — wie beim
+analogen `acceptInvitation()`-Fall — nur gegen einen echten
+Unique-Constraint auslösen; neuer Integrationstest in
+`apps/api/test-integration/authService.integration.test.ts`
+(`describe('authService.changeEmail() — P2002-Regression …')`) gegen eine
+echte Postgres-Instanz.
+
+Ursprünglicher Befund, Fundstellen zum Zeitpunkt der Analyse:
 `apps/api/src/modules/auth/auth.service.ts:486-488`,
 `auth.repository.ts:105-107`, `schema.prisma:63`
 
@@ -494,8 +560,28 @@ begrenzt ist.
 Wird H2 wie empfohlen umgesetzt, wandert diese Prüfung in den neuen
 E-Mail-Endpunkt — der Fang gehört dann dorthin.
 
-### N4 — `resetPassword()` invalidiert weitere offene Reset-Tokens nicht
+### N4 — `resetPassword()` invalidiert weitere offene Reset-Tokens nicht — **behoben**
 
+**Fix.** Neue Methode `markAllUsedForUser(userId)` auf
+`PasswordResetTokenRepository` (`updateMany({ where: { userId, usedAt: null }, data: { usedAt: new Date() } })`
+in der Prisma-Implementierung; äquivalente Iteration im In-Memory-Double).
+`resetPassword()` ruft sie jetzt anstelle von `markUsed(existing.id)` auf
+— deckt das gerade eingelöste Token mit ab (dessen `usedAt` ist an dieser
+Stelle noch `null`) UND invalidiert zusätzlich jeden anderen, noch
+offenen Reset-Link desselben Kontos. Zusätzlich (wie in der Empfehlung
+vorgeschlagen) ruft auch `changePassword()` dieselbe Methode auf: ein
+regulärer Passwortwechsel mit Kenntnis des aktuellen Passworts soll einen
+zuvor angeforderten, noch offenen „Passwort vergessen"-Link ebenso nicht
+überleben lassen.
+
+Regressionstests: `apps/api/test/auth/auth.service.test.ts` — ein Test in
+`describe('authService.resetPassword …')` (ein zweiter, noch offener
+Reset-Link wird beim Einlösen des ersten ungültig) sowie ein Test in
+`describe('authService.changePassword …')` (ein offener Reset-Link wird
+durch einen regulären Passwortwechsel invalidiert, inkl. Prüfung, dass
+das Token tatsächlich `usedAt` trägt statt nur zufällig fehlzuschlagen).
+
+Ursprünglicher Befund, Fundstelle zum Zeitpunkt der Analyse:
 `apps/api/src/modules/auth/auth.service.ts:427-445`
 
 `resetPassword()` markiert das eingelöste Token als verwendet
@@ -677,8 +763,10 @@ und sind sauber:
   durchgängig `ctx.validatedPayload`, nie den Rohwert;
   `createdAt`/`updatedAt` werden vor jeder Verwendung entfernt.
   `UpdateMeRequestSchema` kann weder `role` noch `clubId` setzen. (Dass es
-  `email` setzen kann, ist Befund **H2** — kein Mass Assignment, sondern
-  eine bewusst vorgesehene Funktion ohne ausreichende Absicherung.)
+  zum Analysezeitpunkt zusätzlich `email` setzen konnte, war Befund
+  **H2** — kein Mass Assignment, sondern eine bewusst vorgesehene
+  Funktion ohne ausreichende Absicherung, inzwischen behoben und `email`
+  seither kein Feld dieses Schemas mehr.)
 * **Privilege Escalation über Einladungen.** `InvitationRoleSchema`
   schließt `superadmin` aus; `assertCanIssueRole()` erlaubt
   Admin-Einladungen nur `superadmin`; `resolveTargetClubId()` ignoriert
@@ -740,13 +828,17 @@ und sind sauber:
    Regressionstest um den Spoofing-Fall erweitern.~~ **Behoben**
    (`TRUSTED_PROXY_IPS`, siehe dortiger **Fix**-Abschnitt) — zusammen mit
    **N7** umgesetzt, da beide dieselbe Betriebsannahme betreffen.
-2. **H2** — E-Mail-Wechsel hinter `currentPassword` legen (Schritt 1 der
-   Empfehlung). Double-Opt-In und Benachrichtigung der alten Adresse
-   können unmittelbar danach folgen. Größter verbleibender Befund.
+2. ~~**H2** — E-Mail-Wechsel hinter `currentPassword` legen (Schritt 1 der
+   Empfehlung).~~ **Behoben** (`POST /api/me/email`, siehe dortiger
+   **Fix**-Abschnitt) — bewusst ohne Double-Opt-In und Benachrichtigung
+   der alten Adresse (Schritte 2/3 der ursprünglichen Empfehlung), da
+   Schritt 4 dort Schritt 1 allein bereits als „die entscheidende Sperre"
+   benannt hatte. **N3** direkt mitbehoben (wandert wie empfohlen in den
+   neuen Endpunkt).
 3. **M1** — `Invitation.email` in den Hard-Purge aufnehmen; direkte
    Analogie zum bereits geleisteten N5-Fix, mit stabilerer Zuordnung.
+   Größter verbleibender Befund.
 4. **M2** — `authorId` einführen oder die Entscheidung an `CommentSchema`
    explizit dokumentieren.
-5. **N1–N6** bei nächster Berührung; **N3** und **N4** fallen bei der
-   Umsetzung von H2 ohnehin fast von selbst mit an. ~~**N7**~~ **Behoben**
-   (`HOST`, siehe dortiger **Fix**-Abschnitt).
+5. **N1, N2, N5, N6** bei nächster Berührung. ~~**N3**~~/~~**N4**~~/~~**N7**~~
+   **Behoben** (siehe jeweiliger **Fix**-Abschnitt).

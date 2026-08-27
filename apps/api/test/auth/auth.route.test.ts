@@ -502,6 +502,120 @@ describe('GET/PATCH /api/me (geschützt)', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json().name).toBe('Geänderter Name');
   });
+
+  // Regressionstest für Sicherheitsreview 2026-08-27, Befund H2: `email`
+  // ist bewusst KEIN Feld von UpdateMeRequestSchema mehr — ein
+  // mitgeschicktes "email"-Feld wird von Zod stillschweigend entfernt
+  // (siehe parseInput()), bevor authService.updateMe() es überhaupt zu
+  // Gesicht bekäme. Prüft den tatsächlich erreichbaren Angriffspfad
+  // end-to-end (ein manipulierter Client, der trotz entferntem
+  // Formularfeld weiterhin "email" im Request-Body mitschickt).
+  it('ignoriert ein mitgeschicktes "email"-Feld in PATCH /api/me (kein Bestandteil dieses Endpunkts mehr, siehe POST /api/me/email)', async () => {
+    const response = await app.inject({
+      method: 'PATCH', url: '/api/me',
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: { name: 'Nochmal geändert', email: 'sollte-ignoriert-werden@example.org' },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().email).toBe('sabine.reuter@example.org');
+  });
+});
+
+describe('POST /api/me/email (geschützt, Sicherheitsreview 2026-08-27, Befund H2)', () => {
+  async function registerAndLogin(app: FastifyInstance, invitations: InMemoryInvitationRepository, email: string) {
+    const inviteToken = await seedInvitationToken(invitations, { email });
+    const response = await app.inject({ method: 'POST', url: '/auth/register', payload: { token: inviteToken, name: 'X', password: 'ein-sicheres-passwort', consent: true } });
+    return response.json().accessToken as string;
+  }
+
+  it('liefert 401 ohne Authorization-Header', async () => {
+    const { app } = await buildTestApp();
+    const response = await app.inject({ method: 'POST', url: '/api/me/email', payload: { currentPassword: 'x', newEmail: 'neu@example.org' } });
+    expect(response.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it('ändert bei korrektem aktuellem Passwort die E-Mail-Adresse (200) und liefert ein frisches Token-Paar', async () => {
+    const { app, invitations } = await buildTestApp();
+    const accessToken = await registerAndLogin(app, invitations, 'email-route@example.org');
+
+    const response = await app.inject({
+      method: 'POST', url: '/api/me/email',
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: { currentPassword: 'ein-sicheres-passwort', newEmail: 'email-route-neu@example.org' },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().user.email).toBe('email-route-neu@example.org');
+    expect(response.json().accessToken).toBeTruthy();
+
+    const loginResponse = await app.inject({ method: 'POST', url: '/auth/login', payload: { email: 'email-route-neu@example.org', password: 'ein-sicheres-passwort', consent: true } });
+    expect(loginResponse.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it('liefert 401 bei falschem aktuellem Passwort, ohne die E-Mail-Adresse zu ändern', async () => {
+    const { app, invitations } = await buildTestApp();
+    const accessToken = await registerAndLogin(app, invitations, 'email-route2@example.org');
+
+    const response = await app.inject({
+      method: 'POST', url: '/api/me/email',
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: { currentPassword: 'falsches-passwort', newEmail: 'sollte-nicht-ankommen@example.org' },
+    });
+    expect(response.statusCode).toBe(401);
+
+    const meResponse = await app.inject({ method: 'GET', url: '/api/me', headers: { authorization: `Bearer ${accessToken}` } });
+    expect(meResponse.json().email).toBe('email-route2@example.org');
+    await app.close();
+  });
+
+  it('liefert 400 bei einer ungültigen neuen E-Mail-Adresse', async () => {
+    const { app, invitations } = await buildTestApp();
+    const accessToken = await registerAndLogin(app, invitations, 'email-route3@example.org');
+
+    const response = await app.inject({
+      method: 'POST', url: '/api/me/email',
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: { currentPassword: 'ein-sicheres-passwort', newEmail: 'keine-email' },
+    });
+    expect(response.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it('liefert 409 bei einer bereits vergebenen E-Mail-Adresse', async () => {
+    const { app, invitations } = await buildTestApp();
+    const accessToken = await registerAndLogin(app, invitations, 'email-route4@example.org');
+    await registerAndLogin(app, invitations, 'email-route4-bereits-vergeben@example.org');
+
+    const response = await app.inject({
+      method: 'POST', url: '/api/me/email',
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: { currentPassword: 'ein-sicheres-passwort', newEmail: 'email-route4-bereits-vergeben@example.org' },
+    });
+    expect(response.statusCode).toBe(409);
+    await app.close();
+  });
+});
+
+describe('Rate-Limiting auf /api/me/email (5/min)', () => {
+  it('blockiert nach 5 Versuchen innerhalb einer Minute (429)', async () => {
+    const { app, invitations } = await buildTestApp();
+    const inviteToken = await seedInvitationToken(invitations, { email: 'email-ratelimit@example.org' });
+    const registerResponse = await app.inject({ method: 'POST', url: '/auth/register', payload: { token: inviteToken, name: 'X', password: 'ein-sicheres-passwort', consent: true } });
+    const accessToken = registerResponse.json().accessToken;
+
+    const attempt = () => app.inject({
+      method: 'POST', url: '/api/me/email',
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: { currentPassword: 'falsches-passwort', newEmail: 'neu@example.org' },
+    });
+    const results = [];
+    for (let i = 0; i < 6; i++) results.push(await attempt());
+    const statusCodes = results.map((r) => r.statusCode);
+    expect(statusCodes.slice(0, 5).every((code) => code === 401)).toBe(true);
+    expect(statusCodes[5]).toBe(429);
+    await app.close();
+  });
 });
 
 describe('POST /auth/refresh + /auth/logout', () => {

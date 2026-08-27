@@ -76,12 +76,23 @@ export const MeResponseSchema = PublicUserSchema.extend({
 });
 export type MeResponse = z.infer<typeof MeResponseSchema>;
 
+// Sicherheitsreview 2026-08-27, Befund H2: `email` stand hier bislang mit
+// drin — ein Wechsel der hinterlegten E-Mail-Adresse verlangte dadurch
+// KEIN aktuelles Passwort, obwohl er dieselbe Kontoübernahme-Fläche
+// eröffnet wie ein Passwortwechsel: mit einem kurzzeitig entwendeten,
+// noch gültigen Access Token (z. B. Refresh Token im localStorage, siehe
+// Sicherheitsreview 2026-08, Befund N3) hätte ein Angreifer die Adresse
+// auf eine eigene umbiegen und danach über POST /auth/forgot-password
+// einen Reset-Link an sich selbst zustellen können — die rechtmäßige
+// Person wäre dabei sowohl aus- als auch fortan ausgesperrt gewesen.
+// `email` ist deshalb kein Teil dieses Schemas mehr, sondern ein eigener,
+// per aktuellem Passwort abgesicherter Endpunkt — siehe
+// ChangeEmailRequestSchema unten (analog zu ChangePasswordRequestSchema).
 export const UpdateMeRequestSchema = z
   .object({
     // `.max(200)` (Sicherheitsreview 2026-08, Befund N2) — siehe Begründung
     // bei CreateClubRequestSchema (invitation.ts).
     name: z.string().min(1).max(200).optional(),
-    email: z.string().email().optional(),
     locale: LocaleSchema.optional(),
   })
   .refine((v) => Object.keys(v).length > 0, { message: 'Mindestens ein Feld muss angegeben werden.' });
@@ -129,6 +140,18 @@ export const ChangePasswordRequestSchema = z.object({
   newPassword: newPasswordField,
 });
 export type ChangePasswordRequest = z.infer<typeof ChangePasswordRequestSchema>;
+
+// POST /api/me/email (Sicherheitsreview 2026-08-27, Befund H2) —
+// authentifiziert, verlangt wie ChangePasswordRequestSchema oben
+// zusätzlich das aktuelle Passwort (siehe dortiger Kommentar bzw.
+// UpdateMeRequestSchema oben für die vollständige Begründung: verhindert,
+// dass ein kurzzeitig entwendeter Access Token allein — kombiniert mit
+// "Passwort vergessen" — zur dauerhaften Kontoübernahme reicht).
+export const ChangeEmailRequestSchema = z.object({
+  currentPassword: z.string().min(1).max(200),
+  newEmail: z.string().email(),
+});
+export type ChangeEmailRequest = z.infer<typeof ChangeEmailRequestSchema>;
 
 // Claims im Access Token (siehe Abschnitt 5.3 des Backend-Entwicklungsplans).
 export const AccessTokenClaimsSchema = z.object({

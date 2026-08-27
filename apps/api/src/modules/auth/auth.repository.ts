@@ -95,6 +95,22 @@ export interface PasswordResetTokenRepository {
   create(userId: string, tokenHash: string, expiresAt: Date): Promise<PasswordResetTokenRecord>;
   findByHash(tokenHash: string): Promise<PasswordResetTokenRecord | null>;
   markUsed(id: string): Promise<void>;
+  // Sicherheitsreview 2026-08-27, Befund N4: markUsed(id) allein
+  // invalidierte nur GENAU das eingelöste Token — bei mehreren innerhalb
+  // der TTL angeforderten Reset-Links (z. B. 3 pro 15 Minuten, siehe
+  // Rate-Limit auf /auth/forgot-password) blieben die übrigen bis zu ihrem
+  // eigenen Ablauf gültig und lösten JEWEILS erneut einen Passwortwechsel
+  // samt Auto-Login aus. Ein Passwort-Reset gilt als mögliches
+  // Kompromittierungssignal (siehe resetPassword()-Kommentar in
+  // auth.service.ts) — genau dann sollen auch alle ANDEREN, noch nicht
+  // eingelösten Reset-Links desselben Kontos verfallen, nicht nur der
+  // gerade benutzte. Ersetzt markUsed(existing.id) in resetPassword()
+  // vollständig (deckt das eingelöste Token mit ab, da dessen usedAt zu
+  // diesem Zeitpunkt noch null ist) und wird zusätzlich von
+  // changePassword() aufgerufen — ein regulärer Passwortwechsel soll
+  // ebenso keinen zuvor angeforderten, noch offenen Reset-Link überleben
+  // lassen.
+  markAllUsedForUser(userId: string): Promise<void>;
 }
 
 // ---- Prisma-Implementierungen (Produktionsbetrieb) ------------------------
@@ -175,5 +191,9 @@ export class PrismaPasswordResetTokenRepository implements PasswordResetTokenRep
   }
   async markUsed(id: string): Promise<void> {
     await this.prisma.passwordResetToken.update({ where: { id }, data: { usedAt: new Date() } });
+  }
+
+  async markAllUsedForUser(userId: string): Promise<void> {
+    await this.prisma.passwordResetToken.updateMany({ where: { userId, usedAt: null }, data: { usedAt: new Date() } });
   }
 }
