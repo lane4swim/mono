@@ -253,6 +253,7 @@ export default {
     deleteConfirm: 'Delete this comment?', deleted: 'Comment deleted', added: 'Comment added',
     countButton: '💬 {count}', countButtonEmpty: '💬 Comment',
     validationText: 'Please enter some text.',
+    validationNoIdentity: 'Cannot add a comment: your session is no longer valid. Please sign in again.',
     planCommentsTitle: 'Comments on this plan',
     exerciseCommentsTitle: 'Comments on this exercise',
     setCommentsTitle: 'Comments on this set',

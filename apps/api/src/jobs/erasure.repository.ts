@@ -188,19 +188,30 @@ export class PrismaErasureJobGateway implements ErasureJobGateway {
       // Block-/Set-Verschachtelung), statt alle Pläne/Übungen/Vorlagen des
       // Vereins zu laden und in JS zu filtern.
       if (user.clubId) {
+        // Die SQL-Bedingungen unten sind bewusst ETWAS breiter als die
+        // eigentliche Trefferregel: sie holen zusätzlich Zeilen, die den
+        // NAMEN der Person tragen (Altbestand ohne `authorId`, siehe
+        // commentAnonymization.ts). Welche Kommentare tatsächlich
+        // anonymisiert werden, entscheidet allein die dortige Funktion —
+        // eine zu viel geladene Zeile ergibt schlicht `changed: false`
+        // und wird nicht geschrieben. Das war schon vor Befund M2 so und
+        // ist der Grund, warum hier gefiltert statt exakt selektiert wird.
+        const author = { id: user.id, name: user.name };
         const authorIdContainment = JSON.stringify([{ authorId: user.id }]);
-        const pathVars = JSON.stringify({ id: user.id });
+        const authorNameContainment = JSON.stringify([{ authorName: user.name }]);
+        const pathVars = JSON.stringify({ id: user.id, name: user.name });
 
         const affectedPlans = await tx.$queryRaw<Array<{ id: string; comments: unknown; days: unknown }>>`
           SELECT id, comments, days FROM "plans"
           WHERE "clubId" = ${user.clubId}
             AND (
               comments @> ${authorIdContainment}::jsonb
-              OR jsonb_path_exists(days, '$.**.comments[*] ? (@.authorId == $id)', ${pathVars}::jsonb)
+              OR comments @> ${authorNameContainment}::jsonb
+              OR jsonb_path_exists(days, '$.**.comments[*] ? (@.authorId == $id || @.authorName == $name)', ${pathVars}::jsonb)
             )
         `;
         for (const row of affectedPlans) {
-          const { changed, comments, days } = anonymizePlanCommentAuthors(row, user.id);
+          const { changed, comments, days } = anonymizePlanCommentAuthors(row, author);
           if (changed) {
             await tx.plan.update({
               where: { id: row.id },
@@ -212,10 +223,13 @@ export class PrismaErasureJobGateway implements ErasureJobGateway {
         const affectedExercises = await tx.$queryRaw<Array<{ id: string; comments: unknown }>>`
           SELECT id, comments FROM "exercises"
           WHERE "clubId" = ${user.clubId}
-            AND comments @> ${authorIdContainment}::jsonb
+            AND (
+              comments @> ${authorIdContainment}::jsonb
+              OR comments @> ${authorNameContainment}::jsonb
+            )
         `;
         for (const row of affectedExercises) {
-          const { changed, comments } = anonymizeExerciseCommentAuthors(row, user.id);
+          const { changed, comments } = anonymizeExerciseCommentAuthors(row, author);
           if (changed) {
             await tx.exercise.update({ where: { id: row.id }, data: { comments: comments as Prisma.InputJsonValue } });
           }
@@ -224,10 +238,10 @@ export class PrismaErasureJobGateway implements ErasureJobGateway {
         const affectedTemplates = await tx.$queryRaw<Array<{ id: string; sets: unknown }>>`
           SELECT id, sets FROM "templates"
           WHERE "clubId" = ${user.clubId}
-            AND jsonb_path_exists(sets, '$.**.comments[*] ? (@.authorId == $id)', ${pathVars}::jsonb)
+            AND jsonb_path_exists(sets, '$.**.comments[*] ? (@.authorId == $id || @.authorName == $name)', ${pathVars}::jsonb)
         `;
         for (const row of affectedTemplates) {
-          const { changed, sets } = anonymizeTemplateCommentAuthors(row, user.id);
+          const { changed, sets } = anonymizeTemplateCommentAuthors(row, author);
           if (changed) {
             await tx.template.update({ where: { id: row.id }, data: { sets: sets as Prisma.InputJsonValue } });
           }

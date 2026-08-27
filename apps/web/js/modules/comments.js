@@ -67,14 +67,22 @@ export function renderCommentThread(hostNode, initialComments, persist) {
     const text = (rawText || '').trim();
     if (!text) { toast(t('comments.validationText'), 'error'); return; }
     const user = getCurrentUser();
+    // Sicherheitsreview 2026-08-27, Befund M2: Ein NEUER Kommentar muss
+    // serverseitig der eigenen Identität zugeordnet sein
+    // (sync.commentAuthorship.ts prüft `authorId === request.user.sub`).
+    // Ohne bekannte eigene id hier abbrechen, statt den Kommentar lokal
+    // anzulegen: gespeichert würde er trotzdem, der Sync-Push scheiterte
+    // danach aber dauerhaft (fünf Fehlversuche, dann Status 'failed',
+    // siehe syncClient.js) — der Kommentar sähe für die schreibende
+    // Person aus wie gespeichert, käme aber nie bei den anderen an. Ein
+    // klarer Fehler sofort ist besser als ein stiller Verlust später.
+    // Anders als beim reinen Anzeigefeld `authorName` (Rückfall auf
+    // E-Mail/"—") gibt es für die Identität bewusst keinen Ersatzwert.
+    if (!user?.id) { toast(t('comments.validationNoIdentity'), 'error'); return; }
     const next = [...comments, {
       id: localId('comment'),
-      // Sicherheitsreview 2026-08-27, Befund M2: authorId ist jetzt
-      // Pflichtfeld (siehe CommentSchema in entities.ts) und wird serverseitig
-      // gegen die eigene Identität geprüft (sync.commentAuthorship.ts) — ein
-      // fehlender/fremder Wert würde den Sync-Push ablehnen.
-      authorId: user?.id,
-      authorName: user?.name || user?.email || '—',
+      authorId: user.id,
+      authorName: user.name || user.email || '—',
       text,
       createdAt: new Date().toISOString(),
     }];

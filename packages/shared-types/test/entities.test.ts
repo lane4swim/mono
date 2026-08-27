@@ -139,11 +139,19 @@ describe('CommentSchema', () => {
   it('lehnt einen leeren Autorennamen ab', () => {
     expect(CommentSchema.safeParse({ ...valid, authorName: '' }).success).toBe(false);
   });
-  // Regressionstest für Befund M2 (Sicherheitsreview 2026-08-27): authorId
-  // ist jetzt Pflichtfeld und muss eine gültige User-ID (UUID) sein.
-  it('lehnt eine fehlende authorId ab', () => {
+  // Befund M2 (Sicherheitsreview 2026-08-27): authorId muss, wenn
+  // vorhanden, eine gültige User-ID (UUID) sein. Ein FEHLENDES authorId
+  // ist auf Schema-Ebene bewusst erlaubt — Kommentare liegen als
+  // eingebettetes JSONB vor, ein Pflichtfeld hätte jeden vor der Änderung
+  // gespeicherten Kommentar dauerhaft unspeicherbar gemacht (siehe
+  // Kommentar an CommentSchema). Die eigentliche Sperre sitzt eine Ebene
+  // höher in assertCommentAuthorship(): dort muss jeder NEUE Kommentar
+  // die eigene authorId tragen, und ein Kommentar ohne authorId kommt nur
+  // unverändert aus dem Altbestand durch (regressionsgetestet in
+  // apps/api/test/sync/sync.service.test.ts).
+  it('lässt einen Kommentar ohne authorId zu (Altbestand — Durchsetzung erfolgt beim Sync-Push)', () => {
     const { authorId: _authorId, ...withoutAuthorId } = valid;
-    expect(CommentSchema.safeParse(withoutAuthorId).success).toBe(false);
+    expect(CommentSchema.safeParse(withoutAuthorId).success).toBe(true);
   });
   it('lehnt eine ungültige authorId ab', () => {
     expect(CommentSchema.safeParse({ ...valid, authorId: 'not-a-uuid' }).success).toBe(false);

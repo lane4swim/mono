@@ -257,6 +257,7 @@ export default {
     deleteConfirm: 'Diesen Kommentar löschen?', deleted: 'Kommentar gelöscht', added: 'Kommentar hinzugefügt',
     countButton: '💬 {count}', countButtonEmpty: '💬 Kommentieren',
     validationText: 'Bitte einen Text eingeben.',
+    validationNoIdentity: 'Kommentar nicht möglich: Die eigene Anmeldung ist nicht mehr gültig. Bitte neu anmelden.',
     planCommentsTitle: 'Kommentare zum Plan',
     exerciseCommentsTitle: 'Kommentare zur Übung',
     setCommentsTitle: 'Kommentare zu diesem Satz',

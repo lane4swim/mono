@@ -59,7 +59,23 @@ const nullableIsoDate = z.string().datetime().nullable();
 // Namensänderung) entfällt dadurch.
 export const CommentSchema = z.object({
   id: z.string().min(1),
-  authorId: z.string().uuid(),
+  // `.optional()` ist KEINE Aufweichung der Durchsetzung, sondern eine
+  // Migrationsnotwendigkeit: Kommentare leben als eingebettetes JSONB in
+  // plans/exercises/templates, es gibt für sie also keine Spalten-
+  // Migration, die ein neues Pflichtfeld nachträglich befüllen könnte.
+  // Wäre `authorId` hier verpflichtend, würde JEDER vor dieser Änderung
+  // gespeicherte Kommentar seinen umgebenden Datensatz dauerhaft
+  // unspeicherbar machen: der Client pullt den Altbestand unverändert,
+  // schickt ihn beim nächsten Bearbeiten zurück, und der `.strict()`-
+  // Check lehnte ihn ab ("Payload entspricht nicht dem Schema") — ein
+  // Plan mit Alt-Kommentaren ließe sich nie wieder ändern. Die
+  // eigentliche Sperre sitzt deshalb eine Ebene höher, wo sie zwischen
+  // "Altbestand" und "neu" unterscheiden kann: assertCommentAuthorship()
+  // (apps/api/src/modules/sync/sync.commentAuthorship.ts) verlangt für
+  // jeden NEUEN Kommentar `authorId === request.user.sub` und lässt einen
+  // Kommentar ohne `authorId` ausschließlich dann durch, wenn er
+  // unverändert aus dem bereits gespeicherten Datensatz stammt.
+  authorId: z.string().uuid().optional(),
   authorName: z.string().min(1).max(200),
   text: z.string().min(1).max(5000),
   createdAt: isoDate,

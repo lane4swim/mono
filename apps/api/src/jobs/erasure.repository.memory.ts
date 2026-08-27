@@ -84,20 +84,20 @@ export class InMemoryErasureJobGateway implements ErasureJobGateway {
     // `authorName` — siehe ausführliche Begründung im Prisma-Pendant.
     if (user.clubId) {
       const clubId = user.clubId;
-      const authorId = userId;
+      const author = { id: userId, name: typeof user.name === 'string' ? user.name : null };
       for (const plan of this.db.plans ?? []) {
         if (plan.clubId !== clubId) continue;
-        const { changed, comments, days } = anonymizePlanCommentAuthors(plan, authorId);
+        const { changed, comments, days } = anonymizePlanCommentAuthors(plan, author);
         if (changed) { plan.comments = comments; plan.days = days; }
       }
       for (const exercise of this.db.exercises ?? []) {
         if (exercise.clubId !== clubId) continue;
-        const { changed, comments } = anonymizeExerciseCommentAuthors(exercise, authorId);
+        const { changed, comments } = anonymizeExerciseCommentAuthors(exercise, author);
         if (changed) exercise.comments = comments;
       }
       for (const template of this.db.templates ?? []) {
         if (template.clubId !== clubId) continue;
-        const { changed, sets } = anonymizeTemplateCommentAuthors(template, authorId);
+        const { changed, sets } = anonymizeTemplateCommentAuthors(template, author);
         if (changed) template.sets = sets;
       }
     }

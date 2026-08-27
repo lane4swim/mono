@@ -412,6 +412,16 @@ describe('PrismaErasureJobGateway.purgeUserAndDependents() — Comment.authorNam
 
     const updatedTemplate = await prisma.template.findUnique({ where: { id: template.id } });
     expect((updatedTemplate?.sets as Array<Record<string, unknown>>)[0]).toMatchObject({ comments: [{ authorName: 'Gelöschtes Konto', text: 'Vorlagen-Hinweis' }] });
+
+    // Nachreview zu M2: `authorId` muss VOLLSTÄNDIG verschwinden, nicht
+    // nur der Anzeigename überschrieben werden — sonst überlebte den
+    // Art.-17-Purge ein stabiler personenbezogener Schlüssel, über den
+    // sich alle Kommentare derselben gelöschten Person wieder verketten
+    // ließen. toMatchObject() oben prüft nur die genannten Felder und
+    // würde ein zurückgebliebenes authorId nicht bemerken.
+    const remainingAuthorIds = JSON.stringify([updatedPlan?.comments, updatedPlan?.days, updatedExercise?.comments, updatedTemplate?.sets]);
+    expect(remainingAuthorIds).not.toContain(user.id);
+    expect(remainingAuthorIds).not.toContain('authorId');
   });
 
   it('lässt Kommentare ANDERER Personen und eines ANDEREN Vereins unangetastet', async () => {

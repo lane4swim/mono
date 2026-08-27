@@ -38,6 +38,31 @@ und **N5**. Damit sind beide Hoch-Befunde, beide Mittel-Befunde sowie
 sechs der sieben Niedrig-Befunde behoben; lediglich **N2** ist zum
 Zeitpunkt dieses Updates weiterhin offen.
 
+**Nachtrag (Gegenprüfung der Korrekturen).** Die umgesetzten Fixes wurden
+anschließend noch einmal unabhängig gegengelesen. Dabei fielen drei Mängel
+am **M2**-Fix selbst auf, die inzwischen behoben sind (Details im dortigen
+**Fix**-Abschnitt):
+
+1. Die Autor:innen-Prüfung schlug die `authorId` über die Kommentar-`id`
+   nach. Da `CommentSchema.id` ein frei wählbarer, nicht eindeutiger
+   Client-String ist, war sie auf drei Wegen umgehbar — dieselbe `id`
+   doppelt im selben Array, dieselbe `id` an anderer Stelle des
+   Datensatzes, oder nur der ausgetauschte `text` eines bestehenden
+   fremden Kommentars. Der Befund war damit praktisch nicht behoben. Der
+   Abgleich läuft jetzt über den vollständigen Kommentar als
+   Vielfachmenge; alle drei Wege sind als Regressionstests festgehalten.
+2. `authorId` war als **Pflichtfeld** eingeführt worden. Da Kommentare
+   eingebettetes JSONB sind, gibt es keine Migration, die den Altbestand
+   befüllen könnte — jeder Datensatz mit Kommentaren aus der Zeit davor
+   wäre dauerhaft unspeicherbar geworden. Das Feld ist jetzt schema-seitig
+   optional, die Durchsetzung sitzt eine Ebene höher.
+3. Die Art.-17-Anonymisierung überschrieb nur `authorName` und ließ
+   `authorId` stehen — der Purge hätte damit einen stabilen
+   personenbezogenen Schlüssel überlebt, über den sich alle Kommentare
+   derselben gelöschten Person wieder verketten ließen. `authorId` wird
+   jetzt entfernt; für Altbestand ohne `authorId` bleibt der
+   Namensabgleich als Rückfall erhalten.
+
 **Vorbemerkung.** Der Gesamteindruck des Vorreviews bestätigt sich: die
 Kernlogik ist überdurchschnittlich sorgfältig gebaut. argon2id mit
 OWASP-Parametern, RS256 mit opaken, gehashten Refresh-Tokens inkl. Rotation
@@ -430,51 +455,89 @@ dem Athletenprofil ohnehin gelöscht) können den Klarnamen enthalten.
 Erweiterung über den ursprünglichen Vorschlag hinaus:
 
 * `CommentSchema` (`packages/shared-types/src/entities.ts`) trägt jetzt
-  zusätzlich `authorId: z.string().uuid()`.
+  zusätzlich `authorId: z.string().uuid().optional()`. `.optional()` ist
+  keine Aufweichung, sondern eine Migrationsnotwendigkeit: Kommentare
+  liegen als eingebettetes JSONB in `plans`/`exercises`/`templates` vor,
+  es gibt für sie also keine Spalten-Migration, die ein neues Pflichtfeld
+  nachträglich befüllen könnte. Als Pflichtfeld hätte jeder VOR dieser
+  Änderung gespeicherte Kommentar seinen umgebenden Datensatz dauerhaft
+  unspeicherbar gemacht (Client pullt den Altbestand, schickt ihn beim
+  nächsten Bearbeiten zurück, `.strict()` lehnt ab). Die Durchsetzung
+  sitzt deshalb eine Ebene höher, wo sie Altbestand von Neuanlage
+  unterscheiden kann.
 * `SyncRequester` (`sync.service.ts`) führt ein neues Feld `userId`
   (`request.user.sub`, durchgereicht über `requesterFrom()` in
   `sync.route.ts`).
 * Neue Datei `apps/api/src/modules/sync/sync.commentAuthorship.ts`:
-  `assertCommentAuthorship()` durchsucht für die drei Stores mit
+  `assertCommentAuthorship()` sammelt für die drei Stores mit
   eingebetteten Kommentar-Arrays (`exercises`, `plans`, `templates`,
   inklusive der verschachtelten `days[].sets[].comments`/`sets[].comments`
-  bis in Wiederholungsblöcke hinein) alle Kommentar-Gruppen eines
-  validierten Payloads und erzwingt zwei Regeln, analog zur bestehenden
-  `results`-Zeilenprüfung inline in `push()` (nachdem `existing` geladen
-  wurde, da beide Regeln den bisherigen Datensatz zum Vergleich brauchen):
-  * ein **neuer** Kommentar (dessen `id` im bisherigen Datensatz noch nicht
-    vorkam) muss `authorId === requester.sub` tragen;
-  * ein **bestehender** Kommentar (die `id` existierte bereits) behält
-    seine ursprüngliche `authorId`-Zuordnung unveränderlich — unabhängig
-    davon, wer den umgebenden Datensatz gerade bearbeitet.
+  bis in Wiederholungsblöcke hinein) alle Kommentare eines validierten
+  Payloads und prüft sie gegen den bisherigen Stand — inline in `push()`
+  nach dem Laden von `existing`, analog zur bestehenden
+  `results`-Zeilenprüfung:
+  * Ein Kommentar mit `authorId === requester.sub` ist immer erlaubt
+    (eigene Kommentare frei anlegen/bearbeiten/löschen).
+  * Jeder **andere** Kommentar — fremde `authorId` oder gar keine
+    (Altbestand) — muss **zeichengleich** aus dem gespeicherten Datensatz
+    stammen und wird dabei höchstens **einmal** verbraucht
+    (Vielfachmengen-Abgleich über den vollständigen Kommentar).
 
-  Die zweite Regel geht bewusst über die ursprüngliche Empfehlung hinaus
-  (die nur „neue/geänderte Kommentare" nannte): `plans` steht in
-  `STORE_PERMISSIONS` als `shared` — ohne diese zweite Regel könnte jedes
-  Vereinsmitglied beim Bearbeiten eines geteilten Plans die
-  Autor:innen-Zuordnung eines fremden, bereits bestehenden Kommentars
-  nachträglich umschreiben, ohne selbst einen neuen Kommentar anzulegen.
-* `jobs/commentAnonymization.ts` (N5-Fix des Vorreviews) gleicht jetzt auf
-  `authorId` statt auf `authorName` ab — die dort zuvor dokumentierte
-  Grenze (Namensgleichheit/-änderung als Unschärfequelle) entfällt damit
-  vollständig, ebenso in `erasure.repository.ts`/`.memory.ts` (Art.-17-Purge
-  übergibt jetzt `user.id` statt `user.name`).
+  Der Abgleich läuft bewusst über den gesamten Kommentar und nicht über
+  dessen `id`: `CommentSchema.id` ist ein frei wählbarer, nicht
+  eindeutiger Client-String (bewusst kein UUID). Ein reiner id-Nachschlag
+  war die erste Fassung dieses Fixes und ließ sich auf drei Wegen
+  umgehen — dieselbe `id` ein zweites Mal im selben Array senden, sie an
+  einer anderen Stelle des Datensatzes einsetzen, oder nur den `text`
+  eines bestehenden fremden Kommentars austauschen. Alle drei sind als
+  Regressionstests festgehalten.
+
+  **Grenze der Zusicherung** (bewusst): Zugesichert ist, dass sich einer
+  **anderen** Person nichts unterschieben lässt. Nicht zugesichert ist,
+  dass ein fremder Kommentar unantastbar wäre — wer den umgebenden
+  Datensatz schreiben darf, darf ihn auch löschen oder auf den **eigenen**
+  Namen umschreiben. Beides ist datenseitig nicht von „fremden Kommentar
+  gelöscht und einen eigenen mit demselben Text angelegt" zu
+  unterscheiden, und Letzteres steht in einem geteilten Team-Dokument
+  ohnehin jeder schreibberechtigten Person offen. Eine Sperre dagegen
+  müsste das Löschen fremder Kommentare generell verbieten — eine
+  fachliche Einschränkung, die über diesen Befund hinausginge.
+* `jobs/commentAnonymization.ts` (N5-Fix des Vorreviews) gleicht jetzt
+  primär auf `authorId` statt auf `authorName` ab — die dort zuvor
+  dokumentierte Grenze (Namensgleichheit/-änderung als Unschärfequelle)
+  entfällt damit für alles seit diesem Fix Geschriebene; für den
+  Altbestand ohne `authorId` bleibt der Namensabgleich als Rückfall
+  bestehen, da diese Kommentare sonst ausgerechnet als älteste Datensätze
+  dauerhaft unanonymisiert blieben. Die Anonymisierung **entfernt
+  `authorId` vollständig**, statt nur `authorName` zu überschreiben:
+  bliebe die ID stehen, überlebte den Art.-17-Hard-Purge ein stabiler
+  personenbezogener Schlüssel, über den sich sämtliche Kommentare
+  derselben gelöschten Person wieder verketten ließen — eine
+  Verkettbarkeit, die es vor Einführung von `authorId` nicht gab und die
+  das Feld nicht neu schaffen darf.
 * Frontend (`apps/web/js/modules/comments.js`): `addComment()` setzt
-  `authorId: user?.id` beim Anlegen eines neuen Kommentars.
+  `authorId` aus dem eingeloggten Konto und **bricht mit einer klaren
+  Meldung ab**, wenn keine eigene ID bekannt ist — der Kommentar würde
+  sonst lokal gespeichert, aber dauerhaft am Sync-Push scheitern und für
+  die schreibende Person nur scheinbar existieren.
 
 Regressionstests: `packages/shared-types/test/entities.test.ts`
-(`authorId` als Pflichtfeld, lehnt fehlenden/ungültigen Wert ab);
-`apps/api/test/jobs/commentAnonymization.test.ts` (Abgleich erfolgt über
-`authorId`, ein abweichender `authorName` bei gleicher `authorId` umgeht
-die Anonymisierung nicht mehr — direkte Regression des vormals
-dokumentierten N5-Umgehungswegs); `apps/api/test/sync/sync.service.test.ts`
-(neuer Block „Kommentar-Autor:innen-Prüfung" — akzeptiert eigene neue
-Kommentare, lehnt fremd zugeordnete neue Kommentare in allen drei Stores
-ab inklusive verschachtelter Plan-Sets/-Blöcke, lehnt den nachträglichen
-`authorId`-Wechsel eines bestehenden Kommentars durch eine andere Person
-ab, erlaubt weiterhin das Hinzufügen eines eigenen neuen Kommentars neben
-einem fremden bestehenden im selben Datensatz, Stores ohne Kommentare
-bleiben unbeeinflusst).
+(`authorId` muss, wenn vorhanden, eine UUID sein; ein fehlendes ist auf
+Schema-Ebene zulässig — Altbestand); `apps/api/test/jobs/
+commentAnonymization.test.ts` (Abgleich über `authorId`, abweichender
+`authorName` bei gleicher `authorId` umgeht die Anonymisierung nicht mehr,
+`authorId` wird beim Anonymisieren entfernt, Altbestand ohne `authorId`
+weiterhin über den Namen erfasst, ein zufällig gleicher Name bei fremder
+`authorId` aber nicht); `apps/api/test/sync/sync.service.test.ts` (Block
+„Kommentar-Autor:innen-Prüfung": eigene neue Kommentare akzeptiert, fremd
+zugeordnete neue Kommentare in allen drei Stores abgelehnt inklusive
+verschachtelter Plan-Sets/-Blöcke, Zuschreibung an eine dritte Person
+abgelehnt, die drei oben genannten Umgehungswege je einzeln abgelehnt,
+Löschen eines fremden Kommentars und Umschreiben auf die eigene Identität
+als bewusst erlaubt festgehalten, Altbestand ohne `authorId` unverändert
+durchreichbar aber nicht nachträglich zuschreibbar, Stores ohne Kommentare
+unbeeinflusst); `apps/api/test-integration/profileErasure.integration.test.ts`
+(nach dem Purge steht in keinem Kommentar mehr eine `authorId`).
 
 Ursprünglicher Befund, Fundstellen zum Zeitpunkt der Analyse:
 `packages/shared-types/src/entities.ts:41-50`,
