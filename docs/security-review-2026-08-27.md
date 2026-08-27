@@ -26,17 +26,17 @@ nachvollzogen. Ergebnis dieser Nachprüfung:
   Lücke geöffnet — siehe **H1** unten. Der zugehörige Regressionstest
   zementiert genau das verwundbare Verhalten als „korrekt".
 
-**Update (27. August 2026, im Anschluss an dieses Review).** In vier
+**Update (27. August 2026, im Anschluss an dieses Review).** In fünf
 Schritten direkt im Anschluss an diese Prüfung behoben (siehe die
 jeweiligen **Fix**-Abschnitte unten): zuerst **H1** und **N7** — beide
 betreffen dieselbe Betriebsannahme (ein vorgeschalteter, co-lokalisierter
 Reverse Proxy) und wurden bewusst gemeinsam umgesetzt —, danach **H2**
 zusammen mit **N3** (N3s Fix wandert wie in dessen ursprünglicher
 Empfehlung vorgesehen direkt in den für H2 neu geschaffenen Endpunkt) und
-**N4**, danach **M1**, zuletzt **M2** zusammen mit **N6**. Damit sind
-beide Hoch-Befunde, beide Mittel-Befunde sowie fünf der sieben
-Niedrig-Befunde behoben; **N1**, **N2**, **N5** sind zum Zeitpunkt dieses
-Updates weiterhin offen.
+**N4**, danach **M1**, danach **M2** zusammen mit **N6**, zuletzt **N1**
+und **N5**. Damit sind beide Hoch-Befunde, beide Mittel-Befunde sowie
+sechs der sieben Niedrig-Befunde behoben; lediglich **N2** ist zum
+Zeitpunkt dieses Updates weiterhin offen.
 
 **Vorbemerkung.** Der Gesamteindruck des Vorreviews bestätigt sich: die
 Kernlogik ist überdurchschnittlich sorgfältig gebaut. argon2id mit
@@ -67,11 +67,11 @@ Schweregrade: **Hoch** = vor dem nächsten Produktivbetrieb beheben,
 | H2 | `PATCH /api/me` erlaubt unverifizierten E-Mail-Wechsel ohne Passwortprüfung → dauerhafte Kontoübernahme | `auth.route.ts:204`, `auth.service.ts:482` | Hoch — **behoben** |
 | M1 | Art.-17-Hard-Purge lässt die E-Mail-Adresse in `invitations` stehen | `jobs/erasure.repository.ts:43-217` | Mittel — **behoben** |
 | M2 | `Comment.authorName` ist reine Client-Angabe — Identitätsvortäuschung im Verein | `entities.ts:47`, `sync.permissions.ts:91` | Mittel — **behoben** |
-| N1 | Frisch erzeugtes DB-Passwort landet im Klartext im Terminal/CI-Log | `scripts/setup-codespace.sh:296` | Niedrig |
+| N1 | Frisch erzeugtes DB-Passwort landet im Klartext im Terminal/CI-Log | `scripts/setup-codespace.sh:296` | Niedrig — **behoben** |
 | N2 | Superadmin-Passwort als Kommandozeilenargument (**offen aus Vorreview N6**) | `scripts/createSuperAdmin.ts`, `setup-codespace.sh:221` | Niedrig |
 | N3 | E-Mail-Wechsel auf die Adresse eines soft-gelöschten Kontos → 500 statt 409 (Existenz-Orakel) | `auth.service.ts:486-488` | Niedrig — **behoben** |
 | N4 | `resetPassword()` invalidiert weitere offene Reset-Tokens desselben Kontos nicht | `auth.service.ts:427-445` | Niedrig — **behoben** |
-| N5 | Abbestelltes Modul entfernt bereits synchronisierte Daten nicht vom Gerät | `sync.service.ts:439`, `syncClient.js` | Niedrig |
+| N5 | Abbestelltes Modul entfernt bereits synchronisierte Daten nicht vom Gerät | `sync.service.ts:439`, `syncClient.js` | Niedrig — **behoben** |
 | N6 | `GET /api/users/trainers` liefert vollständige Nutzerdatensätze an jede Rolle `trainer` | `auth.service.ts:545` | Niedrig — **behoben** |
 | N7 | API lauscht fest auf `0.0.0.0:3000`, nicht konfigurierbar | `apps/api/src/index.ts:10` | Niedrig — **behoben** |
 
@@ -539,8 +539,19 @@ bewusster Trade-off erkennbar ist statt als Lücke.
 
 ## Niedrig
 
-### N1 — Frisch erzeugtes DB-Passwort im Klartext im Terminal/CI-Log
+### N1 — Frisch erzeugtes DB-Passwort im Klartext im Terminal/CI-Log — **behoben**
 
+**Fix.** Umgesetzt exakt wie in der Empfehlung beschrieben: Zeile 301
+(`scripts/setup-codespace.sh`) gibt jetzt nur noch einen Verweis auf
+`apps/api/.env` aus, statt das Passwort selbst zu wiederholen — analog zur
+bereits im Vorreview (H1) korrigierten Behandlung des
+Superadmin-Passworts direkt darüber.
+
+Kein dedizierter Regressionstest — das Skript läuft nur interaktiv/in CI
+gegen eine echte Codespaces-Umgebung und wird nirgends automatisiert
+getestet (wie auch der Rest von `setup-codespace.sh`).
+
+Ursprünglicher Befund, Fundstellen zum Zeitpunkt der Analyse:
 `scripts/setup-codespace.sh:44`, `:296`
 
 ```bash
@@ -682,8 +693,55 @@ Naheliegend zusätzlich: dasselbe in `changePassword()`, damit ein
 vergessener Reset-Link nach einem regulären Passwortwechsel nicht
 weiterlebt.
 
-### N5 — Abbestelltes Modul entfernt bereits synchronisierte Daten nicht vom Gerät
+### N5 — Abbestelltes Modul entfernt bereits synchronisierte Daten nicht vom Gerät — **behoben**
 
+**Fix.** Umgesetzt wie in der Empfehlung beschrieben. `state.js` hält jetzt
+zusätzlich zum In-Memory-`current` den zuletzt bekannten
+`enabledModules`-Stand dauerhaft in IndexedDB (`meta`-Store) — bewusst
+nicht nur im Speicher, da sonst ein Seiten-Reload NACH einer Abbestellung
+den Vergleich fälschlich als „erste Sitzung auf diesem Gerät" behandeln
+würde, obwohl der volle Altbestand des abbestellten Pakets weiterhin in
+der IndexedDB liegt. Eine neue, interne `applyEnabledModules()`-Funktion
+läuft an jeder Stelle, an der `enabledModules` vom Server hereinkommt
+(`login()`, `restoreSession()`, `resetPassword()`, `changePassword()`,
+`changeEmail()`, `setUserLocale()`/`updateProfile()` — Letztere über
+`PATCH /api/me`, dessen Antwort laut `MeResponseSchema` ebenfalls
+`enabledModules` mitführt): für jedes Paket, das im neuen Stand fehlt,
+aber im letzten bekannten noch enthalten war, werden die zugehörigen
+lokalen Stores geleert (`db.js: clearStore()`) und der globale Sync-Cursor
+zurückgesetzt (neue Funktion `syncClient.js: resetCursor()`) — Letzteres,
+weil der Cursor EIN gemeinsamer Wasserstand für alle Stores ist, kein
+Reset also ein späteres Wieder-Zubuchen desselben Pakets nicht zuverlässig
+erneut befüllen würde (`pull()` liefert ab dem gespeicherten Cursor nur
+noch Änderungen, unveränderten Altbestand nie wieder).
+
+`apps/web` lädt ohne Build-Schritt direkt als Browser-ES-Module und kann
+`MODULE_PACKAGES` aus `packages/shared-types/src/modules.ts` daher nicht
+importieren (dieselbe bereits bestehende Einschränkung wie bei
+`router.js: ROUTE_TO_PACKAGE`) — die Paket-zu-Store-Zuordnung ist deshalb
+als eigene, im selben Muster kommentierte `MODULE_STORES`-Konstante in
+`state.js` dupliziert, inhaltlich deckungsgleich mit
+`MODULE_PACKAGES[*].stores`.
+
+Bewusst nicht mit angefasst: bereits in die lokale Sync-Warteschlange
+eingereihte, noch nicht übertragene Änderungen an einem soeben
+abbestellten Store werden von `clearStore()` mit entfernt (kein
+gesonderter Fang für `syncQueue`-Einträge dieses Stores) — sie würden vom
+Server ohnehin abgelehnt (`canWrite()` sperrt den Store bereits), laufen
+also so oder so ins Leere. Ein seltener Grenzfall (Abbestellung fällt
+exakt mit einer noch unsynchronisierten Offline-Änderung genau dieses
+Stores zusammen), passend zur „Niedrig"-Einstufung nicht weiter vertieft.
+
+Regressionstests: `apps/web/test/state.moduleDeprovisioning.test.js` — der
+allererste Login auf einem Gerät räumt nichts weg (kein bekannter
+vorheriger Stand), eine erkannte Abbestellung leert genau die Stores des
+entfernten Pakets und setzt den Cursor genau einmal zurück, eine
+Erweiterung/unveränderte Paketliste rührt nichts an, dieselbe Erkennung
+funktioniert auch über `restoreSession()` (Seiten-Reload) hinweg statt nur
+innerhalb derselben Sitzung, und ein Paket ohne eigene Stores (`stats`)
+setzt zwar den Cursor zurück, ruft aber `clearStore()` nicht auf.
+
+Ursprünglicher Befund, Fundstellen zum Zeitpunkt der Analyse:
 `apps/api/src/modules/sync/sync.service.ts:439`, `apps/web/js/syncClient.js`
 
 Das Modul-Gating ist serverseitig korrekt durchgesetzt: `canRead()` filtert
@@ -940,6 +998,11 @@ und sind sauber:
    zusammen mit **N6** umgesetzt.
 5. ~~**N6** — eigene Projektion für `/api/users/trainers`.~~ **Behoben**
    (`listMembers()`-Parameter `project`, siehe dortiger **Fix**-Abschnitt).
-6. **N1, N2, N5** bei nächster Berührung, größter verbleibender Befund
-   dabei **N5**. ~~**N3**~~/~~**N4**~~/~~**N7**~~ **Behoben** (siehe
-   jeweiliger **Fix**-Abschnitt).
+6. ~~**N1** — Verweis auf `apps/api/.env` statt DB-Passwort-Ausgabe.~~
+   **Behoben** (siehe dortiger **Fix**-Abschnitt).
+7. ~~**N5** — lokale Stores eines abbestellten Pakets leeren, Sync-Cursor
+   zurücksetzen.~~ **Behoben** (`applyEnabledModules()` in `state.js`,
+   siehe dortiger **Fix**-Abschnitt).
+8. **N2** bei nächster Berührung — letzter verbleibender Befund.
+   ~~**N3**~~/~~**N4**~~/~~**N7**~~ **Behoben** (siehe jeweiliger
+   **Fix**-Abschnitt).

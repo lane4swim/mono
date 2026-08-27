@@ -16,7 +16,8 @@
 import * as api from './apiClient.js';
 import { setLocale, detectInitialLocale } from './i18n.js';
 import { IS_DEMO } from './demoMode.js';
-import { wipeAll, setClubIdProvider } from './db.js';
+import { wipeAll, setClubIdProvider, get, put, clearStore } from './db.js';
+import { resetCursor } from './syncClient.js';
 
 // Muss inhaltlich mit CURRENT_CONSENT_VERSION im Backend
 // (packages/shared-types/src/auth.ts) übereinstimmen — nur zur Anzeige
@@ -38,6 +39,7 @@ export async function restoreSession() {
   if (!api.getStoredRefreshToken()) return null;
   try {
     const result = await api.refreshTokens();
+    await applyEnabledModules(result.enabledModules);
     current = { ...result.user, enabledModules: result.enabledModules };
     setLocale(current?.locale || detectInitialLocale());
     return current;
@@ -73,8 +75,66 @@ export function isLoggedIn() { return !!current; }
 // geladen ist.
 export function getEnabledModules() { return current?.enabledModules ?? []; }
 
+// Sicherheitsreview 2026-08-27, Befund N5: Paket-Key -> IndexedDB-Store-
+// Namen, deren lokal bereits synchronisierte Daten beim Abbestellen des
+// Pakets entfernt werden müssen (siehe applyEnabledModules() unten). MUSS
+// inhaltlich mit packages/shared-types/src/modules.ts:
+// MODULE_PACKAGES[*].stores übereinstimmen — wie ROUTE_TO_PACKAGE in
+// router.js kann apps/web dieses Backend-Paket nicht importieren (siehe
+// dortiger Kommentar: kein Build-Schritt, direktes Laden als
+// Browser-ES-Module).
+const MODULE_STORES = {
+  athletes: ['athletes', 'groups'],
+  competitions: ['competitions', 'entries'],
+  times: [],
+  plans: ['plans'],
+  templates: ['templates'],
+  catalog: ['exercises'],
+  sessions: ['sessions'],
+  actionitems: ['actionItems'],
+  stats: [],
+};
+
+const ENABLED_MODULES_META_KEY = 'enabledModules';
+
+// Sicherheitsreview 2026-08-27, Befund N5: enabledModules kommt bei jeder
+// hier unten aufgerufenen Stelle (Login, Sitzungswiederherstellung,
+// Passwort-/E-Mail-Wechsel, Profil-Aktualisierung — überall dort liefert
+// das Backend ohnehin den aktuellen Stand mit) frisch vom Server. Der
+// letzte lokal bekannte Stand wird dauerhaft in IndexedDB gehalten (nicht
+// nur im Speicher, siehe `current` oben) — ein Seiten-Reload NACH einer
+// Abbestellung durchläuft `current = null -> neu gesetzt` und würde einen
+// rein speicherbasierten Vergleich sonst immer als "erste Sitzung"
+// missverstehen, obwohl auf dem Gerät noch der volle Altbestand des
+// abbestellten Pakets in der IndexedDB liegt.
+//
+// Für jedes Paket, das im neuen Stand fehlt, aber im letzten bekannten
+// Stand noch enthalten war, werden die zugehörigen Stores geleert und der
+// globale Sync-Cursor zurückgesetzt (siehe syncClient.js: resetCursor()
+// für die Begründung, warum das nötig ist). Ohne verknüpften bekannten
+// Stand (allererste Sitzung auf diesem Gerät nach einem wipeAll(), siehe
+// logout()) gibt es nichts zu bereinigen.
+async function applyEnabledModules(nextModules) {
+  const modules = nextModules ?? [];
+  const stored = await get('meta', ENABLED_MODULES_META_KEY);
+  const previousModules = stored?.modules ?? null;
+  await put('meta', { id: ENABLED_MODULES_META_KEY, modules });
+  if (!previousModules) return;
+
+  const removed = previousModules.filter((key) => !modules.includes(key));
+  if (removed.length === 0) return;
+
+  for (const key of removed) {
+    for (const store of MODULE_STORES[key] ?? []) {
+      await clearStore(store);
+    }
+  }
+  await resetCursor();
+}
+
 export async function login(email, password, consent) {
   const user = await api.login({ email, password, consent });
+  await applyEnabledModules(user.enabledModules);
   current = user;
   setLocale(user.locale || detectInitialLocale());
   emit();
@@ -83,6 +143,7 @@ export async function login(email, password, consent) {
 
 export async function acceptInvitation(token, name, password, consent) {
   const user = await api.acceptInvitation({ token, name, password, consent });
+  await applyEnabledModules(user.enabledModules);
   current = user;
   setLocale(user.locale || detectInitialLocale());
   emit();
@@ -95,6 +156,7 @@ export async function acceptInvitation(token, name, password, consent) {
 // apiClient.js: resetPassword()).
 export async function resetPassword(token, newPassword) {
   const user = await api.resetPassword({ token, newPassword });
+  await applyEnabledModules(user.enabledModules);
   current = user;
   setLocale(user.locale || detectInitialLocale());
   emit();
@@ -141,7 +203,9 @@ export async function logout() {
 export async function setUserLocale(locale) {
   if (!current) { setLocale(locale); return null; }
   if (IS_DEMO) { current = { ...current, locale }; setLocale(locale); return current; }
-  current = await api.updateMe({ locale });
+  const updated = await api.updateMe({ locale });
+  await applyEnabledModules(updated.enabledModules);
+  current = updated;
   setLocale(locale);
   return current;
 }
@@ -156,7 +220,9 @@ export async function setUserLocale(locale) {
 export async function updateProfile(patch) {
   if (!current) return null;
   if (IS_DEMO) { current = { ...current, ...patch }; emit(); return current; }
-  current = await api.updateMe(patch);
+  const updated = await api.updateMe(patch);
+  await applyEnabledModules(updated.enabledModules);
+  current = updated;
   emit();
   return current;
 }
@@ -169,7 +235,9 @@ export async function updateProfile(patch) {
 // setUserLocale() oben.
 export async function changePassword(currentPassword, newPassword) {
   if (!current) return null;
-  current = await api.changePassword({ currentPassword, newPassword });
+  const updated = await api.changePassword({ currentPassword, newPassword });
+  await applyEnabledModules(updated.enabledModules);
+  current = updated;
   return current;
 }
 
@@ -182,7 +250,9 @@ export async function changePassword(currentPassword, newPassword) {
 // dort zeigt, analog zu updateProfile() oben.
 export async function changeEmail(currentPassword, newEmail) {
   if (!current) return null;
-  current = await api.changeEmail({ currentPassword, newEmail });
+  const updated = await api.changeEmail({ currentPassword, newEmail });
+  await applyEnabledModules(updated.enabledModules);
+  current = updated;
   emit();
   return current;
 }
