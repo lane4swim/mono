@@ -432,6 +432,8 @@ export default {
     removeBlock: 'Remove block', blockNamePlaceholder: 'Block name, e.g. "Main set"',
     fromCatalogHint: 'from exercise catalog: {name}', noSetsInBlock: 'No sets in this block yet.',
     blockSummary: 'Block distance: {inner} m per round × {n} = {total} m total',
+    moveUp: 'Move one position up', moveDown: 'Move one position down',
+    insertHere: 'Insert here', insertHereHint: 'Insert here:',
     equipmentSummary: 'Equipment needed:', equipmentNone: 'No equipment needed',
     editEquipment: 'Edit equipment', equipmentSaved: 'Equipment saved',
   },
