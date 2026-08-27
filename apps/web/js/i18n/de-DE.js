@@ -436,6 +436,8 @@ export default {
     removeBlock: 'Block entfernen', blockNamePlaceholder: 'Blockname, z. B. „Hauptserie"',
     fromCatalogHint: 'aus Übungskatalog: {name}', noSetsInBlock: 'Noch keine Sätze in diesem Block.',
     blockSummary: 'Blockdistanz: {inner} m je Durchgang × {n} = {total} m gesamt',
+    moveUp: 'Eine Position nach oben', moveDown: 'Eine Position nach unten',
+    insertHere: 'Hier einfügen', insertHereHint: 'Hier einfügen:',
     equipmentSummary: 'Benötigte Ausrüstung:', equipmentNone: 'Keine Ausrüstung nötig',
     editEquipment: 'Ausrüstung bearbeiten', equipmentSaved: 'Ausrüstung gespeichert',
   },
