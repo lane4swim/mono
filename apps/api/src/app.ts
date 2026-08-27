@@ -50,6 +50,20 @@ const MEMBER_INVITATION_TTL_DAYS = 7; // Trainer:in-/Athlet:in-Einladungen
 // generatePasswordResetToken()-Kommentar für die Begründung).
 const PASSWORD_RESET_TTL_MINUTES = 60;
 
+// Sicherheitsreview 2026-08-27, Befund H1 — siehe ausführlichen
+// Kommentar bei TRUSTED_PROXY_IPS in config/env.ts für die volle
+// Vorgeschichte (H2 des Sicherheitsreviews 2026-08 -> `trustProxy: true`
+// -> Befund H1). Leere Liste -> `false` (Fastifys sicherer Default, kein
+// Hop wird vertraut) statt eines leeren Arrays — funktional identisch
+// (@fastify/proxy-addr behandelt beides gleich), liest sich an der
+// Aufrufstelle unten aber klarer als "kein Proxy konfiguriert".
+function resolveTrustProxy(env: Env): boolean | string[] {
+  const trustedProxies = env.TRUSTED_PROXY_IPS.split(',')
+    .map((ip) => ip.trim())
+    .filter(Boolean);
+  return trustedProxies.length > 0 ? trustedProxies : false;
+}
+
 function resolveMailer(env: Env): MailSender {
   if (!env.SMTP_HOST) return new ConsoleMailSender();
   return new SmtpMailSender({
@@ -70,14 +84,30 @@ export async function buildApp(env: Env, overrides: BuildAppOverrides = {}): Pro
     // trustProxy ignoriert Fastify den von allen Deployment-Anleitungen
     // gesetzten "X-Forwarded-For"-Header — request.ip ist dann für JEDE
     // Anfrage die Adresse des vorgeschalteten Nginx (siehe docs/deployment*.md),
-    // nicht die des tatsächlichen Clients. Die drei IP-basierten
-    // Rate-Limits (global in plugins/security.ts, sowie /auth/refresh und
-    // /auth/logout in auth.route.ts) kollabierten dadurch auf einen
-    // EINZIGEN, geteilten Zähler für die gesamte Installation — ein
-    // einzelner Client konnte damit alle anderen aussperren. trustProxy:
-    // true wertet "X-Forwarded-For" aus; request.ip zeigt danach wieder
-    // die tatsächliche Client-Adresse.
-    trustProxy: true,
+    // nicht die des tatsächlichen Clients. Alle IP-basierten Rate-Limits
+    // kollabierten dadurch auf einen EINZIGEN, geteilten Zähler für die
+    // gesamte Installation — ein einzelner Client konnte damit alle
+    // anderen aussperren.
+    //
+    // Sicherheitskorrektur (Sicherheitsreview 2026-08-27, Befund H1): der
+    // damalige Fix (`trustProxy: true`) behob das, öffnete dabei aber
+    // eine neue Lücke: `true` vertraut JEDER Adresse in der Kette als
+    // Proxy, Fastify übernimmt dadurch den am weitesten LINKS stehenden
+    // "X-Forwarded-For"-Eintrag als request.ip — und genau den bestimmt
+    // ein Client vollständig selbst, da Nginx nur ANHÄNGT
+    // (`$proxy_add_x_forwarded_for`), statt den Header zu ersetzen. Jedes
+    // IP-basierte Rate-Limit (Login, "Passwort vergessen", Refresh, …)
+    // war dadurch mit einem frei wählbaren Header-Wert pro Anfrage
+    // umgehbar. resolveTrustProxy() benennt stattdessen NUR die
+    // tatsächlich vertrauenswürdigen Proxy-Adressen (siehe
+    // TRUSTED_PROXY_IPS in config/env.ts) — Fastify/proxy-addr überspringt
+    // dann ausschließlich diese Hops und liefert den ersten NICHT
+    // vertrauenswürdigen Eintrag als request.ip, unabhängig davon, was ein
+    // Client selbst in den Header schreibt (empirisch verifiziert: eine
+    // Anfrage direkt an die API, nicht von einer vertrauenswürdigen
+    // Adresse, liefert weiterhin die echte Peer-Adresse, auch bei
+    // gesetztem Fälschungs-Header).
+    trustProxy: resolveTrustProxy(env),
   });
 
   await registerSecurityPlugins(app, env);

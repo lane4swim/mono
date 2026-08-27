@@ -69,8 +69,59 @@ describe('loadEnv', () => {
       CORS_ORIGIN: 'https://app.lane1.example.org',
       JWT_PRIVATE_KEY: 'dummy-private-key',
       JWT_PUBLIC_KEY: 'dummy-public-key',
+      TRUSTED_PROXY_IPS: '127.0.0.1',
     });
     expect(env.CORS_ORIGIN).toBe('https://app.lane1.example.org');
+  });
+
+  // Regressionstests für Sicherheitsreview 2026-08-27, Befund H1: ein
+  // fehlender TRUSTED_PROXY_IPS-Wert in Produktion reproduzierte zuvor
+  // stillschweigend entweder Befund H1 (fiele man auf "trustProxy: true"
+  // zurück) oder den ursprünglichen Befund H2 (Rate-Limits kollabieren
+  // wieder) — beide Defaults sind sicherheitsrelevant falsch, daher ein
+  // Abbruch analog zum JWT-Schlüsselpaar oben.
+  describe('TRUSTED_PROXY_IPS', () => {
+    it('ist standardmäßig leer (kein Proxy vertrauenswürdig) — korrekt außerhalb von Produktion', () => {
+      const env = loadEnv(validEnv);
+      expect(env.TRUSTED_PROXY_IPS).toBe('');
+    });
+
+    it('lehnt einen fehlenden Wert in Produktion ab', () => {
+      expect(() =>
+        loadEnv({
+          ...validEnv,
+          NODE_ENV: 'production',
+          JWT_PRIVATE_KEY: 'dummy-private-key',
+          JWT_PUBLIC_KEY: 'dummy-public-key',
+        }),
+      ).toThrow(/TRUSTED_PROXY_IPS/);
+    });
+
+    it('akzeptiert einen gesetzten Wert in Produktion', () => {
+      const env = loadEnv({
+        ...validEnv,
+        NODE_ENV: 'production',
+        JWT_PRIVATE_KEY: 'dummy-private-key',
+        JWT_PUBLIC_KEY: 'dummy-public-key',
+        TRUSTED_PROXY_IPS: '127.0.0.1',
+      });
+      expect(env.TRUSTED_PROXY_IPS).toBe('127.0.0.1');
+    });
+  });
+
+  // Regressionstest für Sicherheitsreview 2026-08-27, Befund N7: HOST war
+  // zuvor fest auf "0.0.0.0" verdrahtet in src/index.ts, unabhängig vom
+  // tatsächlichen Deployment.
+  describe('HOST', () => {
+    it('ist standardmäßig "127.0.0.1" (kein Bind auf allen Interfaces)', () => {
+      const env = loadEnv(validEnv);
+      expect(env.HOST).toBe('127.0.0.1');
+    });
+
+    it('ist überschreibbar (z. B. "0.0.0.0" im Container-Betrieb)', () => {
+      const env = loadEnv({ ...validEnv, HOST: '0.0.0.0' });
+      expect(env.HOST).toBe('0.0.0.0');
+    });
   });
 
   // Regressionstest für die Code-Review-Korrektur: z.coerce.boolean()

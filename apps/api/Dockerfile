@@ -37,6 +37,14 @@ RUN npm ci --omit=dev --ignore-scripts
 FROM node:22-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
+# Sicherheitsreview 2026-08-27, Befund N7: config/env.ts' HOST-Default ist
+# 127.0.0.1 (korrekt für jedes dokumentierte, nicht-containerisierte
+# Deployment mit co-lokalisiertem Nginx) — innerhalb eines Containers wäre
+# das für den Host nicht erreichbar, da der Zugriff über Dockers eigene
+# Portweiterleitung läuft. 0.0.0.0 ist hier tatsächlich richtig; als
+# ENV statt nur in docker-compose.yml gesetzt, damit auch ein einfacher
+# `docker run` (ohne Compose) sofort funktioniert.
+ENV HOST=0.0.0.0
 COPY --from=build --chown=node:node /repo/apps/api/dist ./dist
 COPY --from=build --chown=node:node /repo/apps/api/package.json ./package.json
 COPY --from=build --chown=node:node /repo/apps/api/prisma ./prisma

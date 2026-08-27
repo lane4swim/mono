@@ -190,8 +190,9 @@ JWT_PRIVATE_KEY="<mit openssl erzeugen, siehe unten>"
 JWT_PUBLIC_KEY="<mit openssl erzeugen, siehe unten>"
 CORS_ORIGIN="https://DEIN-CODESPACE-NAME-8080.app.github.dev"
 FRONTEND_BASE_URL="https://DEIN-CODESPACE-NAME-8080.app.github.dev"
+TRUSTED_PROXY_IPS="127.0.0.1"
 ```
-(`CORS_ORIGIN`/`FRONTEND_BASE_URL`: die oben berechnete Adresse einsetzen, **ohne** abschließenden Schrägstrich.)
+(`CORS_ORIGIN`/`FRONTEND_BASE_URL`: die oben berechnete Adresse einsetzen, **ohne** abschließenden Schrägstrich. `TRUSTED_PROXY_IPS`: Nginx — Schritt 10 unten — läuft auf demselben Codespace und ist der einzige tatsächliche Reverse-Proxy-Hop; PFLICHT, da `NODE_ENV=production` gesetzt ist, siehe Sicherheitsreview 2026-08-27, Befund H1, bzw. `deployment.md`, Abschnitt 7.2 für die ausführliche Begründung.)
 
 **SMTP (optional für einen reinen Test):** Ohne `SMTP_HOST` wird eine Einladung nur ins Server-Log geschrieben statt tatsächlich per E-Mail versendet — für einen Testlauf meist ausreichend (der Einladungslink lässt sich trotzdem direkt in der Nutzerverwaltungs-Oberfläche kopieren, siehe `apps/web/help/admin.html`). Soll der komplette Versandweg mitgetestet werden, denselben SMTP-Block wie in `deployment.md`, Abschnitt 7.2 eintragen. Ein Hinweis speziell für Cloud-Umgebungen wie Codespaces: Manche Cloud-Anbieter sperren ausgehende Verbindungen auf klassischen Mail-Ports (25/465) zur Spam-Prävention — Port 587 (wie im SMTP-Block vorgesehen) ist davon in aller Regel nicht betroffen; schlägt der Versand dennoch fehl, ist eine anbieterseitige Sperre eine mögliche Ursache.
 

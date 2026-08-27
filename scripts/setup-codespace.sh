@@ -137,6 +137,11 @@ JWT_REFRESH_TTL_DAYS=30
 CORS_ORIGIN="${PUBLIC_URL}"
 FRONTEND_BASE_URL="${PUBLIC_URL}"
 
+# Sicherheitsreview 2026-08-27, Befund H1 — Nginx (Schritt 10 unten) läuft
+# auf demselben Host und ist der einzige tatsächliche Reverse-Proxy-Hop.
+# PFLICHT bei NODE_ENV=production (siehe apps/api/src/config/env.ts).
+TRUSTED_PROXY_IPS="127.0.0.1"
+
 SMTP_HOST=
 SMTP_PORT=587
 SMTP_USER=

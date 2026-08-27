@@ -320,6 +320,11 @@ JWT_PUBLIC_KEY="<mit openssl erzeugen, siehe unten>"
 CORS_ORIGIN="https://training.mein-verein.de"
 FRONTEND_BASE_URL="https://training.mein-verein.de"
 
+# Sicherheitsreview 2026-08-27, Befund H1 — Nginx (Abschnitt 9 unten)
+# läuft auf demselben Host und ist der einzige tatsächliche
+# Reverse-Proxy-Hop; PFLICHT bei NODE_ENV=production.
+TRUSTED_PROXY_IPS="127.0.0.1"
+
 # SMTP — nötig, damit Einladungs-E-Mails (Vereins-/Nutzerverwaltung,
 # siehe apps/web/help/admin.html) tatsächlich zugestellt werden. Bleibt
 # SMTP_HOST leer, wird die Einladung nur ins Server-Log geschrieben statt
@@ -353,6 +358,16 @@ Schlüssel nicht zusätzlich unverschlüsselt auf der Platte liegt:
 rm /tmp/jwt_private.pem /tmp/jwt_public.pem
 ```
 
+> **Hinweis TRUSTED_PROXY_IPS:** benennt die Adresse(n), denen die API den
+> Header `X-Forwarded-For` überhaupt glaubt (Fastifys `trustProxy`-Option)
+> — bei diesem Aufbau ausschließlich `127.0.0.1`, da Nginx auf demselben
+> Pi läuft und die API nur über die Loopback-Adresse anspricht (siehe
+> Abschnitt 9). Dieser Wert ist die einzige Verteidigung gegen einen
+> Client, der selbst einen `X-Forwarded-For`-Header mitschickt, um Rate-
+> Limits zu umgehen. `env.ts` erzwingt einen gesetzten Wert, sobald
+> `NODE_ENV=production` ist (siehe `deployment.md`, Abschnitt 7.2 für die
+> ausführliche Begründung).
+>
 > **Hinweis SMTP_SECURE:** `SMTP_SECURE=false` (Port 587/STARTTLS) oder
 > `SMTP_SECURE=true` (Port 465/implizites TLS) explizit setzen — beide
 > werden korrekt ausgewertet. Bleibt die Zeile ganz weg, gilt ebenfalls
@@ -670,6 +685,11 @@ npm run build --workspace=apps/api
 pm2 restart lane1-api
 sudo systemctl reload nginx
 ```
+
+> **Update auf/nach Sicherheitsreview 2026-08-27, Befund H1:** siehe
+> `deployment.md`, Abschnitt 13 — vor dem ersten `pm2 restart` nach diesem
+> Update einmalig `TRUSTED_PROXY_IPS="127.0.0.1"` an `apps/api/.env`
+> anhängen, sonst bricht der Neustart mit einer klaren Fehlermeldung ab.
 
 ---
 

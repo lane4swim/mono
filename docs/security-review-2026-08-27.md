@@ -26,6 +26,13 @@ nachvollzogen. Ergebnis dieser Nachprüfung:
   Lücke geöffnet — siehe **H1** unten. Der zugehörige Regressionstest
   zementiert genau das verwundbare Verhalten als „korrekt".
 
+**Update (27. August 2026, im Anschluss an dieses Review).** **H1** und
+**N7** wurden direkt im Anschluss an diese Prüfung behoben (siehe die
+jeweiligen **Fix**-Abschnitte unten) — beide betreffen dieselbe
+Betriebsannahme (ein vorgeschalteter, co-lokalisierter Reverse Proxy) und
+wurden bewusst gemeinsam umgesetzt. **H2** sowie alle Mittel-/Niedrig-
+Befunde sind zum Zeitpunkt dieses Updates weiterhin offen.
+
 **Vorbemerkung.** Der Gesamteindruck des Vorreviews bestätigt sich: die
 Kernlogik ist überdurchschnittlich sorgfältig gebaut. argon2id mit
 OWASP-Parametern, RS256 mit opaken, gehashten Refresh-Tokens inkl. Rotation
@@ -51,7 +58,7 @@ Schweregrade: **Hoch** = vor dem nächsten Produktivbetrieb beheben,
 
 | # | Befund | Ort | Schwere |
 |---|--------|-----|---------|
-| H1 | `trustProxy: true`: `X-Forwarded-For` ist vollständig client-kontrolliert — alle IP-Rate-Limits umgehbar | `apps/api/src/app.ts:80` | Hoch |
+| H1 | `trustProxy: true`: `X-Forwarded-For` ist vollständig client-kontrolliert — alle IP-Rate-Limits umgehbar | `apps/api/src/app.ts:80` | Hoch — **behoben** |
 | H2 | `PATCH /api/me` erlaubt unverifizierten E-Mail-Wechsel ohne Passwortprüfung → dauerhafte Kontoübernahme | `auth.route.ts:204`, `auth.service.ts:482` | Hoch |
 | M1 | Art.-17-Hard-Purge lässt die E-Mail-Adresse in `invitations` stehen | `jobs/erasure.repository.ts:43-217` | Mittel |
 | M2 | `Comment.authorName` ist reine Client-Angabe — Identitätsvortäuschung im Verein | `entities.ts:47`, `sync.permissions.ts:91` | Mittel |
@@ -61,14 +68,48 @@ Schweregrade: **Hoch** = vor dem nächsten Produktivbetrieb beheben,
 | N4 | `resetPassword()` invalidiert weitere offene Reset-Tokens desselben Kontos nicht | `auth.service.ts:427-445` | Niedrig |
 | N5 | Abbestelltes Modul entfernt bereits synchronisierte Daten nicht vom Gerät | `sync.service.ts:439`, `syncClient.js` | Niedrig |
 | N6 | `GET /api/users/trainers` liefert vollständige Nutzerdatensätze an jede Rolle `trainer` | `auth.service.ts:545` | Niedrig |
-| N7 | API lauscht fest auf `0.0.0.0:3000`, nicht konfigurierbar | `apps/api/src/index.ts:10` | Niedrig |
+| N7 | API lauscht fest auf `0.0.0.0:3000`, nicht konfigurierbar | `apps/api/src/index.ts:10` | Niedrig — **behoben** |
 
 ---
 
 ## Hoch
 
-### H1 — `trustProxy: true`: `X-Forwarded-For` ist vollständig client-kontrolliert
+### H1 — `trustProxy: true`: `X-Forwarded-For` ist vollständig client-kontrolliert — **behoben**
 
+**Fix.** Neue Umgebungsvariable `TRUSTED_PROXY_IPS`
+(`apps/api/src/config/env.ts`) — kommagetrennte Liste der tatsächlich
+vertrauenswürdigen Reverse-Proxy-Adressen (bei jedem dokumentierten
+Deployment: `127.0.0.1`, da Nginx auf demselben Host läuft). `app.ts:
+resolveTrustProxy()` wandelt sie in Fastifys `trustProxy`-Option um (Array
+statt `true`) — leer bedeutet "kein Proxy vertrauenswürdig" (Fastifys
+sicherer Default), korrekt für lokale Entwicklung und den
+docker-compose-Aufbau ohne vorgeschalteten Proxy. In Produktion ist die
+Variable jetzt **Pflicht**: `loadEnv()` bricht ohne sie sofort mit einer
+klaren Fehlermeldung ab, analog zum bestehenden JWT-Schlüsselpaar-Zwang —
+bewusst kein stiller Default, da sowohl "leer" (kollabiert zurück auf
+Befund H2 des Vorreviews) als auch "alles vertrauen" (reproduziert diesen
+Befund) sicherheitsrelevant falsch wären.
+
+Empirisch gegen Fastify 5 verifiziert (siehe Regressionstests unten): eine
+Anfrage von der konfigurierten Proxy-Adresse liefert weiterhin die
+tatsächliche Client-Adresse aus `X-Forwarded-For`; eine Anfrage von einer
+NICHT vertrauenswürdigen Adresse ignoriert einen mitgeschickten
+Fälschungs-Header vollständig und liefert die echte Peer-Adresse.
+
+Regressionstests: `apps/api/test/plugins/security.test.ts` (Testblock
+„trustProxy — nur die konfigurierte Proxy-Adresse wird vertraut" — ein
+Test bestätigt, dass zwei echte Clients HINTER der vertrauenswürdigen
+Proxy-Adresse weiterhin getrennte Rate-Limit-Budgets bekommen, deckt also
+weiterhin Befund H2 des Vorreviews ab; ein zweiter simuliert den
+H1-Angriff selbst — ein Client hängt bei jedem Versuch einen anderen,
+frei erfundenen Wert vor die von Nginx angehängte echte Adresse und
+erschöpft trotzdem nur EIN gemeinsames Budget. Beide Tests wurden vor dem
+Fix gegen den alten Code — `trustProxy: true` — gegengeprüft: der
+H1-Angriffstest schlägt dort erwartungsgemäß fehl, was bestätigt, dass er
+die Regression tatsächlich erkennt.) sowie `apps/api/test/env.test.ts`
+(Pflicht in Produktion, Default außerhalb).
+
+Ursprünglicher Befund, Fundstelle zum Zeitpunkt der Analyse:
 `apps/api/src/app.ts:80`
 
 ```ts
@@ -533,8 +574,25 @@ Felder braucht.
 (`auth.service.ts:187-195`) nimmt bereits `filter`/`compare` entgegen —
 ein optionaler `project`-Parameter fügt sich dort natürlich ein.
 
-### N7 — API lauscht fest auf `0.0.0.0:3000`, nicht konfigurierbar
+### N7 — API lauscht fest auf `0.0.0.0:3000`, nicht konfigurierbar — **behoben**
 
+**Fix.** Neue Umgebungsvariable `HOST` (`apps/api/src/config/env.ts`,
+Default `127.0.0.1`) — `index.ts` verwendet jetzt `env.HOST` statt des
+fest verdrahteten `'0.0.0.0'`. Der Default passt zu jedem dokumentierten,
+nicht-containerisierten Deployment (Nginx co-lokalisiert, siehe H1).
+Container-Betrieb setzt `HOST=0.0.0.0` explizit dort, wo es korrekt ist —
+sowohl als `ENV HOST=0.0.0.0` im `Dockerfile` (Laufzeit-Stage, wirkt auch
+bei einem einfachen `docker run` ohne Compose) als auch redundant/
+dokumentierend in `docker-compose.yml`. Gemeinsam mit **H1** umgesetzt, da
+beide dieselbe Betriebsannahme (co-lokalisierter Reverse Proxy)
+betreffen — in Produktion ohne gesetztes `TRUSTED_PROXY_IPS` bricht der
+Start jetzt ohnehin ab (siehe dortiger **Fix**-Abschnitt), ein zusätzlicher
+Zwang für `HOST` wäre daher redundant; ein sicherer Default genügt hier.
+
+Regressionstests: `apps/api/test/env.test.ts` (Default `127.0.0.1`,
+überschreibbar z. B. auf `0.0.0.0`).
+
+Ursprünglicher Befund, Fundstelle zum Zeitpunkt der Analyse:
 `apps/api/src/index.ts:10`
 
 ```ts
@@ -678,18 +736,17 @@ und sind sauber:
 
 ## Empfohlene Reihenfolge
 
-1. **H1** — `trustProxy` auf die konkrete Proxy-Adresse setzen und den
-   Regressionstest um den Spoofing-Fall erweitern. Kleinster Eingriff,
-   größte Wirkung: ohne diesen Fix ist jedes andere Rate-Limit der
-   Anwendung wirkungslos.
+1. ~~**H1** — `trustProxy` auf die konkrete Proxy-Adresse setzen und den
+   Regressionstest um den Spoofing-Fall erweitern.~~ **Behoben**
+   (`TRUSTED_PROXY_IPS`, siehe dortiger **Fix**-Abschnitt) — zusammen mit
+   **N7** umgesetzt, da beide dieselbe Betriebsannahme betreffen.
 2. **H2** — E-Mail-Wechsel hinter `currentPassword` legen (Schritt 1 der
    Empfehlung). Double-Opt-In und Benachrichtigung der alten Adresse
-   können unmittelbar danach folgen.
+   können unmittelbar danach folgen. Größter verbleibender Befund.
 3. **M1** — `Invitation.email` in den Hard-Purge aufnehmen; direkte
    Analogie zum bereits geleisteten N5-Fix, mit stabilerer Zuordnung.
 4. **M2** — `authorId` einführen oder die Entscheidung an `CommentSchema`
    explizit dokumentieren.
-5. **N1–N7** bei nächster Berührung. **N3** und **N4** fallen bei der
-   Umsetzung von H2 ohnehin fast von selbst mit an; **N7** passt
-   natürlich zu H1 (beide betreffen dieselbe Betriebsannahme über den
-   vorgeschalteten Reverse Proxy).
+5. **N1–N6** bei nächster Berührung; **N3** und **N4** fallen bei der
+   Umsetzung von H2 ohnehin fast von selbst mit an. ~~**N7**~~ **Behoben**
+   (`HOST`, siehe dortiger **Fix**-Abschnitt).
