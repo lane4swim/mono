@@ -22,6 +22,11 @@ Sicherheitsmaßnahme nicht, weil sie weder die Ursache von M1 beseitigt
 noch der einzige Weg ist, an ein Superadmin-Konto zu gelangen (siehe
 **H1**) — kostet aber den einzigen legitimen Wiederherstellungspfad.
 
+**Update (28. August 2026, im Anschluss an dieses Review).** **H1**
+wurde direkt im Anschluss an diese Prüfung behoben — siehe den
+**Fix**-Abschnitt dort. **H2** ist zum Zeitpunkt dieses Updates
+weiterhin offen.
+
 Schweregrade: **Hoch** = vor dem nächsten Produktivbetrieb beheben,
 **Mittel** = einplanen, **Niedrig** = bei nächster Berührung mitnehmen.
 
@@ -31,7 +36,7 @@ Schweregrade: **Hoch** = vor dem nächsten Produktivbetrieb beheben,
 
 | # | Befund | Ort | Schwere |
 |---|--------|-----|---------|
-| H1 | Seed-Skript legt einen **Superadmin mit im Repository veröffentlichtem Passwort** an — ohne jede `NODE_ENV`-Absicherung, im README als auszuführender Befehl dokumentiert | `apps/api/prisma/seed.ts:59-62,156-197`, `README.md:215-223` | Hoch |
+| H1 | Seed-Skript legt einen **Superadmin mit im Repository veröffentlichtem Passwort** an — ohne jede `NODE_ENV`-Absicherung, im README als auszuführender Befehl dokumentiert | `apps/api/prisma/seed.ts:59-62,156-197`, `README.md:215-223` | Hoch — **behoben** |
 | H2 | `apps/api/.env` (enthält `JWT_PRIVATE_KEY`) wird ohne Dateirechte-Härtung angelegt → weltlesbar → **Fälschung beliebiger Access Tokens** | `scripts/setup-codespace.sh:123`, `docs/deployment.md:261-315` | Hoch |
 | M1 | Superadmin-Passwort als Kommandozeilenargument (**offen aus Vorreview N2/N6**) | `apps/api/scripts/createSuperAdmin.ts:11,18-40`, `scripts/setup-codespace.sh:226` | Mittel |
 | M2 | „Skript nach dem ersten Lauf löschen" ist keine wirksame Zugangskontrolle, entfernt aber den einzigen Wiederherstellungspfad | `apps/api/scripts/createSuperAdmin.ts:44-60` | Mittel |
@@ -43,7 +48,7 @@ Schweregrade: **Hoch** = vor dem nächsten Produktivbetrieb beheben,
 
 ## Hoch
 
-### H1 — Seed-Skript legt einen Superadmin mit veröffentlichtem Passwort an
+### H1 — Seed-Skript legt einen Superadmin mit veröffentlichtem Passwort an — **behoben**
 
 **Ort.** `apps/api/prisma/seed.ts:59-62` (Daten), `:156-197` (`main()`),
 `README.md:215-223` (Dokumentation), `apps/api/package.json:"prisma:seed"`.
@@ -113,6 +118,37 @@ demselben Ergebnis und bleibt vom Löschen des einen Skripts unberührt.
    erzeugten Wert ersetzen, der nur in der Skriptausgabe erscheint.
 4. `README.md:215-223` um einen unmissverständlichen Warnhinweis
    ergänzen („nur gegen eine leere Entwicklungsdatenbank").
+
+**Fix.** `apps/api/prisma/seed.ts`: `main()` bricht per neuer
+`assertSafeToSeed()` in zwei unabhängigen Schritten ab — erstens
+unbedingt bei `NODE_ENV=production`, zweitens (auch außerhalb von
+Produktion, als Schutz gegen eine versehentlich falsche `DATABASE_URL`)
+ohne die Bestätigung `SEED_CONFIRM=yes-demo-data`. Das gemeinsame,
+fest im Quellcode stehende `'ChangeMe123!'` ist durch ein bei jedem
+Lauf frisch erzeugtes Zufallspasswort (`randomDemoPassword()`, 128 Bit
+Entropie) ersetzt, das ausschließlich in der Konsolenausgabe des
+jeweiligen Laufs erscheint — die Ausgabe nennt jetzt zusätzlich alle
+vier Demo-Logins statt nur des Admin-Kontos, da der Superadmin-Zugang
+sonst nach dem Lauf nirgends mehr nachlesbar wäre. `README.md:215-230`
+trägt einen unübersehbaren Warnhinweis und den aktualisierten,
+`SEED_CONFIRM` einschließenden Befehl.
+
+**Abweichung von Empfehlung 2** (Superadmin vollständig aus den
+Demo-Daten entfernen): nicht umgesetzt.
+`test/prisma/seedData.test.ts:26-30` verlangt ausdrücklich „genau ein
+Superadmin-Konto, dessen clubId null ist" als Teil der geprüften
+referenziellen Integrität von `buildDemoData()` — ein Entfernen hätte
+diesen bestehenden, bewusst so geschriebenen Test gebrochen. Die beiden
+Ablauf-Sperren plus das nicht mehr vorhersagbare Passwort schließen die
+eigentliche Lücke (ein auf einer echten Instanz reproduzierbares,
+öffentlich bekanntes Superadmin-Passwort) ebenso wirksam, ohne den
+Demo-Datensatz selbst anzutasten. Per `npm test`
+(`test/prisma/seedData.test.ts`) sowie `npm run typecheck` und
+`npm run lint` in `apps/api` bestätigt; die beiden neuen Abbruchpfade
+wurden zusätzlich manuell gegen einen echten `tsx prisma/seed.ts`-Lauf
+verifiziert (Abbruch bei `NODE_ENV=production`, Abbruch ohne
+`SEED_CONFIRM`, Durchlauf bis zum — mangels lokaler Datenbank erwarteten
+— Verbindungsfehler, sobald beide Bedingungen erfüllt sind).
 
 ### H2 — `apps/api/.env` mit `JWT_PRIVATE_KEY` wird weltlesbar angelegt
 

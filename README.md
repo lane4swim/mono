@@ -216,10 +216,18 @@ per `npx prisma migrate deploy` an.
 `apps/web/js/seed.js` (ein Demo-Verein, sechs Athlet:innen, vier
 Nutzer:innen inkl. Superadmin, Übungskatalog, zwei Vorlagen, ein
 Trainingsplan, zwei Einheiten, drei Handlungsfelder, zwei Wettkämpfe).
-Ausführen mit:
+
+> ⚠️ **Nur gegen eine leere Entwicklungsdatenbank ausführen — niemals auf
+> einer Produktivinstanz.** Das Skript legt u. a. ein Superadmin-Konto an;
+> gegen die falsche `DATABASE_URL` gelaufen, hebelt das die gesamte
+> einladungsbasierte Registrierung aus. Es bricht daher bei
+> `NODE_ENV=production` immer ab und verlangt zusätzlich eine explizite
+> Bestätigung. Alle vier Demo-Konten teilen sich ein bei jedem Lauf neu
+> zufällig erzeugtes Passwort, das ausschließlich in der Konsolenausgabe
+> dieses einen Laufs erscheint (nicht im Quellcode).
 
 ```bash
-npm run prisma:seed --workspace=apps/api
+SEED_CONFIRM=yes-demo-data npm run prisma:seed --workspace=apps/api
 ```
 
 Die referenzielle Integrität der Demo-Daten (z. B. „jede Übungs-Referenz
