@@ -63,6 +63,15 @@ describe('moveEntry()', () => {
     expect(totalDistance(list)).toBe(before);
   });
 
+  it('verschiebt einen Abschnitt wie jeden anderen Eintrag, ohne seine eigene entries-Liste anzurühren', () => {
+    const section = { kind: 'section', id: 'sec', heading: 'Hauptteil', entries: [set('x', 50)] };
+    const list = [set('a'), section, set('c')];
+    expect(moveEntry(list, 1, -1)).toBe(true);
+    expect(ids(list)).toEqual(['sec', 'a', 'c']);
+    expect(list[0]).toBe(section);
+    expect(section.entries).toEqual([set('x', 50)]);
+  });
+
   it('weist ungültige Indizes und Nicht-Arrays ab', () => {
     expect(moveEntry([set('a')], -1, 1)).toBe(false);
     expect(moveEntry([set('a')], 5, -1)).toBe(false);
@@ -108,5 +117,25 @@ describe('insertEntry()', () => {
     const list = [set('a', 100), set('c', 100)];
     insertEntry(list, 1, set('b', 200));
     expect(totalDistance(list)).toBe(400);
+  });
+});
+
+describe('totalDistance() mit Abschnitten', () => {
+  it('summiert die entries-Liste eines Abschnitts (auch mit Wiederholungsblock darin)', () => {
+    const section = {
+      kind: 'section', id: 'sec', heading: 'Hauptteil',
+      entries: [set('a', 100), { kind: 'block', id: 'blk', repeatCount: 3, sets: [set('x', 50)] }],
+    };
+    // 100 (Satz) + 50×3 (Block) = 250
+    expect(totalDistance([section])).toBe(250);
+  });
+
+  it('summiert mehrere Abschnitte plus Einträge außerhalb jedes Abschnitts', () => {
+    const list = [
+      set('warmup', 400),
+      { kind: 'section', id: 'sec1', heading: 'Hauptteil', entries: [set('a', 100)] },
+      { kind: 'section', id: 'sec2', heading: 'Ausschwimmen', entries: [set('b', 200)] },
+    ];
+    expect(totalDistance(list)).toBe(700);
   });
 });

@@ -63,6 +63,31 @@ describe('importLibrary()', () => {
     expect(TemplateSchema.safeParse(savedTemplate).success).toBe(true);
   });
 
+  it('remappt exerciseId auch innerhalb eines Abschnitts (sets[].entries[]) und ergibt eine gültige Vorlage', async () => {
+    const dump = {
+      format: LIBRARY_EXPORT_FORMAT,
+      exercises: [{ id: 'orig-ex-1', name: 'Kraul-Beinschlag', category: 'Technik', tags: [], equipment: [] }],
+      templates: [{
+        id: 'orig-tpl-1', name: 'Hauptteil', tags: [],
+        sets: [{
+          kind: 'section', heading: 'Hauptteil',
+          entries: [
+            { kind: 'set', description: 'Beinschlag', exerciseId: 'orig-ex-1' },
+            { kind: 'block', label: 'Serie', repeatCount: 2, sets: [{ kind: 'set', description: 'X' }] },
+          ],
+        }],
+      }],
+    };
+
+    await importLibrary(dump);
+    const [savedExercise] = await db.getAll('exercises');
+    const [savedTemplate] = await db.getAll('templates');
+
+    expect(savedTemplate.sets[0].kind).toBe('section');
+    expect(savedTemplate.sets[0].entries[0].exerciseId).toBe(savedExercise.id);
+    expect(TemplateSchema.safeParse(savedTemplate).success).toBe(true);
+  });
+
   it('reiht für jede importierte Übung/Vorlage ein "create"-Sync-Event ein', async () => {
     const dump = {
       format: LIBRARY_EXPORT_FORMAT,

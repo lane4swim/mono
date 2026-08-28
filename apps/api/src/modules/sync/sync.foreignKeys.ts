@@ -38,28 +38,32 @@ export type ForeignKeyRef =
   | { kind: 'nested'; store: EntityStoreName; extract: (payload: Record<string, unknown>) => string[] }; // mehrere Referenzen verschachtelt im Payload, siehe collectSetExerciseIds() unten
 
 // "templates.sets" und "plans.days[].sets" tragen dieselbe SetEntry[]-Struktur
-// (packages/shared-types/src/entities.ts: PlainSetSchema/RepeatBlockSchema)
-// wie das Frontend in js/modules/setEditor.js verwendet: ein Eintrag ist
-// entweder ein einzelner Satz (kind: 'set', trägt optional eine exerciseId)
-// oder ein Block (kind: 'block'), der wiederum mehrere einzelne Sätze
-// enthält (keine verschachtelten Blöcke). Anders als athleteId/groupId/
-// competitionId/assignedTrainerId ist exerciseId hier NICHT top-level,
-// sondern beliebig tief in diesem Array verschachtelt — die generische
-// { field, store }-Form von ForeignKeyRef (die nur payload[field] liest)
-// erreicht sie nicht. Diese Funktion sammelt alle gesetzten exerciseId-Werte
-// aus einem SetEntry[]-Array unabhängig von der Verschachtelung ein, damit
-// assertForeignKeysWithinClub() jede davon genauso gegen den eigenen Verein
-// prüfen kann wie jede andere Fremdschlüssel-Referenz.
+// (packages/shared-types/src/entities.ts: PlainSetSchema/RepeatBlockSchema/
+// SectionSchema) wie das Frontend in js/modules/setEditor.js verwendet: ein
+// Eintrag ist ein einzelner Satz (kind: 'set', trägt optional eine
+// exerciseId), ein Block (kind: 'block', mehrere einzelne Sätze, keine
+// verschachtelten Blöcke) oder ein Abschnitt (kind: 'section', mehrere
+// Sätze/Blöcke, keine verschachtelten Abschnitte). Anders als athleteId/
+// groupId/competitionId/assignedTrainerId ist exerciseId hier NICHT
+// top-level, sondern beliebig tief in diesem Array verschachtelt — die
+// generische { field, store }-Form von ForeignKeyRef (die nur
+// payload[field] liest) erreicht sie nicht. Diese Funktion sammelt alle
+// gesetzten exerciseId-Werte aus einem SetEntry[]-Array unabhängig von der
+// Verschachtelung ein, damit assertForeignKeysWithinClub() jede davon
+// genauso gegen den eigenen Verein prüfen kann wie jede andere
+// Fremdschlüssel-Referenz.
 function collectSetExerciseIds(sets: unknown): string[] {
   if (!Array.isArray(sets)) return [];
   const ids: string[] = [];
   for (const entry of sets) {
     if (!entry || typeof entry !== 'object') continue;
-    const e = entry as { kind?: unknown; exerciseId?: unknown; sets?: unknown };
+    const e = entry as { kind?: unknown; exerciseId?: unknown; sets?: unknown; entries?: unknown };
     if (e.kind === 'set') {
       if (typeof e.exerciseId === 'string') ids.push(e.exerciseId);
     } else if (e.kind === 'block') {
       ids.push(...collectSetExerciseIds(e.sets));
+    } else if (e.kind === 'section') {
+      ids.push(...collectSetExerciseIds(e.entries));
     }
   }
   return ids;

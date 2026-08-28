@@ -300,6 +300,18 @@ tr:hover td{ background: var(--c-foam-2); }
 .day-block{ border: 1px solid var(--c-line); border-radius: var(--radius-md); padding: 14px 16px; margin-bottom: 12px; }
 .day-block-head{ display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
 
+/* Abschnitte: ein Block-Container mit farbigem linken Rand statt
+   gestricheltem Rahmen, damit er sich auf einen Blick von einem
+   Wiederholungsblock unterscheidet — eine Überschrift, keine Wiederholung. */
+.section-block{ border: 1px solid var(--c-line); border-left: 4px solid var(--c-petrol); border-radius: var(--radius-md); padding: 14px 16px; margin-bottom: 12px; }
+.section-block-head{ display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
+.section-heading-input{ font-size: var(--fs-md); font-weight:700; padding:6px 10px; min-width:220px; }
+/* Read-only Anzeige (plans.js: renderSectionBox) — derselbe farbige Rand,
+   diesmal als Einrückung statt Container, weil die Sätze/Blöcke darunter
+   bereits ihre eigene Kästchen-/Tabellen-Optik mitbringen. */
+.section-block-view{ border-left: 3px solid var(--c-petrol); padding-left: 12px; margin: 4px 0 12px; }
+.section-heading-view{ font-size: var(--fs-md); margin: 0 0 8px; }
+
 /* Responsive */
 @media (max-width: 860px){
   .sidenav{ display:none; }
@@ -325,7 +337,7 @@ tr:hover td{ background: var(--c-foam-2); }
   /* Blockname darf schmaler werden, damit die Blockkopfzeile
      (Name, Wiederholungen, Sortieren, Entfernen) auf dem Handy
      umbricht statt überzulaufen. */
-  .day-block-head input[type="text"]{ min-width:110px; }
+  .day-block-head input[type="text"], .section-block-head input[type="text"]{ min-width:110px; }
   /* Ohne Hover (Touch) bleiben die Einfügepunkte dauerhaft sichtbar —
      sonst gäbe es dort keinen Weg, sie überhaupt zu bemerken. */
   .insert-point{ opacity:.7; }
@@ -443,6 +455,16 @@ tr:hover td{ background: var(--c-foam-2); }
 }
 .print-block-list .print-entry:last-child{ border-bottom: none; }
 .print-empty{ font-size: 4mm; color: #000; }
+.print-section{ margin: 1mm 0 3mm; }
+.print-section-head{
+  display: flex; justify-content: space-between; align-items: baseline; gap: 2mm;
+  border-bottom: 0.5mm solid #000; padding-bottom: 1mm; margin-bottom: 1.5mm;
+}
+.print-section-heading{
+  font-family: var(--f-display); font-weight: 700; font-size: 4.6mm;
+  text-transform: uppercase; letter-spacing: 0.2mm; color: #000;
+}
+.print-section-total{ font-weight: 700; font-size: 3.6mm; font-family: var(--f-mono); color: #000; white-space: nowrap; }
 
 /* Einzeltag-Druck (exportDayToPdf): volle Seitenbreite statt Raster,
    dadurch bekommt jeder Eintrag deutlich mehr Platz — Schrift entsprechend
@@ -456,6 +478,9 @@ tr:hover td{ background: var(--c-foam-2); }
 .print-days-solo .print-entry-rest{ font-size: 5mm; }
 .print-days-solo .print-block{ padding: 4mm 5mm; margin: 3mm 0 5mm; }
 .print-days-solo .print-block-head{ font-size: 6mm; margin-bottom: 2mm; }
+.print-days-solo .print-section-head{ padding-bottom: 2mm; margin-bottom: 2.5mm; }
+.print-days-solo .print-section-heading{ font-size: 6.6mm; }
+.print-days-solo .print-section-total{ font-size: 5mm; }
 
 @media print{
   /* html/body normally carry height:100% + the app's foam background

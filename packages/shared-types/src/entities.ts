@@ -205,7 +205,28 @@ export const RepeatBlockSchema = z.object({
 }).strict();
 export type RepeatBlock = z.infer<typeof RepeatBlockSchema>;
 
-export const SetEntrySchema = z.discriminatedUnion('kind', [PlainSetSchema, RepeatBlockSchema]);
+// Ein Abschnitt gliedert eine Sätze-/Blöcke-Liste (Plan-Tag oder Vorlage)
+// mit einer Überschrift — z. B. "Einschwimmen" / "Hauptteil" /
+// "Ausschwimmen". Bewusst NUR eine Ebene tief (`entries` referenziert
+// dieselbe PlainSet/RepeatBlock-Union wie ein Block, NICHT SetEntrySchema
+// selbst): Abschnitte verschachteln sich nicht ineinander, genau wie sich
+// Wiederholungsblöcke nicht ineinander verschachteln (siehe oben). Ein
+// Umsortieren/Einfügen bleibt dadurch strukturell auf die eigene
+// `entries`-Liste beschränkt — ein Verschieben von Sätzen/Blöcken über
+// Abschnittsgrenzen hinweg ist fachlich nicht vorgesehen und mit dieser
+// Form gar nicht erst darstellbar.
+export const ExerciseEntrySchema = z.discriminatedUnion('kind', [PlainSetSchema, RepeatBlockSchema]);
+export type ExerciseEntry = z.infer<typeof ExerciseEntrySchema>;
+
+export const SectionSchema = z.object({
+  kind: z.literal('section'),
+  id: z.string(),
+  heading: z.string().max(200).default(''),
+  entries: z.array(ExerciseEntrySchema).max(200),
+}).strict();
+export type Section = z.infer<typeof SectionSchema>;
+
+export const SetEntrySchema = z.discriminatedUnion('kind', [PlainSetSchema, RepeatBlockSchema, SectionSchema]);
 export type SetEntry = z.infer<typeof SetEntrySchema>;
 
 export const TemplateSchema = z.object({

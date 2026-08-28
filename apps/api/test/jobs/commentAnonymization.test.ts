@@ -140,6 +140,31 @@ describe('anonymizeSetEntries — verschachtelte Sets/Blöcke (Plan.days[].sets 
     expect(block.sets.find((s) => s.id === 's2')!.comments[0]!.authorName).toBe('Jens Bauer');
   });
 
+  // Ein "section"-Eintrag (SectionSchema) hat ebenfalls KEIN eigenes
+  // comments-Feld, sondern verschachtelt eine "entries"-Liste (Sätze
+  // und/oder Blöcke, keine verschachtelten Abschnitte laut Schema) — die
+  // Rekursion muss dort ebenso hineinsehen wie in einen Block.
+  it('anonymisiert Kommentare INNERHALB eines "section"-Eintrags (auch verschachtelt in einem Block darin)', () => {
+    const entries = [
+      {
+        kind: 'section',
+        id: 'sec1',
+        heading: 'Hauptteil',
+        entries: [
+          { kind: 'set', id: 's1', comments: [makeComment({ id: 'c1' })] },
+          { kind: 'block', id: 'b1', repeatCount: 2, sets: [{ kind: 'set', id: 's2', comments: [makeComment({ id: 'c2', authorId: JENS_ID, authorName: 'Jens Bauer' })] }] },
+        ],
+      },
+    ];
+    const { changed, value } = anonymizeSetEntries(entries, MARA);
+    expect(changed).toBe(true);
+    const section = (value as Array<{ entries: Array<Record<string, unknown>> }>)[0]!;
+    const set1 = section.entries[0] as { comments: Array<{ authorName: string }> };
+    expect(set1.comments[0]!.authorName).toBe(ANONYMIZED_COMMENT_AUTHOR);
+    const block = section.entries[1] as { sets: Array<{ comments: Array<{ authorName: string }> }> };
+    expect(block.sets[0]!.comments[0]!.authorName).toBe('Jens Bauer');
+  });
+
   it('lässt Einträge ohne Treffer strukturell unverändert (keine unnötige Kopie)', () => {
     const entries = [{ kind: 'set', id: 's1', comments: [makeComment({ authorId: JENS_ID, authorName: 'Jens Bauer' })] }];
     const { changed, value } = anonymizeSetEntries(entries, MARA);

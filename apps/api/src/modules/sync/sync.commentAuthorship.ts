@@ -69,13 +69,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-// Sammelt die comments-Arrays aller SetEntry-Einträge (PlainSet ODER
-// RepeatBlock, siehe SetEntrySchema) — ein "set" trägt sein eigenes
-// comments-Array direkt, ein "block" enthält stattdessen eine
+// Sammelt die comments-Arrays aller SetEntry-Einträge (PlainSet,
+// RepeatBlock ODER Section, siehe SetEntrySchema) — ein "set" trägt sein
+// eigenes comments-Array direkt, ein "block" enthält stattdessen eine
 // verschachtelte sets-Liste (keine verschachtelten Blöcke laut Schema),
-// dort rekursiv weitergesucht. Identisches Traversierungsmuster wie
-// collectSetExerciseIds() in sync.foreignKeys.ts, hier nur für
-// "comments" statt "exerciseId".
+// eine "section" analog eine entries-Liste (keine verschachtelten
+// Abschnitte), dort jeweils rekursiv weitergesucht. Identisches
+// Traversierungsmuster wie collectSetExerciseIds() in sync.foreignKeys.ts,
+// hier nur für "comments" statt "exerciseId".
 function collectSetEntryCommentGroups(sets: unknown): unknown[][] {
   if (!Array.isArray(sets)) return [];
   const groups: unknown[][] = [];
@@ -85,6 +86,8 @@ function collectSetEntryCommentGroups(sets: unknown): unknown[][] {
       groups.push(Array.isArray(entry.comments) ? entry.comments : []);
     } else if (entry.kind === 'block') {
       groups.push(...collectSetEntryCommentGroups(entry.sets));
+    } else if (entry.kind === 'section') {
+      groups.push(...collectSetEntryCommentGroups(entry.entries));
     }
   }
   return groups;
