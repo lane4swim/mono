@@ -22,11 +22,14 @@ Sicherheitsmaßnahme nicht, weil sie weder die Ursache von M1 beseitigt
 noch der einzige Weg ist, an ein Superadmin-Konto zu gelangen (siehe
 **H1**) — kostet aber den einzigen legitimen Wiederherstellungspfad.
 
-**Update (28. August 2026, im Anschluss an dieses Review).** In zwei
+**Update (28. August 2026, im Anschluss an dieses Review).** In drei
 Schritten direkt im Anschluss an diese Prüfung behoben — siehe die
-jeweiligen **Fix**-Abschnitte: zuerst **H1**, danach **H2**. Damit sind
-zum Zeitpunkt dieses Updates beide Hoch-Befunde behoben; **M1** und
-**M2** sind weiterhin offen.
+jeweiligen **Fix**-Abschnitte: zuerst **H1**, danach **H2**, zuletzt
+dessen Empfehlung 3 (separate `JWT_PRIVATE_KEY_FILE`) als eigener
+Nachtrag. Damit sind zum Zeitpunkt dieses Updates beide Hoch-Befunde
+vollständig behoben, einschließlich der ursprünglich nur mittelfristig
+empfohlenen Schlüssel-Datei-Trennung; **M1** und **M2** sind weiterhin
+offen.
 
 Schweregrade: **Hoch** = vor dem nächsten Produktivbetrieb beheben,
 **Mittel** = einplanen, **Niedrig** = bei nächster Berührung mitnehmen.
@@ -235,16 +238,75 @@ umgesetzt — ein globales `umask` im Skript hätte auch alle anderen in
 diesem Lauf angelegten Dateien (Log-Ausgaben, `pm2`-eigene Dateien)
 mitgehärtet, über den eigentlichen Befund hinaus; das gezielte `chmod`
 auf genau die eine sicherheitsrelevante Datei trifft den Befund
-präziser. Empfehlungen 3 (separate `JWT_PRIVATE_KEY_FILE`) und 4
-(Schlüsselrotation bei bereits gelaufenen Installationen) bleiben
-offen — beides sind Betriebs- bzw. Migrationsschritte für bestehende
-Installationen, kein Code-/Dokumentationsfix in diesem Repository.
+präziser. Empfehlung 3 (separate `JWT_PRIVATE_KEY_FILE`) ist seit dem
+Nachtrag unten ebenfalls umgesetzt; Empfehlung 4 (Schlüsselrotation bei
+bereits gelaufenen Installationen) bleibt offen — das ist ein
+Betriebsschritt für bestehende Installationen, kein Code-/
+Dokumentationsfix in diesem Repository.
 Manuell verifiziert: eine per `cat >`/`cp` unter Standard-`umask`
 (`022`) angelegte Testdatei hat vor der Korrektur Modus `644`
 (weltlesbar), nach `chmod 600` Modus `600` (nur Eigentümer). Kein
 automatisierter Test möglich — die betroffenen Skripte/Anleitungen
 laufen außerhalb der `apps/api`-Testsuite; `bash -n
 scripts/setup-codespace.sh` bestätigt weiterhin gültige Shell-Syntax.
+
+**Fix (Nachtrag, Empfehlung 3).** `JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY`
+(Inline-PEM in der `.env`) haben jetzt gleichwertige Gegenstücke
+`JWT_PRIVATE_KEY_FILE`/`JWT_PUBLIC_KEY_FILE` (Dateipfad zu einer
+PEM-Datei mit echten Zeilenumbrüchen) — je Schlüssel ist GENAU EINE der
+beiden Formen erlaubt, unabhängig vom jeweils anderen Schlüssel wählbar
+(privat per Datei, öffentlich inline geht z. B. ebenso). Umgesetzt in
+drei Schichten:
+
+- `apps/api/src/config/env.ts`: `EnvSchema` um die beiden neuen
+  optionalen Felder ergänzt; `loadEnv()` lehnt eine gleichzeitige Angabe
+  beider Formen für denselben Schlüssel unabhängig von `NODE_ENV` ab
+  (uneindeutig, welche gilt) und verlangt in Produktion je Schlüssel
+  mindestens eine der beiden Formen — ohne selbst auf die Festplatte
+  zuzugreifen (reine String-Prüfung).
+- `apps/api/src/auth/keys.ts`: `resolveKeyPair()` löst jeden Schlüssel
+  unabhängig auf (`resolveKeyValue()`) — Inline-Wert, falls gesetzt,
+  sonst `readFileSync()` auf den Dateipfad. Ein nicht lesbarer Pfad
+  bricht mit einer auf die genaue Variable (`JWT_PRIVATE_KEY_FILE`/
+  `JWT_PUBLIC_KEY_FILE`) zurückführbaren Fehlermeldung ab, samt `cause`
+  für die zugrundeliegende Node-Fehlermeldung (ESLint-Regel
+  `preserve-caught-error`), statt Node.js' rohes `ENOENT`
+  unkommentiert durchzureichen. `unescapePem()` (literales `\n` →
+  echter Zeilenumbruch) läuft weiterhin über beide Formen — für eine
+  Datei mit bereits echten Zeilenumbrüchen ein No-op, deckt aber auch
+  eine versehentlich escapt abgelegte Datei ab.
+- `scripts/setup-codespace.sh` (Schritt 6) erzeugt das Schlüsselpaar
+  jetzt direkt an seinem endgültigen Ort (`apps/api/keys/`, `chmod 700`
+  aufs Verzeichnis, `600`/`644` auf die beiden Dateien) statt es über
+  ein temporäres Verzeichnis als `\n`-kodierten String in die `.env` zu
+  kopieren — ein Zwischenschritt, in dem der private Schlüssel
+  zusätzlich unverschlüsselt an einem zweiten Ort läge, entfällt damit
+  vollständig. `apps/api/.env` referenziert nur noch die beiden Pfade
+  über `JWT_PRIVATE_KEY_FILE`/`JWT_PUBLIC_KEY_FILE`. Der neue Ordner ist
+  per `.gitignore` ausgeschlossen. Alle vier Deployment-Anleitungen
+  zeigen die Datei-Form jetzt als empfohlenen Standardweg, mit der
+  bisherigen Inline-Form als dokumentierter Alternative für Setups ohne
+  eigene Schlüsseldatei (z. B. ein reiner Secrets-Manager, der nur
+  Umgebungsvariablen injiziert).
+
+Bestehende Installationen mit der bisherigen Inline-Form funktionieren
+unverändert weiter (rückwärtskompatibel, keine Migration erzwungen) —
+die Datei-Form ist ein zusätzlicher, empfohlener Weg, kein Ersatz für
+die bereits vorhandene.
+
+Verifiziert: neue Testdatei `apps/api/test/auth/keys.test.ts` (Inline-
+Form, Datei-Form, gemischte Formen, `\n`-Escaping in einer Datei,
+fehlende Datei → Fehlermeldung nennt `JWT_PRIVATE_KEY_FILE`, Dev-Fallback
+samt Caching) sowie sechs neue Fälle in `apps/api/test/env.test.ts`
+(fehlendes Schlüsselpaar in Produktion, Datei-Form akzeptiert, gemischte
+Formen akzeptiert, beide Formen gleichzeitig je Schlüssel abgelehnt).
+`npm run typecheck`/`lint`/`test` in `apps/api` grün (444 Tests, davon
+30 neu). Das Erzeugen des Schlüsselpaars an seinem endgültigen Ort
+zusätzlich isoliert mit echtem `openssl` nachvollzogen (Verzeichnis
+`700`, private Datei `600`, öffentliche Datei `644`, beide mit
+korrektem PEM-Header) — nicht End-to-End über das vollständige
+`setup-codespace.sh`, da dessen übrige Schritte (Systempakete, `sudo`,
+laufender Postgres/PM2) außerhalb der hier verfügbaren Umgebung liegen.
 
 ---
 

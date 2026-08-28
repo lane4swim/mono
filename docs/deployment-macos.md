@@ -149,8 +149,8 @@ Werte setzen bzw. anpassen:
 NODE_ENV=production
 PORT=3000
 DATABASE_URL="postgresql://lane1_app:EIN-TESTPASSWORT-HIER@localhost:5432/lane1"
-JWT_PRIVATE_KEY="<mit openssl erzeugen, siehe unten>"
-JWT_PUBLIC_KEY="<mit openssl erzeugen, siehe unten>"
+JWT_PRIVATE_KEY_FILE="<mit openssl erzeugen, siehe unten>"
+JWT_PUBLIC_KEY_FILE="<mit openssl erzeugen, siehe unten>"
 CORS_ORIGIN="https://lane1.test"
 FRONTEND_BASE_URL="https://lane1.test"
 
@@ -165,23 +165,46 @@ TRUSTED_PROXY_IPS="127.0.0.1"
 
 **SMTP (optional für eine reine Testumgebung):** Ohne `SMTP_HOST` wird eine Einladung nur ins Server-Log geschrieben statt tatsächlich per E-Mail versendet — für lokale Tests meist völlig ausreichend (der Einladungslink lässt sich trotzdem im Log bzw. direkt in der Nutzerverwaltungs-Oberfläche kopieren, siehe `apps/web/help/admin.html`). Soll der komplette Versandweg mitgetestet werden, denselben SMTP-Block wie in `deployment.md`, Abschnitt 7.2 eintragen.
 
-**RS256-Schlüsselpaar erzeugen** (in Produktion — und damit auch hier, siehe Hinweis oben — PFLICHT). Das auf macOS vorinstallierte `openssl`-Kommando (LibreSSL-basiert) unterstützt die hier verwendeten Befehle vollständig — falls in einer künftigen macOS-Version doch einmal nicht, ersatzweise `brew install openssl@3` und `$(brew --prefix openssl@3)/bin/openssl` statt `openssl` verwenden:
+**RS256-Schlüsselpaar erzeugen** (in Produktion — und damit auch hier, siehe Hinweis oben — PFLICHT). Das auf macOS vorinstallierte `openssl`-Kommando (LibreSSL-basiert) unterstützt die hier verwendeten Befehle vollständig — falls in einer künftigen macOS-Version doch einmal nicht, ersatzweise `brew install openssl@3` und `$(brew --prefix openssl@3)/bin/openssl` statt `openssl` verwenden.
+
+**Empfohlen** (Sicherheitsreview 2026-08-28, Befund H2, Empfehlung 3):
+das Schlüsselpaar direkt an seinem endgültigen Ort erzeugen, statt es
+über eine `.env`-Zeile zu leiten — die Schlüsseldatei trägt dadurch
+eigene, engere Dateirechte (`600`), unabhängig von der übrigen `.env`
+(die u. a. auch das Datenbank-Passwort enthält):
 ```bash
-openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out /tmp/jwt_private.pem
-openssl pkey -in /tmp/jwt_private.pem -pubout -out /tmp/jwt_public.pem
+mkdir -p apps/api/keys
+chmod 700 apps/api/keys
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out apps/api/keys/jwt_private.pem
+openssl pkey -in apps/api/keys/jwt_private.pem -pubout -out apps/api/keys/jwt_public.pem
+chmod 600 apps/api/keys/jwt_private.pem
+chmod 644 apps/api/keys/jwt_public.pem
 ```
-Beide PEM-Dateien müssen als **eine Zeile** mit literalen `\n` statt
-echter Zeilenumbrüche in die `.env`:
+In der `.env` dann nur den Pfad eintragen:
+```
+JWT_PRIVATE_KEY_FILE="/Users/<dein-benutzername>/lane1/apps/api/keys/jwt_private.pem"
+JWT_PUBLIC_KEY_FILE="/Users/<dein-benutzername>/lane1/apps/api/keys/jwt_public.pem"
+```
+(Pfad an den tatsächlichen Ort deines Checkouts anpassen — `~/lane1` löst
+`pm2`/andere Startmethoden je nach Arbeitsverzeichnis nicht immer korrekt
+auf, ein absoluter Pfad ist robuster.) `apps/api/keys/` ist per
+`.gitignore` bereits ausgeschlossen — dieser Ordner darf wie `.env`
+niemals committet werden.
+
+**Alternative** (falls eine separate Schlüsseldatei nicht praktikabel
+ist): den PEM-Inhalt direkt als `JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY` in die
+`.env` schreiben, mit literalen `\n` statt echter Zeilenumbrüche:
 ```bash
-awk 'BEGIN{ORS="\\n"} {print}' /tmp/jwt_private.pem
-awk 'BEGIN{ORS="\\n"} {print}' /tmp/jwt_public.pem
+awk 'BEGIN{ORS="\\n"} {print}' apps/api/keys/jwt_private.pem
+awk 'BEGIN{ORS="\\n"} {print}' apps/api/keys/jwt_public.pem
 ```
 Jede Ausgabe komplett kopieren und als Wert von `JWT_PRIVATE_KEY` bzw.
-`JWT_PUBLIC_KEY` in Anführungszeichen einsetzen. Anschließend die
-temporären PEM-Dateien löschen:
-```bash
-rm /tmp/jwt_private.pem /tmp/jwt_public.pem
-```
+`JWT_PUBLIC_KEY` in Anführungszeichen einsetzen, und **nur in diesem
+Fall** anschließend `apps/api/keys/` wieder löschen (`rm -rf
+apps/api/keys`) — sonst liegt derselbe private Schlüssel doppelt vor. Je
+Schlüssel darf **nur eine** der beiden Formen gesetzt sein
+(`JWT_PRIVATE_KEY` **oder** `JWT_PRIVATE_KEY_FILE`, nie beide — `env.ts`
+lehnt eine gleichzeitige Angabe sonst mit einer klaren Fehlermeldung ab).
 
 ---
 

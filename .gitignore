@@ -4,3 +4,9 @@ coverage/
 .env
 *.log
 .DS_Store
+
+# Sicherheitsreview 2026-08-28, Befund H2, Empfehlung 3: von
+# scripts/setup-codespace.sh (Schritt 6) erzeugtes RS256-Schlüsselpaar
+# (JWT_PRIVATE_KEY_FILE/JWT_PUBLIC_KEY_FILE) — darf wie .env niemals
+# committet werden.
+apps/api/keys/

@@ -202,8 +202,8 @@ Erklärung (vollständiges, verbindliches Schema samt Validierung:
 NODE_ENV=production
 PORT=3000
 DATABASE_URL="postgresql://lane1_app:EIN-TESTPASSWORT-HIER@localhost:5432/lane1"
-JWT_PRIVATE_KEY="<mit openssl erzeugen, siehe unten>"
-JWT_PUBLIC_KEY="<mit openssl erzeugen, siehe unten>"
+JWT_PRIVATE_KEY_FILE="<mit openssl erzeugen, siehe unten>"
+JWT_PUBLIC_KEY_FILE="<mit openssl erzeugen, siehe unten>"
 CORS_ORIGIN="https://DEIN-CODESPACE-NAME-8080.app.github.dev"
 FRONTEND_BASE_URL="https://DEIN-CODESPACE-NAME-8080.app.github.dev"
 TRUSTED_PROXY_IPS="127.0.0.1"
@@ -212,23 +212,45 @@ TRUSTED_PROXY_IPS="127.0.0.1"
 
 **SMTP (optional für einen reinen Test):** Ohne `SMTP_HOST` wird eine Einladung nur ins Server-Log geschrieben statt tatsächlich per E-Mail versendet — für einen Testlauf meist ausreichend (der Einladungslink lässt sich trotzdem direkt in der Nutzerverwaltungs-Oberfläche kopieren, siehe `apps/web/help/admin.html`). Soll der komplette Versandweg mitgetestet werden, denselben SMTP-Block wie in `deployment.md`, Abschnitt 7.2 eintragen. Ein Hinweis speziell für Cloud-Umgebungen wie Codespaces: Manche Cloud-Anbieter sperren ausgehende Verbindungen auf klassischen Mail-Ports (25/465) zur Spam-Prävention — Port 587 (wie im SMTP-Block vorgesehen) ist davon in aller Regel nicht betroffen; schlägt der Versand dennoch fehl, ist eine anbieterseitige Sperre eine mögliche Ursache.
 
-**RS256-Schlüsselpaar erzeugen** (in Produktion — und damit auch hier, da `NODE_ENV=production` gesetzt ist — PFLICHT):
+**RS256-Schlüsselpaar erzeugen** (in Produktion — und damit auch hier, da `NODE_ENV=production` gesetzt ist — PFLICHT). Dasselbe macht `scripts/setup-codespace.sh` (Schritt 6) beim automatisierten Vorgehen bereits selbst.
+
+**Empfohlen** (Sicherheitsreview 2026-08-28, Befund H2, Empfehlung 3):
+das Schlüsselpaar direkt an seinem endgültigen Ort erzeugen, statt es
+über eine `.env`-Zeile zu leiten — die Schlüsseldatei trägt dadurch
+eigene, engere Dateirechte (`600`), unabhängig von der übrigen `.env`
+(die u. a. auch das Datenbank-Passwort enthält):
 ```bash
-openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out /tmp/jwt_private.pem
-openssl pkey -in /tmp/jwt_private.pem -pubout -out /tmp/jwt_public.pem
+mkdir -p apps/api/keys
+chmod 700 apps/api/keys
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out apps/api/keys/jwt_private.pem
+openssl pkey -in apps/api/keys/jwt_private.pem -pubout -out apps/api/keys/jwt_public.pem
+chmod 600 apps/api/keys/jwt_private.pem
+chmod 644 apps/api/keys/jwt_public.pem
 ```
-Beide PEM-Dateien müssen als **eine Zeile** mit literalen `\n` statt
-echter Zeilenumbrüche in die `.env`:
+In der `.env` dann `JWT_PRIVATE_KEY_FILE`/`JWT_PUBLIC_KEY_FILE` auf die
+absoluten Pfade setzen (`/workspaces/DEIN-REPO-NAME` durch die Ausgabe
+von `pwd` aus Schritt 3 ersetzen, siehe auch Abschnitt 10 unten):
+```
+JWT_PRIVATE_KEY_FILE="/workspaces/DEIN-REPO-NAME/apps/api/keys/jwt_private.pem"
+JWT_PUBLIC_KEY_FILE="/workspaces/DEIN-REPO-NAME/apps/api/keys/jwt_public.pem"
+```
+`apps/api/keys/` ist per `.gitignore` bereits ausgeschlossen — dieser
+Ordner darf wie `.env` niemals committet werden.
+
+**Alternative** (falls eine separate Schlüsseldatei nicht praktikabel
+ist): den PEM-Inhalt direkt als `JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY` in die
+`.env` schreiben, mit literalen `\n` statt echter Zeilenumbrüche:
 ```bash
-awk 'BEGIN{ORS="\\n"} {print}' /tmp/jwt_private.pem
-awk 'BEGIN{ORS="\\n"} {print}' /tmp/jwt_public.pem
+awk 'BEGIN{ORS="\\n"} {print}' apps/api/keys/jwt_private.pem
+awk 'BEGIN{ORS="\\n"} {print}' apps/api/keys/jwt_public.pem
 ```
 Jede Ausgabe komplett kopieren und als Wert von `JWT_PRIVATE_KEY` bzw.
-`JWT_PUBLIC_KEY` in Anführungszeichen einsetzen. Anschließend die
-temporären PEM-Dateien löschen:
-```bash
-rm /tmp/jwt_private.pem /tmp/jwt_public.pem
-```
+`JWT_PUBLIC_KEY` in Anführungszeichen einsetzen, und **nur in diesem
+Fall** anschließend `apps/api/keys/` wieder löschen (`rm -rf
+apps/api/keys`) — sonst liegt derselbe private Schlüssel doppelt vor. Je
+Schlüssel darf **nur eine** der beiden Formen gesetzt sein
+(`JWT_PRIVATE_KEY` **oder** `JWT_PRIVATE_KEY_FILE`, nie beide — `env.ts`
+lehnt eine gleichzeitige Angabe sonst mit einer klaren Fehlermeldung ab).
 
 ---
 

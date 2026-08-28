@@ -109,14 +109,27 @@ else
 
   JWT_SIGNING_KEY="$(openssl rand -base64 48)"
 
-  TMP_KEY_DIR="$(mktemp -d)"
-  trap 'rm -rf "$TMP_KEY_DIR"' EXIT
-  openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$TMP_KEY_DIR/private.pem"
-  openssl pkey -in "$TMP_KEY_DIR/private.pem" -pubout -out "$TMP_KEY_DIR/public.pem"
-  JWT_PRIVATE_KEY="$(awk 'BEGIN{ORS="\\n"} {print}' "$TMP_KEY_DIR/private.pem")"
-  JWT_PUBLIC_KEY="$(awk 'BEGIN{ORS="\\n"} {print}' "$TMP_KEY_DIR/public.pem")"
-  rm -rf "$TMP_KEY_DIR"
-  trap - EXIT
+  # Sicherheitskorrektur (Sicherheitsreview 2026-08-28, Befund H2,
+  # Empfehlung 3): das Schlüsselpaar wird jetzt direkt an seinem
+  # endgültigen, geschützten Ort erzeugt (apps/api/keys/) statt zuerst in
+  # ein temporäres Verzeichnis und von dort — als literal-"\n"-kodierter
+  # String — in $ENV_FILE kopiert zu werden. Zwei Vorteile gegenüber der
+  # vorherigen Inline-Form: (1) kein Zwischenschritt, in dem der private
+  # Schlüssel zusätzlich unverschlüsselt an einem zweiten Ort (dem
+  # Temp-Verzeichnis) liegt, (2) die Schlüsseldatei trägt eigene,
+  # engere Dateirechte (600, nur Eigentümer) UNABHÄNGIG von $ENV_FILE
+  # (das u. a. auch das Datenbank-Passwort enthält) — apps/api/.env
+  # verweist über JWT_PRIVATE_KEY_FILE/JWT_PUBLIC_KEY_FILE nur noch auf
+  # den Pfad, siehe apps/api/src/config/env.ts.
+  KEYS_DIR="${REPO_ROOT}/apps/api/keys"
+  mkdir -p "$KEYS_DIR"
+  chmod 700 "$KEYS_DIR"
+  JWT_PRIVATE_KEY_FILE="${KEYS_DIR}/jwt_private.pem"
+  JWT_PUBLIC_KEY_FILE="${KEYS_DIR}/jwt_public.pem"
+  openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$JWT_PRIVATE_KEY_FILE"
+  openssl pkey -in "$JWT_PRIVATE_KEY_FILE" -pubout -out "$JWT_PUBLIC_KEY_FILE"
+  chmod 600 "$JWT_PRIVATE_KEY_FILE"
+  chmod 644 "$JWT_PUBLIC_KEY_FILE"
 
   DATABASE_URL="postgresql://${DB_USER}:${DB_PASSWORD}@localhost:5432/${DB_NAME}"
 
@@ -128,8 +141,8 @@ DATABASE_URL="${DATABASE_URL}"
 
 JWT_SIGNING_KEY="${JWT_SIGNING_KEY}"
 
-JWT_PRIVATE_KEY="${JWT_PRIVATE_KEY}"
-JWT_PUBLIC_KEY="${JWT_PUBLIC_KEY}"
+JWT_PRIVATE_KEY_FILE="${JWT_PRIVATE_KEY_FILE}"
+JWT_PUBLIC_KEY_FILE="${JWT_PUBLIC_KEY_FILE}"
 
 JWT_ACCESS_TTL_SECONDS=900
 JWT_REFRESH_TTL_DAYS=30
@@ -156,12 +169,15 @@ EOF
 fi
 
 # Sicherheitskorrektur (Sicherheitsreview 2026-08-28, Befund H2): $ENV_FILE
-# enthält u. a. JWT_PRIVATE_KEY (signiert sämtliche Access Tokens) und das
-# DATABASE_URL-Passwort — ohne dies entsteht die Datei per `cat >` unter
-# der jeweils geltenden umask, üblich 0644 (weltlesbar). Wer die Datei
-# lesen kann (jedes andere lokale Benutzerkonto, ein unter fremder Kennung
-# laufender Prozess, ein Backup ohne eigene Rechteprüfung), kann damit
-# beliebige Access Tokens selbst signieren — authenticate.ts prüft dabei
+# enthält u. a. das DATABASE_URL-Passwort und — bei einer bereits
+# vorhandenen Datei aus der Zeit vor Empfehlung 3 oben — möglicherweise
+# weiterhin JWT_PRIVATE_KEY direkt inline (signiert sämtliche Access
+# Tokens). Ohne dies entsteht die Datei per `cat >` unter der jeweils
+# geltenden umask, üblich 0644 (weltlesbar). Wer die Datei lesen kann
+# (jedes andere lokale Benutzerkonto, ein unter fremder Kennung laufender
+# Prozess, ein Backup ohne eigene Rechteprüfung), kann damit — je nach
+# Inhalt — beliebige Access Tokens selbst signieren oder direkt auf die
+# Datenbank zugreifen; authenticate.ts prüft bei einem gefälschten Token
 # ausschließlich Signatur/Gültigkeit, nie die Datenbank (siehe dortiger
 # Kommentar), die Übernahme wäre also spurlos. Unbedingt (nicht nur im
 # ENV_WAS_CREATED-Zweig oben) — korrigiert bei einem erneuten Lauf auch die
@@ -317,6 +333,7 @@ if [[ "$ENV_WAS_CREATED" == "1" ]]; then
   # ohnehin bereits in apps/api/.env (dort ist er nötig), ein Verweis
   # darauf genügt.
   echo "Das erzeugte DB-Passwort steht in apps/api/.env unter DATABASE_URL."
+  echo "Das erzeugte JWT-Schlüsselpaar liegt unter apps/api/keys/ (chmod 600/644, referenziert per JWT_PRIVATE_KEY_FILE/JWT_PUBLIC_KEY_FILE in apps/api/.env)."
   echo "Öffentliche Adresse (CORS_ORIGIN/FRONTEND_BASE_URL): ${PUBLIC_URL}"
 fi
 echo "Weiter geht es manuell mit Schritt 11 (Port veröffentlichen) in docs/deployment-github-codespaces.md."

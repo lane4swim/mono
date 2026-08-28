@@ -329,8 +329,8 @@ Für einen Produktivserver mindestens folgende Werte setzen bzw. anpassen:
 NODE_ENV=production
 PORT=3000
 DATABASE_URL="postgresql://lane1_app:EIN-SICHERES-PASSWORT-HIER@localhost:5432/lane1"
-JWT_PRIVATE_KEY="<mit openssl erzeugen, siehe unten>"
-JWT_PUBLIC_KEY="<mit openssl erzeugen, siehe unten>"
+JWT_PRIVATE_KEY_FILE="<mit openssl erzeugen, siehe unten>"
+JWT_PUBLIC_KEY_FILE="<mit openssl erzeugen, siehe unten>"
 CORS_ORIGIN="https://training.mein-verein.de"
 FRONTEND_BASE_URL="https://training.mein-verein.de"
 
@@ -351,26 +351,49 @@ SMTP_FROM_EMAIL="postversand@mein-verein.de"
 SMTP_FROM_NAME="Lane 1"
 ```
 **RS256-Schlüsselpaar erzeugen** (signiert die Zugriffs-Tokens; in
-Produktion PFLICHT — ohne diese beiden Werte bricht der Serverstart mit
-`NODE_ENV=production` sofort ab):
+Produktion PFLICHT — ohne einen konfigurierten Schlüssel bricht der
+Serverstart mit `NODE_ENV=production` sofort ab).
+
+**Empfohlen** (Sicherheitsreview 2026-08-28, Befund H2, Empfehlung 3):
+das Schlüsselpaar direkt an seinem endgültigen Ort erzeugen, statt es
+über eine `.env`-Zeile zu leiten — die Schlüsseldatei trägt dadurch
+eigene, engere Dateirechte (`600`, nur das Dienstkonto), unabhängig von
+der übrigen `.env` (die u. a. auch das Datenbank-Passwort enthält):
 ```bash
-openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out /tmp/jwt_private.pem
-openssl pkey -in /tmp/jwt_private.pem -pubout -out /tmp/jwt_public.pem
+mkdir -p apps/api/keys
+chmod 700 apps/api/keys
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out apps/api/keys/jwt_private.pem
+openssl pkey -in apps/api/keys/jwt_private.pem -pubout -out apps/api/keys/jwt_public.pem
+chmod 600 apps/api/keys/jwt_private.pem
+chmod 644 apps/api/keys/jwt_public.pem
 ```
-Beide PEM-Dateien müssen als **eine Zeile** mit literalen `\n` statt
-echter Zeilenumbrüche in die `.env`:
+In der `.env` dann nur den Pfad eintragen (absolute Pfade sind robuster
+gegen einen vom PM2-Start abweichenden Arbeitsordner):
+```
+JWT_PRIVATE_KEY_FILE="/home/deploy/lane1/apps/api/keys/jwt_private.pem"
+JWT_PUBLIC_KEY_FILE="/home/deploy/lane1/apps/api/keys/jwt_public.pem"
+```
+`apps/api/keys/` ist per `.gitignore` bereits ausgeschlossen — dieser
+Ordner darf wie `.env` niemals committet werden.
+
+**Alternative** (falls eine separate Schlüsseldatei im jeweiligen Setup
+nicht praktikabel ist, z. B. bei einer rein umgebungsvariablenbasierten
+Konfiguration/einem Secrets-Manager, der nur Variablen injiziert): den
+PEM-Inhalt direkt als `JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY` in die `.env`
+schreiben, mit literalen `\n` statt echter Zeilenumbrüche:
 ```bash
-awk 'BEGIN{ORS="\\n"} {print}' /tmp/jwt_private.pem
-awk 'BEGIN{ORS="\\n"} {print}' /tmp/jwt_public.pem
+awk 'BEGIN{ORS="\\n"} {print}' apps/api/keys/jwt_private.pem
+awk 'BEGIN{ORS="\\n"} {print}' apps/api/keys/jwt_public.pem
 ```
 Jede Ausgabe komplett kopieren und als Wert von `JWT_PRIVATE_KEY` bzw.
 `JWT_PUBLIC_KEY` in Anführungszeichen einsetzen (z. B.
-`JWT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nMIIEvQ...\n-----END PRIVATE KEY-----\n"`).
-Anschließend die temporären PEM-Dateien löschen, damit der private
-Schlüssel nicht zusätzlich unverschlüsselt auf der Platte liegt:
-```bash
-rm /tmp/jwt_private.pem /tmp/jwt_public.pem
-```
+`JWT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nMIIEvQ...\n-----END PRIVATE KEY-----\n"`),
+und **nur in diesem Fall** anschließend `apps/api/keys/` wieder löschen
+(`rm -rf apps/api/keys`) — sonst liegt derselbe private Schlüssel
+doppelt vor, einmal in der Datei und einmal inline in der `.env`. Je
+Schlüssel darf **nur eine** der beiden Formen gesetzt sein
+(`JWT_PRIVATE_KEY` **oder** `JWT_PRIVATE_KEY_FILE`, nie beide — `env.ts`
+lehnt eine gleichzeitige Angabe sonst mit einer klaren Fehlermeldung ab).
 
 > **Hinweis TRUSTED_PROXY_IPS:** benennt die Adresse(n), denen die API den
 > Header `X-Forwarded-For` überhaupt glaubt (Fastifys `trustProxy`-Option)
