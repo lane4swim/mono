@@ -155,6 +155,19 @@ EOF
   echo "  $ENV_FILE geschrieben. Öffentliche Adresse (für Schritt 11): ${PUBLIC_URL}"
 fi
 
+# Sicherheitskorrektur (Sicherheitsreview 2026-08-28, Befund H2): $ENV_FILE
+# enthält u. a. JWT_PRIVATE_KEY (signiert sämtliche Access Tokens) und das
+# DATABASE_URL-Passwort — ohne dies entsteht die Datei per `cat >` unter
+# der jeweils geltenden umask, üblich 0644 (weltlesbar). Wer die Datei
+# lesen kann (jedes andere lokale Benutzerkonto, ein unter fremder Kennung
+# laufender Prozess, ein Backup ohne eigene Rechteprüfung), kann damit
+# beliebige Access Tokens selbst signieren — authenticate.ts prüft dabei
+# ausschließlich Signatur/Gültigkeit, nie die Datenbank (siehe dortiger
+# Kommentar), die Übernahme wäre also spurlos. Unbedingt (nicht nur im
+# ENV_WAS_CREATED-Zweig oben) — korrigiert bei einem erneuten Lauf auch die
+# Rechte einer bereits vorhandenen Datei aus der Zeit vor dieser Korrektur.
+chmod 600 "$ENV_FILE"
+
 # --- Schritt 7: Datenbank-Schema anlegen -------------------------------------
 # `migrate deploy` statt `db push` (Code-Review, Befund W5): wendet die
 # committete Migrationshistorie unter apps/api/prisma/migrations/ an.

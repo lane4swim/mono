@@ -261,8 +261,22 @@ Führt npm dank der Workspace-Konfiguration für alle Pakete (`apps/web`, `apps/
 ### 7.2 Umgebungsvariablen konfigurieren (`.env`)
 ```bash
 cp apps/api/.env.example apps/api/.env
+chmod 600 apps/api/.env
 nano apps/api/.env
 ```
+Das `chmod 600` ist **Pflicht, nicht optional**: `apps/api/.env` enthält
+gleich zwei kritische Geheimnisse — das Datenbank-Passwort und, sobald
+unten gesetzt, `JWT_PRIVATE_KEY` (signiert sämtliche Access Tokens).
+Ohne diesen Schritt entsteht die Datei mit den systemweiten
+Standardrechten (üblich `644`, also weltlesbar) — jedes andere lokale
+Benutzerkonto auf diesem Server könnte den privaten Schlüssel lesen und
+sich damit ein Access Token mit beliebiger Rolle (auch `superadmin`)
+selbst signieren, ohne dass ein Login, ein Rate-Limit oder ein Logeintrag
+das sichtbar machen würde (`app.authenticate` prüft ausschließlich die
+Signatur, nie die Datenbank — siehe `apps/api/src/plugins/authenticate.ts`).
+Analog zu `chmod 600 ~/.pgpass` in Abschnitt 12.1 unten, dort für dasselbe
+Datenbank-Passwort.
+
 `apps/api/.env.example` enthält bereits alle bekannten Variablen mit
 Erklärung (vollständiges, verbindliches Schema samt Validierung:
 `apps/api/src/config/env.ts` — ein fehlender/ungültiger Pflichtwert lässt

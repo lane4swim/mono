@@ -22,10 +22,11 @@ Sicherheitsmaßnahme nicht, weil sie weder die Ursache von M1 beseitigt
 noch der einzige Weg ist, an ein Superadmin-Konto zu gelangen (siehe
 **H1**) — kostet aber den einzigen legitimen Wiederherstellungspfad.
 
-**Update (28. August 2026, im Anschluss an dieses Review).** **H1**
-wurde direkt im Anschluss an diese Prüfung behoben — siehe den
-**Fix**-Abschnitt dort. **H2** ist zum Zeitpunkt dieses Updates
-weiterhin offen.
+**Update (28. August 2026, im Anschluss an dieses Review).** In zwei
+Schritten direkt im Anschluss an diese Prüfung behoben — siehe die
+jeweiligen **Fix**-Abschnitte: zuerst **H1**, danach **H2**. Damit sind
+zum Zeitpunkt dieses Updates beide Hoch-Befunde behoben; **M1** und
+**M2** sind weiterhin offen.
 
 Schweregrade: **Hoch** = vor dem nächsten Produktivbetrieb beheben,
 **Mittel** = einplanen, **Niedrig** = bei nächster Berührung mitnehmen.
@@ -37,7 +38,7 @@ Schweregrade: **Hoch** = vor dem nächsten Produktivbetrieb beheben,
 | # | Befund | Ort | Schwere |
 |---|--------|-----|---------|
 | H1 | Seed-Skript legt einen **Superadmin mit im Repository veröffentlichtem Passwort** an — ohne jede `NODE_ENV`-Absicherung, im README als auszuführender Befehl dokumentiert | `apps/api/prisma/seed.ts:59-62,156-197`, `README.md:215-223` | Hoch — **behoben** |
-| H2 | `apps/api/.env` (enthält `JWT_PRIVATE_KEY`) wird ohne Dateirechte-Härtung angelegt → weltlesbar → **Fälschung beliebiger Access Tokens** | `scripts/setup-codespace.sh:123`, `docs/deployment.md:261-315` | Hoch |
+| H2 | `apps/api/.env` (enthält `JWT_PRIVATE_KEY`) wird ohne Dateirechte-Härtung angelegt → weltlesbar → **Fälschung beliebiger Access Tokens** | `scripts/setup-codespace.sh:123`, `docs/deployment.md:261-315` | Hoch — **behoben** |
 | M1 | Superadmin-Passwort als Kommandozeilenargument (**offen aus Vorreview N2/N6**) | `apps/api/scripts/createSuperAdmin.ts:11,18-40`, `scripts/setup-codespace.sh:226` | Mittel |
 | M2 | „Skript nach dem ersten Lauf löschen" ist keine wirksame Zugangskontrolle, entfernt aber den einzigen Wiederherstellungspfad | `apps/api/scripts/createSuperAdmin.ts:44-60` | Mittel |
 | N1 | Anwendungsrolle `lane1_app` besitzt dauerhaft volle DDL-Rechte (`GRANT ALL`) | `docs/deployment.md:196-202`, `scripts/setup-codespace.sh:73-76` | Niedrig |
@@ -150,7 +151,7 @@ verifiziert (Abbruch bei `NODE_ENV=production`, Abbruch ohne
 `SEED_CONFIRM`, Durchlauf bis zum — mangels lokaler Datenbank erwarteten
 — Verbindungsfehler, sobald beide Bedingungen erfüllt sind).
 
-### H2 — `apps/api/.env` mit `JWT_PRIVATE_KEY` wird weltlesbar angelegt
+### H2 — `apps/api/.env` mit `JWT_PRIVATE_KEY` wird weltlesbar angelegt — **behoben**
 
 **Ort.** `scripts/setup-codespace.sh:123-153`,
 `docs/deployment.md:261-315`, analog `deployment-raspberry-pi.md` /
@@ -216,6 +217,34 @@ Teil desselben Befunds.
    behandeln und rotieren; ein Wechsel von `JWT_PRIVATE_KEY`/
    `JWT_PUBLIC_KEY` invalidiert alle laufenden Access Tokens, die
    Refresh Tokens bleiben gültig.
+
+**Fix.** `scripts/setup-codespace.sh` führt nach dem Anlegen-/
+Übersprungen-Zweig (Schritt 6) unbedingt `chmod 600 "$ENV_FILE"` aus —
+nicht nur im „gerade neu geschrieben"-Zweig, sondern auch dann, wenn die
+Datei aus einem früheren Lauf bereits vorhanden war, damit ein erneuter
+Lauf auch die Rechte einer vor dieser Korrektur angelegten Datei
+nachträglich schließt. Alle vier Deployment-Anleitungen
+(`deployment.md`, `deployment-raspberry-pi.md`, `deployment-macos.md`,
+`deployment-github-codespaces.md`) tragen jetzt `chmod 600
+apps/api/.env` als eigenen Befehl direkt hinter dem `cp`/vor dem `nano`,
+mit derselben Begründung, die dort bereits bei `~/.pgpass` steht, und
+einem Verweis auf `authenticate.ts`, der erklärt, warum ein kompromit­
+tierter Schlüssel spurlos zur Kontoübernahme führt. Empfehlung 1
+(`umask 077` statt/zusätzlich zu `chmod`) wurde bewusst NICHT zusätzlich
+umgesetzt — ein globales `umask` im Skript hätte auch alle anderen in
+diesem Lauf angelegten Dateien (Log-Ausgaben, `pm2`-eigene Dateien)
+mitgehärtet, über den eigentlichen Befund hinaus; das gezielte `chmod`
+auf genau die eine sicherheitsrelevante Datei trifft den Befund
+präziser. Empfehlungen 3 (separate `JWT_PRIVATE_KEY_FILE`) und 4
+(Schlüsselrotation bei bereits gelaufenen Installationen) bleiben
+offen — beides sind Betriebs- bzw. Migrationsschritte für bestehende
+Installationen, kein Code-/Dokumentationsfix in diesem Repository.
+Manuell verifiziert: eine per `cat >`/`cp` unter Standard-`umask`
+(`022`) angelegte Testdatei hat vor der Korrektur Modus `644`
+(weltlesbar), nach `chmod 600` Modus `600` (nur Eigentümer). Kein
+automatisierter Test möglich — die betroffenen Skripte/Anleitungen
+laufen außerhalb der `apps/api`-Testsuite; `bash -n
+scripts/setup-codespace.sh` bestätigt weiterhin gültige Shell-Syntax.
 
 ---
 
