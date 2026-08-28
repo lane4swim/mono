@@ -125,16 +125,32 @@ sudo su - postgres -c psql
 ```
 > **Warum nicht `sudo -u postgres psql`?** Auf manchen Codespaces-Images ist das für den eigenen Benutzer (`vscode` o. ä.) nicht ohne Passwort erlaubt — `sudo` fragt dann nach dem Passwort **des eigenen Benutzers**, nicht nach einem Datenbank-Passwort. Da für diesen Benutzer in Codespaces aber gar kein Passwort gesetzt ist, schlägt jede Eingabe mit „Sorry, try again" fehl, egal was eingetippt wird. Reines `sudo` (ohne `-u <anderer-benutzer>`, also als root) ist dagegen ohne Passwort erlaubt — der Befehl oben nutzt das aus: `sudo` startet `su - postgres -c psql` als root, und root darf mit `su` ohne Passwort zu jedem Benutzer wechseln.
 
-Innerhalb der PostgreSQL-Konsole (Prompt `postgres=#`):
+Innerhalb der PostgreSQL-Konsole (Prompt `postgres=#`) — **zwei** Rollen
+statt einer (Sicherheitsreview 2026-08-28, Befund N1): `lane1_migrator`
+wendet ausschließlich das Datenbankschema an (`prisma migrate deploy`,
+braucht dafür DDL-Rechte), `lane1_app` ist die Rolle, mit der die
+Anwendung selbst läuft (`DATABASE_URL` unten) und bekommt bewusst NUR
+Lese-/Schreibrechte auf Zeilenebene, keine DDL-Rechte:
 ```sql
 CREATE DATABASE lane1;
+
+CREATE USER lane1_migrator WITH ENCRYPTED PASSWORD 'EIN-TESTPASSWORT-MIGRATION-HIER';
+GRANT ALL PRIVILEGES ON DATABASE lane1 TO lane1_migrator;
+
 CREATE USER lane1_app WITH ENCRYPTED PASSWORD 'EIN-TESTPASSWORT-HIER';
-GRANT ALL PRIVILEGES ON DATABASE lane1 TO lane1_app;
+GRANT CONNECT ON DATABASE lane1 TO lane1_app;
+
 \c lane1
-GRANT ALL ON SCHEMA public TO lane1_app;
+GRANT ALL ON SCHEMA public TO lane1_migrator;
+GRANT USAGE ON SCHEMA public TO lane1_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO lane1_app;
+ALTER DEFAULT PRIVILEGES FOR ROLE lane1_migrator IN SCHEMA public
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO lane1_app;
 \q
 ```
-**Das Passwort notieren** — es wird gleich in der `.env`-Datei gebraucht.
+**Beide Passwörter notieren** — `lane1_app` wird gleich in der
+`.env`-Datei gebraucht, `lane1_migrator` beim `prisma migrate deploy`
+weiter unten.
 
 > **Wichtig (PostgreSQL 15+):** Seit PostgreSQL 15 hat nur noch der Datenbank-Eigentümer automatisch das Recht, im Schema `public` Tabellen anzulegen — `GRANT ALL PRIVILEGES ON DATABASE` allein reicht dafür **nicht** mehr. Ohne das zusätzliche `\c lane1` + `GRANT ALL ON SCHEMA public` oben bricht Schritt 7 (`prisma migrate deploy`) mit `permission denied for schema public` ab.
 
@@ -202,6 +218,9 @@ Erklärung (vollständiges, verbindliches Schema samt Validierung:
 NODE_ENV=production
 PORT=3000
 DATABASE_URL="postgresql://lane1_app:EIN-TESTPASSWORT-HIER@localhost:5432/lane1"
+# WICHTIG (Sicherheitsreview 2026-08-28, Befund N1): bewusst die
+# DML-only-Rolle `lane1_app`, NICHT `lane1_migrator` (siehe Abschnitt 4.2)
+# — dies sind die Zugangsdaten, mit denen die Anwendung dauerhaft läuft.
 JWT_PRIVATE_KEY_FILE="<mit openssl erzeugen, siehe unten>"
 JWT_PUBLIC_KEY_FILE="<mit openssl erzeugen, siehe unten>"
 CORS_ORIGIN="https://DEIN-CODESPACE-NAME-8080.app.github.dev"
@@ -256,9 +275,12 @@ lehnt eine gleichzeitige Angabe sonst mit einer klaren Fehlermeldung ab).
 
 ## 7. Datenbank-Schema anlegen
 
+`DATABASE_URL` wird hier bewusst mit der DDL-Rolle `lane1_migrator`
+**überschrieben**, nur für genau diesen einen Befehl (Befund N1, siehe
+Abschnitt 4.2):
 ```bash
 cd apps/api
-npx prisma migrate deploy
+DATABASE_URL="postgresql://lane1_migrator:EIN-TESTPASSWORT-MIGRATION-HIER@localhost:5432/lane1" npx prisma migrate deploy
 cd ../..
 ```
 > Siehe `deployment.md`, Abschnitt 7.3 für die ausführliche Begründung
@@ -279,9 +301,12 @@ Baut dabei automatisch auch die gemeinsamen Pakete (`packages/shared-types`, `pa
 
 ## 9. Backend mit PM2 starten
 
+`--node-args="--env-file=.env"` ist **Pflicht** (Sicherheitsreview
+2026-08-28, Befund N2): ohne dieses Flag lädt der Prozess
+`apps/api/.env` nicht und stürzt sofort mit „DATABASE_URL: Required" ab:
 ```bash
 cd apps/api
-pm2 start dist/index.js --name lane1-api
+pm2 start dist/index.js --name lane1-api --node-args="--env-file=.env"
 cd ../..
 ```
 Kontrolle:
@@ -427,9 +452,9 @@ Ein Codespace hält **automatisch nach 30 Minuten Inaktivität** an (einstellbar
 ```bash
 sudo service postgresql start
 sudo service nginx start
-cd apps/api && pm2 start dist/index.js --name lane1-api ; cd ../..
+cd apps/api && pm2 start dist/index.js --name lane1-api --node-args="--env-file=.env" ; cd ../..
 ```
-(`pm2 start` mit demselben `--name` ist unproblematisch, falls der Prozess aus einer vorigen Sitzung noch als „gestoppt" gelistet ist — PM2 startet ihn dann einfach neu.)
+(`pm2 start` mit demselben `--name` ist unproblematisch, falls der Prozess aus einer vorigen Sitzung noch als „gestoppt" gelistet ist — PM2 startet ihn dann einfach neu. `--node-args="--env-file=.env"` erneut nötig — siehe Abschnitt 9, Befund N2 — da dieser Aufruf den Prozess unabhängig neu startet, nicht über ein gespeichertes `pm2 save`.)
 
 Manuell anhalten (statt auf die 30-Minuten-Grenze zu warten, z. B. am Ende eines Testtages) über die Codespaces-Übersicht: **github.com/codespaces** → bei der jeweiligen Zeile auf die drei Punkte → **„Stop codespace"**.
 

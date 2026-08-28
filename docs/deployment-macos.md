@@ -149,6 +149,9 @@ Werte setzen bzw. anpassen:
 NODE_ENV=production
 PORT=3000
 DATABASE_URL="postgresql://lane1_app:EIN-TESTPASSWORT-HIER@localhost:5432/lane1"
+# WICHTIG (Sicherheitsreview 2026-08-28, Befund N1): bewusst die
+# DML-only-Rolle `lane1_app`, NICHT `lane1_migrator` (siehe Abschnitt 6)
+# — dies sind die Zugangsdaten, mit denen die Anwendung dauerhaft läuft.
 JWT_PRIVATE_KEY_FILE="<mit openssl erzeugen, siehe unten>"
 JWT_PUBLIC_KEY_FILE="<mit openssl erzeugen, siehe unten>"
 CORS_ORIGIN="https://lane1.test"
@@ -214,16 +217,32 @@ Homebrew richtet PostgreSQL beim ersten Start (Abschnitt 3) automatisch mit eine
 ```bash
 psql postgres
 ```
-Innerhalb der PostgreSQL-Konsole (Prompt `postgres=#`):
+Innerhalb der PostgreSQL-Konsole (Prompt `postgres=#`) — **zwei** Rollen
+statt einer (Sicherheitsreview 2026-08-28, Befund N1): `lane1_migrator`
+wendet ausschließlich das Datenbankschema an (`prisma migrate deploy`,
+braucht dafür DDL-Rechte), `lane1_app` ist die Rolle, mit der die
+Anwendung selbst läuft (`DATABASE_URL` in Schritt 5) und bekommt bewusst
+NUR Lese-/Schreibrechte auf Zeilenebene, keine DDL-Rechte:
 ```sql
 CREATE DATABASE lane1;
+
+CREATE USER lane1_migrator WITH ENCRYPTED PASSWORD 'EIN-TESTPASSWORT-MIGRATION-HIER';
+GRANT ALL PRIVILEGES ON DATABASE lane1 TO lane1_migrator;
+
 CREATE USER lane1_app WITH ENCRYPTED PASSWORD 'EIN-TESTPASSWORT-HIER';
-GRANT ALL PRIVILEGES ON DATABASE lane1 TO lane1_app;
+GRANT CONNECT ON DATABASE lane1 TO lane1_app;
+
 \c lane1
-GRANT ALL ON SCHEMA public TO lane1_app;
+GRANT ALL ON SCHEMA public TO lane1_migrator;
+GRANT USAGE ON SCHEMA public TO lane1_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO lane1_app;
+ALTER DEFAULT PRIVILEGES FOR ROLE lane1_migrator IN SCHEMA public
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO lane1_app;
 \q
 ```
-Das Passwort muss zum in Schritt 5 eingetragenen `DATABASE_URL` passen.
+Das `lane1_app`-Passwort muss zum in Schritt 5 eingetragenen
+`DATABASE_URL` passen; `lane1_migrator` wird gleich beim
+`prisma migrate deploy` unten gebraucht.
 
 > **Wichtig (PostgreSQL 15+, betrifft auch die hier installierte Version 16):** Seit
 > PostgreSQL 15 hat nur noch der Datenbank-Eigentümer automatisch das Recht,
@@ -232,10 +251,12 @@ Das Passwort muss zum in Schritt 5 eingetragenen `DATABASE_URL` passen.
 > `GRANT ALL ON SCHEMA public` oben bricht der nächste Befehl unten mit
 > `permission denied for schema public` ab.
 
-Schema anlegen:
+Schema anlegen — `DATABASE_URL` wird hier bewusst mit der DDL-Rolle
+`lane1_migrator` **überschrieben**, nur für genau diesen einen Befehl
+(Befund N1, siehe oben):
 ```bash
 cd apps/api
-npx prisma migrate deploy
+DATABASE_URL="postgresql://lane1_migrator:EIN-TESTPASSWORT-MIGRATION-HIER@localhost:5432/lane1" npx prisma migrate deploy
 cd ../..
 ```
 > Siehe `deployment.md`, Abschnitt 7.3 für die ausführliche Begründung
@@ -256,9 +277,12 @@ Baut dabei automatisch auch die gemeinsamen Pakete (`packages/shared-types`, `pa
 
 ## 8. Backend mit PM2 starten
 
+`--node-args="--env-file=.env"` ist **Pflicht** — siehe `deployment.md`,
+Abschnitt 8 (Sicherheitsreview 2026-08-28, Befund N2): ohne dieses Flag
+lädt der Prozess `apps/api/.env` nicht und stürzt sofort ab:
 ```bash
 cd apps/api
-pm2 start dist/index.js --name lane1-api
+pm2 start dist/index.js --name lane1-api --node-args="--env-file=.env"
 pm2 save
 pm2 startup
 ```
@@ -429,9 +453,9 @@ Für eine reine Testumgebung ist ein vollwertiges Backup-Konzept wie in `deploym
 mkdir -p ~/lane1-backups
 "$(brew --prefix postgresql@16)/bin/pg_dump" -h 127.0.0.1 -U lane1_app lane1 > ~/lane1-backups/lane1-$(date +%F).sql
 ```
-Wiederherstellen (z. B. nach einem `prisma migrate reset`, das versehentlich Testdaten gelöscht hat):
+Wiederherstellen (z. B. nach einem `prisma migrate reset`, das versehentlich Testdaten gelöscht hat) — bewusst mit `lane1_migrator`, nicht `lane1_app` (Befund N1 oben): `pg_dump` schreibt standardmäßig auch `CREATE TABLE`/`DROP TABLE`-Anweisungen mit in die Datei, das Einspielen ist damit ein Schema-Vorgang wie `prisma migrate deploy`, kein reiner Datenzugriff:
 ```bash
-"$(brew --prefix postgresql@16)/bin/psql" -h 127.0.0.1 -U lane1_app lane1 < ~/lane1-backups/lane1-2026-08-17.sql
+"$(brew --prefix postgresql@16)/bin/psql" -h 127.0.0.1 -U lane1_migrator lane1 < ~/lane1-backups/lane1-2026-08-17.sql
 ```
 
 Für einen automatisierten täglichen Lauf per `cron` gilt derselbe Hinweis wie in `deployment.md`, Abschnitt 12.1 (`-h 127.0.0.1` statt Unix-Socket, damit die passwortbasierte statt der `peer`-Authentifizierung greift, plus `~/.pgpass`) — **zusätzlich** unter macOS zu beachten:
@@ -447,7 +471,9 @@ Identisch zu `deployment.md`, Abschnitt 13:
 cd ~/lane1
 git pull
 npm install
-cd apps/api && npx prisma migrate deploy && cd ../..
+cd apps/api
+DATABASE_URL="postgresql://lane1_migrator:EIN-TESTPASSWORT-MIGRATION-HIER@localhost:5432/lane1" npx prisma migrate deploy   # DDL-Rolle, siehe Abschnitt 6 (Befund N1)
+cd ..
 npm run build --workspace=apps/api
 pm2 restart lane1-api
 sudo nginx -s reload

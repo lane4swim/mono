@@ -42,6 +42,14 @@ DB_USER="lane1_app"
 # Nur relevant, falls die Rolle in diesem Lauf NEU angelegt wird (siehe
 # Schritt 4.2) — per DB_PASSWORD=... vorgebbar, sonst zufällig erzeugt.
 DB_PASSWORD="${DB_PASSWORD:-$(openssl rand -hex 16)}"
+# Sicherheitskorrektur (Sicherheitsreview 2026-08-28, Befund N1): eigene
+# Rolle NUR für `prisma migrate deploy` (Schritt 7) — DB_USER/lane1_app
+# oben ist ab jetzt die Rolle, mit der die Anwendung dauerhaft läuft
+# (DATABASE_URL in .env, Schritt 6) und bekommt bewusst KEINE DDL-Rechte
+# mehr (siehe Schritt 4.2 unten). Analog zu DB_PASSWORD per
+# DB_MIGRATOR_PASSWORD=... vorgebbar, sonst zufällig erzeugt.
+DB_MIGRATOR_USER="lane1_migrator"
+DB_MIGRATOR_PASSWORD="${DB_MIGRATOR_PASSWORD:-$(openssl rand -hex 16)}"
 
 # --- Schritt 4.1: Node.js ---------------------------------------------------
 log "Schritt 4.1: Node.js (v22) installieren"
@@ -60,6 +68,21 @@ if ! command -v psql >/dev/null 2>&1; then
 fi
 sudo service postgresql start
 
+# Sicherheitskorrektur (Sicherheitsreview 2026-08-28, Befund N1): ZWEI
+# Rollen statt einer. ${DB_MIGRATOR_USER} wendet ausschließlich das
+# Datenbankschema an (prisma migrate deploy, Schritt 7) und braucht dafür
+# DDL-Rechte (Tabellen anlegen/ändern) — deshalb Eigentümerin der
+# Datenbank. ${DB_USER} ist die Rolle, mit der die Anwendung selbst zur
+# Laufzeit läuft (DATABASE_URL in .env, Schritt 6) und bekommt bewusst
+# NUR Lese-/Schreibrechte auf Zeilenebene, keine DDL-Rechte — ein zur
+# Laufzeit erlangter Datenbankzugriff kann dadurch keine Tabellen mehr
+# anlegen, ändern oder löschen.
+if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='${DB_MIGRATOR_USER}'" | grep -q 1; then
+  sudo -u postgres psql -c "CREATE USER ${DB_MIGRATOR_USER} WITH ENCRYPTED PASSWORD '${DB_MIGRATOR_PASSWORD}';"
+else
+  echo "  Rolle ${DB_MIGRATOR_USER} existiert bereits — Passwort bleibt unverändert."
+fi
+
 if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='${DB_USER}'" | grep -q 1; then
   sudo -u postgres psql -c "CREATE USER ${DB_USER} WITH ENCRYPTED PASSWORD '${DB_PASSWORD}';"
 else
@@ -67,13 +90,41 @@ else
 fi
 
 if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='${DB_NAME}'" | grep -q 1; then
-  sudo -u postgres psql -c "CREATE DATABASE ${DB_NAME} OWNER ${DB_USER};"
+  sudo -u postgres psql -c "CREATE DATABASE ${DB_NAME} OWNER ${DB_MIGRATOR_USER};"
 fi
 
-sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE ${DB_NAME} TO ${DB_USER};"
-# Seit PostgreSQL 15 zusätzlich nötig, sonst schlägt Schritt 7 (prisma db
-# push) mit "permission denied for schema public" fehl (siehe Doku 4.2).
-sudo -u postgres psql -d "${DB_NAME}" -c "GRANT ALL ON SCHEMA public TO ${DB_USER};"
+sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE ${DB_NAME} TO ${DB_MIGRATOR_USER};"
+sudo -u postgres psql -c "GRANT CONNECT ON DATABASE ${DB_NAME} TO ${DB_USER};"
+# Seit PostgreSQL 15 zusätzlich nötig, sonst schlägt Schritt 7 (prisma
+# migrate deploy) mit "permission denied for schema public" fehl (siehe
+# Doku 4.2) — gilt nur für die Eigentümerin ${DB_MIGRATOR_USER}, ${DB_USER}
+# bekommt stattdessen die explizite, auf DML begrenzte Zeile darunter.
+sudo -u postgres psql -d "${DB_NAME}" -c "GRANT ALL ON SCHEMA public TO ${DB_MIGRATOR_USER};"
+sudo -u postgres psql -d "${DB_NAME}" -c "GRANT USAGE ON SCHEMA public TO ${DB_USER};"
+sudo -u postgres psql -d "${DB_NAME}" -c "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ${DB_USER};"
+# Sorgt dafür, dass auch von KÜNFTIGEN Migrationen (durch ${DB_MIGRATOR_USER}
+# neu angelegte Tabellen) automatisch dieselben Rechte für ${DB_USER}
+# gelten, ohne nach jeder Migration erneut manuell GRANTen zu müssen.
+sudo -u postgres psql -d "${DB_NAME}" -c "ALTER DEFAULT PRIVILEGES FOR ROLE ${DB_MIGRATOR_USER} IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ${DB_USER};"
+
+# ${DB_MIGRATOR_USER}s Zugangsdaten bewusst NICHT in apps/api/.env (das
+# liest ausschließlich die Anwendung selbst, siehe Schritt 6/Befund N1) —
+# stattdessen in einer eigenen, chmod-600-geschützten Datei, damit sie bei
+# einer künftigen manuellen `prisma migrate deploy` (z. B. nach einer
+# neuen, per `git pull` hinzugekommenen Migration) wiederauffindbar
+# bleiben, ohne dass ein Blick in die Skript-Ausgabe dieses einen Laufs
+# nötig ist. Unbedingt (nicht nur bei Neuanlage) — hält die Datei auch bei
+# einem erneuten Lauf mit unverändertem Passwort aktuell.
+MIGRATOR_ENV_FILE="apps/api/.env.migrate"
+cat >"$MIGRATOR_ENV_FILE" <<EOF
+# apps/api/.env.migrate — NICHT von der Anwendung oder von Prisma
+# automatisch gelesen (nur "apps/api/.env" wird automatisch geladen).
+# Ausschließlich zum manuellen Nachschlagen für ein künftiges
+# "prisma migrate deploy" gedacht, siehe scripts/setup-codespace.sh
+# Schritt 7 bzw. docs/deployment-github-codespaces.md, Abschnitt 7.
+MIGRATE_DATABASE_URL="postgresql://${DB_MIGRATOR_USER}:${DB_MIGRATOR_PASSWORD}@localhost:5432/${DB_NAME}"
+EOF
+chmod 600 "$MIGRATOR_ENV_FILE"
 
 # --- Schritt 4.3: Nginx ------------------------------------------------------
 log "Schritt 4.3: Nginx installieren (Konfiguration folgt erst in Schritt 10)"
@@ -187,20 +238,32 @@ chmod 600 "$ENV_FILE"
 # --- Schritt 7: Datenbank-Schema anlegen -------------------------------------
 # `migrate deploy` statt `db push` (Code-Review, Befund W5): wendet die
 # committete Migrationshistorie unter apps/api/prisma/migrations/ an.
+# DATABASE_URL wird hier bewusst mit der DDL-Rolle ${DB_MIGRATOR_USER}
+# ÜBERSCHRIEBEN (Sicherheitsreview 2026-08-28, Befund N1) — nur für genau
+# diesen einen Befehl, nicht für apps/api/.env selbst (das weiterhin die
+# DML-only-Rolle ${DB_USER} trägt, siehe Schritt 6). Prismas eigenes
+# .env-Laden überschreibt eine bereits gesetzte Umgebungsvariable nicht.
 log "Schritt 7: Datenbank-Schema anlegen (prisma migrate deploy)"
-(cd apps/api && npx prisma migrate deploy)
+(cd apps/api && DATABASE_URL="postgresql://${DB_MIGRATOR_USER}:${DB_MIGRATOR_PASSWORD}@localhost:5432/${DB_NAME}" npx prisma migrate deploy)
 
 # --- Schritt 8: Backend bauen -------------------------------------------------
 log "Schritt 8: Backend bauen (inkl. packages/shared-types, packages/sync-protocol über prebuild-Skripte)"
 npm run build --workspace=apps/api
 
 # --- Schritt 9: Backend mit PM2 starten ---------------------------------------
+# Sicherheitsreview 2026-08-28, Befund N2: --node-args="--env-file=.env"
+# ist Pflicht — weder config/env.ts noch der laufende Server laden
+# apps/api/.env von sich aus; ohne dieses Flag stürzt der Prozess sofort
+# mit "DATABASE_URL: Required" ab (empirisch geprüft). Nur beim
+# ERSTMALIGEN `pm2 start` nötig — `pm2 restart` im else-Zweig darunter
+# übernimmt die beim ersten Start hinterlegten Node-Argumente automatisch
+# erneut.
 log "Schritt 9: Backend mit PM2 starten"
 if pm2 describe lane1-api >/dev/null 2>&1; then
   echo "  Prozess lane1-api läuft bereits unter PM2 — wird neu gestartet."
   (cd apps/api && pm2 restart lane1-api)
 else
-  (cd apps/api && pm2 start dist/index.js --name lane1-api)
+  (cd apps/api && pm2 start dist/index.js --name lane1-api --node-args="--env-file=.env")
 fi
 pm2 status
 
@@ -341,7 +404,8 @@ if [[ "$ENV_WAS_CREATED" == "1" ]]; then
   # landete hier unnötig im Terminal-Scrollback/CI-Log. Der Wert steht
   # ohnehin bereits in apps/api/.env (dort ist er nötig), ein Verweis
   # darauf genügt.
-  echo "Das erzeugte DB-Passwort steht in apps/api/.env unter DATABASE_URL."
+  echo "Das erzeugte DB-Passwort (Laufzeitrolle lane1_app) steht in apps/api/.env unter DATABASE_URL."
+  echo "Das erzeugte DB-Migrationspasswort (lane1_migrator, nur für künftige 'prisma migrate deploy'-Läufe) steht in apps/api/.env.migrate."
   echo "Das erzeugte JWT-Schlüsselpaar liegt unter apps/api/keys/ (chmod 600/644, referenziert per JWT_PRIVATE_KEY_FILE/JWT_PUBLIC_KEY_FILE in apps/api/.env)."
   echo "Öffentliche Adresse (CORS_ORIGIN/FRONTEND_BASE_URL): ${PUBLIC_URL}"
 fi

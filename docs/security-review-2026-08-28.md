@@ -22,16 +22,23 @@ Sicherheitsmaßnahme nicht, weil sie weder die Ursache von M1 beseitigt
 noch der einzige Weg ist, an ein Superadmin-Konto zu gelangen (siehe
 **H1**) — kostet aber den einzigen legitimen Wiederherstellungspfad.
 
-**Update (28. August 2026, im Anschluss an dieses Review).** In fünf
+**Update (28. August 2026, im Anschluss an dieses Review).** In sechs
 Schritten direkt im Anschluss an diese Prüfung behoben — siehe die
 jeweiligen **Fix**-Abschnitte: zuerst **H1**, danach **H2**, dessen
 Empfehlung 3 (separate `JWT_PRIVATE_KEY_FILE`) als eigener Nachtrag,
-zuletzt gemeinsam **M1** und **M2** (dieselbe Datei,
+danach gemeinsam **M1** und **M2** (dieselbe Datei,
 `createSuperAdmin.ts`, gemeinsam gehärtet und gegen eine echte
-PostgreSQL-Instanz end-to-end verifiziert). Damit sind zum Zeitpunkt
-dieses Updates beide Hoch- und beide Mittel-Befunde vollständig
-behoben, einschließlich der ursprünglich nur mittelfristig empfohlenen
-Schlüssel-Datei-Trennung; nur die drei Niedrig-Befunde sind noch offen.
+PostgreSQL-Instanz end-to-end verifiziert), zuletzt gemeinsam **N1**
+bis **N3**. Bei **N2** stellte sich beim Beheben heraus, dass der
+Befund schwerwiegender war als beim ursprünglichen Review angenommen —
+siehe den entsprechenden Nachtrag dort: der dokumentierte Startweg
+sämtlicher vier Deployment-Anleitungen, `npm run dev`, `npm run
+create-superadmin` und der Purge-Cronjob luden `apps/api/.env`
+tatsächlich nie, empirisch als reproduzierbarer Absturz bestätigt (nicht
+nur als am Docker-Compose-Weg vorbeigedachte Randnotiz). Damit sind zum
+Zeitpunkt dieses Updates **alle** Befunde dieses Reviews behoben,
+einschließlich der ursprünglich nur mittelfristig empfohlenen
+Schlüssel-Datei-Trennung (H2, Empfehlung 3).
 
 Schweregrade: **Hoch** = vor dem nächsten Produktivbetrieb beheben,
 **Mittel** = einplanen, **Niedrig** = bei nächster Berührung mitnehmen.
@@ -46,9 +53,9 @@ Schweregrade: **Hoch** = vor dem nächsten Produktivbetrieb beheben,
 | H2 | `apps/api/.env` (enthält `JWT_PRIVATE_KEY`) wird ohne Dateirechte-Härtung angelegt → weltlesbar → **Fälschung beliebiger Access Tokens** | `scripts/setup-codespace.sh:123`, `docs/deployment.md:261-315` | Hoch — **behoben** |
 | M1 | Superadmin-Passwort als Kommandozeilenargument (**offen aus Vorreview N2/N6**) | `apps/api/scripts/createSuperAdmin.ts:11,18-40`, `scripts/setup-codespace.sh:226` | Mittel — **behoben** |
 | M2 | „Skript nach dem ersten Lauf löschen" ist keine wirksame Zugangskontrolle, entfernt aber den einzigen Wiederherstellungspfad | `apps/api/scripts/createSuperAdmin.ts:44-60` | Mittel — **behoben** |
-| N1 | Anwendungsrolle `lane1_app` besitzt dauerhaft volle DDL-Rechte (`GRANT ALL`) | `docs/deployment.md:196-202`, `scripts/setup-codespace.sh:73-76` | Niedrig |
-| N2 | Kein `.env`-Loader im Laufzeitpfad des Servers (weder `dotenv` noch `--env-file`) | `apps/api/src/index.ts:6`, `apps/api/package.json` | Niedrig |
-| N3 | Port 5432 wird im Codespace mit fest im Repository stehendem Passwort weitergeleitet | `.devcontainer/devcontainer.json:22-27`, `docker-compose.yml:8-10` | Niedrig |
+| N1 | Anwendungsrolle `lane1_app` besitzt dauerhaft volle DDL-Rechte (`GRANT ALL`) | `docs/deployment.md:196-202`, `scripts/setup-codespace.sh:73-76` | Niedrig — **behoben** |
+| N2 | Kein `.env`-Loader im Laufzeitpfad des Servers (weder `dotenv` noch `--env-file`) | `apps/api/src/index.ts:6`, `apps/api/package.json` | Niedrig — **behoben** |
+| N3 | Port 5432 wird im Codespace mit fest im Repository stehendem Passwort weitergeleitet | `.devcontainer/devcontainer.json:22-27`, `docker-compose.yml:8-10` | Niedrig — **behoben** |
 
 ---
 
@@ -483,7 +490,7 @@ Adresse) → derselbe Lauf mit `--force` (Erfolg, zweite Zeile mit `role:
 
 ## Niedrig
 
-### N1 — Anwendungsrolle besitzt dauerhaft volle DDL-Rechte
+### N1 — Anwendungsrolle besitzt dauerhaft volle DDL-Rechte — **behoben**
 
 **Ort.** `docs/deployment.md:196-202`, `scripts/setup-codespace.sh:73-76`.
 
@@ -501,7 +508,41 @@ Zeilen zu lesen und zu schreiben.
 DML-Rechten für `DATABASE_URL`. Kein dringender Befund, aber die
 naheliegende Ergänzung, sobald **H2** angefasst wird.
 
-### N2 — Kein `.env`-Loader im Laufzeitpfad des Servers
+**Fix.** Neue Rolle `lane1_migrator` — Eigentümerin der Datenbank,
+ausschließlich für `prisma migrate deploy` verwendet. `lane1_app` bleibt
+der Name der Laufzeitrolle, verliert aber alle DDL-Rechte: `GRANT
+SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public` statt
+`GRANT ALL`, dazu `ALTER DEFAULT PRIVILEGES FOR ROLE lane1_migrator …
+GRANT … TO lane1_app`, damit auch von KÜNFTIGEN Migrationen neu
+angelegte Tabellen automatisch dieselben (eingeschränkten) Rechte
+erhalten, ohne nach jeder Migration erneut manuell nachgrant werden zu
+müssen. Jede `prisma migrate deploy`-Stelle überschreibt `DATABASE_URL`
+für genau diesen einen Befehl auf `lane1_migrator` (Prismas eigenes
+`.env`-Laden überschreibt eine bereits gesetzte Umgebungsvariable
+nicht) — `apps/api/.env` selbst trägt weiterhin nur die DML-only-Rolle.
+Umgesetzt in allen vier Deployment-Anleitungen (Ersteinrichtung,
+spätere Updates, `pg_dump`/`psql`-Wiederherstellung in
+`deployment-macos.md`, wo ein vollständiger Dump auch `CREATE
+TABLE`-Anweisungen enthält und daher ebenfalls die DDL-Rolle braucht)
+sowie in `scripts/setup-codespace.sh`. Das dort automatisch erzeugte
+`lane1_migrator`-Passwort landet NICHT in `apps/api/.env` (das liest nur
+die Anwendung selbst), sondern in einer neuen, `chmod 600`-geschützten
+`apps/api/.env.migrate` — ausschließlich zum manuellen Nachschlagen für
+eine künftige manuelle `prisma migrate deploy`, von nichts automatisch
+gelesen, per `.gitignore` ausgeschlossen.
+
+Verifiziert gegen eine echte, lokal aufgesetzte PostgreSQL-16-Instanz:
+`lane1_migrator` wendet `prisma migrate deploy` erfolgreich an;
+`lane1_app` kann anschließend lesen/schreiben (`SELECT`/`INSERT`/
+`UPDATE`/`DELETE`), scheitert aber wie vorgesehen an `CREATE TABLE`
+(„permission denied for schema public"), `ALTER TABLE` und `DROP TABLE`
+(„must be owner of table …"); eine von `lane1_migrator` NACH der
+Rechtevergabe neu angelegte Tabelle (simuliert eine künftige Migration)
+ist für `lane1_app` ohne jeden weiteren manuellen Grant sofort
+lese-/schreibbar, aber ebenso wenig änderbar — bestätigt, dass `ALTER
+DEFAULT PRIVILEGES` wie vorgesehen greift.
+
+### N2 — Kein `.env`-Loader im Laufzeitpfad des Servers — **behoben**
 
 **Ort.** `apps/api/src/index.ts:6`, `apps/api/package.json`.
 
@@ -513,14 +554,38 @@ im dokumentierten Startbefehl (`pm2 start dist/index.js`,
 Prisma-CLI-Schritte (`migrate deploy`, `db seed`) greift das eigene
 `.env`-Laden der Prisma-CLI, für den Fastify-Einstiegspunkt jedoch nicht.
 
-Dieser Punkt ließ sich in dieser Umgebung nicht empirisch verifizieren
-(keine installierten `node_modules`) und ist daher als Beobachtung
-festgehalten, nicht als bestätigter Fehler. Sicherheitsrelevant ist er
-mittelbar: Weicht der real funktionierende Startweg von dem
-dokumentierten ab, gelten die in `config/env.ts` bewusst als
-Produktionspflicht erzwungenen Werte (`TRUSTED_PROXY_IPS`,
-`JWT_PRIVATE_KEY`, `CORS_ORIGIN != "*"`) möglicherweise nicht für den
-Prozess, der tatsächlich läuft.
+Dieser Punkt ließ sich zum Zeitpunkt des ursprünglichen Reviews in dieser
+Umgebung nicht empirisch verifizieren (keine installierten
+`node_modules`) und war daher als Beobachtung festgehalten, nicht als
+bestätigter Fehler.
+
+**Nachtrag — beim Beheben empirisch bestätigt, schwerwiegender als
+angenommen.** Mit installierten `node_modules` ließ sich der Verdacht
+direkt nachstellen: `pm2 start dist/index.js --name lane1-api` bzw.
+`node dist/index.js`, beide exakt wie dokumentiert aus `apps/api/`
+gegen ein dort liegendes, korrekt befülltes `.env` gestartet, stürzen
+sofort mit `Ungültige Umgebungskonfiguration: DATABASE_URL: Required`
+ab — der Prozess sieht die Datei buchstäblich direkt daneben liegen und
+liest sie trotzdem nicht. Dasselbe gilt für `npm run dev` (`tsx watch
+src/index.ts`) UND — das war zuvor nicht mitbedacht — für
+`createSuperAdmin.ts`/`purgeDeletedData.ts`: eine direkt instanziierte
+`PrismaClient` (statt der Prisma-**CLI**, `npx prisma migrate deploy`/
+`db seed`, die tatsächlich ihr eigenes `.env`-Laden mitbringt) hat
+ebenso wenig eingebautes `.env`-Laden. Als dokumentiert und damit real
+funktionierend galten bislang: der komplette Produktivbetrieb aller vier
+Deployment-Anleitungen, `npm run dev`, `npm run create-superadmin` und
+der Purge-Cronjob — keiner davon hätte ohne diesen Fix je die in
+`config/env.ts` erzwungenen Werte (`TRUSTED_PROXY_IPS`,
+`JWT_PRIVATE_KEY`, `CORS_ORIGIN != "*"`) tatsächlich gesehen, weil sie
+gar nicht erst gestartet wären.
+
+Nicht betroffen: der Docker-Compose-Weg (`docker-compose.yml`/
+`apps/api/Dockerfile`) — dessen `CMD` ruft `node dist/index.js` direkt
+auf (nicht über `npm start`) und bekommt seine Variablen bereits per
+Compose-`environment:`-Block direkt in den Prozess injiziert, ganz ohne
+`.env`-Datei; ebenso die CI (`.github/workflows/ci.yml`), die ihre
+Variablen als echte GitHub-Actions-`env:`-Einträge setzt — beide Wege
+haben nie eine `.env`-Datei gebraucht und sind vom Befund unberührt.
 
 **Empfehlung.** Den Startweg einmal am realen Deployment nachvollziehen
 und das Ergebnis in der Dokumentation festhalten — entweder durch
@@ -528,7 +593,47 @@ und das Ergebnis in der Dokumentation festhalten — entweder durch
 durch eine ausdrückliche Notiz, wie die Variablen in die Prozessumgebung
 gelangen.
 
-### N3 — Codespace leitet Port 5432 mit repository-bekanntem Passwort weiter
+**Fix.** Node ≥ 20.6 unterstützt `--env-file` nativ (kein zusätzliches
+`dotenv`-Paket nötig) — empirisch bestätigt: `--env-file` überschreibt
+niemals einen bereits gesetzten echten Prozess-Umgebungswert (Standard-
+dotenv-Semantik), bricht aber hart ab, wenn die angegebene Datei fehlt.
+Beides passt genau auf die vier dokumentierten Deployments (`.env`
+garantiert vorhanden, sobald dieser Schritt erreicht wird) und lässt den
+Docker-Compose-Weg unberührt (der ruft `node dist/index.js` nie über
+diese `package.json`-Skripte auf). Umgesetzt:
+
+- `apps/api/package.json`: `dev` (`tsx watch --env-file=.env
+  src/index.ts`), `start` (`node --env-file=.env dist/index.js`),
+  `create-superadmin` und `purge-deleted-data` (beide `tsx
+  --env-file=.env …`) tragen das Flag jetzt fest.
+- Alle fünf `pm2 start dist/index.js`-Stellen (vier Deployment-
+  Anleitungen plus `scripts/setup-codespace.sh`) ergänzen
+  `--node-args="--env-file=.env"`. `pm2 restart` (spätere Updates,
+  `setup-codespace.sh`s Re-Run-Zweig) braucht das Flag NICHT erneut —
+  PM2 hinterlegt die beim ersten `pm2 start` übergebenen Node-Argumente
+  und wendet sie bei jedem `restart` automatisch wieder an (empirisch
+  bestätigt).
+- Der Purge-Cronjob (`deployment.md`/`deployment-raspberry-pi.md`,
+  Abschnitt 12.1) ruft `tsx` bewusst über seinen absoluten Pfad statt
+  über `npm run purge-deleted-data` auf (Cron hat keinen zuverlässigen
+  `npm` im `PATH`) — dort direkt `--env-file=.env` ergänzt, da dieser
+  Aufruf nicht über den jetzt gefixten `package.json`-Eintrag läuft.
+
+Verifiziert mit `env -i` (vollständig geleerte Prozessumgebung, nur
+`PATH`/`HOME`) gegen eine echte, lokal aufgesetzte PostgreSQL-16-Instanz:
+`npm run dev`, `npm run start`, `npm run create-superadmin` und
+`npm run purge-deleted-data` laden `apps/api/.env` jetzt alle korrekt
+und funktionieren Ende-zu-Ende (Superadmin-Konto tatsächlich angelegt,
+Purge-Lauf tatsächlich gegen die Datenbank ausgeführt) — vorher schlugen
+alle vier mit exakt derselben `DATABASE_URL: Required`-Meldung fehl.
+`pm2 start dist/index.js --node-args="--env-file=.env"` sowie ein
+anschließender `pm2 restart` wurden ebenso gegen eine echte, temporär
+installierte PM2-Instanz bestätigt (Server startet, Log zeigt „Server
+listening", auch nach dem Restart). `npm run typecheck`/`lint`/`test`
+(444 Tests) sowie die volle Integrationstestsuite (52 Tests, gegen
+dieselbe echte Postgres-Instanz) bleiben grün.
+
+### N3 — Codespace leitet Port 5432 mit repository-bekanntem Passwort weiter — **behoben**
 
 **Ort.** `.devcontainer/devcontainer.json:22-27`, `docker-compose.yml:8-10`.
 
@@ -546,6 +651,17 @@ Komfort bietet (die Anwendung im selben Compose-Netz erreicht Postgres
 **Empfehlung.** 5432 aus `forwardPorts` streichen; wer einen
 GUI-Client anschließen will, kann den Port bei Bedarf manuell
 weiterleiten.
+
+**Fix.** `5432` aus `forwardPorts` sowie der zugehörige Eintrag aus
+`portsAttributes` entfernt; `docker-compose.yml` selbst (Postgres-Bind
+auf `127.0.0.1`) blieb unverändert — dieser Befund betraf ausschließlich
+die zusätzliche Codespaces-eigene Portweiterleitung obendrauf. Funktional
+folgenlos: die Anwendung erreicht Postgres weiterhin über den
+Compose-internen Servicenamen (`postgres:5432`), unabhängig von
+`forwardPorts`. Kein automatisierter Test möglich (Codespaces-eigenes
+Verhalten, keine lokal nachstellbare Laufzeitumgebung) — `devcontainer.json`
+manuell auf gültiges JSON geprüft (nach Entfernen der `//`-Kommentare,
+die JSONC dort erlaubt).
 
 ---
 
