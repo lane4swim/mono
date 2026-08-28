@@ -250,9 +250,18 @@ if [[ ${#SUPERADMIN_PASSWORD} -lt 8 ]]; then
   echo "  Fehler: SUPERADMIN_PASSWORD muss mindestens 8 Zeichen lang sein (siehe apps/api/scripts/createSuperAdmin.ts)." >&2
   exit 1
 fi
+# Sicherheitskorrektur (Sicherheitsreview 2026-08-28, Befund M1): das
+# Passwort wird NICHT mehr als --password=…-Argument übergeben — Argumente
+# eines laufenden Prozesses sind auf Linux über /proc/<pid>/cmdline für
+# JEDEN lokalen Benutzer lesbar (`ps aux` genügt), für die gesamte, bei
+# argon2id nicht ganz kurze Laufzeit von createSuperAdmin.ts. Stattdessen
+# als Umgebungsvariable NUR für diesen einen Befehl gesetzt (nicht per
+# `export`, das würde sie unnötig für den Rest dieses Skriptlaufs in der
+# Prozessumgebung belassen) — createSuperAdmin.ts liest SUPERADMIN_PASSWORD
+# bereits selbst vorrangig aus der Umgebung, siehe dort.
 if (
   cd apps/api
-  npm run create-superadmin -- --email="${SUPERADMIN_EMAIL}" --password="${SUPERADMIN_PASSWORD}" --name="${SUPERADMIN_NAME}"
+  SUPERADMIN_PASSWORD="${SUPERADMIN_PASSWORD}" npm run create-superadmin -- --email="${SUPERADMIN_EMAIL}" --name="${SUPERADMIN_NAME}"
 ); then
   echo "  Superadmin ${SUPERADMIN_EMAIL} angelegt."
 else

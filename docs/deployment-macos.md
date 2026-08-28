@@ -272,10 +272,16 @@ pm2 logs lane1-api
 
 ### 8.1 Ersten Superadmin anlegen (einmalig)
 
-Identisch zu `deployment.md`, Abschnitt 8.1 — ohne diesen Schritt kann sich niemand einloggen:
+Identisch zu `deployment.md`, Abschnitt 8.1 — ohne diesen Schritt kann sich niemand einloggen. Das Passwort wird bewusst NICHT als Argument angegeben (Sicherheitsreview 2026-08-28, Befund M1), sondern interaktiv abgefragt:
 ```bash
 cd apps/api
-npm run create-superadmin -- --email=admin@test.lane1.test --password='EIN-TESTPASSWORT' --name="Test Admin"
+npm run create-superadmin -- --email=admin@test.lane1.test --name="Test Admin"
+cd ../..
+```
+Alternativ nicht-interaktiv per Umgebungsvariable:
+```bash
+cd apps/api
+SUPERADMIN_PASSWORD='EIN-TESTPASSWORT' npm run create-superadmin -- --email=admin@test.lane1.test --name="Test Admin"
 cd ../..
 ```
 Mit diesem Konto danach unter `https://lane1.test/admin` anmelden und dort den ersten (Test-)Verein anlegen.

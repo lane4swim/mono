@@ -138,12 +138,21 @@ Einladungs-Tokens:
 ### Den allerersten Superadmin anlegen (Bootstrapping)
 
 Da es keine offene Registrierung gibt, muss das erste Superadmin-Konto
-direkt angelegt werden:
+direkt angelegt werden. Das Passwort wird bewusst NICHT als Argument
+angegeben (Sicherheitsreview 2026-08-28, Befund M1 —
+Kommandozeilenargumente sind auf Linux über `/proc/<pid>/cmdline` für
+jeden lokalen Benutzer lesbar), sondern per Umgebungsvariable
+`SUPERADMIN_PASSWORD` oder — wenn diese leer ist — interaktiv ohne
+Terminal-Echo abgefragt:
 
 ```bash
 cd apps/api
-npm run create-superadmin -- --email=admin@dachverband.de --password='...' --name="Max Mustermann"
+npm run create-superadmin -- --email=admin@dachverband.de --name="Max Mustermann"
 ```
+
+Existiert bereits ein Superadmin-Konto, bricht das Skript ab (verhindert
+eine unbeabsichtigte Mehrfachanlage) — für den bewussten Ausnahmefall
+`--force` anhängen.
 
 ### Auth-/Einladungs-Endpunkte
 

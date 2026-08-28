@@ -459,10 +459,21 @@ bewusst keine offene Registrierung, Konten entstehen ausschließlich per
 Einladungslink, und Einladungen kann nur verschicken, wer schon ein Konto
 hat. Für die allererste Person gibt es deshalb ein einmaliges CLI-Skript
 (siehe `apps/api/scripts/createSuperAdmin.ts`), das direkt in der
-Datenbank ein Superadmin-Konto anlegt:
+Datenbank ein Superadmin-Konto anlegt. Das Passwort wird bewusst NICHT
+als Argument angegeben (Sicherheitsreview 2026-08-28, Befund M1 —
+Kommandozeilenargumente sind auf Linux über `/proc/<pid>/cmdline` für
+jeden lokalen Benutzer lesbar), sondern interaktiv abgefragt (ohne
+Terminal-Echo, mit Bestätigung):
 ```bash
 cd apps/api
-npm run create-superadmin -- --email=admin@mein-verein.de --password='EIN-SICHERES-PASSWORT' --name="Vorname Nachname"
+npm run create-superadmin -- --email=admin@mein-verein.de --name="Vorname Nachname"
+cd ../..
+```
+Alternativ nicht-interaktiv per Umgebungsvariable (z. B. für ein
+automatisiertes Setup):
+```bash
+cd apps/api
+SUPERADMIN_PASSWORD='EIN-SICHERES-PASSWORT' npm run create-superadmin -- --email=admin@mein-verein.de --name="Vorname Nachname"
 cd ../..
 ```
 Mit diesem Konto danach unter `https://training.mein-verein.de/admin`

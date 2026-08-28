@@ -22,14 +22,16 @@ Sicherheitsmaßnahme nicht, weil sie weder die Ursache von M1 beseitigt
 noch der einzige Weg ist, an ein Superadmin-Konto zu gelangen (siehe
 **H1**) — kostet aber den einzigen legitimen Wiederherstellungspfad.
 
-**Update (28. August 2026, im Anschluss an dieses Review).** In drei
+**Update (28. August 2026, im Anschluss an dieses Review).** In fünf
 Schritten direkt im Anschluss an diese Prüfung behoben — siehe die
-jeweiligen **Fix**-Abschnitte: zuerst **H1**, danach **H2**, zuletzt
-dessen Empfehlung 3 (separate `JWT_PRIVATE_KEY_FILE`) als eigener
-Nachtrag. Damit sind zum Zeitpunkt dieses Updates beide Hoch-Befunde
-vollständig behoben, einschließlich der ursprünglich nur mittelfristig
-empfohlenen Schlüssel-Datei-Trennung; **M1** und **M2** sind weiterhin
-offen.
+jeweiligen **Fix**-Abschnitte: zuerst **H1**, danach **H2**, dessen
+Empfehlung 3 (separate `JWT_PRIVATE_KEY_FILE`) als eigener Nachtrag,
+zuletzt gemeinsam **M1** und **M2** (dieselbe Datei,
+`createSuperAdmin.ts`, gemeinsam gehärtet und gegen eine echte
+PostgreSQL-Instanz end-to-end verifiziert). Damit sind zum Zeitpunkt
+dieses Updates beide Hoch- und beide Mittel-Befunde vollständig
+behoben, einschließlich der ursprünglich nur mittelfristig empfohlenen
+Schlüssel-Datei-Trennung; nur die drei Niedrig-Befunde sind noch offen.
 
 Schweregrade: **Hoch** = vor dem nächsten Produktivbetrieb beheben,
 **Mittel** = einplanen, **Niedrig** = bei nächster Berührung mitnehmen.
@@ -42,8 +44,8 @@ Schweregrade: **Hoch** = vor dem nächsten Produktivbetrieb beheben,
 |---|--------|-----|---------|
 | H1 | Seed-Skript legt einen **Superadmin mit im Repository veröffentlichtem Passwort** an — ohne jede `NODE_ENV`-Absicherung, im README als auszuführender Befehl dokumentiert | `apps/api/prisma/seed.ts:59-62,156-197`, `README.md:215-223` | Hoch — **behoben** |
 | H2 | `apps/api/.env` (enthält `JWT_PRIVATE_KEY`) wird ohne Dateirechte-Härtung angelegt → weltlesbar → **Fälschung beliebiger Access Tokens** | `scripts/setup-codespace.sh:123`, `docs/deployment.md:261-315` | Hoch — **behoben** |
-| M1 | Superadmin-Passwort als Kommandozeilenargument (**offen aus Vorreview N2/N6**) | `apps/api/scripts/createSuperAdmin.ts:11,18-40`, `scripts/setup-codespace.sh:226` | Mittel |
-| M2 | „Skript nach dem ersten Lauf löschen" ist keine wirksame Zugangskontrolle, entfernt aber den einzigen Wiederherstellungspfad | `apps/api/scripts/createSuperAdmin.ts:44-60` | Mittel |
+| M1 | Superadmin-Passwort als Kommandozeilenargument (**offen aus Vorreview N2/N6**) | `apps/api/scripts/createSuperAdmin.ts:11,18-40`, `scripts/setup-codespace.sh:226` | Mittel — **behoben** |
+| M2 | „Skript nach dem ersten Lauf löschen" ist keine wirksame Zugangskontrolle, entfernt aber den einzigen Wiederherstellungspfad | `apps/api/scripts/createSuperAdmin.ts:44-60` | Mittel — **behoben** |
 | N1 | Anwendungsrolle `lane1_app` besitzt dauerhaft volle DDL-Rechte (`GRANT ALL`) | `docs/deployment.md:196-202`, `scripts/setup-codespace.sh:73-76` | Niedrig |
 | N2 | Kein `.env`-Loader im Laufzeitpfad des Servers (weder `dotenv` noch `--env-file`) | `apps/api/src/index.ts:6`, `apps/api/package.json` | Niedrig |
 | N3 | Port 5432 wird im Codespace mit fest im Repository stehendem Passwort weitergeleitet | `.devcontainer/devcontainer.json:22-27`, `docker-compose.yml:8-10` | Niedrig |
@@ -312,7 +314,7 @@ laufender Postgres/PM2) außerhalb der hier verfügbaren Umgebung liegen.
 
 ## Mittel
 
-### M1 — Superadmin-Passwort als Kommandozeilenargument (offen aus Vorreview N2/N6)
+### M1 — Superadmin-Passwort als Kommandozeilenargument (offen aus Vorreview N2/N6) — **behoben**
 
 **Ort.** `apps/api/scripts/createSuperAdmin.ts:11` (dokumentierte
 Nutzung), `:18-40` (Argument-Auswertung), `scripts/setup-codespace.sh:226`,
@@ -353,7 +355,50 @@ entsprechend anzupassen. `setup-codespace.sh` übergibt die bereits
 sicher eingelesene Variable dann als Umgebungsvariable statt als
 Argument.
 
-### M2 — Löschen des Skripts nach dem ersten Lauf trägt als Sicherheitsmaßnahme nicht
+**Fix.** `--password=` ist ersatzlos entfallen. `createSuperAdmin.ts`
+liest das Passwort jetzt über `resolvePassword()`: vorrangig aus
+`SUPERADMIN_PASSWORD` (Umgebungsvariable), sonst interaktiv über eine
+neue `readHiddenLine()` — ein manueller Raw-Mode-Umweg (Node hat kein
+eingebautes Äquivalent zu `read -s`), der stdin für die GESAMTE
+Eingabe-/Bestätigungs-Sequenz in den Raw-Modus versetzt (nicht je
+Prompt einzeln an-/ausschaltet — ein Toggle je Aufruf öffnete sonst
+zwischen zwei Prompts ein kurzes Zeitfenster mit deaktiviertem
+Raw-Modus). Mit Längenprüfung, Bestätigungsabgleich und
+Wiederholungsschleife bei Fehleingabe, spiegelbildlich zur bereits
+vorhandenen Bash-Logik in `setup-codespace.sh`. `setup-codespace.sh`
+selbst übergibt die dort bereits sicher (per `read -rsp`) eingelesene
+Variable jetzt nur noch als Umgebungsvariable für genau diesen einen
+Befehl (`SUPERADMIN_PASSWORD="…" npm run create-superadmin -- …`, nicht
+`export`iert), statt sie als `--password=…`-Argument weiterzureichen.
+Alle fünf Fundstellen (`deployment.md`, `deployment-raspberry-pi.md`,
+`deployment-github-codespaces.md`, `deployment-macos.md`, `README.md`)
+zeigen jetzt beide Wege: den interaktiven Aufruf ohne Passwort-Argument
+und, als Alternative für einen automatisierten Lauf,
+`SUPERADMIN_PASSWORD='…' npm run create-superadmin -- …`.
+
+Verifiziert gegen eine echte, lokal aufgesetzte PostgreSQL-16-Instanz
+(Migrationen per `prisma migrate deploy` angewendet): Nutzungsfehler,
+ungültige E-Mail-Adresse, fehlendes Terminal ohne `SUPERADMIN_PASSWORD`,
+zu kurzes `SUPERADMIN_PASSWORD` — alle mit der erwarteten, klaren
+Fehlermeldung. Der interaktive Pfad zusätzlich über ein echtes
+Pseudo-Terminal (Python `pty`) automatisiert durchgespielt: zu kurze
+Eingabe löst die Wiederholungsschleife aus, eine abweichende
+Bestätigung ebenso, das eingegebene Passwort erscheint zu keinem
+Zeitpunkt im Terminal-Output (dabei zunächst — vor der oben
+beschriebenen Umstellung auf EINMALIGEN statt Toggle-je-Aufruf
+Raw-Modus — ein einmaliges Echo-Leck zwischen zwei Prompts beobachtet
+und durch genau diese Umstellung behoben; erneut verifiziert). Der
+volle Erfolgspfad (erstes Konto anlegen → zweiter Lauf mit anderer
+E-Mail ohne `--force` → Ablehnung → derselbe Lauf mit `--force` →
+Erfolg) ebenfalls gegen die echte Datenbank bestätigt, inkl. Kontrolle
+der gespeicherten Zeilen (`role: 'superadmin'`, `passwordHash` gesetzt,
+`clubId: null`). `npm run typecheck`/`lint`/`test` in `apps/api` grün
+(444 Tests, unverändert — dieses Skript hat wie zuvor keine eigene
+Unit-Testdatei, konsistent mit den übrigen `scripts/*.ts` dieses Repos).
+`bash -n scripts/setup-codespace.sh` bestätigt weiterhin gültige
+Shell-Syntax.
+
+### M2 — Löschen des Skripts nach dem ersten Lauf trägt als Sicherheitsmaßnahme nicht — **behoben**
 
 **Ort.** `apps/api/scripts/createSuperAdmin.ts:44-60`.
 
@@ -410,6 +455,29 @@ es tatsächlich wirkt:
    verkleinert werden soll, ist das Skript der falsche Hebel: wirksam
    sind hier **H2** (Dateirechte auf `.env`), **N1** (getrennte
    Datenbankrollen) und die bestehende SSH-/Firewall-Absicherung.
+
+**Fix.** Das Skript bleibt bestehen (Empfehlung 4 war ohnehin kein
+Änderungsauftrag an dieser Datei, siehe dortige Begründung — **H2** ist
+bereits behoben, **N1** weiterhin offen). Empfehlung 1 ist mit **M1**
+oben erledigt. Empfehlung 2: `main()` prüft jetzt zusätzlich zur
+bestehenden E-Mail-Prüfung, ob bereits IRGENDEIN Konto mit
+`role: 'superadmin'` existiert (`prisma.user.findFirst({ where: { role:
+'superadmin' } })`) und bricht in diesem Fall mit einer erklärenden
+Meldung ab, außer `--force` wurde übergeben (per `parseArgs()` jetzt
+zusätzlich zu `--email=`/`--name=` als reines Flag erkannt, ohne
+Wert). Empfehlung 3: die E-Mail-Adresse läuft durch
+`z.string().email().safeParse()`, konsistent zu `LoginRequestSchema` &
+Co. — ein ungültiger Wert bricht mit einer klaren Meldung ab, bevor
+irgendein Datenbankzugriff stattfindet.
+
+Verifiziert gegen dieselbe echte PostgreSQL-16-Instanz wie bei **M1**
+(gemeinsamer End-to-End-Lauf): erstes Superadmin-Konto anlegen
+(Erfolg) → zweiter Lauf mit abweichender E-Mail-Adresse, kein `--force`
+(Ablehnung mit Verweis auf das bestehende Konto samt dessen E-Mail-
+Adresse) → derselbe Lauf mit `--force` (Erfolg, zweite Zeile mit `role:
+'superadmin'` in der Datenbank bestätigt) → ungültige E-Mail-Adresse
+(Ablehnung vor jedem Datenbankzugriff). `npm run typecheck`/`lint` in
+`apps/api` grün.
 
 ---
 
