@@ -237,6 +237,41 @@ describe('SetEntrySchema (Sätze & Wiederholungsblöcke)', () => {
   });
 });
 
+describe('SetEntrySchema — Abschnitte (section)', () => {
+  it('akzeptiert einen Abschnitt mit gemischten Sätzen/Blöcken', () => {
+    const section = {
+      kind: 'section', id: 'sec1', heading: 'Hauptteil',
+      entries: [
+        { kind: 'set', id: 's1', description: 'Einschwimmen', distance: 400, reps: 1, intensity: 'locker', restSec: 0 },
+        { kind: 'block', id: 'b1', label: 'Serie', repeatCount: 3, sets: [] },
+      ],
+    };
+    expect(SetEntrySchema.safeParse(section).success).toBe(true);
+  });
+  it('akzeptiert einen Abschnitt ohne Überschrift und ohne Einträge (Default-Werte)', () => {
+    expect(SetEntrySchema.safeParse({ kind: 'section', id: 'sec1', entries: [] }).success).toBe(true);
+  });
+  it('lehnt einen Abschnitt ab, der selbst wieder einen Abschnitt enthält (keine Verschachtelung erlaubt)', () => {
+    const invalidSection = {
+      kind: 'section', id: 'sec1', heading: 'X',
+      entries: [{ kind: 'section', id: 'sec2', heading: 'Y', entries: [] }],
+    };
+    expect(SetEntrySchema.safeParse(invalidSection).success).toBe(false);
+  });
+  it('lehnt einen Block ab, der einen Abschnitt enthält (keine Verschachtelung erlaubt)', () => {
+    const invalidBlock = {
+      kind: 'block', id: 'b1', label: 'X', repeatCount: 2,
+      sets: [{ kind: 'section', id: 'sec1', heading: 'Y', entries: [] }],
+    };
+    expect(SetEntrySchema.safeParse(invalidBlock).success).toBe(false);
+  });
+  it('lehnt eine Überschrift über 200 Zeichen sowie mehr als 200 Einträge ab', () => {
+    expect(SetEntrySchema.safeParse({ kind: 'section', id: 'sec1', heading: 'x'.repeat(201), entries: [] }).success).toBe(false);
+    const oneSet = { kind: 'set', id: 's1', description: 'X', distance: 100, reps: 1, intensity: 'ga1', restSec: 0 };
+    expect(SetEntrySchema.safeParse({ kind: 'section', id: 'sec1', heading: 'X', entries: Array(201).fill(oneSet) }).success).toBe(false);
+  });
+});
+
 describe('TemplateSchema', () => {
   it('akzeptiert eine Vorlage mit gemischten Sätzen/Blöcken', () => {
     const template = {
@@ -244,6 +279,17 @@ describe('TemplateSchema', () => {
       sets: [
         { kind: 'set', id: 's1', description: 'Einschwimmen', distance: 400, reps: 1, intensity: 'locker', restSec: 0 },
         { kind: 'block', id: 'b1', label: 'Hauptserie', repeatCount: 3, sets: [] },
+      ],
+      createdAt: now, updatedAt: now,
+    };
+    expect(TemplateSchema.safeParse(template).success).toBe(true);
+  });
+
+  it('akzeptiert eine Vorlage mit einem Abschnitt', () => {
+    const template = {
+      id: ATHLETE_ID, clubId: CLUB_ID, name: 'Grundlagenausdauer', description: '', tags: [],
+      sets: [
+        { kind: 'section', id: 'sec1', heading: 'Hauptteil', entries: [{ kind: 'set', id: 's1', description: '', distance: 400, reps: 1, intensity: 'locker', restSec: 0 }] },
       ],
       createdAt: now, updatedAt: now,
     };

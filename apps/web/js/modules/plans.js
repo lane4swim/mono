@@ -108,11 +108,18 @@ async function renderDetail(container, planId) {
 // sets are grouped into one table (as before); a repeat block interrupts
 // the table and is shown as its own distinct box — same visual language
 // (dashed border, "repeat block" badge) as the editor uses, so the
-// reading view and the editing view stay recognizably consistent.
+// reading view and the editing view stay recognizably consistent. A
+// section likewise interrupts the table and renders its heading followed
+// by its own entries — appendEntryRows() recurses into it, so sets/blocks
+// inside a section are grouped exactly the same way as at the top level.
 function renderDayItems(items, exercises, plan) {
   const host = el('div');
   if (items.length === 0) { host.appendChild(el('p', {}, t('plans.noSetsPlanned'))); return host; }
+  appendEntryRows(host, items, exercises, plan);
+  return host;
+}
 
+function appendEntryRows(host, items, exercises, plan) {
   let pendingRows = [];
   function flushTable() {
     if (pendingRows.length === 0) return;
@@ -129,6 +136,9 @@ function renderDayItems(items, exercises, plan) {
     if (entry.kind === 'block') {
       flushTable();
       host.appendChild(renderBlockBox(entry, exercises, plan));
+    } else if (entry.kind === 'section') {
+      flushTable();
+      host.appendChild(renderSectionBox(entry, exercises, plan));
     } else {
       pendingRows.push(el('tr', {}, [
         el('td', {}, equipmentDescCell(entry, exercises)), el('td', {}, `${entry.distance ?? '—'} m`), el('td', {}, entry.reps), el('td', {}, `${entry.restSec || 0}s`),
@@ -137,7 +147,17 @@ function renderDayItems(items, exercises, plan) {
     }
   });
   flushTable();
-  return host;
+}
+
+function renderSectionBox(section, exercises, plan) {
+  const box = el('div', { class: 'section-block-view' });
+  box.appendChild(el('h4', { class: 'section-heading-view mt-0' }, section.heading || t('plans.defaultSectionHeading')));
+  if (!section.entries || section.entries.length === 0) {
+    box.appendChild(el('p', { class: 'hint mt-0' }, t('plans.sectionNoEntries')));
+  } else {
+    appendEntryRows(box, section.entries, exercises, plan);
+  }
+  return box;
 }
 
 // Opens a modal with the comment thread for a single set/exercise entry

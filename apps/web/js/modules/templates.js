@@ -58,6 +58,11 @@ function renderList(container, templates, exercises) {
           el('span', { style: 'flex:1' }, [badge(`${entry.repeatCount || 1}×`, 'progress'), ' ', entry.label || t('templates.defaultBlockLabel'), el('span', { class: 'hint' }, t('templates.setsCountSuffix', { count: (entry.sets || []).length }))]),
           el('span', { class: 'data text-sm' }, `${totalDistance(entry.sets || []) * (entry.repeatCount || 1)}m`),
         ]));
+      } else if (entry.kind === 'section') {
+        list.appendChild(el('div', { class: 'list-row' }, [
+          el('span', { style: 'flex:1' }, [badge(t('templates.sectionLabel'), 'neutral'), ' ', entry.heading || t('plans.defaultSectionHeading'), el('span', { class: 'hint' }, t('templates.entriesCountSuffix', { count: (entry.entries || []).length }))]),
+          el('span', { class: 'data text-sm' }, `${totalDistance(entry.entries || [])}m`),
+        ]));
       } else {
         const ex = entry.exerciseId ? exercises.find(x => x.id === entry.exerciseId) : null;
         list.appendChild(el('div', { class: 'list-row' }, [

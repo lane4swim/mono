@@ -141,6 +141,10 @@ function buildDayColumn(day, exercises) {
 // Wiederholungsblöcke ("3x [...]") bekommen eine eigene, umrandete Box
 // mit Multiplikator-Kennzeichnung statt in der Liste unterzugehen —
 // genau das erwartete visuelle Muster für "Achte auf wiederholte Blöcke".
+// Ein Abschnitt bekommt stattdessen eine Überschriftenzeile mit
+// Zwischensumme, gefolgt von seinen eigenen Einträgen (rekursiv über
+// buildEntryNode — dadurch werden Blöcke INNERHALB eines Abschnitts genau
+// wie auf oberster Ebene als eigene Box dargestellt).
 function buildEntryNode(entry, exercises) {
   if (entry.kind === 'block') {
     const box = el('div', { class: 'print-block' });
@@ -148,6 +152,17 @@ function buildEntryNode(entry, exercises) {
       t('plans.repeatBlockLabel', { n: entry.repeatCount || 1 }) + (entry.label ? ` — ${entry.label}` : '')));
     const inner = el('div', { class: 'print-entry-list print-block-list' });
     (entry.sets || []).forEach(s => inner.appendChild(buildSetRow(s, exercises)));
+    box.appendChild(inner);
+    return box;
+  }
+  if (entry.kind === 'section') {
+    const box = el('div', { class: 'print-section' });
+    box.appendChild(el('div', { class: 'print-section-head' }, [
+      el('span', { class: 'print-section-heading' }, entry.heading || t('plans.defaultSectionHeading')),
+      el('span', { class: 'print-section-total' }, `${totalDistance(entry.entries || [])} m`),
+    ]));
+    const inner = el('div', { class: 'print-entry-list' });
+    (entry.entries || []).forEach(e => inner.appendChild(buildEntryNode(e, exercises)));
     box.appendChild(inner);
     return box;
   }

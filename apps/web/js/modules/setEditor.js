@@ -2,12 +2,17 @@
 // modules/setEditor.js — shared "Sets/Serien" editor widget used
 // by both templates.js and plans.js so the editing UX is consistent.
 //
-// An editable list is an array of "entries". Each entry is either:
-//   - a plain set:   { kind: 'set',   id, description, distance, reps, intensity, restSec, exerciseId? }
-//   - a repeat block:{ kind: 'block', id, label, repeatCount, sets: [ <plain set>, ... ] }
+// An editable list is an array of "entries". Each entry is one of:
+//   - a plain set:   { kind: 'set',     id, description, distance, reps, intensity, restSec, exerciseId? }
+//   - a repeat block:{ kind: 'block',   id, label, repeatCount, sets: [ <plain set>, ... ] }
+//   - a section:     { kind: 'section', id, heading, entries: [ <plain set | repeat block>, ... ] }
 //
 // Repeat blocks model classic swim-set notation like "3x [100 free,
 // 50 kick]" without forcing the whole block to be typed out longhand.
+// Sections group a run of sets/blocks under a heading (e.g. "Warm-up" /
+// "Main set" / "Cool-down") — only ONE level deep: a section's `entries`
+// can hold plain sets and repeat blocks, but not another section, exactly
+// like a block's own `sets` can't hold another block (see entities.ts).
 // Entries without a `kind` (older saved data) are treated as plain sets
 // for backward compatibility — no data migration needed.
 //
@@ -16,8 +21,11 @@
 // entstehen und sich bewegen: zwischen zwei bestehenden Einträgen
 // einfügen (siehe buildInsertPoint()) und eine Position auf-/abwärts
 // verschieben (siehe moveEntry()/entryControls()). Beides gilt
-// gleichermaßen für die oberste Ebene (Sätze UND Wiederholungsblöcke)
-// wie für die Sätze INNERHALB eines Wiederholungsblocks.
+// gleichermaßen für die oberste Ebene (Sätze, Wiederholungsblöcke UND
+// Abschnitte) wie für die Sätze/Blöcke INNERHALB eines Abschnitts bzw.
+// die Sätze INNERHALB eines Wiederholungsblocks — da jede Ebene auf ihrer
+// EIGENEN Liste arbeitet, ist ein Verschieben über eine Abschnittsgrenze
+// hinweg strukturell ausgeschlossen (nicht extra zu sperren).
 // ============================================================
 import { el, clear, localId } from '../dom.js';
 import { badge, toast } from '../ui.js';
@@ -47,6 +55,10 @@ function newBlock() {
   return { kind: 'block', id: localId('block'), label: '', repeatCount: 3, sets: [newBlankSet()] };
 }
 
+function newSection() {
+  return { kind: 'section', id: localId('section'), heading: '', entries: [] };
+}
+
 function setFromExercise(exercise) {
   const defaults = CATEGORY_DEFAULTS[exercise.category] || { intensity: 'ga1', restSec: 20 };
   return {
@@ -74,6 +86,9 @@ export function totalDistance(items) {
       const inner = totalDistance(entry.sets || []);
       return sum + inner * (entry.repeatCount || 1);
     }
+    if (entry.kind === 'section') {
+      return sum + totalDistance(entry.entries || []);
+    }
     return sum + (entry.distance || 0) * (entry.reps || 1);
   }, 0);
 }
@@ -85,6 +100,9 @@ export function cloneItems(items) {
   return (items || []).map(entry => {
     if (entry.kind === 'block') {
       return { ...entry, id: localId('block'), sets: (entry.sets || []).map(s => ({ ...s, id: localId('set') })) };
+    }
+    if (entry.kind === 'section') {
+      return { ...entry, id: localId('section'), entries: cloneItems(entry.entries || []) };
     }
     return { ...entry, id: localId('set') };
   });
@@ -100,6 +118,7 @@ export function collectEquipment(items, exercises) {
   const walk = (list) => {
     (list || []).forEach(entry => {
       if (entry.kind === 'block') { walk(entry.sets || []); return; }
+      if (entry.kind === 'section') { walk(entry.entries || []); return; }
       if (entry.exerciseId) {
         const ex = exercises.find(x => x.id === entry.exerciseId);
         (ex?.equipment || []).forEach(eq => codes.add(eq));
@@ -294,13 +313,15 @@ function buildSetRow(s, exercises, controls, onEquipmentChange) {
 }
 
 // Die "Hinzufügen"-Steuerelemente (leerer Satz / Wiederholungsblock /
-// Übung aus dem Katalog) an EINER Stelle, weil sie an mehreren Orten
-// gebraucht werden: am Listenende, am Blockende und in jedem
-// Einfügepunkt zwischen zwei Einträgen. Der Unterschied ist allein,
-// WOHIN der neue Eintrag wandert — das entscheidet `onAdd`.
+// Abschnitt / Übung aus dem Katalog) an EINER Stelle, weil sie an
+// mehreren Orten gebraucht werden: am Listenende, am Block-/Abschnittsende
+// und in jedem Einfügepunkt zwischen zwei Einträgen. Der Unterschied ist
+// allein, WOHIN der neue Eintrag wandert — das entscheidet `onAdd`.
 // `allowBlock: false` innerhalb eines Blocks, weil Blöcke sich nicht
-// verschachteln (siehe Datenmodell oben).
-function buildAddControls(exercises, { onAdd, allowBlock = true, className = 'flex gap-8', style = '', labels = {} }) {
+// verschachteln (siehe Datenmodell oben). `allowSection` ist NUR auf
+// oberster Ebene true (Standard hier: false) — Abschnitte selbst lassen
+// sich weder in einem Block noch in einem anderen Abschnitt anlegen.
+function buildAddControls(exercises, { onAdd, allowBlock = true, allowSection = false, className = 'flex gap-8', style = '', labels = {} }) {
   const row = el('div', { class: className, style });
 
   row.appendChild(el('button', {
@@ -311,6 +332,12 @@ function buildAddControls(exercises, { onAdd, allowBlock = true, className = 'fl
     row.appendChild(el('button', {
       type: 'button', class: 'btn btn-primary btn-sm', onclick: () => onAdd(newBlock()),
     }, labels.block || t('setEditor.addBlock')));
+  }
+
+  if (allowSection) {
+    row.appendChild(el('button', {
+      type: 'button', class: 'btn btn-primary btn-sm', onclick: () => onAdd(newSection()),
+    }, labels.section || t('setEditor.addSection')));
   }
 
   if (exercises.length > 0) {
@@ -338,7 +365,7 @@ function buildAddControls(exercises, { onAdd, allowBlock = true, className = 'fl
 // Listenende aufklappt — nur wird hier an Position `index` eingefügt
 // statt angehängt. Dadurch braucht es keinen separaten "Wohin?"-Dialog:
 // die Einfügestelle IST der angeklickte Punkt.
-function buildInsertPoint(list, index, exercises, { allowBlock = true, redraw }) {
+function buildInsertPoint(list, index, exercises, { allowBlock = true, allowSection = false, redraw }) {
   const host = el('div', { class: 'insert-point-host' });
   const panelHost = el('div');
   let open = false;
@@ -360,6 +387,7 @@ function buildInsertPoint(list, index, exercises, { allowBlock = true, redraw })
       el('span', { class: 'hint' }, t('setEditor.insertHereHint')),
       buildAddControls(exercises, {
         allowBlock,
+        allowSection,
         className: 'flex gap-8',
         style: 'flex-wrap:wrap',
         // Nach dem Einfügen zeichnet redraw() die ganze Liste neu — das
@@ -440,6 +468,74 @@ function buildBlockRow(block, exercises, controls, onRedrawParent) {
   return container;
 }
 
+// Renders one section: header (heading + move/remove), its own inner
+// rows/insert points/controls (sets AND blocks, reusing buildSetRow()/
+// buildBlockRow() — a section is the one place besides the top level that
+// allows blocks), and a live subtotal. Structurally the mirror image of
+// buildBlockRow() above, one level up: `controls` moves/removes the
+// section itself within the parent (top-level) list, `onRedrawParent` is
+// that top level's `updateTotal`.
+//
+// `bubbleUp` (below) is what nested rows/blocks receive as THEIR
+// "something changed, refresh ancestors" callback instead of the raw
+// `onRedrawParent`: it refreshes this section's own subtotal AND forwards
+// to `onRedrawParent`, so e.g. changing a block's repeatCount two levels
+// down still updates both the section's and the top-level total. A direct
+// insert/move/remove on `section.entries` itself instead goes through
+// `redrawInner` (full local re-render, see entryControls() below).
+function buildSectionRow(section, exercises, controls, onRedrawParent) {
+  const container = el('div', { class: 'section-block' });
+
+  const headingInput = el('input', {
+    type: 'text', value: section.heading || '', placeholder: t('setEditor.sectionHeadingPlaceholder'),
+    class: 'section-heading-input', oninput: (e) => section.heading = e.target.value,
+  });
+  const removeSectionBtn = el('button', { type: 'button', class: 'btn btn-danger btn-sm', onclick: controls.onRemove }, t('setEditor.removeSection'));
+
+  container.appendChild(el('div', { class: 'section-block-head' }, [
+    headingInput,
+    el('div', { class: 'flex items-center gap-8' }, [...orderButtons(controls), removeSectionBtn]),
+  ]));
+
+  const innerHost = el('div');
+  container.appendChild(innerHost);
+  const subtotalEl = el('div', { class: 'hint', style: 'margin-top:6px' });
+  container.appendChild(subtotalEl);
+
+  function updateSubtotal() {
+    subtotalEl.textContent = t('setEditor.sectionSummary', { m: totalDistance(section.entries || []) });
+  }
+  function bubbleUp() { updateSubtotal(); onRedrawParent(); }
+
+  function drawInner() {
+    clear(innerHost);
+    section.entries = section.entries || [];
+    section.entries.forEach((entry, i) => {
+      innerHost.appendChild(buildInsertPoint(section.entries, i, exercises, { allowSection: false, redraw: redrawInner }));
+      const entryControlsForRow = entryControls(section.entries, i, redrawInner);
+      if (entry.kind === 'block') {
+        innerHost.appendChild(buildBlockRow(entry, exercises, entryControlsForRow, bubbleUp));
+      } else {
+        innerHost.appendChild(buildSetRow(entry, exercises, entryControlsForRow, bubbleUp));
+      }
+    });
+    if (section.entries.length === 0) {
+      innerHost.appendChild(el('p', { class: 'hint', style: 'padding:4px 0' }, t('setEditor.emptySectionHint')));
+    }
+    updateSubtotal();
+  }
+  function redrawInner() { drawInner(); onRedrawParent(); }
+  drawInner();
+
+  const innerControls = buildAddControls(exercises, {
+    style: 'margin-top:6px;flex-wrap:wrap',
+    onAdd: (entry) => { section.entries = section.entries || []; section.entries.push(entry); redrawInner(); },
+  });
+  container.appendChild(innerControls);
+
+  return container;
+}
+
 // Renders an editable list of mixed sets/blocks into `hostNode`.
 // `items` is mutated in place; the caller reads the same array on submit.
 // `exercises` (optional) enables "use from exercise catalog" pickers.
@@ -472,10 +568,12 @@ export function renderSetEditor(hostNode, items, exercises = []) {
       // Vor JEDEM Eintrag ein Einfügepunkt (der letzte Platz — ganz am
       // Ende — bleibt den Steuerelementen unter der Liste vorbehalten,
       // die genau das schon immer getan haben).
-      rowsHost.appendChild(buildInsertPoint(items, i, exercises, { redraw: draw }));
+      rowsHost.appendChild(buildInsertPoint(items, i, exercises, { allowSection: true, redraw: draw }));
       const controls = entryControls(items, i, draw);
       if (entry.kind === 'block') {
         rowsHost.appendChild(buildBlockRow(entry, exercises, controls, updateTotal));
+      } else if (entry.kind === 'section') {
+        rowsHost.appendChild(buildSectionRow(entry, exercises, controls, updateTotal));
       } else {
         rowsHost.appendChild(buildSetRow(entry, exercises, controls, updateTotal));
       }
@@ -488,6 +586,7 @@ export function renderSetEditor(hostNode, items, exercises = []) {
   draw();
 
   const controls = buildAddControls(exercises, {
+    allowSection: true,
     style: 'margin-top:10px;flex-wrap:wrap',
     onAdd: (entry) => { items.push(entry); draw(); },
   });

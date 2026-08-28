@@ -878,6 +878,29 @@ describe('syncService.push — Fremdschlüssel-Eigentümerprüfung (Sicherheitsr
     },
   );
 
+  it('lehnt ein "templates"-Event mit einer exerciseId eines FREMDEN Vereins ab, verschachtelt in einem Abschnitt (sets[].entries[], auch innerhalb eines Blocks darin)', async () => {
+    const { service, gateway } = makeService();
+    const foreignExerciseId = 'cccccccc-0000-0000-0000-000000000003';
+    gateway.seed('exercises', {
+      id: foreignExerciseId, clubId: CLUB_B, name: 'Fremde Übung', category: 'kick', stroke: null,
+      description: '', defaultDistance: null, tags: [], equipment: [], comments: [], updatedAt: new Date(), deletedAt: null,
+    });
+    const now = new Date().toISOString();
+    const plainSet = { kind: 'set' as const, id: 'set-1', description: '', distance: null, reps: 1, intensity: '', restSec: 0, exerciseId: foreignExerciseId, comments: [] };
+    const payload = {
+      id: '99999999-8888-8888-8888-888888888884', clubId: CLUB_A, name: 'Vorlage', description: '', tags: [],
+      sets: [{ kind: 'section' as const, id: 'section-1', heading: 'Hauptteil', entries: [{ kind: 'block' as const, id: 'block-1', label: '', repeatCount: 2, sets: [plainSet] }] }],
+      createdAt: now, updatedAt: now,
+    };
+    const results = await service.push(
+      [{ id: 'evt-fk-foreign-exercise-section', store: 'templates', entityId: payload.id, action: 'create', payload, clientUpdatedAt: now }],
+      asTrainer(CLUB_A),
+    );
+    expect(results[0]!.status).toBe('error');
+    const stored = await gateway.findById('templates', payload.id);
+    expect(stored).toBeNull();
+  });
+
   it('akzeptiert eine exerciseId, die zu einer Übung des EIGENEN Vereins gehört (verschachtelt in "templates".sets[])', async () => {
     const { service, gateway } = makeService();
     const ownExerciseId = 'cccccccc-0000-0000-0000-000000000002';
@@ -1542,6 +1565,42 @@ describe('syncService.push — Kommentar-Autor:innen-Prüfung (Sicherheitsreview
       asTrainer(CLUB_A),
     );
     expect(nestedResults[0]!.status).toBe('error');
+  });
+
+  it('prüft Kommentare, die innerhalb eines Abschnitts (section) verschachtelt sind', async () => {
+    const { service } = makeService();
+    const payload = makePlanPayload({
+      id: '99999999-6666-6666-6666-666666666665',
+      days: [
+        {
+          date: new Date().toISOString(),
+          sets: [
+            {
+              kind: 'section',
+              id: 'sec1',
+              heading: 'Hauptteil',
+              entries: [
+                {
+                  kind: 'set',
+                  id: 's1',
+                  description: '',
+                  distance: 100,
+                  reps: 4,
+                  intensity: 'ga1',
+                  restSec: 20,
+                  comments: [{ id: 'set-c1', authorId: ADMIN_USER_ID, authorName: 'Fremd', text: 'Fremd zugeordnet (Abschnitt)', createdAt: new Date().toISOString() }],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    const results = await service.push(
+      [{ id: 'evt-m2-plan-section-spoof', store: 'plans', entityId: payload.id, action: 'create', payload, clientUpdatedAt: payload.updatedAt }],
+      asTrainer(CLUB_A),
+    );
+    expect(results[0]!.status).toBe('error');
   });
 
   it('akzeptiert Kommentare in Template.sets, wenn die authorId der eigenen Identität entspricht', async () => {

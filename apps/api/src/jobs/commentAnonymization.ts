@@ -96,10 +96,12 @@ export function anonymizeCommentArray(comments: unknown, author: DeletedCommentA
   return { changed, value };
 }
 
-// Eine einzelne SetEntry (PlainSet ODER RepeatBlock, siehe
+// Eine einzelne SetEntry (PlainSet, RepeatBlock ODER Section, siehe
 // SetEntrySchema): ein "set" trägt sein eigenes comments-Array direkt, ein
 // "block" enthält stattdessen eine verschachtelte sets-Liste (keine
-// verschachtelten Blöcke laut Schema) — dort rekursiv weitersuchen.
+// verschachtelten Blöcke laut Schema), eine "section" analog eine
+// entries-Liste (keine verschachtelten Abschnitte) — jeweils rekursiv
+// weitersuchen.
 function anonymizeSetEntry(entry: unknown, author: DeletedCommentAuthor): AnonymizeResult<unknown> {
   if (!isRecord(entry)) return { changed: false, value: entry };
   if (entry.kind === 'set') {
@@ -109,6 +111,10 @@ function anonymizeSetEntry(entry: unknown, author: DeletedCommentAuthor): Anonym
   if (entry.kind === 'block' && Array.isArray(entry.sets)) {
     const { changed, value: sets } = anonymizeSetEntries(entry.sets, author);
     return changed ? { changed: true, value: { ...entry, sets } } : { changed: false, value: entry };
+  }
+  if (entry.kind === 'section' && Array.isArray(entry.entries)) {
+    const { changed, value: entries } = anonymizeSetEntries(entry.entries, author);
+    return changed ? { changed: true, value: { ...entry, entries } } : { changed: false, value: entry };
   }
   return { changed: false, value: entry };
 }

@@ -44,6 +44,13 @@ function stripSetEntry(entry) {
       sets: (entry.sets || []).map(stripSetEntry),
     };
   }
+  if (entry.kind === 'section') {
+    return {
+      kind: 'section',
+      heading: entry.heading || '',
+      entries: (entry.entries || []).map(stripSetEntry),
+    };
+  }
   return {
     kind: 'set',
     description: entry.description || '',
@@ -95,6 +102,14 @@ function remapSetEntry(entry, idMap) {
       label: entry.label || '',
       repeatCount: entry.repeatCount || 1,
       sets: (entry.sets || []).map(s => remapSetEntry(s, idMap)),
+    };
+  }
+  if (entry?.kind === 'section') {
+    return {
+      kind: 'section',
+      id: localId('section'),
+      heading: entry.heading || '',
+      entries: (entry.entries || []).map(s => remapSetEntry(s, idMap)),
     };
   }
   return {
