@@ -16,7 +16,7 @@
 import * as api from './apiClient.js';
 import { setLocale, detectInitialLocale } from './i18n.js';
 import { IS_DEMO } from './demoMode.js';
-import { wipeAll, setClubIdProvider, get, put, clearStore } from './db.js';
+import { wipeAll, setClubIdProvider, get, put, clearStore, countAll, CLUB_SCOPED_STORES } from './db.js';
 import { resetCursor } from './syncClient.js';
 
 // Muss inhaltlich mit CURRENT_CONSENT_VERSION im Backend
@@ -39,6 +39,12 @@ export async function restoreSession() {
   if (!api.getStoredRefreshToken()) return null;
   try {
     const result = await api.refreshTokens();
+    // Sicherheitsreview 2026-08-29, Befund H1 — auch hier, nicht nur bei
+    // login(): dasselbe Gerät kann ein Refresh Token einer ANDEREN Person
+    // tragen als die zuletzt lokal gespeicherten Daten (z. B. wenn zwei
+    // Personen sich abwechselnd anmelden und eine davon den Tab nur
+    // geschlossen, nicht abgemeldet hat).
+    await ensureLocalStoreBelongsTo(result.user.id);
     await applyEnabledModules(result.enabledModules);
     current = { ...result.user, enabledModules: result.enabledModules };
     setLocale(current?.locale || detectInitialLocale());
@@ -97,6 +103,92 @@ const MODULE_STORES = {
 
 const ENABLED_MODULES_META_KEY = 'enabledModules';
 
+// Sicherheitsreview 2026-08-29, Befund H1: Schlüssel im 'meta'-Store, unter
+// dem die User-ID hinterlegt wird, zu der der aktuelle Inhalt der lokalen
+// IndexedDB gehört.
+//
+// Vorgeschichte: logout() unten räumt die lokale Ablage per wipeAll() auf
+// — genau dafür wurde es eingeführt. Es gibt aber mehrere Wege, auf denen
+// eine Sitzung endet, OHNE dass logout() je läuft:
+//   - restoreSession() schlägt fehl, weil das Refresh Token abgelaufen
+//     ist oder serverseitig widerrufen wurde (Passwort-/E-Mail-Wechsel auf
+//     einem anderen Gerät, Reuse-Detection in auth.service.ts: refresh(),
+//     Kontolöschung) — die Funktion räumt dann nur die Tokens weg und
+//     zeigt den Login-Bildschirm,
+//   - der Browser/das Gerät wird schlicht geschlossen und später von einer
+//     anderen Person geöffnet.
+// In beiden Fällen blieb der VOLLSTÄNDIGE gesynchte Vereinsbestand der
+// vorherigen Person in der IndexedDB liegen, und login() räumte ihn nicht
+// auf. Da alle Module ihre Daten über getAll(<store>) lesen — ohne jeden
+// clubId-/Rollenfilter, siehe db.js — bekam die NÄCHSTE angemeldete
+// Person diesen Altbestand vollständig angezeigt. Zwei Ausprägungen:
+//   - vereinsübergreifend: auf einem geteilten Gerät (Vereinsheim-Tablet,
+//     Poolrand-Gerät, ein die Vereine wechselnder Trainer) sah Verein B
+//     die Athlet:innen, Notizen, Pläne und Anwesenheiten von Verein A;
+//   - rollenübergreifend und praktisch näherliegend: meldet sich auf dem
+//     Tablet einer Trainerin anschließend eine Athlet:in an, sieht sie
+//     genau die Felder, die der Server für ihre Rolle gezielt redigiert
+//     (athletes.notes, sessions.trainerNote, fremde attendance-Zeilen,
+//     birthdate/gender/joinDate fremder Personen — siehe
+//     sync.athleteScope.ts). Die serverseitige Redaktion war damit lokal
+//     vollständig ausgehebelt.
+//
+// Fix: die lokale Ablage ist ab jetzt an GENAU EINE Identität gebunden.
+// Wechselt sie, wird vorher vollständig aufgeräumt. Bewusst an der
+// User-ID festgemacht, nicht an der clubId: auch ein Rollenwechsel
+// INNERHALB eines Vereins (Trainerin -> Athlet:in auf demselben Gerät)
+// ist genau der Fall, den die zweite Ausprägung oben beschreibt.
+const LOCAL_STORE_OWNER_META_KEY = 'localStoreOwner';
+
+// Liegen überhaupt fachliche (vereinsgebundene) Daten lokal? Wird nur für
+// den Sonderfall "kein Eigentümer vermerkt" unten gebraucht.
+async function hasLocalClubScopedData() {
+  for (const store of CLUB_SCOPED_STORES) {
+    if ((await countAll(store)) > 0) return true;
+  }
+  return false;
+}
+
+// Stellt sicher, dass die lokale Ablage zur übergebenen Person gehört —
+// andernfalls wird sie vollständig geleert. Muss VOR
+// applyEnabledModules() laufen (das schreibt selbst in 'meta', was
+// wipeAll() sonst gleich wieder verwerfen würde) und wird deshalb von
+// allen vier Stellen aufgerufen, an denen eine Identität NEU gesetzt
+// wird: restoreSession(), login(), acceptInvitation() und
+// resetPassword(). changePassword()/changeEmail() unten brauchen es
+// bewusst NICHT — dort ist die Person bereits angemeldet, die Identität
+// (user.id) ändert sich nicht, nur ihre Zugangsdaten.
+//
+// Kein vermerkter Eigentümer bedeutet "Herkunft unbekannt" — das trifft
+// sowohl ein fabrikneues Gerät (nichts zu verlieren) als auch eine
+// Installation aus der Zeit VOR dieser Korrektur (deren Bestand genau der
+// oben beschriebene, ungeklärte Altbestand ist). Deshalb wird auch dann
+// geleert, aber nur, wenn tatsächlich fachliche Daten vorliegen — der
+// Normalfall (frisches Gerät, leere Ablage) verliert dadurch nichts.
+//
+// Der Preis ist in beiden Fällen derselbe wie bei logout(): noch nicht
+// hochgeladene Offline-Änderungen der VORHERIGEN Person gehen verloren.
+// Das ist bewusst so gewählt — die Alternative wäre, fremde
+// personenbezogene Daten sichtbar zu lassen, und die Sync-Warteschlange
+// der vorherigen Person ist ohnehin nur mit deren Zugangsdaten
+// hochladbar (der Server weist jedes Event mit fremder clubId zurück,
+// siehe sync.service.ts: requireOwnClub).
+async function ensureLocalStoreBelongsTo(userId) {
+  const stored = await get('meta', LOCAL_STORE_OWNER_META_KEY);
+  const owner = stored?.userId ?? null;
+  if (owner === userId) return;
+
+  // wipeAll() leert ALLE Stores, 'meta' eingeschlossen (siehe STORES in
+  // db.js) — der Sync-Cursor verschwindet damit automatisch mit, ein
+  // zusätzlicher resetCursor() wäre wirkungslose Doppelung. Der nächste
+  // pull() startet dadurch ohne Cursor, zieht also den vollständigen
+  // Bestand des NEUEN Vereins — genau das Gewünschte.
+  if (owner !== null || (await hasLocalClubScopedData())) {
+    await wipeAll();
+  }
+  await put('meta', { id: LOCAL_STORE_OWNER_META_KEY, userId });
+}
+
 // Sicherheitsreview 2026-08-27, Befund N5: enabledModules kommt bei jeder
 // hier unten aufgerufenen Stelle (Login, Sitzungswiederherstellung,
 // Passwort-/E-Mail-Wechsel, Profil-Aktualisierung — überall dort liefert
@@ -134,6 +226,10 @@ async function applyEnabledModules(nextModules) {
 
 export async function login(email, password, consent) {
   const user = await api.login({ email, password, consent });
+  // Sicherheitsreview 2026-08-29, Befund H1 — siehe
+  // ensureLocalStoreBelongsTo(): räumt die lokale Ablage auf, falls sie
+  // noch einer anderen Person gehört.
+  await ensureLocalStoreBelongsTo(user.id);
   await applyEnabledModules(user.enabledModules);
   current = user;
   setLocale(user.locale || detectInitialLocale());
@@ -143,6 +239,10 @@ export async function login(email, password, consent) {
 
 export async function acceptInvitation(token, name, password, consent) {
   const user = await api.acceptInvitation({ token, name, password, consent });
+  // Sicherheitsreview 2026-08-29, Befund H1 — siehe
+  // ensureLocalStoreBelongsTo(): räumt die lokale Ablage auf, falls sie
+  // noch einer anderen Person gehört.
+  await ensureLocalStoreBelongsTo(user.id);
   await applyEnabledModules(user.enabledModules);
   current = user;
   setLocale(user.locale || detectInitialLocale());
@@ -156,6 +256,10 @@ export async function acceptInvitation(token, name, password, consent) {
 // apiClient.js: resetPassword()).
 export async function resetPassword(token, newPassword) {
   const user = await api.resetPassword({ token, newPassword });
+  // Sicherheitsreview 2026-08-29, Befund H1 — siehe
+  // ensureLocalStoreBelongsTo(): räumt die lokale Ablage auf, falls sie
+  // noch einer anderen Person gehört.
+  await ensureLocalStoreBelongsTo(user.id);
   await applyEnabledModules(user.enabledModules);
   current = user;
   setLocale(user.locale || detectInitialLocale());

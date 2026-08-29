@@ -538,17 +538,31 @@ server {
     # siehe `deployment.md`, Abschnitt 9 für die ausführliche Begründung
     # (u. a. warum `style-src 'unsafe-inline'` hier ein bewusster,
     # dokumentierter Kompromiss ist).
+
+    # Sicherheitsreview 2026-08-29, Befund N2: HSTS/nosniff/Referrer-Policy
+    # ergänzt — siehe docs/deployment.md, Abschnitt 9 für die ausführliche
+    # Begründung (Helmet in apps/api deckt nur die JSON-Antworten der API
+    # ab, nicht die hier statisch ausgelieferte Weboberfläche).
     set $csp "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; worker-src 'self'; manifest-src 'self'";
+    set $hsts "max-age=31536000; includeSubDomains";
+    set $nosniff "nosniff";
+    set $referrer_policy "strict-origin-when-cross-origin";
 
     location / {
         try_files $uri $uri/ /index.html;
         add_header Content-Security-Policy $csp always;
+        add_header Strict-Transport-Security $hsts always;
+        add_header X-Content-Type-Options $nosniff always;
+        add_header Referrer-Policy $referrer_policy always;
     }
 
     # Service Worker & Manifest müssen exakt korrekt ausgeliefert werden
     location = /sw.js {
         add_header Cache-Control "no-cache";
         add_header Content-Security-Policy $csp always;
+        add_header Strict-Transport-Security $hsts always;
+        add_header X-Content-Type-Options $nosniff always;
+        add_header Referrer-Policy $referrer_policy always;
     }
 
     # API-Anfragen an das Node.js-Backend weiterleiten

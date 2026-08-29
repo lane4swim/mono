@@ -9,6 +9,7 @@
 //     — POST /auth/register verlangt zwingend ein Einladungs-Token.
 import { z } from 'zod';
 import { MODULE_KEYS, ModuleKeySchema } from './modules.js';
+import { NormalizedEmailSchema } from './user.js';
 
 export const ClubSchema = z.object({
   id: z.string().uuid(),
@@ -45,7 +46,12 @@ export type ClubWithCounts = z.infer<typeof ClubWithCountsSchema>;
 // E-Mail-Betreff geschrieben (siehe mail/mailer.ts).
 export const CreateClubRequestSchema = z.object({
   name: z.string().min(1).max(200),
-  adminEmail: z.string().email(),
+  // Sicherheitsreview 2026-08-29, Befund M2 — siehe NormalizedEmailSchema
+  // (packages/shared-types/src/user.ts): die hier erfasste Adresse landet
+  // unverändert in der Einladung und später als `User.email`; eine
+  // versehentlich groß geschriebene Eingabe sperrte die eingeladene
+  // Person sonst dauerhaft aus.
+  adminEmail: NormalizedEmailSchema,
   adminName: z.string().min(1).max(200),
   // Default: alle Module aktiv — das Anlegen-Formular (clubForm.js) schickt
   // dieses Feld zwar immer explizit, andere/künftige Aufrufer sollen aber
@@ -65,7 +71,9 @@ export const InvitationRoleSchema = z.enum(['admin', 'trainer', 'athlete']);
 export type InvitationRole = z.infer<typeof InvitationRoleSchema>;
 
 export const CreateInvitationRequestSchema = z.object({
-  email: z.string().email(),
+  // Sicherheitsreview 2026-08-29, Befund M2 — siehe CreateClubRequestSchema
+  // oben bzw. NormalizedEmailSchema (packages/shared-types/src/user.ts).
+  email: NormalizedEmailSchema,
   role: InvitationRoleSchema,
   // Pflicht, wenn ein:e Superadmin eine:n Admin für einen bestehenden Verein
   // einlädt. Für Admin-Nutzer:innen, die Trainer:innen/Athlet:innen

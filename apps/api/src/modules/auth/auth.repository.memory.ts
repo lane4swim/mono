@@ -21,9 +21,16 @@ import type {
 export class InMemoryUserRepository implements UserRepository {
   private usersById = new Map<string, UserRecord>();
 
+  // Sicherheitsreview 2026-08-29, Befund M2: vergleicht — wie
+  // PrismaUserRepository.findByEmail() (dort per `mode: 'insensitive'`,
+  // siehe dessen Kommentar für die Begründung) — ohne Rücksicht auf
+  // Groß-/Kleinschreibung. Ein zeichengenauer Vergleich hier würde dieses
+  // Double von der echten Implementierung entkoppeln und könnte eine
+  // Regression durchwinken, die in Produktion längst ausgeschlossen ist.
   async findByEmail(email: string): Promise<UserRecord | null> {
+    const needle = email.toLowerCase();
     for (const user of this.usersById.values()) {
-      if (user.email === email && !user.deletedAt) return { ...user };
+      if (user.email.toLowerCase() === needle && !user.deletedAt) return { ...user };
     }
     return null;
   }

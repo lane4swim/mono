@@ -528,13 +528,24 @@ export function createAuthService(deps: AuthServiceDeps) {
       if (!currentPasswordOk) throw new InvalidCurrentPasswordError();
 
       // Schneller, klarer Vorab-Check für den häufigen Fall (Adresse
-      // gehört zu einem AKTIVEN Konto) — spart Passwort-Hashing-Aufwand
-      // und einen DB-Schreibversuch, der ohnehin scheitern würde. Kein
-      // Konflikt mit sich selbst (unverändert beibehaltene eigene Adresse).
-      if (newEmail !== user.email) {
-        const emailTaken = await deps.users.findByEmail(newEmail);
-        if (emailTaken) throw new EmailAlreadyRegisteredError();
-      }
+      // gehört zu einem AKTIVEN Konto) — spart einen DB-Schreibversuch,
+      // der ohnehin scheitern würde.
+      //
+      // Sicherheitsreview 2026-08-29, Befund M2: die Prüfung schließt
+      // jetzt das EIGENE Konto explizit aus (`emailTaken.id !== userId`),
+      // statt vorab `newEmail !== user.email` zu vergleichen. Zwei Gründe,
+      // beide Folge der Normalisierung/des case-insensitiven Abgleichs:
+      //   - findByEmail() findet seit Befund M2 auch die eigene, in
+      //     abweichender Schreibweise gespeicherte Adresse — der frühere
+      //     Zeichenvergleich hätte „Anna@verein.de" -> „anna@verein.de"
+      //     (die Normalisierung der EIGENEN Adresse) fälschlich als
+      //     „bereits vergeben" abgelehnt.
+      //   - Der Vergleich `newEmail !== user.email` war ohnehin
+      //     zeichengenau und hätte eine reine Schreibweisen-Änderung als
+      //     echten Wechsel behandelt.
+      // Der Aufwand bleibt identisch: eine Abfrage in beiden Fällen.
+      const emailTaken = await deps.users.findByEmail(newEmail);
+      if (emailTaken && emailTaken.id !== userId) throw new EmailAlreadyRegisteredError();
 
       let updated: UserRecord;
       try {

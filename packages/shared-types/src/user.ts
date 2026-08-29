@@ -18,6 +18,43 @@ export type Role = z.infer<typeof RoleSchema>;
 export const LocaleSchema = z.enum(['de-DE', 'en-US']);
 export type Locale = z.infer<typeof LocaleSchema>;
 
+// Sicherheitsreview 2026-08-29, Befund M2: E-Mail-Adressen wurden an
+// KEINER Stelle normalisiert. `User.email` trägt in PostgreSQL ein
+// `@unique` (siehe schema.prisma), und dessen Vergleich ist
+// zeichengenau — „Anna@verein.de" und „anna@verein.de" waren dadurch
+// zwei verschiedene Adressen. Drei konkrete Folgen:
+//
+//   1. Anmelde-Sackgasse: wer bei der Einladung als „Anna@verein.de"
+//      erfasst wurde und sich später als „anna@verein.de" anmeldet,
+//      bekommt „E-Mail-Adresse oder Passwort ist ungültig" — richtige
+//      Zugangsdaten, kein Hinweis auf die Ursache.
+//   2. Stille Sackgasse bei „Passwort vergessen": der Endpunkt antwortet
+//      aus gutem Grund IMMER generisch (verhindert User-Enumeration,
+//      siehe auth.service.ts: requestPasswordReset()) — eine
+//      Schreibweisen-Abweichung ist von „Konto existiert nicht" also
+//      nicht unterscheidbar, es kommt schlicht nie eine E-Mail an.
+//   3. Doppelkonten: die Duplikat-Prüfungen in acceptInvitation() und
+//      changeEmail() (beide über UserRepository.findByEmail()) ließen
+//      sich durch eine abweichende Groß-/Kleinschreibung umgehen — für
+//      EIN reales Postfach konnten zwei Konten mit unterschiedlichen
+//      Rollen entstehen.
+//
+// Diese Schema-Ebene deckt Punkt (1) bis (3) für alle NEUEN Eingaben ab
+// (`.trim().toLowerCase()` laufen als Zod-String-Checks in der hier
+// notierten Reihenfolge, also VOR der `.email()`-Prüfung). Bereits
+// gespeicherte Adressen in gemischter Schreibweise bleiben davon
+// unberührt — deshalb ist der Abgleich in
+// PrismaUserRepository.findByEmail() zusätzlich case-insensitiv
+// (`mode: 'insensitive'`), statt hier eine Datenmigration zu erzwingen,
+// die an genau den Doppelkonten aus (3) scheitern könnte.
+//
+// BEWUSST nur für EINGABE-Schemas (Login, „Passwort vergessen",
+// E-Mail-Wechsel, Einladungen) — nicht für die Ausgabe-Schemas
+// (UserSchema.email unten, InvitationSummarySchema, …): die beschreiben,
+// was der Server LIEFERT, und dürfen einen bereits gespeicherten Wert
+// nicht nachträglich umschreiben.
+export const NormalizedEmailSchema = z.string().trim().toLowerCase().email();
+
 export const UserSchema = z.object({
   id: z.string().uuid(),
   // null nur für role === 'superadmin' — jede andere Rolle gehört genau

@@ -31,12 +31,22 @@ const { fakeDb, clearStoreCalls, resetCursorMock } = vi.hoisted(() => ({
   resetCursorMock: vi.fn(),
 }));
 
+// countAll()/CLUB_SCOPED_STORES kamen mit Sicherheitsreview 2026-08-29,
+// Befund H1 dazu (state.js: ensureLocalStoreBelongsTo()) — beide werden
+// hier über denselben `fakeDb` bedient, damit dieser Test weiterhin
+// ausschließlich das Modul-Abbestellungs-Verhalten prüft und nicht
+// nebenbei am neuen Eigentümer-Wächter scheitert.
 vi.mock('../js/db.js', () => ({
   wipeAll: vi.fn(async () => { fakeDb.clear(); }),
   setClubIdProvider: vi.fn(),
   get: vi.fn(async (store, id) => fakeDb.get(`${store}:${id}`) ?? null),
   put: vi.fn(async (store, obj) => { fakeDb.set(`${store}:${obj.id}`, obj); return obj; }),
   clearStore: vi.fn(async (store) => { clearStoreCalls.push(store); }),
+  countAll: vi.fn(async (store) => [...fakeDb.keys()].filter((k) => k.startsWith(`${store}:`)).length),
+  CLUB_SCOPED_STORES: new Set([
+    'athletes', 'groups', 'competitions', 'entries', 'results',
+    'exercises', 'templates', 'plans', 'sessions', 'actionItems',
+  ]),
 }));
 
 vi.mock('../js/syncClient.js', () => ({ resetCursor: resetCursorMock }));
