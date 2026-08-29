@@ -79,7 +79,7 @@ Sollte von `127.0.0.1` antworten.
 brew install node@22 postgresql@16 nginx git mkcert nss
 ```
 
-- **`node@22`** — passend zur in `apps/api/package.json`/`package.json` geforderten Node-Version (`>=22.0.0`), gleiche Major-Version wie in den anderen beiden Anleitungen.
+- **`node@22`** — passend zur in `apps/api/package.json`/`package.json` geforderten Node-Version (`>=22.9.0` — `--env-file-if-exists`, siehe Sicherheitsreview 2026-08-28, Befund N2), gleiche Major-Version wie in den anderen beiden Anleitungen.
 - **`postgresql@16`** — passend zu Ubuntu 24.04 (Hetzner-Anleitung) und aktuellem Raspberry Pi OS; die PostgreSQL-15+-Schema-Rechte-Besonderheit (siehe Abschnitt 6) betrifft diese Version genauso.
 - **`nginx`** — liefert die Weboberfläche aus und leitet API-Anfragen weiter, wie bei den anderen beiden Anleitungen.
 - **`mkcert`** (+ `nss`, falls auch Firefox getestet werden soll) — erzeugt ein lokal vertrauenswürdiges HTTPS-Zertifikat, siehe Abschnitt 10.
@@ -277,12 +277,12 @@ Baut dabei automatisch auch die gemeinsamen Pakete (`packages/shared-types`, `pa
 
 ## 8. Backend mit PM2 starten
 
-`--node-args="--env-file=.env"` ist **Pflicht** — siehe `deployment.md`,
+`--node-args="--env-file-if-exists=.env"` ist **Pflicht** — siehe `deployment.md`,
 Abschnitt 8 (Sicherheitsreview 2026-08-28, Befund N2): ohne dieses Flag
 lädt der Prozess `apps/api/.env` nicht und stürzt sofort ab:
 ```bash
 cd apps/api
-pm2 start dist/index.js --name lane1-api --node-args="--env-file=.env"
+pm2 start dist/index.js --name lane1-api --node-args="--env-file-if-exists=.env"
 pm2 save
 pm2 startup
 ```

@@ -442,7 +442,7 @@ npm run build --workspace=apps/api
 
 ## 8. Backend mit PM2 starten (sobald vorhanden)
 
-`--node-args="--env-file=.env"` ist **Pflicht** (Sicherheitsreview
+`--node-args="--env-file-if-exists=.env"` ist **Pflicht** (Sicherheitsreview
 2026-08-28, Befund N2): Weder `apps/api/src/config/env.ts` noch der
 laufende Server laden `apps/api/.env` von sich aus — ohne dieses Flag
 stürzt der Prozess sofort mit „DATABASE_URL: Required" ab, obwohl die
@@ -450,7 +450,7 @@ Datei direkt daneben liegt (empirisch geprüft: `pm2 start dist/index.js`
 ohne dieses Flag lädt `.env` nicht, mit dem Flag funktioniert es):
 ```bash
 cd apps/api
-pm2 start dist/index.js --name lane1-api --node-args="--env-file=.env"
+pm2 start dist/index.js --name lane1-api --node-args="--env-file-if-exists=.env"
 pm2 save
 pm2 startup
 ```
@@ -721,7 +721,7 @@ crontab -e
 Folgende Zeile ergänzen (läuft täglich um 4:00 Uhr, also nach dem
 Datenbank-Backup aus 12.1):
 ```
-0 4 * * * cd /home/deploy/lane1/apps/api && /home/deploy/lane1/node_modules/.bin/tsx --env-file=.env scripts/purgeDeletedData.ts >> /home/deploy/backups/purge.log 2>&1
+0 4 * * * cd /home/deploy/lane1/apps/api && /home/deploy/lane1/node_modules/.bin/tsx --env-file-if-exists=.env scripts/purgeDeletedData.ts >> /home/deploy/backups/purge.log 2>&1
 ```
 > **Warum nicht `npm run purge-deleted-data`?** `cron` startet mit einer
 > minimalen `PATH`-Umgebung, in der `npm` typischerweise nicht zuverlässig
@@ -735,7 +735,7 @@ Datenbank-Backup aus 12.1):
 > bricht mit `ERR_MODULE_NOT_FOUND` ab; `tsx` übernimmt genau diese
 > Auflösung zusätzlich zum reinen Type-Stripping.
 >
-> **Warum `--env-file=.env`?** (Sicherheitsreview 2026-08-28, Befund N2)
+> **Warum `--env-file-if-exists=.env`?** (Sicherheitsreview 2026-08-28, Befund N2)
 > Weder `apps/api/src/config/env.ts` noch die direkt instanziierte
 > `PrismaClient` in `purgeDeletedData.ts` laden `apps/api/.env` von sich
 > aus — ohne dieses Flag bricht der Cronjob sofort mit „DATABASE_URL:

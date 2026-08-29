@@ -10,11 +10,11 @@
   },
   "scripts": {
     "predev": "cd ../../packages/sync-protocol && npm run build",
-    "dev": "tsx watch --env-file=.env src/index.ts",
+    "dev": "tsx watch --env-file-if-exists=.env src/index.ts",
     "prebuild": "cd ../../packages/sync-protocol && npm run build",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.typecheck.json",
-    "start": "node --env-file=.env dist/index.js",
+    "start": "node --env-file-if-exists=.env dist/index.js",
     "pretest": "cd ../../packages/sync-protocol && npm run build",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -25,8 +25,8 @@
     "prisma:validate": "prisma validate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "prisma db seed",
-    "create-superadmin": "tsx --env-file=.env scripts/createSuperAdmin.ts",
-    "purge-deleted-data": "tsx --env-file=.env scripts/purgeDeletedData.ts"
+    "create-superadmin": "tsx --env-file-if-exists=.env scripts/createSuperAdmin.ts",
+    "purge-deleted-data": "tsx --env-file-if-exists=.env scripts/purgeDeletedData.ts"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.1",

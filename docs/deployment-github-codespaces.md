@@ -301,12 +301,12 @@ Baut dabei automatisch auch die gemeinsamen Pakete (`packages/shared-types`, `pa
 
 ## 9. Backend mit PM2 starten
 
-`--node-args="--env-file=.env"` ist **Pflicht** (Sicherheitsreview
+`--node-args="--env-file-if-exists=.env"` ist **Pflicht** (Sicherheitsreview
 2026-08-28, Befund N2): ohne dieses Flag lädt der Prozess
 `apps/api/.env` nicht und stürzt sofort mit „DATABASE_URL: Required" ab:
 ```bash
 cd apps/api
-pm2 start dist/index.js --name lane1-api --node-args="--env-file=.env"
+pm2 start dist/index.js --name lane1-api --node-args="--env-file-if-exists=.env"
 cd ../..
 ```
 Kontrolle:
@@ -452,9 +452,9 @@ Ein Codespace hält **automatisch nach 30 Minuten Inaktivität** an (einstellbar
 ```bash
 sudo service postgresql start
 sudo service nginx start
-cd apps/api && pm2 start dist/index.js --name lane1-api --node-args="--env-file=.env" ; cd ../..
+cd apps/api && pm2 start dist/index.js --name lane1-api --node-args="--env-file-if-exists=.env" ; cd ../..
 ```
-(`pm2 start` mit demselben `--name` ist unproblematisch, falls der Prozess aus einer vorigen Sitzung noch als „gestoppt" gelistet ist — PM2 startet ihn dann einfach neu. `--node-args="--env-file=.env"` erneut nötig — siehe Abschnitt 9, Befund N2 — da dieser Aufruf den Prozess unabhängig neu startet, nicht über ein gespeichertes `pm2 save`.)
+(`pm2 start` mit demselben `--name` ist unproblematisch, falls der Prozess aus einer vorigen Sitzung noch als „gestoppt" gelistet ist — PM2 startet ihn dann einfach neu. `--node-args="--env-file-if-exists=.env"` erneut nötig — siehe Abschnitt 9, Befund N2 — da dieser Aufruf den Prozess unabhängig neu startet, nicht über ein gespeichertes `pm2 save`.)
 
 Manuell anhalten (statt auf die 30-Minuten-Grenze zu warten, z. B. am Ende eines Testtages) über die Codespaces-Übersicht: **github.com/codespaces** → bei der jeweiligen Zeile auf die drei Punkte → **„Stop codespace"**.
 

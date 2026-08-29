@@ -469,12 +469,12 @@ Baut dabei automatisch auch die gemeinsamen Pakete (`packages/shared-types`, `pa
 
 ## 8. Backend mit PM2 starten
 
-`--node-args="--env-file=.env"` ist **Pflicht** — siehe `deployment.md`,
+`--node-args="--env-file-if-exists=.env"` ist **Pflicht** — siehe `deployment.md`,
 Abschnitt 8 (Sicherheitsreview 2026-08-28, Befund N2): ohne dieses Flag
 lädt der Prozess `apps/api/.env` nicht und stürzt sofort ab:
 ```bash
 cd apps/api
-pm2 start dist/index.js --name lane1-api --node-args="--env-file=.env"
+pm2 start dist/index.js --name lane1-api --node-args="--env-file-if-exists=.env"
 pm2 save
 pm2 startup
 ```
@@ -737,7 +737,7 @@ crontab -e
 Folgende Zeile ergänzen (läuft täglich um 4:00 Uhr, also nach dem
 Datenbank-Backup aus 12.1):
 ```
-0 4 * * * cd /home/deploy/lane1/apps/api && /home/deploy/lane1/node_modules/.bin/tsx --env-file=.env scripts/purgeDeletedData.ts >> /home/deploy/backups/purge.log 2>&1
+0 4 * * * cd /home/deploy/lane1/apps/api && /home/deploy/lane1/node_modules/.bin/tsx --env-file-if-exists=.env scripts/purgeDeletedData.ts >> /home/deploy/backups/purge.log 2>&1
 ```
 > **Warum nicht `npm run purge-deleted-data`?** `cron` startet mit einer
 > minimalen `PATH`-Umgebung, in der `npm` typischerweise nicht zuverlässig
@@ -751,7 +751,7 @@ Datenbank-Backup aus 12.1):
 > `ERR_MODULE_NOT_FOUND` ab; `tsx` übernimmt genau diese Auflösung
 > zusätzlich zum reinen Type-Stripping.
 >
-> **Warum `--env-file=.env`?** Siehe `deployment.md`, Abschnitt 12.1
+> **Warum `--env-file-if-exists=.env`?** Siehe `deployment.md`, Abschnitt 12.1
 > (Sicherheitsreview 2026-08-28, Befund N2) — ohne dieses Flag bricht der
 > Cronjob sofort mit „DATABASE_URL: Required" ab.
 

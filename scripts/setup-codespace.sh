@@ -77,8 +77,10 @@ sudo service postgresql start
 # NUR Lese-/Schreibrechte auf Zeilenebene, keine DDL-Rechte — ein zur
 # Laufzeit erlangter Datenbankzugriff kann dadurch keine Tabellen mehr
 # anlegen, ändern oder löschen.
+MIGRATOR_ROLE_CREATED=0
 if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='${DB_MIGRATOR_USER}'" | grep -q 1; then
   sudo -u postgres psql -c "CREATE USER ${DB_MIGRATOR_USER} WITH ENCRYPTED PASSWORD '${DB_MIGRATOR_PASSWORD}';"
+  MIGRATOR_ROLE_CREATED=1
 else
   echo "  Rolle ${DB_MIGRATOR_USER} existiert bereits — Passwort bleibt unverändert."
 fi
@@ -113,10 +115,19 @@ sudo -u postgres psql -d "${DB_NAME}" -c "ALTER DEFAULT PRIVILEGES FOR ROLE ${DB
 # einer künftigen manuellen `prisma migrate deploy` (z. B. nach einer
 # neuen, per `git pull` hinzugekommenen Migration) wiederauffindbar
 # bleiben, ohne dass ein Blick in die Skript-Ausgabe dieses einen Laufs
-# nötig ist. Unbedingt (nicht nur bei Neuanlage) — hält die Datei auch bei
-# einem erneuten Lauf mit unverändertem Passwort aktuell.
+# nötig ist.
+#
+# NUR schreiben, wenn die Rolle in DIESEM Lauf tatsächlich neu angelegt
+# wurde: ${DB_MIGRATOR_PASSWORD} ist sonst ein frisch gewürfelter Wert,
+# der nie in die Datenbank geschrieben wurde (der else-Zweig oben lässt
+# das bestehende Passwort bewusst unverändert). Ein unbedingtes
+# Überschreiben hinterließe nach jedem Wiederholungslauf eine Datei mit
+# einem Passwort, das schlicht nicht funktioniert — genau die Art
+# stillschweigender Zugangsdaten-Vertauschung, die dieses Skript für
+# apps/api/.env ausdrücklich vermeidet (siehe Kopfkommentar oben).
 MIGRATOR_ENV_FILE="apps/api/.env.migrate"
-cat >"$MIGRATOR_ENV_FILE" <<EOF
+if [[ "$MIGRATOR_ROLE_CREATED" == "1" ]]; then
+  cat >"$MIGRATOR_ENV_FILE" <<EOF
 # apps/api/.env.migrate — NICHT von der Anwendung oder von Prisma
 # automatisch gelesen (nur "apps/api/.env" wird automatisch geladen).
 # Ausschließlich zum manuellen Nachschlagen für ein künftiges
@@ -124,7 +135,21 @@ cat >"$MIGRATOR_ENV_FILE" <<EOF
 # Schritt 7 bzw. docs/deployment-github-codespaces.md, Abschnitt 7.
 MIGRATE_DATABASE_URL="postgresql://${DB_MIGRATOR_USER}:${DB_MIGRATOR_PASSWORD}@localhost:5432/${DB_NAME}"
 EOF
-chmod 600 "$MIGRATOR_ENV_FILE"
+  chmod 600 "$MIGRATOR_ENV_FILE"
+elif [[ -f "$MIGRATOR_ENV_FILE" ]]; then
+  # Rolle bestand bereits UND die Datei aus dem damaligen Lauf ist noch da
+  # — unverändert lassen, sie trägt weiterhin das tatsächlich gültige
+  # Passwort. Rechte trotzdem nachziehen (analog zu apps/api/.env unten),
+  # falls die Datei aus einer Version vor dieser Korrektur stammt.
+  chmod 600 "$MIGRATOR_ENV_FILE"
+  echo "  $MIGRATOR_ENV_FILE existiert bereits — wird nicht überschrieben."
+else
+  echo "  Hinweis: Rolle ${DB_MIGRATOR_USER} existiert bereits, aber $MIGRATOR_ENV_FILE fehlt —" >&2
+  echo "  das gültige Passwort ist diesem Lauf nicht bekannt und wird daher NICHT geraten." >&2
+  echo "  Für ein künftiges 'prisma migrate deploy' entweder das alte Passwort verwenden oder" >&2
+  echo "  ein neues setzen:" >&2
+  echo "    sudo -u postgres psql -c \"ALTER USER ${DB_MIGRATOR_USER} WITH ENCRYPTED PASSWORD '<neues-passwort>';\"" >&2
+fi
 
 # --- Schritt 4.3: Nginx ------------------------------------------------------
 log "Schritt 4.3: Nginx installieren (Konfiguration folgt erst in Schritt 10)"
@@ -251,7 +276,7 @@ log "Schritt 8: Backend bauen (inkl. packages/shared-types, packages/sync-protoc
 npm run build --workspace=apps/api
 
 # --- Schritt 9: Backend mit PM2 starten ---------------------------------------
-# Sicherheitsreview 2026-08-28, Befund N2: --node-args="--env-file=.env"
+# Sicherheitsreview 2026-08-28, Befund N2: --node-args="--env-file-if-exists=.env"
 # ist Pflicht — weder config/env.ts noch der laufende Server laden
 # apps/api/.env von sich aus; ohne dieses Flag stürzt der Prozess sofort
 # mit "DATABASE_URL: Required" ab (empirisch geprüft). Nur beim
@@ -263,7 +288,7 @@ if pm2 describe lane1-api >/dev/null 2>&1; then
   echo "  Prozess lane1-api läuft bereits unter PM2 — wird neu gestartet."
   (cd apps/api && pm2 restart lane1-api)
 else
-  (cd apps/api && pm2 start dist/index.js --name lane1-api --node-args="--env-file=.env")
+  (cd apps/api && pm2 start dist/index.js --name lane1-api --node-args="--env-file-if-exists=.env")
 fi
 pm2 status
 

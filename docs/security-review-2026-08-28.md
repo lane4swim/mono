@@ -529,7 +529,15 @@ sowie in `scripts/setup-codespace.sh`. Das dort automatisch erzeugte
 die Anwendung selbst), sondern in einer neuen, `chmod 600`-geschützten
 `apps/api/.env.migrate` — ausschließlich zum manuellen Nachschlagen für
 eine künftige manuelle `prisma migrate deploy`, von nichts automatisch
-gelesen, per `.gitignore` ausgeschlossen.
+gelesen, per `.gitignore` ausgeschlossen. Diese Datei wird bewusst NUR
+geschrieben, wenn die Rolle in genau diesem Lauf neu angelegt wurde:
+`DB_MIGRATOR_PASSWORD` ist sonst ein frisch gewürfelter Wert, der nie in
+die Datenbank gelangt ist (der „Rolle existiert bereits"-Zweig lässt das
+Passwort unverändert) — ein unbedingtes Überschreiben hinterließe nach
+jedem Wiederholungslauf eine Datei mit einem Passwort, das schlicht
+nicht funktioniert. Existiert die Rolle bereits und die Datei fehlt,
+rät das Skript nicht, sondern weist auf `ALTER USER … WITH ENCRYPTED
+PASSWORD` hin.
 
 Verifiziert gegen eine echte, lokal aufgesetzte PostgreSQL-16-Instanz:
 `lane1_migrator` wendet `prisma migrate deploy` erfolgreich an;
@@ -540,7 +548,11 @@ Verifiziert gegen eine echte, lokal aufgesetzte PostgreSQL-16-Instanz:
 Rechtevergabe neu angelegte Tabelle (simuliert eine künftige Migration)
 ist für `lane1_app` ohne jeden weiteren manuellen Grant sofort
 lese-/schreibbar, aber ebenso wenig änderbar — bestätigt, dass `ALTER
-DEFAULT PRIVILEGES` wie vorgesehen greift.
+DEFAULT PRIVILEGES` wie vorgesehen greift. Zusätzlich wurden zwei
+aufeinanderfolgende Skriptläufe gegen dieselbe Instanz durchgespielt
+(der dokumentierte Wiederholungsfall): die Zugangsdaten in
+`apps/api/.env.migrate` authentifizieren sich danach weiterhin
+erfolgreich, die Datei behält Modus `600`.
 
 ### N2 — Kein `.env`-Loader im Laufzeitpfad des Servers — **behoben**
 
@@ -589,35 +601,56 @@ haben nie eine `.env`-Datei gebraucht und sind vom Befund unberührt.
 
 **Empfehlung.** Den Startweg einmal am realen Deployment nachvollziehen
 und das Ergebnis in der Dokumentation festhalten — entweder durch
-`node --env-file=.env dist/index.js` bzw. eine PM2-Ecosystem-Datei, oder
+`node --env-file-if-exists=.env dist/index.js` bzw. eine
+PM2-Ecosystem-Datei, oder
 durch eine ausdrückliche Notiz, wie die Variablen in die Prozessumgebung
 gelangen.
 
-**Fix.** Node ≥ 20.6 unterstützt `--env-file` nativ (kein zusätzliches
-`dotenv`-Paket nötig) — empirisch bestätigt: `--env-file` überschreibt
-niemals einen bereits gesetzten echten Prozess-Umgebungswert (Standard-
-dotenv-Semantik), bricht aber hart ab, wenn die angegebene Datei fehlt.
-Beides passt genau auf die vier dokumentierten Deployments (`.env`
-garantiert vorhanden, sobald dieser Schritt erreicht wird) und lässt den
-Docker-Compose-Weg unberührt (der ruft `node dist/index.js` nie über
-diese `package.json`-Skripte auf). Umgesetzt:
+**Fix.** Node unterstützt das Laden einer `.env`-Datei nativ (kein
+zusätzliches `dotenv`-Paket nötig). Verwendet wird bewusst
+`--env-file-if-exists` (Node ≥ 22.9) statt `--env-file` (Node ≥ 20.6):
 
-- `apps/api/package.json`: `dev` (`tsx watch --env-file=.env
-  src/index.ts`), `start` (`node --env-file=.env dist/index.js`),
-  `create-superadmin` und `purge-deleted-data` (beide `tsx
-  --env-file=.env …`) tragen das Flag jetzt fest.
+- Gemeinsam: beide überschreiben NIEMALS einen bereits gesetzten echten
+  Prozess-Umgebungswert (Standard-dotenv-Semantik, empirisch bestätigt)
+  — die per Compose/CI direkt injizierten Variablen behalten also in
+  jedem Fall Vorrang.
+- Unterschied: `--env-file` bricht hart ab (`node: .env: not found`),
+  wenn die Datei fehlt. Das wäre eine **Regression** gegenüber dem
+  Zustand vor diesem Fix: ein Lauf ganz ohne `.env`, aber mit echten,
+  exportierten Umgebungsvariablen (CI, Container, bewusst
+  dateiloser Betrieb) funktionierte vorher einwandfrei und hätte danach
+  nur noch mit „not found" abgebrochen — empirisch nachgestellt.
+  `--env-file-if-exists` lädt die Datei, wenn sie da ist, und läuft
+  sonst normal weiter; fehlt die Konfiguration dann tatsächlich, greift
+  weiterhin die klare Meldung aus `config/env.ts`
+  („`DATABASE_URL: Required`"). Die Variante ist damit strikt additiv:
+  sie behebt N2, ohne irgendeinen zuvor funktionierenden Weg zu brechen.
+- Weil `--env-file-if-exists` Node ≥ 22.9 voraussetzt, ist
+  `engines.node` in der Wurzel-`package.json` von `>=22.0.0` auf
+  `>=22.9.0` angehoben (alle vier Anleitungen installieren ohnehin das
+  jeweils aktuelle Node 22.x; `deployment-macos.md` nennt die Version
+  jetzt entsprechend) — besser eine explizite Anforderung als ein
+  kryptisches „bad option" auf einem alten 22.0–22.8.
+
+Umgesetzt:
+
+- `apps/api/package.json`: `dev` (`tsx watch --env-file-if-exists=.env
+  src/index.ts`), `start` (`node --env-file-if-exists=.env
+  dist/index.js`), `create-superadmin` und `purge-deleted-data` (beide
+  `tsx --env-file-if-exists=.env …`) tragen das Flag jetzt fest.
 - Alle fünf `pm2 start dist/index.js`-Stellen (vier Deployment-
   Anleitungen plus `scripts/setup-codespace.sh`) ergänzen
-  `--node-args="--env-file=.env"`. `pm2 restart` (spätere Updates,
-  `setup-codespace.sh`s Re-Run-Zweig) braucht das Flag NICHT erneut —
-  PM2 hinterlegt die beim ersten `pm2 start` übergebenen Node-Argumente
-  und wendet sie bei jedem `restart` automatisch wieder an (empirisch
-  bestätigt).
+  `--node-args="--env-file-if-exists=.env"`. `pm2 restart` (spätere
+  Updates, `setup-codespace.sh`s Re-Run-Zweig) braucht das Flag NICHT
+  erneut — PM2 hinterlegt die beim ersten `pm2 start` übergebenen
+  Node-Argumente und wendet sie bei jedem `restart` automatisch wieder
+  an (empirisch bestätigt).
 - Der Purge-Cronjob (`deployment.md`/`deployment-raspberry-pi.md`,
   Abschnitt 12.1) ruft `tsx` bewusst über seinen absoluten Pfad statt
   über `npm run purge-deleted-data` auf (Cron hat keinen zuverlässigen
-  `npm` im `PATH`) — dort direkt `--env-file=.env` ergänzt, da dieser
-  Aufruf nicht über den jetzt gefixten `package.json`-Eintrag läuft.
+  `npm` im `PATH`) — dort direkt `--env-file-if-exists=.env` ergänzt, da
+  dieser Aufruf nicht über den jetzt gefixten `package.json`-Eintrag
+  läuft.
 
 Verifiziert mit `env -i` (vollständig geleerte Prozessumgebung, nur
 `PATH`/`HOME`) gegen eine echte, lokal aufgesetzte PostgreSQL-16-Instanz:
@@ -626,10 +659,13 @@ Verifiziert mit `env -i` (vollständig geleerte Prozessumgebung, nur
 und funktionieren Ende-zu-Ende (Superadmin-Konto tatsächlich angelegt,
 Purge-Lauf tatsächlich gegen die Datenbank ausgeführt) — vorher schlugen
 alle vier mit exakt derselben `DATABASE_URL: Required`-Meldung fehl.
-`pm2 start dist/index.js --node-args="--env-file=.env"` sowie ein
-anschließender `pm2 restart` wurden ebenso gegen eine echte, temporär
+`pm2 start dist/index.js --node-args="--env-file-if-exists=.env"` sowie
+ein anschließender `pm2 restart` wurden ebenso gegen eine echte, temporär
 installierte PM2-Instanz bestätigt (Server startet, Log zeigt „Server
-listening", auch nach dem Restart). `npm run typecheck`/`lint`/`test`
+listening", auch nach dem Restart). Zusätzlich bestätigt, dass ein Start
+GANZ OHNE `.env`, aber mit exportierten Umgebungsvariablen, weiterhin
+funktioniert (die oben beschriebene Regression, die `--env-file` erzeugt
+hätte). `npm run typecheck`/`lint`/`test`
 (444 Tests) sowie die volle Integrationstestsuite (52 Tests, gegen
 dieselbe echte Postgres-Instanz) bleiben grün.
 
