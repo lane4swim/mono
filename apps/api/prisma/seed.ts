@@ -15,12 +15,27 @@
 //   - main(): nimmt das Ergebnis von buildDemoData() und schreibt es via
 //     Prisma in die Datenbank. Läuft über `npx prisma db seed` bzw.
 //     `npm run prisma:seed` — braucht eine echte Postgres-Verbindung.
-import { randomUUID } from 'node:crypto';
+import { randomUUID, randomBytes } from 'node:crypto';
 import { MODULE_KEYS, type SetEntry } from '@lane1/shared-types';
 
 function id(): string {
   return randomUUID();
 }
+
+// Sicherheitskorrektur (Sicherheitsreview 2026-08-28, Befund H1): vormals
+// ein fest im Repository stehendes, für alle vier Demo-Konten (inkl.
+// Superadmin) identisches Passwort ('ChangeMe123!') — jeder, der dieses
+// Repository lesen kann, kannte damit auch die Zugangsdaten eines
+// Superadmin-Kontos auf JEDER Installation, gegen die dieses Skript
+// versehentlich lief. Stattdessen ein bei jedem Lauf frisch erzeugtes,
+// zufälliges Passwort (128 Bit Entropie) — geteilt über alle vier
+// Demo-Konten (bewusst wie zuvor, der Demo-Zweck braucht keine separaten
+// Passwörter), aber nie im Quellcode sichtbar. main() gibt es unten
+// genau einmal in der Konsolenausgabe aus.
+function randomDemoPassword(): string {
+  return randomBytes(16).toString('base64url');
+}
+
 function isoDate(date: Date): string {
   return date.toISOString();
 }
@@ -56,10 +71,11 @@ export function buildDemoData() {
     { id: id(), clubId: club.id, firstName: 'Finn', lastName: 'Hartmann', birthdate: '2011-04-18', gender: 'm', groupId: groupB.id, joinDate: '2021-05-20', active: true, notes: 'Rückenschwimmen ausbauen' },
   ];
 
-  const superAdminUser = { id: id(), clubId: null as string | null, name: 'System-Superadmin', role: 'superadmin', athleteId: null as string | null, email: 'superadmin@example.org', locale: 'de-DE', password: 'ChangeMe123!' };
-  const trainerUser = { id: id(), clubId: club.id, name: 'Sabine Reuter', role: 'trainer', athleteId: null as string | null, email: 'sabine.reuter@example.org', locale: 'de-DE', password: 'ChangeMe123!' };
-  const adminUser = { id: id(), clubId: club.id, name: 'Team-Administrator', role: 'admin', athleteId: null as string | null, email: 'admin@example.org', locale: 'de-DE', password: 'ChangeMe123!' };
-  const athleteUser = { id: id(), clubId: club.id, name: `${athletes[0]!.firstName} ${athletes[0]!.lastName}`, role: 'athlete', athleteId: athletes[0]!.id, email: 'mara.vogel@example.org', locale: 'en-US', password: 'ChangeMe123!' };
+  const demoPassword = randomDemoPassword();
+  const superAdminUser = { id: id(), clubId: null as string | null, name: 'System-Superadmin', role: 'superadmin', athleteId: null as string | null, email: 'superadmin@example.org', locale: 'de-DE', password: demoPassword };
+  const trainerUser = { id: id(), clubId: club.id, name: 'Sabine Reuter', role: 'trainer', athleteId: null as string | null, email: 'sabine.reuter@example.org', locale: 'de-DE', password: demoPassword };
+  const adminUser = { id: id(), clubId: club.id, name: 'Team-Administrator', role: 'admin', athleteId: null as string | null, email: 'admin@example.org', locale: 'de-DE', password: demoPassword };
+  const athleteUser = { id: id(), clubId: club.id, name: `${athletes[0]!.firstName} ${athletes[0]!.lastName}`, role: 'athlete', athleteId: athletes[0]!.id, email: 'mara.vogel@example.org', locale: 'en-US', password: demoPassword };
   const users = [superAdminUser, trainerUser, adminUser, athleteUser];
 
   const exercises = [
@@ -153,7 +169,46 @@ export function buildDemoData() {
 }
 
 // ---- Prisma-Runner (braucht eine echte Datenbankverbindung) --------------
+//
+// Sicherheitskorrektur (Sicherheitsreview 2026-08-28, Befund H1): dieses
+// Skript legt u. a. ein Superadmin-Konto an (siehe buildDemoData() oben)
+// — auf einer Produktivinstanz höbe das die gesamte einladungsbasierte
+// Registrierung aus. Zwei unabhängige Sicherungen, ANALOG zu den
+// bestehenden Produktionsprüfungen in config/env.ts:
+//   1. NODE_ENV=production bricht immer ab, ohne Umgehungsmöglichkeit —
+//      Demo-Daten gehören nie auf eine Produktivinstanz.
+//   2. Unabhängig davon (auch außerhalb von NODE_ENV=production) eine
+//      explizite Bestätigung per Umgebungsvariable verlangen — fängt
+//      einen versehentlichen Lauf gegen die falsche DATABASE_URL ab (z. B.
+//      eine lokal exportierte Produktions-.env), den NODE_ENV allein
+//      nicht verhindern würde. Bewusst eine Umgebungsvariable statt eines
+//      CLI-Arguments (analog zu SUPERADMIN_PASSWORD in
+//      setup-codespace.sh): "npm run prisma:seed" ruft intern
+//      `prisma db seed` auf, das zusätzliche CLI-Argumente nur über eine
+//      eigene, hier vermeidbare "--"-Verkettung durchreicht — eine
+//      Umgebungsvariable erreicht diesen Prozess unabhängig davon, wie
+//      viele Wrapper dazwischenliegen.
+function assertSafeToSeed(): void {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'Abgebrochen: NODE_ENV=production. Dieses Skript legt Demo-Daten inkl. eines ' +
+        'Superadmin-Kontos an und darf niemals gegen eine Produktivdatenbank laufen. ' +
+        'Für den echten Superadmin-Bootstrap siehe apps/api/scripts/createSuperAdmin.ts.',
+    );
+  }
+  if (process.env.SEED_CONFIRM !== 'yes-demo-data') {
+    throw new Error(
+      'Abgebrochen: fehlende Bestätigung. Dieses Skript legt Demo-Daten inkl. eines ' +
+        'Superadmin-Kontos an — bitte erst prüfen, dass DATABASE_URL tatsächlich auf eine ' +
+        'leere Entwicklungsdatenbank zeigt, und den Lauf dann explizit bestätigen:\n' +
+        '  SEED_CONFIRM=yes-demo-data npm run prisma:seed --workspace=apps/api',
+    );
+  }
+}
+
 async function main() {
+  assertSafeToSeed();
+
   const { PrismaClient } = await import('@prisma/client');
   const { hashPassword } = await import('../src/auth/password.js');
   const prisma = new PrismaClient();
@@ -183,7 +238,16 @@ async function main() {
     await prisma.competition.createMany({ data: data.competitions.map((c) => ({ ...c, date: new Date(c.date) })) });
 
     console.log(`✔ Demo-Daten eingefügt: 1 Verein, ${data.athletes.length} Athlet:innen, ${data.users.length} Nutzer:innen, ${data.exercises.length} Übungen, ${data.templates.length} Vorlagen, ${data.plans.length} Plan(e), ${data.sessions.length} Einheit(en), ${data.actionItems.length} Handlungsfeld(er), ${data.competitions.length} Wettkampf/-kämpfe.`);
-    console.log(`   Demo-Login (bitte nach dem ersten Login ändern): ${data.users[2]!.email} / ${data.users[2]!.password}`);
+    // Sicherheitsreview 2026-08-28, Befund H1: alle vier Demo-Konten
+    // (inkl. Superadmin) teilen sich das oben zufällig erzeugte
+    // demoPassword — dieses erscheint NUR hier in der Konsolenausgabe des
+    // aktuellen Laufs, nirgends im Quellcode. Alle vier Logins aufgeführt
+    // (nicht mehr nur das Admin-Konto), da sonst insbesondere der
+    // Superadmin-Zugang nach diesem Lauf nirgends mehr nachlesbar wäre.
+    console.log('   Demo-Logins (bitte nach dem ersten Login jeweils das Passwort ändern):');
+    for (const user of data.users) {
+      console.log(`     ${user.role.padEnd(10)} ${user.email} / ${user.password}`);
+    }
   } finally {
     await prisma.$disconnect();
   }

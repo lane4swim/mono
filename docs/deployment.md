@@ -192,16 +192,40 @@ Sollte `v22.x` anzeigen.
 sudo apt install -y postgresql
 sudo -u postgres psql
 ```
-Innerhalb der PostgreSQL-Konsole (Prompt `postgres=#`):
+Innerhalb der PostgreSQL-Konsole (Prompt `postgres=#`) — **zwei** Rollen
+statt einer (Sicherheitsreview 2026-08-28, Befund N1): `lane1_migrator`
+wendet ausschließlich das Datenbankschema an (`prisma migrate deploy`,
+braucht dafür DDL-Rechte — Tabellen anlegen/ändern), `lane1_app` ist die
+Rolle, mit der die Anwendung selbst zur Laufzeit läuft (`DATABASE_URL` in
+`.env`, Schritt 7.2) und bekommt bewusst NUR Lese-/Schreibrechte auf
+Zeilenebene, keine DDL-Rechte. Ein zur Laufzeit erlangter Datenbankzugriff
+(z. B. über eine künftige SQL-Injection-Lücke oder ein kompromittiertes
+`DATABASE_URL`) kann dadurch keine Tabellen mehr anlegen, ändern oder
+löschen:
 ```sql
 CREATE DATABASE lane1;
+
+CREATE USER lane1_migrator WITH ENCRYPTED PASSWORD 'EIN-SICHERES-MIGRATIONS-PASSWORT-HIER';
+GRANT ALL PRIVILEGES ON DATABASE lane1 TO lane1_migrator;
+
 CREATE USER lane1_app WITH ENCRYPTED PASSWORD 'EIN-SICHERES-PASSWORT-HIER';
-GRANT ALL PRIVILEGES ON DATABASE lane1 TO lane1_app;
+GRANT CONNECT ON DATABASE lane1 TO lane1_app;
+
 \c lane1
-GRANT ALL ON SCHEMA public TO lane1_app;
+GRANT ALL ON SCHEMA public TO lane1_migrator;
+GRANT USAGE ON SCHEMA public TO lane1_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO lane1_app;
+-- Sorgt dafür, dass auch von KÜNFTIGEN Migrationen neu angelegte Tabellen
+-- automatisch dieselben Rechte für lane1_app tragen, ohne nach jeder
+-- Migration erneut manuell GRANTen zu müssen.
+ALTER DEFAULT PRIVILEGES FOR ROLE lane1_migrator IN SCHEMA public
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO lane1_app;
 \q
 ```
-**Das Passwort notieren** — es wird gleich in der `.env`-Datei gebraucht.
+**Beide Passwörter notieren** — `lane1_app` wird gleich in der
+`.env`-Datei gebraucht (Schritt 7.2), `lane1_migrator` bei jedem
+`prisma migrate deploy` (Schritt 7.3 unten sowie beim späteren
+Aktualisieren, Abschnitt 11).
 
 > **Wichtig (PostgreSQL 15+, damit auch Ubuntu 24.04/PostgreSQL 16):** Seit
 > PostgreSQL 15 hat nur noch der Datenbank-Eigentümer automatisch das Recht,
@@ -261,8 +285,22 @@ Führt npm dank der Workspace-Konfiguration für alle Pakete (`apps/web`, `apps/
 ### 7.2 Umgebungsvariablen konfigurieren (`.env`)
 ```bash
 cp apps/api/.env.example apps/api/.env
+chmod 600 apps/api/.env
 nano apps/api/.env
 ```
+Das `chmod 600` ist **Pflicht, nicht optional**: `apps/api/.env` enthält
+gleich zwei kritische Geheimnisse — das Datenbank-Passwort und, sobald
+unten gesetzt, `JWT_PRIVATE_KEY` (signiert sämtliche Access Tokens).
+Ohne diesen Schritt entsteht die Datei mit den systemweiten
+Standardrechten (üblich `644`, also weltlesbar) — jedes andere lokale
+Benutzerkonto auf diesem Server könnte den privaten Schlüssel lesen und
+sich damit ein Access Token mit beliebiger Rolle (auch `superadmin`)
+selbst signieren, ohne dass ein Login, ein Rate-Limit oder ein Logeintrag
+das sichtbar machen würde (`app.authenticate` prüft ausschließlich die
+Signatur, nie die Datenbank — siehe `apps/api/src/plugins/authenticate.ts`).
+Analog zu `chmod 600 ~/.pgpass` in Abschnitt 12.1 unten, dort für dasselbe
+Datenbank-Passwort.
+
 `apps/api/.env.example` enthält bereits alle bekannten Variablen mit
 Erklärung (vollständiges, verbindliches Schema samt Validierung:
 `apps/api/src/config/env.ts` — ein fehlender/ungültiger Pflichtwert lässt
@@ -272,8 +310,12 @@ Für einen Produktivserver mindestens folgende Werte setzen bzw. anpassen:
 NODE_ENV=production
 PORT=3000
 DATABASE_URL="postgresql://lane1_app:EIN-SICHERES-PASSWORT-HIER@localhost:5432/lane1"
-JWT_PRIVATE_KEY="<mit openssl erzeugen, siehe unten>"
-JWT_PUBLIC_KEY="<mit openssl erzeugen, siehe unten>"
+# WICHTIG (Sicherheitsreview 2026-08-28, Befund N1): bewusst die
+# DML-only-Rolle `lane1_app`, NICHT `lane1_migrator` (siehe Schritt 6.2)
+# — dies sind die Zugangsdaten, mit denen die Anwendung dauerhaft läuft.
+# `lane1_migrator` gehört NICHT in diese Datei, siehe Schritt 7.3.
+JWT_PRIVATE_KEY_FILE="<mit openssl erzeugen, siehe unten>"
+JWT_PUBLIC_KEY_FILE="<mit openssl erzeugen, siehe unten>"
 CORS_ORIGIN="https://training.mein-verein.de"
 FRONTEND_BASE_URL="https://training.mein-verein.de"
 
@@ -294,26 +336,49 @@ SMTP_FROM_EMAIL="postversand@mein-verein.de"
 SMTP_FROM_NAME="Lane 1"
 ```
 **RS256-Schlüsselpaar erzeugen** (signiert die Zugriffs-Tokens; in
-Produktion PFLICHT — ohne diese beiden Werte bricht der Serverstart mit
-`NODE_ENV=production` sofort ab):
+Produktion PFLICHT — ohne einen konfigurierten Schlüssel bricht der
+Serverstart mit `NODE_ENV=production` sofort ab).
+
+**Empfohlen** (Sicherheitsreview 2026-08-28, Befund H2, Empfehlung 3):
+das Schlüsselpaar direkt an seinem endgültigen Ort erzeugen, statt es
+über eine `.env`-Zeile zu leiten — die Schlüsseldatei trägt dadurch
+eigene, engere Dateirechte (`600`, nur das Dienstkonto), unabhängig von
+der übrigen `.env` (die u. a. auch das Datenbank-Passwort enthält):
 ```bash
-openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out /tmp/jwt_private.pem
-openssl pkey -in /tmp/jwt_private.pem -pubout -out /tmp/jwt_public.pem
+mkdir -p apps/api/keys
+chmod 700 apps/api/keys
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out apps/api/keys/jwt_private.pem
+openssl pkey -in apps/api/keys/jwt_private.pem -pubout -out apps/api/keys/jwt_public.pem
+chmod 600 apps/api/keys/jwt_private.pem
+chmod 644 apps/api/keys/jwt_public.pem
 ```
-Beide PEM-Dateien müssen als **eine Zeile** mit literalen `\n` statt
-echter Zeilenumbrüche in die `.env`:
+In der `.env` dann nur den Pfad eintragen (absolute Pfade sind robuster
+gegen einen vom PM2-Start abweichenden Arbeitsordner):
+```
+JWT_PRIVATE_KEY_FILE="/home/deploy/lane1/apps/api/keys/jwt_private.pem"
+JWT_PUBLIC_KEY_FILE="/home/deploy/lane1/apps/api/keys/jwt_public.pem"
+```
+`apps/api/keys/` ist per `.gitignore` bereits ausgeschlossen — dieser
+Ordner darf wie `.env` niemals committet werden.
+
+**Alternative** (falls eine separate Schlüsseldatei im jeweiligen Setup
+nicht praktikabel ist, z. B. bei einer rein umgebungsvariablenbasierten
+Konfiguration/einem Secrets-Manager, der nur Variablen injiziert): den
+PEM-Inhalt direkt als `JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY` in die `.env`
+schreiben, mit literalen `\n` statt echter Zeilenumbrüche:
 ```bash
-awk 'BEGIN{ORS="\\n"} {print}' /tmp/jwt_private.pem
-awk 'BEGIN{ORS="\\n"} {print}' /tmp/jwt_public.pem
+awk 'BEGIN{ORS="\\n"} {print}' apps/api/keys/jwt_private.pem
+awk 'BEGIN{ORS="\\n"} {print}' apps/api/keys/jwt_public.pem
 ```
 Jede Ausgabe komplett kopieren und als Wert von `JWT_PRIVATE_KEY` bzw.
 `JWT_PUBLIC_KEY` in Anführungszeichen einsetzen (z. B.
-`JWT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nMIIEvQ...\n-----END PRIVATE KEY-----\n"`).
-Anschließend die temporären PEM-Dateien löschen, damit der private
-Schlüssel nicht zusätzlich unverschlüsselt auf der Platte liegt:
-```bash
-rm /tmp/jwt_private.pem /tmp/jwt_public.pem
-```
+`JWT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nMIIEvQ...\n-----END PRIVATE KEY-----\n"`),
+und **nur in diesem Fall** anschließend `apps/api/keys/` wieder löschen
+(`rm -rf apps/api/keys`) — sonst liegt derselbe private Schlüssel
+doppelt vor, einmal in der Datei und einmal inline in der `.env`. Je
+Schlüssel darf **nur eine** der beiden Formen gesetzt sein
+(`JWT_PRIVATE_KEY` **oder** `JWT_PRIVATE_KEY_FILE`, nie beide — `env.ts`
+lehnt eine gleichzeitige Angabe sonst mit einer klaren Fehlermeldung ab).
 
 > **Hinweis TRUSTED_PROXY_IPS:** benennt die Adresse(n), denen die API den
 > Header `X-Forwarded-For` überhaupt glaubt (Fastifys `trustProxy`-Option)
@@ -341,9 +406,16 @@ rm /tmp/jwt_private.pem /tmp/jwt_public.pem
 > davon nicht betroffen und funktioniert mit jedem gängigen Anbieter.
 
 ### 7.3 Datenbank-Schema anlegen
+`DATABASE_URL` wird hier bewusst **überschrieben** (Sicherheitsreview
+2026-08-28, Befund N1): `apps/api/.env` enthält die DML-only-Rolle
+`lane1_app` (Schritt 7.2), Schema-Änderungen brauchen aber die DDL-Rolle
+`lane1_migrator` (Schritt 6.2) — die vorangestellte Umgebungsvariable
+gilt nur für genau diesen einen Befehl, ohne `.env` selbst anzufassen
+(Prismas eigenes `.env`-Laden überschreibt eine bereits gesetzte
+Umgebungsvariable nicht):
 ```bash
 cd apps/api
-npx prisma migrate deploy
+DATABASE_URL="postgresql://lane1_migrator:EIN-SICHERES-MIGRATIONS-PASSWORT-HIER@localhost:5432/lane1" npx prisma migrate deploy
 cd ../..
 ```
 > **Warum `migrate deploy` statt `db push`?** `apps/api/prisma/migrations/`
@@ -370,9 +442,15 @@ npm run build --workspace=apps/api
 
 ## 8. Backend mit PM2 starten (sobald vorhanden)
 
+`--node-args="--env-file-if-exists=.env"` ist **Pflicht** (Sicherheitsreview
+2026-08-28, Befund N2): Weder `apps/api/src/config/env.ts` noch der
+laufende Server laden `apps/api/.env` von sich aus — ohne dieses Flag
+stürzt der Prozess sofort mit „DATABASE_URL: Required" ab, obwohl die
+Datei direkt daneben liegt (empirisch geprüft: `pm2 start dist/index.js`
+ohne dieses Flag lädt `.env` nicht, mit dem Flag funktioniert es):
 ```bash
 cd apps/api
-pm2 start dist/index.js --name lane1-api
+pm2 start dist/index.js --name lane1-api --node-args="--env-file-if-exists=.env"
 pm2 save
 pm2 startup
 ```
@@ -391,10 +469,21 @@ bewusst keine offene Registrierung, Konten entstehen ausschließlich per
 Einladungslink, und Einladungen kann nur verschicken, wer schon ein Konto
 hat. Für die allererste Person gibt es deshalb ein einmaliges CLI-Skript
 (siehe `apps/api/scripts/createSuperAdmin.ts`), das direkt in der
-Datenbank ein Superadmin-Konto anlegt:
+Datenbank ein Superadmin-Konto anlegt. Das Passwort wird bewusst NICHT
+als Argument angegeben (Sicherheitsreview 2026-08-28, Befund M1 —
+Kommandozeilenargumente sind auf Linux über `/proc/<pid>/cmdline` für
+jeden lokalen Benutzer lesbar), sondern interaktiv abgefragt (ohne
+Terminal-Echo, mit Bestätigung):
 ```bash
 cd apps/api
-npm run create-superadmin -- --email=admin@mein-verein.de --password='EIN-SICHERES-PASSWORT' --name="Vorname Nachname"
+npm run create-superadmin -- --email=admin@mein-verein.de --name="Vorname Nachname"
+cd ../..
+```
+Alternativ nicht-interaktiv per Umgebungsvariable (z. B. für ein
+automatisiertes Setup):
+```bash
+cd apps/api
+SUPERADMIN_PASSWORD='EIN-SICHERES-PASSWORT' npm run create-superadmin -- --email=admin@mein-verein.de --name="Vorname Nachname"
 cd ../..
 ```
 Mit diesem Konto danach unter `https://training.mein-verein.de/admin`
@@ -577,7 +666,12 @@ Ab jetzt: `https://training.mein-verein.de` mit Schloss-Symbol im Browser.
 mkdir -p /home/deploy/backups
 nano ~/.pgpass
 ```
-Folgende Zeile eintragen (Platzhalter durch das Passwort aus Schritt 6.2 ersetzen) und Datei danach mit `chmod 600 ~/.pgpass` schützen — `pg_dump` liest die Datei automatisch und braucht dadurch keine Passwortabfrage, die in einem nicht-interaktiven Cronjob ohnehin nie beantwortet werden könnte:
+Folgende Zeile eintragen (Platzhalter durch das `lane1_app`-Passwort aus
+Schritt 6.2 ersetzen — die DML-Rechte dieser Rolle genügen für einen
+lesenden `pg_dump`, `lane1_migrator` wird hierfür nicht gebraucht) und
+Datei danach mit `chmod 600 ~/.pgpass` schützen — `pg_dump` liest die
+Datei automatisch und braucht dadurch keine Passwortabfrage, die in
+einem nicht-interaktiven Cronjob ohnehin nie beantwortet werden könnte:
 ```
 127.0.0.1:5432:lane1:lane1_app:EIN-SICHERES-PASSWORT-HIER
 ```
@@ -627,7 +721,7 @@ crontab -e
 Folgende Zeile ergänzen (läuft täglich um 4:00 Uhr, also nach dem
 Datenbank-Backup aus 12.1):
 ```
-0 4 * * * cd /home/deploy/lane1/apps/api && /home/deploy/lane1/node_modules/.bin/tsx scripts/purgeDeletedData.ts >> /home/deploy/backups/purge.log 2>&1
+0 4 * * * cd /home/deploy/lane1/apps/api && /home/deploy/lane1/node_modules/.bin/tsx --env-file-if-exists=.env scripts/purgeDeletedData.ts >> /home/deploy/backups/purge.log 2>&1
 ```
 > **Warum nicht `npm run purge-deleted-data`?** `cron` startet mit einer
 > minimalen `PATH`-Umgebung, in der `npm` typischerweise nicht zuverlässig
@@ -640,6 +734,14 @@ Datenbank-Backup aus 12.1):
 > `tsconfig.json`) nicht automatisch zur passenden `.ts`-Datei auf und
 > bricht mit `ERR_MODULE_NOT_FOUND` ab; `tsx` übernimmt genau diese
 > Auflösung zusätzlich zum reinen Type-Stripping.
+>
+> **Warum `--env-file-if-exists=.env`?** (Sicherheitsreview 2026-08-28, Befund N2)
+> Weder `apps/api/src/config/env.ts` noch die direkt instanziierte
+> `PrismaClient` in `purgeDeletedData.ts` laden `apps/api/.env` von sich
+> aus — ohne dieses Flag bricht der Cronjob sofort mit „DATABASE_URL:
+> Required" ab, unabhängig davon, dass die Datei direkt daneben liegt.
+> Node ≥ 20.6 unterstützt `--env-file` nativ, `tsx` reicht es unverändert
+> an den zugrundeliegenden Node-Prozess durch.
 
 ---
 
@@ -650,7 +752,9 @@ Sobald es Änderungen am Code gibt (neue Version aus Git oder neues ZIP):
 cd /home/deploy/lane1
 git pull                                    # oder: neues ZIP hochladen & entpacken
 npm install
-cd apps/api && npx prisma migrate deploy && cd ../..   # wendet neue Migrationsdateien an, siehe Schritt 7.3
+cd apps/api
+DATABASE_URL="postgresql://lane1_migrator:EIN-SICHERES-MIGRATIONS-PASSWORT-HIER@localhost:5432/lane1" npx prisma migrate deploy   # DDL-Rolle, siehe Schritt 7.3 (Befund N1)
+cd ..
 npm run build --workspace=apps/api
 pm2 restart lane1-api
 sudo systemctl reload nginx

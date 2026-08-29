@@ -125,16 +125,32 @@ sudo su - postgres -c psql
 ```
 > **Warum nicht `sudo -u postgres psql`?** Auf manchen Codespaces-Images ist das für den eigenen Benutzer (`vscode` o. ä.) nicht ohne Passwort erlaubt — `sudo` fragt dann nach dem Passwort **des eigenen Benutzers**, nicht nach einem Datenbank-Passwort. Da für diesen Benutzer in Codespaces aber gar kein Passwort gesetzt ist, schlägt jede Eingabe mit „Sorry, try again" fehl, egal was eingetippt wird. Reines `sudo` (ohne `-u <anderer-benutzer>`, also als root) ist dagegen ohne Passwort erlaubt — der Befehl oben nutzt das aus: `sudo` startet `su - postgres -c psql` als root, und root darf mit `su` ohne Passwort zu jedem Benutzer wechseln.
 
-Innerhalb der PostgreSQL-Konsole (Prompt `postgres=#`):
+Innerhalb der PostgreSQL-Konsole (Prompt `postgres=#`) — **zwei** Rollen
+statt einer (Sicherheitsreview 2026-08-28, Befund N1): `lane1_migrator`
+wendet ausschließlich das Datenbankschema an (`prisma migrate deploy`,
+braucht dafür DDL-Rechte), `lane1_app` ist die Rolle, mit der die
+Anwendung selbst läuft (`DATABASE_URL` unten) und bekommt bewusst NUR
+Lese-/Schreibrechte auf Zeilenebene, keine DDL-Rechte:
 ```sql
 CREATE DATABASE lane1;
+
+CREATE USER lane1_migrator WITH ENCRYPTED PASSWORD 'EIN-TESTPASSWORT-MIGRATION-HIER';
+GRANT ALL PRIVILEGES ON DATABASE lane1 TO lane1_migrator;
+
 CREATE USER lane1_app WITH ENCRYPTED PASSWORD 'EIN-TESTPASSWORT-HIER';
-GRANT ALL PRIVILEGES ON DATABASE lane1 TO lane1_app;
+GRANT CONNECT ON DATABASE lane1 TO lane1_app;
+
 \c lane1
-GRANT ALL ON SCHEMA public TO lane1_app;
+GRANT ALL ON SCHEMA public TO lane1_migrator;
+GRANT USAGE ON SCHEMA public TO lane1_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO lane1_app;
+ALTER DEFAULT PRIVILEGES FOR ROLE lane1_migrator IN SCHEMA public
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO lane1_app;
 \q
 ```
-**Das Passwort notieren** — es wird gleich in der `.env`-Datei gebraucht.
+**Beide Passwörter notieren** — `lane1_app` wird gleich in der
+`.env`-Datei gebraucht, `lane1_migrator` beim `prisma migrate deploy`
+weiter unten.
 
 > **Wichtig (PostgreSQL 15+):** Seit PostgreSQL 15 hat nur noch der Datenbank-Eigentümer automatisch das Recht, im Schema `public` Tabellen anzulegen — `GRANT ALL PRIVILEGES ON DATABASE` allein reicht dafür **nicht** mehr. Ohne das zusätzliche `\c lane1` + `GRANT ALL ON SCHEMA public` oben bricht Schritt 7 (`prisma migrate deploy`) mit `permission denied for schema public` ab.
 
@@ -168,7 +184,23 @@ Führt npm dank der Workspace-Konfiguration für alle Pakete (`apps/web`, `apps/
 
 ```bash
 cp apps/api/.env.example apps/api/.env
+chmod 600 apps/api/.env
 ```
+
+Das `chmod 600` ist **Pflicht, nicht optional**: `apps/api/.env` enthält
+gleich zwei kritische Geheimnisse — das Datenbank-Passwort und, sobald
+unten gesetzt, `JWT_PRIVATE_KEY` (signiert sämtliche Access Tokens). Ohne
+diesen Schritt entsteht die Datei mit den systemweiten Standardrechten
+(üblich `644`, also weltlesbar) — jedes andere lokale Benutzerkonto in
+diesem Codespace könnte den privaten Schlüssel lesen und sich damit ein
+Access Token mit beliebiger Rolle (auch `superadmin`) selbst signieren,
+ohne dass ein Login, ein Rate-Limit oder ein Logeintrag das sichtbar
+machen würde (`app.authenticate` prüft ausschließlich die Signatur, nie
+die Datenbank — siehe `apps/api/src/plugins/authenticate.ts`). Analog zu
+`chmod 600 ~/.pgpass` (siehe `deployment.md`, Abschnitt 12.1), dort für
+dasselbe Datenbank-Passwort. `scripts/setup-codespace.sh` (Schritt 6
+dort) setzt diese Rechte bereits automatisch — nur beim manuellen
+Vorgehen hier ist der Schritt selbst auszuführen.
 
 Bevor die Datei bearbeitet wird: die spätere öffentliche Adresse berechnen. Codespaces stellt dafür den Namen des eigenen Codespace automatisch als Umgebungsvariable bereit — Port `8080` ist der in Schritt 10 verwendete Nginx-Port:
 ```bash
@@ -186,8 +218,11 @@ Erklärung (vollständiges, verbindliches Schema samt Validierung:
 NODE_ENV=production
 PORT=3000
 DATABASE_URL="postgresql://lane1_app:EIN-TESTPASSWORT-HIER@localhost:5432/lane1"
-JWT_PRIVATE_KEY="<mit openssl erzeugen, siehe unten>"
-JWT_PUBLIC_KEY="<mit openssl erzeugen, siehe unten>"
+# WICHTIG (Sicherheitsreview 2026-08-28, Befund N1): bewusst die
+# DML-only-Rolle `lane1_app`, NICHT `lane1_migrator` (siehe Abschnitt 4.2)
+# — dies sind die Zugangsdaten, mit denen die Anwendung dauerhaft läuft.
+JWT_PRIVATE_KEY_FILE="<mit openssl erzeugen, siehe unten>"
+JWT_PUBLIC_KEY_FILE="<mit openssl erzeugen, siehe unten>"
 CORS_ORIGIN="https://DEIN-CODESPACE-NAME-8080.app.github.dev"
 FRONTEND_BASE_URL="https://DEIN-CODESPACE-NAME-8080.app.github.dev"
 TRUSTED_PROXY_IPS="127.0.0.1"
@@ -196,31 +231,56 @@ TRUSTED_PROXY_IPS="127.0.0.1"
 
 **SMTP (optional für einen reinen Test):** Ohne `SMTP_HOST` wird eine Einladung nur ins Server-Log geschrieben statt tatsächlich per E-Mail versendet — für einen Testlauf meist ausreichend (der Einladungslink lässt sich trotzdem direkt in der Nutzerverwaltungs-Oberfläche kopieren, siehe `apps/web/help/admin.html`). Soll der komplette Versandweg mitgetestet werden, denselben SMTP-Block wie in `deployment.md`, Abschnitt 7.2 eintragen. Ein Hinweis speziell für Cloud-Umgebungen wie Codespaces: Manche Cloud-Anbieter sperren ausgehende Verbindungen auf klassischen Mail-Ports (25/465) zur Spam-Prävention — Port 587 (wie im SMTP-Block vorgesehen) ist davon in aller Regel nicht betroffen; schlägt der Versand dennoch fehl, ist eine anbieterseitige Sperre eine mögliche Ursache.
 
-**RS256-Schlüsselpaar erzeugen** (in Produktion — und damit auch hier, da `NODE_ENV=production` gesetzt ist — PFLICHT):
+**RS256-Schlüsselpaar erzeugen** (in Produktion — und damit auch hier, da `NODE_ENV=production` gesetzt ist — PFLICHT). Dasselbe macht `scripts/setup-codespace.sh` (Schritt 6) beim automatisierten Vorgehen bereits selbst.
+
+**Empfohlen** (Sicherheitsreview 2026-08-28, Befund H2, Empfehlung 3):
+das Schlüsselpaar direkt an seinem endgültigen Ort erzeugen, statt es
+über eine `.env`-Zeile zu leiten — die Schlüsseldatei trägt dadurch
+eigene, engere Dateirechte (`600`), unabhängig von der übrigen `.env`
+(die u. a. auch das Datenbank-Passwort enthält):
 ```bash
-openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out /tmp/jwt_private.pem
-openssl pkey -in /tmp/jwt_private.pem -pubout -out /tmp/jwt_public.pem
+mkdir -p apps/api/keys
+chmod 700 apps/api/keys
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out apps/api/keys/jwt_private.pem
+openssl pkey -in apps/api/keys/jwt_private.pem -pubout -out apps/api/keys/jwt_public.pem
+chmod 600 apps/api/keys/jwt_private.pem
+chmod 644 apps/api/keys/jwt_public.pem
 ```
-Beide PEM-Dateien müssen als **eine Zeile** mit literalen `\n` statt
-echter Zeilenumbrüche in die `.env`:
+In der `.env` dann `JWT_PRIVATE_KEY_FILE`/`JWT_PUBLIC_KEY_FILE` auf die
+absoluten Pfade setzen (`/workspaces/DEIN-REPO-NAME` durch die Ausgabe
+von `pwd` aus Schritt 3 ersetzen, siehe auch Abschnitt 10 unten):
+```
+JWT_PRIVATE_KEY_FILE="/workspaces/DEIN-REPO-NAME/apps/api/keys/jwt_private.pem"
+JWT_PUBLIC_KEY_FILE="/workspaces/DEIN-REPO-NAME/apps/api/keys/jwt_public.pem"
+```
+`apps/api/keys/` ist per `.gitignore` bereits ausgeschlossen — dieser
+Ordner darf wie `.env` niemals committet werden.
+
+**Alternative** (falls eine separate Schlüsseldatei nicht praktikabel
+ist): den PEM-Inhalt direkt als `JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY` in die
+`.env` schreiben, mit literalen `\n` statt echter Zeilenumbrüche:
 ```bash
-awk 'BEGIN{ORS="\\n"} {print}' /tmp/jwt_private.pem
-awk 'BEGIN{ORS="\\n"} {print}' /tmp/jwt_public.pem
+awk 'BEGIN{ORS="\\n"} {print}' apps/api/keys/jwt_private.pem
+awk 'BEGIN{ORS="\\n"} {print}' apps/api/keys/jwt_public.pem
 ```
 Jede Ausgabe komplett kopieren und als Wert von `JWT_PRIVATE_KEY` bzw.
-`JWT_PUBLIC_KEY` in Anführungszeichen einsetzen. Anschließend die
-temporären PEM-Dateien löschen:
-```bash
-rm /tmp/jwt_private.pem /tmp/jwt_public.pem
-```
+`JWT_PUBLIC_KEY` in Anführungszeichen einsetzen, und **nur in diesem
+Fall** anschließend `apps/api/keys/` wieder löschen (`rm -rf
+apps/api/keys`) — sonst liegt derselbe private Schlüssel doppelt vor. Je
+Schlüssel darf **nur eine** der beiden Formen gesetzt sein
+(`JWT_PRIVATE_KEY` **oder** `JWT_PRIVATE_KEY_FILE`, nie beide — `env.ts`
+lehnt eine gleichzeitige Angabe sonst mit einer klaren Fehlermeldung ab).
 
 ---
 
 ## 7. Datenbank-Schema anlegen
 
+`DATABASE_URL` wird hier bewusst mit der DDL-Rolle `lane1_migrator`
+**überschrieben**, nur für genau diesen einen Befehl (Befund N1, siehe
+Abschnitt 4.2):
 ```bash
 cd apps/api
-npx prisma migrate deploy
+DATABASE_URL="postgresql://lane1_migrator:EIN-TESTPASSWORT-MIGRATION-HIER@localhost:5432/lane1" npx prisma migrate deploy
 cd ../..
 ```
 > Siehe `deployment.md`, Abschnitt 7.3 für die ausführliche Begründung
@@ -241,9 +301,12 @@ Baut dabei automatisch auch die gemeinsamen Pakete (`packages/shared-types`, `pa
 
 ## 9. Backend mit PM2 starten
 
+`--node-args="--env-file-if-exists=.env"` ist **Pflicht** (Sicherheitsreview
+2026-08-28, Befund N2): ohne dieses Flag lädt der Prozess
+`apps/api/.env` nicht und stürzt sofort mit „DATABASE_URL: Required" ab:
 ```bash
 cd apps/api
-pm2 start dist/index.js --name lane1-api
+pm2 start dist/index.js --name lane1-api --node-args="--env-file-if-exists=.env"
 cd ../..
 ```
 Kontrolle:
@@ -255,10 +318,16 @@ pm2 logs lane1-api --lines 30 --nostream
 
 ### 9.1 Ersten Superadmin anlegen (einmalig)
 
-Identisch zu `deployment.md`, Abschnitt 8.1 — ohne diesen Schritt kann sich niemand einloggen, da es keine offene Registrierung gibt:
+Identisch zu `deployment.md`, Abschnitt 8.1 — ohne diesen Schritt kann sich niemand einloggen, da es keine offene Registrierung gibt. Das Passwort wird bewusst NICHT als Argument angegeben (Sicherheitsreview 2026-08-28, Befund M1), sondern interaktiv abgefragt:
 ```bash
 cd apps/api
-npm run create-superadmin -- --email=admin@test.de --password='EIN-TESTPASSWORT' --name="Test Admin"
+npm run create-superadmin -- --email=admin@test.de --name="Test Admin"
+cd ../..
+```
+Alternativ nicht-interaktiv per Umgebungsvariable:
+```bash
+cd apps/api
+SUPERADMIN_PASSWORD='EIN-TESTPASSWORT' npm run create-superadmin -- --email=admin@test.de --name="Test Admin"
 cd ../..
 ```
 Mit diesem Konto danach unter `<deine-codespace-adresse>/admin` anmelden (siehe `apps/web/help/admin.html`) und dort den ersten (Test-)Verein anlegen.
@@ -383,9 +452,9 @@ Ein Codespace hält **automatisch nach 30 Minuten Inaktivität** an (einstellbar
 ```bash
 sudo service postgresql start
 sudo service nginx start
-cd apps/api && pm2 start dist/index.js --name lane1-api ; cd ../..
+cd apps/api && pm2 start dist/index.js --name lane1-api --node-args="--env-file-if-exists=.env" ; cd ../..
 ```
-(`pm2 start` mit demselben `--name` ist unproblematisch, falls der Prozess aus einer vorigen Sitzung noch als „gestoppt" gelistet ist — PM2 startet ihn dann einfach neu.)
+(`pm2 start` mit demselben `--name` ist unproblematisch, falls der Prozess aus einer vorigen Sitzung noch als „gestoppt" gelistet ist — PM2 startet ihn dann einfach neu. `--node-args="--env-file-if-exists=.env"` erneut nötig — siehe Abschnitt 9, Befund N2 — da dieser Aufruf den Prozess unabhängig neu startet, nicht über ein gespeichertes `pm2 save`.)
 
 Manuell anhalten (statt auf die 30-Minuten-Grenze zu warten, z. B. am Ende eines Testtages) über die Codespaces-Übersicht: **github.com/codespaces** → bei der jeweiligen Zeile auf die drei Punkte → **„Stop codespace"**.
 

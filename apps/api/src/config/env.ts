@@ -26,13 +26,34 @@ const EnvSchema = z.object({
   JWT_ACCESS_TTL_SECONDS: z.coerce.number().int().positive().default(900),
   JWT_REFRESH_TTL_DAYS: z.coerce.number().int().positive().default(30),
   // RS256-Schlüsselpaar für die Access-Token-Signatur (Abschnitt 5.2 des
-  // Backend-Entwicklungsplans). PEM-Inhalte mit \n statt echten Zeilenumbrüchen
-  // in der .env — wird beim Einlesen zurückkonvertiert (siehe auth/keys.ts).
-  // In Produktion Pflicht; in development/test wird andernfalls automatisch
-  // ein Wegwerf-Schlüsselpaar erzeugt (siehe auth/keys.ts), damit lokale
-  // Entwicklung/Tests ohne manuellen Schlüsselerzeugungsschritt funktionieren.
+  // Backend-Entwicklungsplans). Zwei gleichwertige Formen je Schlüssel,
+  // gegenseitig exklusiv (siehe Prüfung unten):
+  //   - JWT_PRIVATE_KEY/JWT_PUBLIC_KEY: PEM-Inhalt direkt in der .env, mit
+  //     \n statt echten Zeilenumbrüchen (wird beim Einlesen zurückkonvertiert,
+  //     siehe auth/keys.ts) — einfach für Deployments ohne eigene
+  //     Secrets-Datei (z. B. eine per Secrets-Management als Umgebungs-
+  //     variable injizierte Konfiguration).
+  //   - JWT_PRIVATE_KEY_FILE/JWT_PUBLIC_KEY_FILE (Sicherheitsreview
+  //     2026-08-28, Befund H2, Empfehlung 3): Dateipfad zu einer PEM-Datei
+  //     mit echten Zeilenumbrüchen, kein \n-Escaping nötig. Für Produktion
+  //     empfohlen — die Schlüsseldatei lässt sich dadurch UNABHÄNGIG von
+  //     .env auf `chmod 600`/das Dienstkonto beschränken, statt dieselbe
+  //     Rechtestufe wie die übrige, weniger sensible Konfiguration zu
+  //     teilen (die .env bleibt zusätzlich per `chmod 600` geschützt, siehe
+  //     deployment*.md — das hier ist eine zusätzliche Trennung, kein Ersatz
+  //     dafür). auth/keys.ts liest die Datei erst beim tatsächlichen
+  //     Auflösen des Schlüsselpaars (resolveKeyPair()) — env.ts prüft hier
+  //     nur die Vollständigkeit der Konfiguration, ohne selbst auf die
+  //     Festplatte zuzugreifen.
+  // In Produktion ist je Schlüssel GENAU EINE der beiden Formen Pflicht
+  // (siehe Prüfungen unten); in development/test wird andernfalls
+  // automatisch ein Wegwerf-Schlüsselpaar erzeugt (siehe auth/keys.ts),
+  // damit lokale Entwicklung/Tests ohne manuellen Schlüsselerzeugungsschritt
+  // funktionieren.
   JWT_PRIVATE_KEY: z.string().optional(),
   JWT_PUBLIC_KEY: z.string().optional(),
+  JWT_PRIVATE_KEY_FILE: z.string().optional(),
+  JWT_PUBLIC_KEY_FILE: z.string().optional(),
   CORS_ORIGIN: z.string().min(1).default('http://localhost:5173'),
 
   // Kommagetrennte Liste der tatsächlich vertrauenswürdigen Reverse-Proxy-
@@ -116,9 +137,30 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
     throw new Error(`Ungültige Umgebungskonfiguration:\n${issues}`);
   }
   const env = parsed.data;
-  if (env.NODE_ENV === 'production' && (!env.JWT_PRIVATE_KEY || !env.JWT_PUBLIC_KEY)) {
+  // Sicherheitsreview 2026-08-28, Befund H2 (Empfehlung 3): je Schlüssel
+  // dürfen nicht beide Formen (Inline-PEM und Dateipfad) gleichzeitig
+  // gesetzt sein — sonst wäre uneindeutig (und stillschweigend vom
+  // Auflösungspfad in auth/keys.ts abhängig), welche tatsächlich gilt.
+  // Gilt unabhängig von NODE_ENV, da eine solche Doppel-Konfiguration in
+  // jeder Umgebung ein Versehen ist, kein gültiger Anwendungsfall.
+  if (env.JWT_PRIVATE_KEY && env.JWT_PRIVATE_KEY_FILE) {
     throw new Error(
-      'JWT_PRIVATE_KEY und JWT_PUBLIC_KEY müssen in Produktion gesetzt sein (siehe .env.example, Abschnitt RS256-Schlüssel).',
+      'JWT_PRIVATE_KEY und JWT_PRIVATE_KEY_FILE dürfen nicht beide gesetzt sein — bitte genau eine der beiden Formen verwenden (siehe .env.example).',
+    );
+  }
+  if (env.JWT_PUBLIC_KEY && env.JWT_PUBLIC_KEY_FILE) {
+    throw new Error(
+      'JWT_PUBLIC_KEY und JWT_PUBLIC_KEY_FILE dürfen nicht beide gesetzt sein — bitte genau eine der beiden Formen verwenden (siehe .env.example).',
+    );
+  }
+  if (env.NODE_ENV === 'production' && !(env.JWT_PRIVATE_KEY || env.JWT_PRIVATE_KEY_FILE)) {
+    throw new Error(
+      'JWT_PRIVATE_KEY oder JWT_PRIVATE_KEY_FILE muss in Produktion gesetzt sein (siehe .env.example, Abschnitt RS256-Schlüssel).',
+    );
+  }
+  if (env.NODE_ENV === 'production' && !(env.JWT_PUBLIC_KEY || env.JWT_PUBLIC_KEY_FILE)) {
+    throw new Error(
+      'JWT_PUBLIC_KEY oder JWT_PUBLIC_KEY_FILE muss in Produktion gesetzt sein (siehe .env.example, Abschnitt RS256-Schlüssel).',
     );
   }
   // Sicherheitshärtung (siehe Sicherheitsreview, Punkt 4): CORS wird mit

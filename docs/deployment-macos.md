@@ -79,7 +79,7 @@ Sollte von `127.0.0.1` antworten.
 brew install node@22 postgresql@16 nginx git mkcert nss
 ```
 
-- **`node@22`** — passend zur in `apps/api/package.json`/`package.json` geforderten Node-Version (`>=22.0.0`), gleiche Major-Version wie in den anderen beiden Anleitungen.
+- **`node@22`** — passend zur in `apps/api/package.json`/`package.json` geforderten Node-Version (`>=22.9.0` — `--env-file-if-exists`, siehe Sicherheitsreview 2026-08-28, Befund N2), gleiche Major-Version wie in den anderen beiden Anleitungen.
 - **`postgresql@16`** — passend zu Ubuntu 24.04 (Hetzner-Anleitung) und aktuellem Raspberry Pi OS; die PostgreSQL-15+-Schema-Rechte-Besonderheit (siehe Abschnitt 6) betrifft diese Version genauso.
 - **`nginx`** — liefert die Weboberfläche aus und leitet API-Anfragen weiter, wie bei den anderen beiden Anleitungen.
 - **`mkcert`** (+ `nss`, falls auch Firefox getestet werden soll) — erzeugt ein lokal vertrauenswürdiges HTTPS-Zertifikat, siehe Abschnitt 10.
@@ -125,8 +125,22 @@ Führt npm dank der Workspace-Konfiguration für alle Pakete (`apps/web`, `apps/
 
 ```bash
 cp apps/api/.env.example apps/api/.env
+chmod 600 apps/api/.env
 nano apps/api/.env
 ```
+Das `chmod 600` ist **Pflicht, nicht optional**: `apps/api/.env` enthält
+gleich zwei kritische Geheimnisse — das Datenbank-Passwort und, sobald
+unten gesetzt, `JWT_PRIVATE_KEY` (signiert sämtliche Access Tokens).
+Ohne diesen Schritt entsteht die Datei mit den systemweiten
+Standardrechten (üblich `644`, also weltlesbar) — jedes andere lokale
+Benutzerkonto auf diesem Rechner könnte den privaten Schlüssel lesen und
+sich damit ein Access Token mit beliebiger Rolle (auch `superadmin`)
+selbst signieren, ohne dass ein Login, ein Rate-Limit oder ein Logeintrag
+das sichtbar machen würde (`app.authenticate` prüft ausschließlich die
+Signatur, nie die Datenbank — siehe `apps/api/src/plugins/authenticate.ts`).
+Analog zu `chmod 600 ~/.pgpass` (siehe `deployment.md`, Abschnitt 12.1),
+dort für dasselbe Datenbank-Passwort.
+
 `apps/api/.env.example` enthält bereits alle bekannten Variablen mit
 Erklärung (vollständiges, verbindliches Schema samt Validierung:
 `apps/api/src/config/env.ts`). Für die Testumgebung mindestens folgende
@@ -135,8 +149,11 @@ Werte setzen bzw. anpassen:
 NODE_ENV=production
 PORT=3000
 DATABASE_URL="postgresql://lane1_app:EIN-TESTPASSWORT-HIER@localhost:5432/lane1"
-JWT_PRIVATE_KEY="<mit openssl erzeugen, siehe unten>"
-JWT_PUBLIC_KEY="<mit openssl erzeugen, siehe unten>"
+# WICHTIG (Sicherheitsreview 2026-08-28, Befund N1): bewusst die
+# DML-only-Rolle `lane1_app`, NICHT `lane1_migrator` (siehe Abschnitt 6)
+# — dies sind die Zugangsdaten, mit denen die Anwendung dauerhaft läuft.
+JWT_PRIVATE_KEY_FILE="<mit openssl erzeugen, siehe unten>"
+JWT_PUBLIC_KEY_FILE="<mit openssl erzeugen, siehe unten>"
 CORS_ORIGIN="https://lane1.test"
 FRONTEND_BASE_URL="https://lane1.test"
 
@@ -151,23 +168,46 @@ TRUSTED_PROXY_IPS="127.0.0.1"
 
 **SMTP (optional für eine reine Testumgebung):** Ohne `SMTP_HOST` wird eine Einladung nur ins Server-Log geschrieben statt tatsächlich per E-Mail versendet — für lokale Tests meist völlig ausreichend (der Einladungslink lässt sich trotzdem im Log bzw. direkt in der Nutzerverwaltungs-Oberfläche kopieren, siehe `apps/web/help/admin.html`). Soll der komplette Versandweg mitgetestet werden, denselben SMTP-Block wie in `deployment.md`, Abschnitt 7.2 eintragen.
 
-**RS256-Schlüsselpaar erzeugen** (in Produktion — und damit auch hier, siehe Hinweis oben — PFLICHT). Das auf macOS vorinstallierte `openssl`-Kommando (LibreSSL-basiert) unterstützt die hier verwendeten Befehle vollständig — falls in einer künftigen macOS-Version doch einmal nicht, ersatzweise `brew install openssl@3` und `$(brew --prefix openssl@3)/bin/openssl` statt `openssl` verwenden:
+**RS256-Schlüsselpaar erzeugen** (in Produktion — und damit auch hier, siehe Hinweis oben — PFLICHT). Das auf macOS vorinstallierte `openssl`-Kommando (LibreSSL-basiert) unterstützt die hier verwendeten Befehle vollständig — falls in einer künftigen macOS-Version doch einmal nicht, ersatzweise `brew install openssl@3` und `$(brew --prefix openssl@3)/bin/openssl` statt `openssl` verwenden.
+
+**Empfohlen** (Sicherheitsreview 2026-08-28, Befund H2, Empfehlung 3):
+das Schlüsselpaar direkt an seinem endgültigen Ort erzeugen, statt es
+über eine `.env`-Zeile zu leiten — die Schlüsseldatei trägt dadurch
+eigene, engere Dateirechte (`600`), unabhängig von der übrigen `.env`
+(die u. a. auch das Datenbank-Passwort enthält):
 ```bash
-openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out /tmp/jwt_private.pem
-openssl pkey -in /tmp/jwt_private.pem -pubout -out /tmp/jwt_public.pem
+mkdir -p apps/api/keys
+chmod 700 apps/api/keys
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out apps/api/keys/jwt_private.pem
+openssl pkey -in apps/api/keys/jwt_private.pem -pubout -out apps/api/keys/jwt_public.pem
+chmod 600 apps/api/keys/jwt_private.pem
+chmod 644 apps/api/keys/jwt_public.pem
 ```
-Beide PEM-Dateien müssen als **eine Zeile** mit literalen `\n` statt
-echter Zeilenumbrüche in die `.env`:
+In der `.env` dann nur den Pfad eintragen:
+```
+JWT_PRIVATE_KEY_FILE="/Users/<dein-benutzername>/lane1/apps/api/keys/jwt_private.pem"
+JWT_PUBLIC_KEY_FILE="/Users/<dein-benutzername>/lane1/apps/api/keys/jwt_public.pem"
+```
+(Pfad an den tatsächlichen Ort deines Checkouts anpassen — `~/lane1` löst
+`pm2`/andere Startmethoden je nach Arbeitsverzeichnis nicht immer korrekt
+auf, ein absoluter Pfad ist robuster.) `apps/api/keys/` ist per
+`.gitignore` bereits ausgeschlossen — dieser Ordner darf wie `.env`
+niemals committet werden.
+
+**Alternative** (falls eine separate Schlüsseldatei nicht praktikabel
+ist): den PEM-Inhalt direkt als `JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY` in die
+`.env` schreiben, mit literalen `\n` statt echter Zeilenumbrüche:
 ```bash
-awk 'BEGIN{ORS="\\n"} {print}' /tmp/jwt_private.pem
-awk 'BEGIN{ORS="\\n"} {print}' /tmp/jwt_public.pem
+awk 'BEGIN{ORS="\\n"} {print}' apps/api/keys/jwt_private.pem
+awk 'BEGIN{ORS="\\n"} {print}' apps/api/keys/jwt_public.pem
 ```
 Jede Ausgabe komplett kopieren und als Wert von `JWT_PRIVATE_KEY` bzw.
-`JWT_PUBLIC_KEY` in Anführungszeichen einsetzen. Anschließend die
-temporären PEM-Dateien löschen:
-```bash
-rm /tmp/jwt_private.pem /tmp/jwt_public.pem
-```
+`JWT_PUBLIC_KEY` in Anführungszeichen einsetzen, und **nur in diesem
+Fall** anschließend `apps/api/keys/` wieder löschen (`rm -rf
+apps/api/keys`) — sonst liegt derselbe private Schlüssel doppelt vor. Je
+Schlüssel darf **nur eine** der beiden Formen gesetzt sein
+(`JWT_PRIVATE_KEY` **oder** `JWT_PRIVATE_KEY_FILE`, nie beide — `env.ts`
+lehnt eine gleichzeitige Angabe sonst mit einer klaren Fehlermeldung ab).
 
 ---
 
@@ -177,16 +217,32 @@ Homebrew richtet PostgreSQL beim ersten Start (Abschnitt 3) automatisch mit eine
 ```bash
 psql postgres
 ```
-Innerhalb der PostgreSQL-Konsole (Prompt `postgres=#`):
+Innerhalb der PostgreSQL-Konsole (Prompt `postgres=#`) — **zwei** Rollen
+statt einer (Sicherheitsreview 2026-08-28, Befund N1): `lane1_migrator`
+wendet ausschließlich das Datenbankschema an (`prisma migrate deploy`,
+braucht dafür DDL-Rechte), `lane1_app` ist die Rolle, mit der die
+Anwendung selbst läuft (`DATABASE_URL` in Schritt 5) und bekommt bewusst
+NUR Lese-/Schreibrechte auf Zeilenebene, keine DDL-Rechte:
 ```sql
 CREATE DATABASE lane1;
+
+CREATE USER lane1_migrator WITH ENCRYPTED PASSWORD 'EIN-TESTPASSWORT-MIGRATION-HIER';
+GRANT ALL PRIVILEGES ON DATABASE lane1 TO lane1_migrator;
+
 CREATE USER lane1_app WITH ENCRYPTED PASSWORD 'EIN-TESTPASSWORT-HIER';
-GRANT ALL PRIVILEGES ON DATABASE lane1 TO lane1_app;
+GRANT CONNECT ON DATABASE lane1 TO lane1_app;
+
 \c lane1
-GRANT ALL ON SCHEMA public TO lane1_app;
+GRANT ALL ON SCHEMA public TO lane1_migrator;
+GRANT USAGE ON SCHEMA public TO lane1_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO lane1_app;
+ALTER DEFAULT PRIVILEGES FOR ROLE lane1_migrator IN SCHEMA public
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO lane1_app;
 \q
 ```
-Das Passwort muss zum in Schritt 5 eingetragenen `DATABASE_URL` passen.
+Das `lane1_app`-Passwort muss zum in Schritt 5 eingetragenen
+`DATABASE_URL` passen; `lane1_migrator` wird gleich beim
+`prisma migrate deploy` unten gebraucht.
 
 > **Wichtig (PostgreSQL 15+, betrifft auch die hier installierte Version 16):** Seit
 > PostgreSQL 15 hat nur noch der Datenbank-Eigentümer automatisch das Recht,
@@ -195,10 +251,12 @@ Das Passwort muss zum in Schritt 5 eingetragenen `DATABASE_URL` passen.
 > `GRANT ALL ON SCHEMA public` oben bricht der nächste Befehl unten mit
 > `permission denied for schema public` ab.
 
-Schema anlegen:
+Schema anlegen — `DATABASE_URL` wird hier bewusst mit der DDL-Rolle
+`lane1_migrator` **überschrieben**, nur für genau diesen einen Befehl
+(Befund N1, siehe oben):
 ```bash
 cd apps/api
-npx prisma migrate deploy
+DATABASE_URL="postgresql://lane1_migrator:EIN-TESTPASSWORT-MIGRATION-HIER@localhost:5432/lane1" npx prisma migrate deploy
 cd ../..
 ```
 > Siehe `deployment.md`, Abschnitt 7.3 für die ausführliche Begründung
@@ -219,9 +277,12 @@ Baut dabei automatisch auch die gemeinsamen Pakete (`packages/shared-types`, `pa
 
 ## 8. Backend mit PM2 starten
 
+`--node-args="--env-file-if-exists=.env"` ist **Pflicht** — siehe `deployment.md`,
+Abschnitt 8 (Sicherheitsreview 2026-08-28, Befund N2): ohne dieses Flag
+lädt der Prozess `apps/api/.env` nicht und stürzt sofort ab:
 ```bash
 cd apps/api
-pm2 start dist/index.js --name lane1-api
+pm2 start dist/index.js --name lane1-api --node-args="--env-file-if-exists=.env"
 pm2 save
 pm2 startup
 ```
@@ -235,10 +296,16 @@ pm2 logs lane1-api
 
 ### 8.1 Ersten Superadmin anlegen (einmalig)
 
-Identisch zu `deployment.md`, Abschnitt 8.1 — ohne diesen Schritt kann sich niemand einloggen:
+Identisch zu `deployment.md`, Abschnitt 8.1 — ohne diesen Schritt kann sich niemand einloggen. Das Passwort wird bewusst NICHT als Argument angegeben (Sicherheitsreview 2026-08-28, Befund M1), sondern interaktiv abgefragt:
 ```bash
 cd apps/api
-npm run create-superadmin -- --email=admin@test.lane1.test --password='EIN-TESTPASSWORT' --name="Test Admin"
+npm run create-superadmin -- --email=admin@test.lane1.test --name="Test Admin"
+cd ../..
+```
+Alternativ nicht-interaktiv per Umgebungsvariable:
+```bash
+cd apps/api
+SUPERADMIN_PASSWORD='EIN-TESTPASSWORT' npm run create-superadmin -- --email=admin@test.lane1.test --name="Test Admin"
 cd ../..
 ```
 Mit diesem Konto danach unter `https://lane1.test/admin` anmelden und dort den ersten (Test-)Verein anlegen.
@@ -386,9 +453,9 @@ Für eine reine Testumgebung ist ein vollwertiges Backup-Konzept wie in `deploym
 mkdir -p ~/lane1-backups
 "$(brew --prefix postgresql@16)/bin/pg_dump" -h 127.0.0.1 -U lane1_app lane1 > ~/lane1-backups/lane1-$(date +%F).sql
 ```
-Wiederherstellen (z. B. nach einem `prisma migrate reset`, das versehentlich Testdaten gelöscht hat):
+Wiederherstellen (z. B. nach einem `prisma migrate reset`, das versehentlich Testdaten gelöscht hat) — bewusst mit `lane1_migrator`, nicht `lane1_app` (Befund N1 oben): `pg_dump` schreibt standardmäßig auch `CREATE TABLE`/`DROP TABLE`-Anweisungen mit in die Datei, das Einspielen ist damit ein Schema-Vorgang wie `prisma migrate deploy`, kein reiner Datenzugriff:
 ```bash
-"$(brew --prefix postgresql@16)/bin/psql" -h 127.0.0.1 -U lane1_app lane1 < ~/lane1-backups/lane1-2026-08-17.sql
+"$(brew --prefix postgresql@16)/bin/psql" -h 127.0.0.1 -U lane1_migrator lane1 < ~/lane1-backups/lane1-2026-08-17.sql
 ```
 
 Für einen automatisierten täglichen Lauf per `cron` gilt derselbe Hinweis wie in `deployment.md`, Abschnitt 12.1 (`-h 127.0.0.1` statt Unix-Socket, damit die passwortbasierte statt der `peer`-Authentifizierung greift, plus `~/.pgpass`) — **zusätzlich** unter macOS zu beachten:
@@ -404,7 +471,9 @@ Identisch zu `deployment.md`, Abschnitt 13:
 cd ~/lane1
 git pull
 npm install
-cd apps/api && npx prisma migrate deploy && cd ../..
+cd apps/api
+DATABASE_URL="postgresql://lane1_migrator:EIN-TESTPASSWORT-MIGRATION-HIER@localhost:5432/lane1" npx prisma migrate deploy   # DDL-Rolle, siehe Abschnitt 6 (Befund N1)
+cd ..
 npm run build --workspace=apps/api
 pm2 restart lane1-api
 sudo nginx -s reload

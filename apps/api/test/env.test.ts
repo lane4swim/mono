@@ -74,6 +74,68 @@ describe('loadEnv', () => {
     expect(env.CORS_ORIGIN).toBe('https://app.lane1.example.org');
   });
 
+  // Regressionstests für Sicherheitsreview 2026-08-28, Befund H2,
+  // Empfehlung 3: JWT_PRIVATE_KEY_FILE/JWT_PUBLIC_KEY_FILE als zweite,
+  // gleichwertige Form neben dem bisherigen Inline-PEM.
+  describe('JWT_PRIVATE_KEY / JWT_PUBLIC_KEY (Inline- vs. Datei-Form)', () => {
+    it('lehnt ein fehlendes Schlüsselpaar (keine Form gesetzt) in Produktion ab', () => {
+      expect(() =>
+        loadEnv({
+          ...validEnv,
+          NODE_ENV: 'production',
+          TRUSTED_PROXY_IPS: '127.0.0.1',
+        }),
+      ).toThrow(/JWT_PRIVATE_KEY/);
+    });
+
+    it('akzeptiert die Datei-Form (JWT_PRIVATE_KEY_FILE/JWT_PUBLIC_KEY_FILE) in Produktion', () => {
+      const env = loadEnv({
+        ...validEnv,
+        NODE_ENV: 'production',
+        TRUSTED_PROXY_IPS: '127.0.0.1',
+        JWT_PRIVATE_KEY_FILE: '/etc/lane1/jwt_private.pem',
+        JWT_PUBLIC_KEY_FILE: '/etc/lane1/jwt_public.pem',
+      });
+      expect(env.JWT_PRIVATE_KEY_FILE).toBe('/etc/lane1/jwt_private.pem');
+      expect(env.JWT_PUBLIC_KEY_FILE).toBe('/etc/lane1/jwt_public.pem');
+    });
+
+    it('akzeptiert gemischte Formen — privat per Datei, öffentlich inline (unabhängige Prüfung je Schlüssel)', () => {
+      const env = loadEnv({
+        ...validEnv,
+        NODE_ENV: 'production',
+        TRUSTED_PROXY_IPS: '127.0.0.1',
+        JWT_PRIVATE_KEY_FILE: '/etc/lane1/jwt_private.pem',
+        JWT_PUBLIC_KEY: 'dummy-public-key',
+      });
+      expect(env.JWT_PRIVATE_KEY_FILE).toBe('/etc/lane1/jwt_private.pem');
+      expect(env.JWT_PUBLIC_KEY).toBe('dummy-public-key');
+    });
+
+    it('lehnt JWT_PRIVATE_KEY und JWT_PRIVATE_KEY_FILE gleichzeitig gesetzt ab (uneindeutig)', () => {
+      expect(() =>
+        loadEnv({
+          ...validEnv,
+          NODE_ENV: 'production',
+          TRUSTED_PROXY_IPS: '127.0.0.1',
+          JWT_PRIVATE_KEY: 'dummy-private-key',
+          JWT_PRIVATE_KEY_FILE: '/etc/lane1/jwt_private.pem',
+          JWT_PUBLIC_KEY: 'dummy-public-key',
+        }),
+      ).toThrow(/JWT_PRIVATE_KEY_FILE/);
+    });
+
+    it('lehnt JWT_PUBLIC_KEY und JWT_PUBLIC_KEY_FILE gleichzeitig gesetzt ab (uneindeutig) — auch außerhalb von Produktion', () => {
+      expect(() =>
+        loadEnv({
+          ...validEnv,
+          JWT_PUBLIC_KEY: 'dummy-public-key',
+          JWT_PUBLIC_KEY_FILE: '/etc/lane1/jwt_public.pem',
+        }),
+      ).toThrow(/JWT_PUBLIC_KEY_FILE/);
+    });
+  });
+
   // Regressionstests für Sicherheitsreview 2026-08-27, Befund H1: ein
   // fehlender TRUSTED_PROXY_IPS-Wert in Produktion reproduzierte zuvor
   // stillschweigend entweder Befund H1 (fiele man auf "trustProxy: true"

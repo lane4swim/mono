@@ -17,11 +17,23 @@
   // committete Migrationshistorie unter apps/api/prisma/migrations/ an.
   "postCreateCommand": "cd apps/api && npm run prisma:generate && npx prisma migrate deploy && cd ../..",
 
-  "forwardPorts": [3000, 5173, 5432],
+  // Sicherheitsreview 2026-08-28, Befund N3: 5432 (PostgreSQL) bewusst
+  // NICHT weitergeleitet — die Anwendung erreicht Postgres innerhalb
+  // desselben Compose-Netzwerks ohnehin über den Servicenamen
+  // ("postgres:5432", siehe ../docker-compose.yml), eine
+  // Host-Weiterleitung bietet also nur Komfort (z. B. ein lokal
+  // angeschlossener GUI-Datenbank-Client), keinen funktionalen Nutzen.
+  // Bei versehentlicher Umstellung eines weitergeleiteten Ports auf
+  // "öffentlich" (Codespaces-Ports sind standardmäßig privat) wäre die
+  // Datenbank sonst mit dem fest im Repository stehenden
+  // Dev-Passwort ("lane1_dev_password", siehe ../docker-compose.yml)
+  // erreichbar. Wer einen GUI-Client anschließen möchte, kann den Port
+  // bei Bedarf manuell weiterleiten (VS Code: "Ports"-Tab -> "Forward a
+  // Port").
+  "forwardPorts": [3000, 5173],
   "portsAttributes": {
     "3000": { "label": "API (Fastify)", "onAutoForward": "notify" },
-    "5173": { "label": "Web (PWA)", "onAutoForward": "openPreview" },
-    "5432": { "label": "PostgreSQL", "onAutoForward": "silent" }
+    "5173": { "label": "Web (PWA)", "onAutoForward": "openPreview" }
   },
 
   "customizations": {
