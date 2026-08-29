@@ -209,3 +209,30 @@ describe('ChangePasswordRequestSchema', () => {
     expect(ChangePasswordRequestSchema.safeParse({ currentPassword: 'x'.repeat(201), newPassword: 'ein-sicheres-passwort' }).success).toBe(false);
   });
 });
+
+// Sicherheitsreview 2026-08-29, Befund M2 — siehe NormalizedEmailSchema
+// (packages/shared-types/src/user.ts) für die vollständige Begründung:
+// `.trim().toLowerCase()` laufen als Zod-String-Checks in der notierten
+// Reihenfolge, also VOR `.email()`. Geprüft wird hier vor allem, dass die
+// Normalisierung tatsächlich im GEPARSTEN Wert ankommt (nicht nur
+// "success: true" liefert) — nur dann sieht der Service unten eine
+// einheitliche Adresse.
+describe('E-Mail-Normalisierung der Eingabe-Schemas (Befund M2)', () => {
+  it('normalisiert die Login-Adresse auf Kleinschreibung und schneidet Leerzeichen ab', () => {
+    const parsed = LoginRequestSchema.parse({ email: '  Anna@Verein.DE  ', password: 'x', consent: true });
+    expect(parsed.email).toBe('anna@verein.de');
+  });
+
+  it('normalisiert die Adresse bei „Passwort vergessen"', () => {
+    expect(ForgotPasswordRequestSchema.parse({ email: 'Anna@Verein.DE' }).email).toBe('anna@verein.de');
+  });
+
+  it('normalisiert die neue Adresse beim E-Mail-Wechsel', () => {
+    const parsed = ChangeEmailRequestSchema.parse({ currentPassword: 'x', newEmail: ' Neu@Verein.DE ' });
+    expect(parsed.newEmail).toBe('neu@verein.de');
+  });
+
+  it('lehnt eine weiterhin ungültige Adresse ab — die Normalisierung ersetzt die Prüfung nicht', () => {
+    expect(LoginRequestSchema.safeParse({ email: '  KEIN-EMAIL  ', password: 'x', consent: true }).success).toBe(false);
+  });
+});

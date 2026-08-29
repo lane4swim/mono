@@ -183,8 +183,6 @@ else
     echo "  Hinweis: CODESPACE_NAME nicht gesetzt (kein Codespace?) — verwende ${PUBLIC_URL}."
   fi
 
-  JWT_SIGNING_KEY="$(openssl rand -base64 48)"
-
   # Sicherheitskorrektur (Sicherheitsreview 2026-08-28, Befund H2,
   # Empfehlung 3): das Schlüsselpaar wird jetzt direkt an seinem
   # endgültigen, geschützten Ort erzeugt (apps/api/keys/) statt zuerst in
@@ -202,20 +200,37 @@ else
   chmod 700 "$KEYS_DIR"
   JWT_PRIVATE_KEY_FILE="${KEYS_DIR}/jwt_private.pem"
   JWT_PUBLIC_KEY_FILE="${KEYS_DIR}/jwt_public.pem"
-  openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$JWT_PRIVATE_KEY_FILE"
-  openssl pkey -in "$JWT_PRIVATE_KEY_FILE" -pubout -out "$JWT_PUBLIC_KEY_FILE"
+  # Sicherheitsreview 2026-08-29, Befund N2: `umask 077` VOR der Erzeugung,
+  # statt nur `chmod 600` danach. `openssl genpkey -out` legt die Datei
+  # unter der geltenden umask an (üblich 0022 -> 0644, weltlesbar) — der
+  # private Schlüssel, mit dem sich beliebige Access Tokens signieren
+  # lassen (siehe plugins/authenticate.ts: prüft nur die Signatur, nie die
+  # Datenbank), lag dadurch zwischen Erzeugung und `chmod` für jedes
+  # andere lokale Konto offen. Das Fenster ist kurz, aber vermeidbar; die
+  # explizite Rechtevergabe unten bleibt zusätzlich stehen (korrigiert
+  # auch eine bereits vorhandene Datei aus der Zeit davor).
+  (
+    umask 077
+    openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$JWT_PRIVATE_KEY_FILE"
+    openssl pkey -in "$JWT_PRIVATE_KEY_FILE" -pubout -out "$JWT_PUBLIC_KEY_FILE"
+  )
   chmod 600 "$JWT_PRIVATE_KEY_FILE"
   chmod 644 "$JWT_PUBLIC_KEY_FILE"
 
   DATABASE_URL="postgresql://${DB_USER}:${DB_PASSWORD}@localhost:5432/${DB_NAME}"
 
+  # Sicherheitsreview 2026-08-29, Befund N2 — dieselbe Begründung wie beim
+  # Schlüsselpaar oben: `cat >` legt die Datei unter der geltenden umask an
+  # (üblich weltlesbar), und sie enthält u. a. das Datenbank-Passwort. Der
+  # unbedingte `chmod 600` weiter unten bleibt zusätzlich bestehen — er
+  # korrigiert auch eine bereits vorhandene Datei aus einem früheren Lauf.
+  (
+  umask 077
   cat >"$ENV_FILE" <<EOF
 NODE_ENV=production
 PORT=3000
 
 DATABASE_URL="${DATABASE_URL}"
-
-JWT_SIGNING_KEY="${JWT_SIGNING_KEY}"
 
 JWT_PRIVATE_KEY_FILE="${JWT_PRIVATE_KEY_FILE}"
 JWT_PUBLIC_KEY_FILE="${JWT_PUBLIC_KEY_FILE}"
@@ -240,6 +255,7 @@ SMTP_FROM_NAME="Lane 1"
 
 DATA_ERASURE_RETENTION_DAYS=30
 EOF
+  )
 
   echo "  $ENV_FILE geschrieben. Öffentliche Adresse (für Schritt 11): ${PUBLIC_URL}"
 fi
@@ -369,17 +385,32 @@ server {
 
     # Content-Security-Policy für das Frontend (Code-Review, Befund S3) —
     # siehe docs/deployment.md, Abschnitt 9 für die ausführliche Begründung.
+
+    # Sicherheitsreview 2026-08-29, Befund N2: HSTS/nosniff/Referrer-Policy
+    # ergänzt — siehe docs/deployment.md, Abschnitt 9 für die ausführliche
+    # Begründung (Helmet in apps/api deckt nur die JSON-Antworten der API
+    # ab, nicht die hier statisch ausgelieferte Weboberfläche).
     set \$csp "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; worker-src 'self'; manifest-src 'self'";
+    # Kein Strict-Transport-Security: dieser Aufbau terminiert kein TLS
+    # (siehe `listen` oben), der Header wäre über HTTP wirkungslos und
+    # würde bei einem späteren echten HTTPS-Betrieb nur falsche Sicherheit
+    # suggerieren.
+    set \$nosniff "nosniff";
+    set \$referrer_policy "strict-origin-when-cross-origin";
 
     location / {
         try_files \$uri \$uri/ /index.html;
         add_header Content-Security-Policy \$csp always;
+        add_header X-Content-Type-Options \$nosniff always;
+        add_header Referrer-Policy \$referrer_policy always;
     }
 
     # Service Worker & Manifest müssen exakt korrekt ausgeliefert werden
     location = /sw.js {
         add_header Cache-Control "no-cache";
         add_header Content-Security-Policy \$csp always;
+        add_header X-Content-Type-Options \$nosniff always;
+        add_header Referrer-Policy \$referrer_policy always;
     }
 
     # API-Anfragen an das Node.js-Backend weiterleiten

@@ -127,3 +127,24 @@ describe('InvitationSummarySchema', () => {
     expect('token' in summary).toBe(false);
   });
 });
+
+// Sicherheitsreview 2026-08-29, Befund M2 — die hier erfasste Adresse
+// landet unverändert in der Einladung und später als `User.email`; eine
+// versehentlich groß geschriebene Eingabe sperrte die eingeladene Person
+// sonst dauerhaft aus (siehe NormalizedEmailSchema in
+// packages/shared-types/src/user.ts).
+describe('E-Mail-Normalisierung der Einladungs-Eingabeschemas (Befund M2)', () => {
+  it('normalisiert adminEmail beim Anlegen eines Vereins', () => {
+    const parsed = CreateClubRequestSchema.parse({
+      name: 'SV Beispiel',
+      adminEmail: '  Admin@Verein.DE ',
+      adminName: 'Anna Admin',
+    });
+    expect(parsed.adminEmail).toBe('admin@verein.de');
+  });
+
+  it('normalisiert die Adresse einer Mitglieder-Einladung', () => {
+    const parsed = CreateInvitationRequestSchema.parse({ email: 'Trainer@Verein.DE', role: 'trainer' });
+    expect(parsed.email).toBe('trainer@verein.de');
+  });
+});

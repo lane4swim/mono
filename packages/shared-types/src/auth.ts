@@ -12,7 +12,7 @@
 // geänderte Datenschutzerklärung erkennbar eine erneute Zustimmung
 // erfordern kann.
 import { z } from 'zod';
-import { RoleSchema, LocaleSchema, UserSchema } from './user.js';
+import { RoleSchema, LocaleSchema, UserSchema, NormalizedEmailSchema } from './user.js';
 import { ModuleKeySchema } from './modules.js';
 
 export const CURRENT_CONSENT_VERSION = '2026-07-15';
@@ -33,7 +33,9 @@ const consentField = z.literal(true, { message: 'Die Einwilligung zur Datenverar
 // unnötiger DoS-Verstärker. 200 Zeichen liegt weit über jeder realistischen
 // Passphrase (siehe auth.passwordHint im Frontend).
 export const LoginRequestSchema = z.object({
-  email: z.string().email(),
+  // Sicherheitsreview 2026-08-29, Befund M2 — siehe NormalizedEmailSchema
+  // (packages/shared-types/src/user.ts) für die vollständige Begründung.
+  email: NormalizedEmailSchema,
   password: z.string().min(1).max(200),
   consent: consentField,
 });
@@ -115,7 +117,11 @@ const newPasswordField = z.string().min(8, 'Passwort muss mindestens 8 Zeichen l
 // dieser E-Mail-Adresse existiert (verhindert User-Enumeration, siehe
 // auth.service.ts: requestPasswordReset()).
 export const ForgotPasswordRequestSchema = z.object({
-  email: z.string().email(),
+  // Sicherheitsreview 2026-08-29, Befund M2 — hier besonders wichtig: die
+  // generische Antwort dieses Endpunkts macht eine bloße Schreibweisen-
+  // Abweichung von „Konto existiert nicht" ununterscheidbar (siehe
+  // NormalizedEmailSchema in user.ts, Punkt 2).
+  email: NormalizedEmailSchema,
 });
 export type ForgotPasswordRequest = z.infer<typeof ForgotPasswordRequestSchema>;
 
@@ -149,7 +155,11 @@ export type ChangePasswordRequest = z.infer<typeof ChangePasswordRequestSchema>;
 // "Passwort vergessen" — zur dauerhaften Kontoübernahme reicht).
 export const ChangeEmailRequestSchema = z.object({
   currentPassword: z.string().min(1).max(200),
-  newEmail: z.string().email(),
+  // Sicherheitsreview 2026-08-29, Befund M2 — ohne Normalisierung ließ
+  // sich hier die Duplikat-Prüfung in changeEmail() über eine abweichende
+  // Groß-/Kleinschreibung umgehen (siehe NormalizedEmailSchema in
+  // user.ts, Punkt 3).
+  newEmail: NormalizedEmailSchema,
 });
 export type ChangeEmailRequest = z.infer<typeof ChangeEmailRequestSchema>;
 

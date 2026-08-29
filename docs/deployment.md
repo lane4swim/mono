@@ -539,17 +539,54 @@ server {
     #     Modals, SVG-Diagramme, Service-Worker-Registrierung,
     #     Superadmin-/Demo-/Hilfe-Seiten) — keine CSP-Verstöße in der
     #     Konsole.
+
+    # Sicherheitsreview 2026-08-29, Befund N2: neben der CSP fehlten der
+    # statisch ausgelieferten Weboberfläche bislang drei weitere Header.
+    # apps/api setzt sie über Helmet (siehe plugins/security.ts) — aber
+    # nur auf seinen EIGENEN JSON-Antworten; die HTML-Anwendung aus
+    # diesem `root`-Verzeichnis läuft nicht durch Fastify und bekam
+    # dadurch keinen davon:
+    #   - Strict-Transport-Security: `certbot --nginx` legt zwar eine
+    #     80->443-Weiterleitung an, aber kein HSTS. Ohne den Header ist
+    #     der allererste Aufruf einer Sitzung (Tippen der Domain ohne
+    #     "https://") als Klartext-HTTP angreifbar — und in genau dieser
+    #     Anfrage schickt der Browser bereits das im localStorage
+    #     liegende Refresh Token mit, sobald die App lädt. `preload`
+    #     bewusst NICHT gesetzt: das ist eine praktisch unumkehrbare
+    #     Eintragung in die Browser-Liste und sollte eine bewusste
+    #     Entscheidung des Betreibers bleiben, kein Nebeneffekt dieser
+    #     Anleitung.
+    #   - X-Content-Type-Options: verhindert MIME-Sniffing — ein als
+    #     Bild/Text hochgeladener oder abgelegter Inhalt darf nicht als
+    #     Skript interpretiert werden.
+    #   - Referrer-Policy: die Einladungs-/Reset-Tokens stehen zwar im
+    #     URL-FRAGMENT und verlassen den Browser ohnehin nie (siehe
+    #     invitations.service.ts: buildInviteUrl()) — der Header hält
+    #     zusätzlich Pfad und Query aus dem Referer fremder Ziele heraus.
+    # Wie bei der CSP als `set`-Variablen definiert, damit sie in jedem
+    # `location`-Block wiederholt werden können: eine Location mit
+    # eigenem `add_header` erbt KEINE `add_header`-Direktiven des
+    # umschließenden Blocks (Nginx-Eigenheit, siehe Kommentar oben).
     set $csp "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; worker-src 'self'; manifest-src 'self'";
+    set $hsts "max-age=31536000; includeSubDomains";
+    set $nosniff "nosniff";
+    set $referrer_policy "strict-origin-when-cross-origin";
 
     location / {
         try_files $uri $uri/ /index.html;
         add_header Content-Security-Policy $csp always;
+        add_header Strict-Transport-Security $hsts always;
+        add_header X-Content-Type-Options $nosniff always;
+        add_header Referrer-Policy $referrer_policy always;
     }
 
     # Service Worker & Manifest müssen exakt korrekt ausgeliefert werden
     location = /sw.js {
         add_header Cache-Control "no-cache";
         add_header Content-Security-Policy $csp always;
+        add_header Strict-Transport-Security $hsts always;
+        add_header X-Content-Type-Options $nosniff always;
+        add_header Referrer-Policy $referrer_policy always;
     }
 
     # API-Anfragen an das Node.js-Backend weiterleiten (sobald vorhanden)

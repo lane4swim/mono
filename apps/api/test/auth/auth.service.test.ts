@@ -685,4 +685,69 @@ describe('authService.changeEmail (Sicherheitsreview 2026-08-27, Befund H2)', ()
 
     await expect(service.changeEmail(user.id, 'ein-sicheres-passwort', 'andere@example.org')).rejects.toThrow(EmailAlreadyRegisteredError);
   });
+
+  // Sicherheitsreview 2026-08-29, Befund M2: der Abgleich lief über einen
+  // zeichengenauen Vergleich — eine abweichende Groß-/Kleinschreibung
+  // umging die Prüfung oben und ließ für EIN reales Postfach zwei Konten
+  // entstehen. Der Endpunkt normalisiert die Eingabe inzwischen
+  // (NormalizedEmailSchema, packages/shared-types/src/auth.ts); der
+  // Service selbst muss zusätzlich case-insensitiv abgleichen, damit auch
+  // BEREITS gespeicherte Adressen in gemischter Schreibweise erkannt
+  // werden. Der Aufruf hier geht bewusst am Schema vorbei (direkt auf den
+  // Service), prüft also genau diese zweite Verteidigungslinie.
+  it('lehnt eine fremde Adresse auch bei abweichender Groß-/Kleinschreibung ab (Befund M2)', async () => {
+    const { service, invitations } = makeService();
+    const { user } = await registerViaInvitation(service, invitations, { email: 'erste-m2@example.org' });
+    await registerViaInvitation(service, invitations, { email: 'andere-m2@example.org' });
+
+    await expect(service.changeEmail(user.id, 'ein-sicheres-passwort', 'Andere-M2@Example.org')).rejects.toThrow(EmailAlreadyRegisteredError);
+  });
+
+  // Kehrseite desselben Befunds: der case-insensitive Abgleich darf die
+  // Person nicht an ihrer EIGENEN Adresse scheitern lassen — genau dafür
+  // vergleicht changeEmail() jetzt `emailTaken.id !== userId`, statt vorab
+  // `newEmail !== user.email` zu prüfen.
+  it('erlaubt es, die EIGENE Adresse in eine andere Schreibweise zu ändern (Befund M2)', async () => {
+    const { service, invitations } = makeService();
+    const { user } = await registerViaInvitation(service, invitations, { email: 'Eigene-M2@example.org' });
+
+    const result = await service.changeEmail(user.id, 'ein-sicheres-passwort', 'eigene-m2@example.org');
+    expect(result.user.email).toBe('eigene-m2@example.org');
+  });
+});
+
+// Sicherheitsreview 2026-08-29, Befund M2: E-Mail-Adressen wurden nirgends
+// normalisiert, `User.email` trägt in PostgreSQL aber ein zeichengenaues
+// `@unique`. Wer als „Anna@verein.de" eingeladen wurde und sich als
+// „anna@verein.de" anmeldete, bekam „E-Mail-Adresse oder Passwort ist
+// ungültig" — bei korrekten Zugangsdaten und ohne jeden Hinweis auf die
+// Ursache. Bei „Passwort vergessen" war der Effekt noch stiller: der
+// Endpunkt antwortet aus gutem Grund immer generisch, es kam schlicht nie
+// eine E-Mail an.
+describe('E-Mail-Abgleich ohne Rücksicht auf Groß-/Kleinschreibung (Befund M2)', () => {
+  it('meldet ein in gemischter Schreibweise gespeichertes Konto auch bei kleingeschriebener Eingabe an', async () => {
+    const { service, invitations } = makeService();
+    await registerViaInvitation(service, invitations, { email: 'Gemischt@Example.org' });
+
+    await expect(
+      service.login({ email: 'gemischt@example.org', password: 'ein-sicheres-passwort', consent: true }),
+    ).resolves.toBeTruthy();
+  });
+
+  it('stellt einen Reset-Link auch dann zu, wenn die Schreibweise von der gespeicherten abweicht', async () => {
+    const { service, invitations, mailer } = makeService();
+    await registerViaInvitation(service, invitations, { email: 'Reset-Gemischt@Example.org' });
+
+    await service.requestPasswordReset('reset-gemischt@example.org');
+    expect(mailer.sentPasswordResetEmails).toHaveLength(1);
+  });
+
+  it('verhindert ein Doppelkonto per abweichender Schreibweise beim Einlösen einer Einladung', async () => {
+    const { service, invitations } = makeService();
+    await registerViaInvitation(service, invitations, { email: 'doppelt@example.org' });
+
+    await expect(
+      registerViaInvitation(service, invitations, { email: 'Doppelt@Example.org' }),
+    ).rejects.toThrow(EmailAlreadyRegisteredError);
+  });
 });

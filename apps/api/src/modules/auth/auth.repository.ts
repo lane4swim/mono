@@ -118,8 +118,28 @@ export interface PasswordResetTokenRepository {
 export class PrismaUserRepository implements UserRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
+  // Sicherheitsreview 2026-08-29, Befund M2: `mode: 'insensitive'`
+  // ergänzt. Die Eingabe-Schemas normalisieren neue Adressen zwar bereits
+  // auf Kleinschreibung (siehe NormalizedEmailSchema in
+  // packages/shared-types/src/user.ts) — BEREITS gespeicherte Adressen in
+  // gemischter Schreibweise blieben davon aber unberührt und wären mit
+  // einem zeichengenauen Vergleich ab sofort NICHT MEHR anmeldbar
+  // gewesen. Der case-insensitive Abgleich deckt beide Bestände ab, ohne
+  // eine Datenmigration zu erzwingen, die an bereits existierenden
+  // Doppelkonten (zwei Zeilen, die sich nur in der Schreibweise
+  // unterscheiden) scheitern könnte, und schließt zugleich die
+  // Umgehbarkeit der Duplikat-Prüfungen in acceptInvitation()/
+  // changeEmail() (siehe auth.service.ts).
+  //
+  // Zum Preis: `citext`/ein funktionaler Index existiert nicht, die
+  // Abfrage nutzt den `email`-Unique-Index also nicht mehr. Für die
+  // Größenordnung dieser Tabelle (Vereinsmitglieder, nicht Endkunden
+  // eines Massendienstes) ist der sequentielle Scan unkritisch; wächst
+  // die Instanz über diese Annahme hinaus, ist ein Index auf
+  // `lower("email")` plus eine einmalige Normalisierungs-Migration der
+  // nächste Schritt.
   async findByEmail(email: string): Promise<UserRecord | null> {
-    return this.prisma.user.findFirst({ where: { email, deletedAt: null } });
+    return this.prisma.user.findFirst({ where: { email: { equals: email, mode: 'insensitive' }, deletedAt: null } });
   }
   // Liefert wie findByEmail() bewusst NUR aktive (nicht gelöschte) Konten —
   // sonst funktionieren refresh()/getMe()/updateMe() (siehe auth.service.ts)
