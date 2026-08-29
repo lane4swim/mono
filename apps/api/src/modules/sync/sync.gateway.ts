@@ -72,6 +72,25 @@ export interface SyncGateway {
   // Vereins gefunden und über den Umweg des Konfliktergebnisses ausgelesen
   // werden.
   findById(store: EntityStoreName, id: string, clubId?: string): Promise<SyncRecord | null>;
+  // Ineffizienz-Korrektur: Mengen-Variante von findById() für die reine
+  // EXISTENZ-Prüfung mehrerer Fremdschlüssel-Referenzen desselben Stores
+  // (siehe sync.foreignKeys.ts). findById() dort je Referenz einzeln
+  // aufzurufen bedeutete eine eigene, SERIELLE Datenbankabfrage pro
+  // Referenz — bei einem Trainingsplan mit vielen verschachtelten
+  // exerciseId-Verweisen (packages/shared-types/src/entities.ts:
+  // PlainSetSchema) also Dutzende Roundtrips nacheinander, jeder davon
+  // zudem mit der VOLLSTÄNDIGEN Zeile im Ergebnis (inkl. großer
+  // JSON-Spalten), obwohl nur "existiert im eigenen Verein?" gefragt war.
+  //
+  // Liefert die Teilmenge von `ids`, die TATSÄCHLICH zu `clubId` gehört
+  // — clubId ist hier PFLICHT (nicht optional wie bei findById): diese
+  // Methode existiert ausschließlich für die Eigentümerprüfung, ein
+  // ungescopter Aufruf hätte dort keinen legitimen Anwendungsfall und
+  // würde die Prüfung stillschweigend wirkungslos machen. Eine id, die
+  // gar nicht existiert, und eine id aus einem FREMDEN Verein sind im
+  // Ergebnis ununterscheidbar (beide fehlen schlicht) — dasselbe
+  // Existenz-Orakel-Verhalten wie beim club-gescopten findById().
+  findExistingIdsInClub(store: EntityStoreName, ids: readonly string[], clubId: string): Promise<Set<string>>;
   // Änderungen eines Vereins seit einem Zeitpunkt, über alle Stores hinweg,
   // absteigend nach updatedAt limitiert (Pagination via `limit`).
   listChangedSince(clubId: string, since: Date | null, limit: number): Promise<ChangedRecord[]>;
@@ -155,6 +174,20 @@ export class PrismaSyncGateway implements SyncGateway, SyncGatewayTestSurface {
     // (z. B. via des serverVersion-Felds bei einem Konfliktergebnis).
     if (record && clubId !== undefined && record.clubId !== clubId) return null;
     return record;
+  }
+
+  // Siehe Interface-Kommentar oben. EINE Abfrage je Store statt einer je
+  // Referenz, und `select: { id: true }` statt der vollständigen Zeile —
+  // die Prüfung braucht nur zu wissen, welche der angefragten ids im
+  // eigenen Verein existieren, nicht deren Inhalt.
+  async findExistingIdsInClub(store: EntityStoreName, ids: readonly string[], clubId: string): Promise<Set<string>> {
+    if (ids.length === 0) return new Set();
+    const delegate = getEntityDelegate(this.prisma, store);
+    const rows = (await delegate.findMany({
+      where: { id: { in: [...ids] }, clubId },
+      select: { id: true },
+    })) as Array<{ id: string }>;
+    return new Set(rows.map((row) => row.id));
   }
 
   async create(store: EntityStoreName, payload: Record<string, unknown>): Promise<void> {

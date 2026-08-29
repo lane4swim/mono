@@ -68,6 +68,28 @@ function tx(store, mode = 'readonly'){
   return openDb().then(db => db.transaction(store, mode).objectStore(store));
 }
 
+// Wie tx(), aber für eine Transaktion über MEHRERE Stores hinweg: liefert
+// die Transaktion selbst statt eines einzelnen Object Stores. IndexedDB
+// erlaubt das ausdrücklich (`db.transaction([...])`) — genau das macht es
+// möglich, eine ganze Pull-Seite (Änderungen quer über alle Stores) in
+// EINER Transaktion anzuwenden statt in einer je Datensatz (siehe
+// applyPulledChanges() unten).
+function multiTx(stores, mode = 'readonly'){
+  return openDb().then(db => db.transaction(stores, mode));
+}
+
+// Wartet auf den Abschluss einer (bereits vollständig befüllten)
+// Transaktion. Gegenstück zu reqPromise() oben, nur eine Ebene höher —
+// bei einem Bulk-Vorgang interessiert nicht das Ergebnis jeder einzelnen
+// Anfrage, sondern nur, ob die Transaktion als Ganzes durchlief.
+function txDone(transaction, result){
+  return new Promise((resolve, reject) => {
+    transaction.oncomplete = () => resolve(result);
+    transaction.onerror = () => reject(transaction.error);
+    transaction.onabort = () => reject(transaction.error);
+  });
+}
+
 // Code-Review, Befund R6: dieselbe request→Promise-Übersetzung (onsuccess/
 // onerror auf resolve/reject abbilden) stand vormals als Duplikat in fast
 // jeder Funktion unten. `map` wandelt das rohe req.result bei Bedarf um
@@ -274,6 +296,117 @@ export async function bulkEnqueueSyncEvents(items){
 
 export function getSyncQueue(){
   return getAll('syncQueue');
+}
+
+// Ineffizienz-Korrektur: liefert genau die Events, die ein Push-Zyklus
+// tatsächlich senden würde ('pending' + 'error', siehe syncClient.js:
+// push()), über den status-Index — statt wie bisher die GESAMTE
+// Warteschlange per getSyncQueue() zu laden und danach in JavaScript zu
+// filtern. Der Unterschied wächst mit der Zeit: bereits erfolgreich
+// gesendete Events werden zwar aufgeräumt (clearSyncedEvents()), dauerhaft
+// gescheiterte ('failed', siehe MAX_SYNC_ATTEMPTS dort) aber bewusst NICHT
+// — sie blieben liegen und wurden bislang samt ihrer vollständigen
+// payload-Blobs bei JEDEM automatischen Sync-Zyklus (alle 60 s) erneut
+// aus IndexedDB gelesen, nur um sofort wieder weggefiltert zu werden.
+//
+// Zwei getrennte Index-Abfragen statt einer Bereichsabfrage, aus demselben
+// Grund wie bei pendingSyncCount() unten: 'pending' und 'error' bilden
+// keine zusammenhängende Schlüsselspanne, und IndexedDB kennt kein "IN".
+export async function getSendableSyncEvents(){
+  const os = await tx('syncQueue');
+  const idx = os.index('status');
+  const [pending, errored] = await Promise.all([
+    reqPromise(idx.getAll('pending'), (r) => r || []),
+    reqPromise(idx.getAll('error'), (r) => r || []),
+  ]);
+  // Nach Entstehungszeit sortiert — und zwar bewusst, nicht nur der
+  // Ordnung halber: die Reihenfolge INNERHALB eines Push-Blocks ist
+  // fachlich relevant. Der Server verarbeitet die Events eines Blocks der
+  // Reihe nach und entscheidet je Event über resolveConflict() anhand des
+  // Zeitstempels, den er beim Schreiben selbst setzt (siehe
+  // packages/sync-protocol: serverIsNewer). Träfe ein Update VOR dem
+  // zugehörigen Create ein, verglichen sich die beiden gegen einen
+  // Serverstand, den das jeweils andere Event gerade erst erzeugt hat —
+  // das ältere von beiden würde dann als "conflict-server-wins"
+  // verworfen, obwohl beide vom selben Gerät und in klarer Reihenfolge
+  // stammen.
+  //
+  // Diese Sortierung fehlte bislang: getSyncQueue() (getAll()) liefert
+  // nach Primärschlüssel sortiert, und der ist eine ZUFÄLLIGE UUID (siehe
+  // uid()) — die Reihenfolge war also nie die Entstehungsreihenfolge,
+  // sondern schlicht beliebig. `createdAt` ist ein ISO-Zeitstempel und
+  // damit lexikografisch in Zeitreihenfolge sortierbar; Array.sort ist
+  // stabil, gleiche Millisekunde behält also die Reihenfolge aus den
+  // beiden Index-Abfragen.
+  return [...pending, ...errored].sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
+}
+
+// Ineffizienz-Korrektur: wendet mehrere Warteschlangen-Aktualisierungen in
+// EINER Transaktion an, statt je Event zwei eigene zu öffnen (updateSyncEvent()
+// unten macht ein get() und ein put(), jedes mit eigener Transaktion). Ein
+// Push-Block umfasst bis zu 200 Events (siehe syncClient.js:
+// PUSH_BATCH_SIZE) — das waren bis zu 400 Transaktionen allein für das
+// Nachführen der Statusfelder.
+//
+// `updates` ist ein Array aus { id, patch }. Nicht (mehr) vorhandene
+// Events werden übersprungen, genau wie updateSyncEvent() sie mit `null`
+// quittiert. Umgeht bewusst put(): dessen Zusatzlogik (clubId ergänzen,
+// updatedAt setzen, Sync-Event einreihen) ist für 'syncQueue' ohnehin
+// wirkungslos bzw. ausgeschlossen (siehe SYNC_EXCLUDED oben).
+export async function bulkUpdateSyncEvents(updates){
+  if (updates.length === 0) return 0;
+  const transaction = await multiTx(['syncQueue'], 'readwrite');
+  const os = transaction.objectStore('syncQueue');
+  let applied = 0;
+  for (const { id, patch } of updates) {
+    const req = os.get(id);
+    req.onsuccess = () => {
+      const evt = req.result;
+      if (!evt) return;
+      applied++;
+      os.put({ ...evt, ...patch, updatedAt: new Date().toISOString() });
+    };
+  }
+  return txDone(transaction, undefined).then(() => applied);
+}
+
+// Ineffizienz-Korrektur: übernimmt eine komplette Pull-Seite (siehe
+// syncClient.js: pull()) in EINER store-übergreifenden Transaktion. Zuvor
+// lief je Änderung ein eigenes putWithoutSync()/removeWithoutSync() — also
+// eine eigene IndexedDB-Transaktion pro Datensatz. Beim erstmaligen
+// Vollabzug eines Vereins (Seitengröße 200, oft mehrere Seiten) waren das
+// hunderte bis tausende Transaktionen nacheinander; auf einem Mobilgerät
+// ist genau das der spürbar langsame Teil des ersten Logins.
+//
+// `changes` ist ein Array aus { store, entityId, action, payload } — exakt
+// das Format der Sync-API-Antwort. Verhalten je Änderung unverändert:
+//   - action 'delete' -> lokal entfernen; ein unbekannter Store wird
+//     ignoriert (die Zeile kann lokal ohnehin nicht liegen), wie zuvor der
+//     `.catch()` um removeWithoutSync(),
+//   - sonst -> Upsert des Payloads OHNE ein Sync-Event zu erzeugen (sonst
+//     ginge jede gepullte Änderung sofort wieder als eigener Push hinaus).
+// Ein unbekannter Store bei einem Upsert bleibt dagegen ein harter Fehler
+// (wie zuvor), damit ein Server, der einen hier nicht vorgesehenen Store
+// ausliefert, nicht stillschweigend Daten verliert.
+export async function applyPulledChanges(changes){
+  if (changes.length === 0) return 0;
+  const known = new Set(STORES);
+  const unknownUpsert = changes.find((c) => c.action !== 'delete' && !known.has(c.store));
+  if (unknownUpsert) throw new Error(`Unbekannter Store "${unknownUpsert.store}" in der Sync-Antwort.`);
+
+  const involved = [...new Set(changes.filter((c) => known.has(c.store)).map((c) => c.store))];
+  if (involved.length === 0) return 0;
+
+  const transaction = await multiTx(involved, 'readwrite');
+  let applied = 0;
+  for (const change of changes) {
+    if (!known.has(change.store)) continue; // nur 'delete', siehe oben
+    const os = transaction.objectStore(change.store);
+    if (change.action === 'delete') os.delete(change.entityId);
+    else os.put(change.payload.id ? change.payload : { ...change.payload, id: uid() });
+    applied++;
+  }
+  return txDone(transaction, applied);
 }
 
 export async function updateSyncEvent(id, patch){

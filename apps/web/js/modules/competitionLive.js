@@ -33,8 +33,29 @@ import { buildSharedStopwatch } from './stopwatch.js';
 // Importpfad einseitig bleibt (competitions.js -> competitionLive.js, wie
 // bei buildLiveGroups()/renderLiveMode() unten) statt einen Zyklus
 // zwischen beiden Dateien zu erzeugen.
-export function findResultForEntry(results, entry) {
-  return results.find(r => r.competitionId === entry.competitionId && r.athleteId === entry.athleteId && r.event === entry.event) || null;
+//
+// Ineffizienz-Korrektur: war vormals ein `results.find(...)`, das BEIDE
+// Aufrufer je Startlisteneintrag erneut über den KOMPLETTEN Ergebnisbestand
+// des Vereins laufen ließen (Startliste: einmal je Zeile; Wettkampfmodus:
+// einmal je Bahn). `results` umfasst alle je erfassten Zeiten — es wächst
+// über Jahre, während die Startliste eines Wettkampfs mehrere hundert
+// Einträge haben kann; das Rendern einer Wettkampfdetailseite war damit
+// quadratisch (Einträge × Ergebnisse). Der Index wird jetzt EINMAL je
+// Render aufgebaut und danach je Eintrag in konstanter Zeit abgefragt.
+const resultKey = (competitionId, athleteId, event) => `${competitionId}\u0000${athleteId}\u0000${event}`;
+
+export function buildResultIndex(results) {
+  const index = new Map();
+  for (const r of results) {
+    const key = resultKey(r.competitionId, r.athleteId, r.event);
+    // Erster Treffer gewinnt — identisch zum vorherigen Array.find().
+    if (!index.has(key)) index.set(key, r);
+  }
+  return index;
+}
+
+export function findResultForEntry(resultIndex, entry) {
+  return resultIndex.get(resultKey(entry.competitionId, entry.athleteId, entry.event)) || null;
 }
 
 // Groups a competition's start-list entries by (Wettkampfnummer, Lauf) and
@@ -113,7 +134,8 @@ export async function renderLiveMode(container, compId, groupIndex) {
   const sharedClock = buildSharedStopwatch(timerCard);
 
   const cardsGrid = el('div', { class: 'grid grid-3' });
-  group.entries.forEach(entry => cardsGrid.appendChild(buildAthleteCard(entry, comp, athletes, results, sharedClock, trainers)));
+  const resultIndex = buildResultIndex(results);
+  group.entries.forEach(entry => cardsGrid.appendChild(buildAthleteCard(entry, comp, athletes, results, resultIndex, sharedClock, trainers)));
   wrap.appendChild(cardsGrid);
 
   container.appendChild(wrap);
@@ -149,14 +171,14 @@ async function saveHeatResult(entry, comp, allResults, savedResult, laps, finalT
 // step — during a live heat there's no time to remember one), a small
 // reset for mis-clicks, and a shortcut to log a Handlungsfeld for that
 // athlete without leaving the screen.
-function buildAthleteCard(entry, comp, athletes, allResults, sharedClock, trainers) {
+function buildAthleteCard(entry, comp, athletes, allResults, resultIndex, sharedClock, trainers) {
   const athlete = athletes.find(a => a.id === entry.athleteId);
   // Mutable, not the initial findResultForEntry() snapshot: reassigned to
   // the freshly saved record after each "Ziel" press so a later save (e.g.
   // after a mis-click + Zurücksetzen) UPDATEs that same row instead of
   // creating a duplicate result, and so "Zurücksetzen" reverts to the
   // actually-persisted state rather than the pre-render one.
-  let savedResult = findResultForEntry(allResults, entry);
+  let savedResult = findResultForEntry(resultIndex, entry);
   let laps = savedResult?.laps ? [...savedResult.laps] : [];
   let done = savedResult?.time != null;
 

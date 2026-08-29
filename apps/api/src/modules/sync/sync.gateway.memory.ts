@@ -54,6 +54,21 @@ export class InMemorySyncGateway implements SyncGateway {
     return record;
   }
 
+  // Spiegelt PrismaSyncGateway.findExistingIdsInClub() (siehe dort und im
+  // Interface-Kommentar in sync.gateway.ts für den Hintergrund): liefert
+  // die Teilmenge von `ids`, die im eigenen Verein existiert. Verhält sich
+  // für jede einzelne id exakt wie ein club-gescopter findById()-Aufruf —
+  // ein Treffer aus einem fremden Verein zählt als "nicht vorhanden".
+  async findExistingIdsInClub(store: EntityStoreName, ids: readonly string[], clubId: string): Promise<Set<string>> {
+    const table = this.table(store);
+    const found = new Set<string>();
+    for (const id of ids) {
+      const record = table.get(id);
+      if (record && record.clubId === clubId) found.add(id);
+    }
+    return found;
+  }
+
   // Code-Review, Befund L5: create()/update()/softDelete()/
   // markEventProcessed() sind keine SyncGateway-Interfacemethoden mehr
   // (siehe SyncGatewayTestSurface-Kommentar in sync.gateway.ts) — kein

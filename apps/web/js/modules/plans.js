@@ -8,7 +8,7 @@ import { badge, emptyState, laneWave, toast } from '../ui.js';
 import { openModal, confirmAction } from '../modal.js';
 import { field, textInput, selectInput, dateInput, formActions } from '../forms.js';
 import { EQUIPMENT_ITEMS } from '../refdata.js';
-import { renderSetEditor, totalDistance, cloneItems, collectEquipment } from './setEditor.js';
+import { renderSetEditor, totalDistance, cloneItems, collectEquipment, exerciseById } from './setEditor.js';
 import { renderCommentThread, commentsButton } from './comments.js';
 import { exportPlanToPdf, exportDayToPdf } from './planPdfExport.js';
 import { navigate } from '../router.js';
@@ -188,7 +188,7 @@ function equipmentDescCell(entry, exercises) {
   const wrap = el('div');
   wrap.appendChild(el('div', {}, entry.description || '—'));
   if (entry.exerciseId) {
-    const ex = (exercises || []).find(x => x.id === entry.exerciseId);
+    const ex = exerciseById(exercises).get(entry.exerciseId);
     if (ex && (ex.equipment || []).length > 0) {
       wrap.appendChild(el('div', { class: 'pill-group', style: 'margin-top:3px' },
         ex.equipment.map(eq => badge(trLabel(EQUIPMENT_ITEMS, eq, 'equipment'), 'pb'))));
