@@ -20,7 +20,7 @@
 // ============================================================
 import { el, clear } from '../dom.js';
 import { fmtDateLong } from '../dates.js';
-import { totalDistance } from './setEditor.js';
+import { totalDistance, exerciseById } from './setEditor.js';
 import { t } from '../i18n.js';
 
 const MM_TO_PX = 96 / 25.4;
@@ -186,5 +186,5 @@ function buildSetRow(entrySet, exercises) {
 
 function exerciseName(entrySet, exercises) {
   if (!entrySet.exerciseId) return '';
-  return (exercises || []).find(x => x.id === entrySet.exerciseId)?.name || '';
+  return exerciseById(exercises).get(entrySet.exerciseId)?.name || '';
 }

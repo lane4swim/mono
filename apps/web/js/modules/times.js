@@ -26,6 +26,12 @@ export const timesModule = {
 };
 
 function renderView(container, athletes, results) {
+  // Ineffizienz-Korrektur: EINMAL je Render statt einmal je Tabellenzeile.
+  // Die Zeitenliste zeigt den gesamten Ergebnisbestand des Vereins (er
+  // wächst über Jahre) und suchte je Zeile linear durch alle
+  // Athlet:innen — und das bei JEDEM Zeichnen, also auch nach jeder
+  // Filteränderung (draw() unten).
+  const athleteById = new Map(athletes.map(a => [a.id, a]));
   const wrap = el('div');
   wrap.appendChild(el('div', { class: 'page-head' }, [
     el('div', {}, [el('div', { class: 'page-eyebrow' }, t('times.eyebrow', { count: results.length })), el('h1', { class: 'mt-0' }, t('times.title'))]),
@@ -70,7 +76,7 @@ function renderView(container, athletes, results) {
     table.appendChild(el('thead', {}, el('tr', {}, [el('th', {}, t('times.colDate')), el('th', {}, t('times.colAthlete')), el('th', {}, t('times.colEvent')), el('th', {}, t('times.colTime')), el('th', {}, t('times.colContext')), el('th', {}, '')])));
     const tbody = el('tbody');
     filtered.slice().sort((a, b) => b.date.localeCompare(a.date)).forEach(r => {
-      const athlete = athletes.find(a => a.id === r.athleteId);
+      const athlete = athleteById.get(r.athleteId);
       tbody.appendChild(el('tr', {}, [
         el('td', {}, fmtDateShort(r.date)), el('td', {}, fullName(athlete)), el('td', {}, trCode(r.event, 'events')),
         el('td', { class: 'data' }, [secToTime(r.time), r.isPB ? ' ' : '', r.isPB ? badge('PB', 'pb') : '']),

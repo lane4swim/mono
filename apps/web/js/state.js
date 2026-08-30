@@ -143,10 +143,15 @@ const LOCAL_STORE_OWNER_META_KEY = 'localStoreOwner';
 // Liegen überhaupt fachliche (vereinsgebundene) Daten lokal? Wird nur für
 // den Sonderfall "kein Eigentümer vermerkt" unten gebraucht.
 async function hasLocalClubScopedData() {
-  for (const store of CLUB_SCOPED_STORES) {
-    if ((await countAll(store)) > 0) return true;
-  }
-  return false;
+  // Ineffizienz-Korrektur: die zehn count()-Abfragen liefen zuvor streng
+  // NACHEINANDER, jede mit einer eigenen IndexedDB-Transaktion. Sie sind
+  // voneinander unabhängig, laufen also parallel — und im Normalfall
+  // (frisches Gerät, alle Stores leer) wurden ohnehin alle zehn gebraucht,
+  // der frühe Abbruch sparte dort nichts. countAll() liest keine
+  // Datensätze, nur deren Anzahl (siehe db.js), der Aufruf ist also auch
+  // bei vollem Bestand billig.
+  const counts = await Promise.all([...CLUB_SCOPED_STORES].map(countAll));
+  return counts.some((count) => count > 0);
 }
 
 // Stellt sicher, dass die lokale Ablage zur übergebenen Person gehört —

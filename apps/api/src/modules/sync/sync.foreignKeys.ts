@@ -112,10 +112,38 @@ export const FOREIGN_ENTITY_ERROR =
 
 // Prüft alle für `store` relevanten Fremdschlüsselfelder eines bereits
 // Zod-validierten Payloads: jede gesetzte (nicht-null/undefined) Referenz
-// muss zu genau `clubId` gehören. `findById()` ist bereits club-gescoped
-// (liefert null sowohl bei "nicht gefunden" als auch bei "fremder
-// Verein", siehe sync.gateway.ts) — das reicht hier direkt aus, ohne
-// zwischen beiden Fällen unterscheiden zu müssen.
+// muss zu genau `clubId` gehören.
+//
+// Ineffizienz-Korrektur: lief vormals als reine SERIELLE Schleife über
+// jede einzelne Referenz mit je einem eigenen, ungebündelten
+// `await gateway.findById(...)` — und ohne jede Entdopplung. Für die
+// verschachtelten `exerciseId`-Verweise (siehe collectSetExerciseIds()
+// oben) war das der teure Fall: ein Trainingsplan mit 40 Sätzen, die
+// dieselben 5 Übungen wiederholt referenzieren, erzeugte 40
+// nacheinander(!) laufende Datenbankabfragen, jede davon mit der
+// vollständigen Übungszeile (inkl. `comments`-JSON) im Ergebnis, obwohl
+// nur 5 verschiedene ids überhaupt zu prüfen waren. Beim Push eines
+// ganzen Batches multipliziert sich das mit der Zahl der Events.
+//
+// Jetzt zweistufig: erst werden ALLE zu prüfenden Referenzen des Payloads
+// eingesammelt und je Zielstore zu einer dopplungsfreien Menge
+// zusammengefasst, dann läuft GENAU EINE Existenzabfrage je beteiligtem
+// Store (findExistingIdsInClub(), club-gescoped, nur `id` im Ergebnis) —
+// alle Stores parallel, zusammen mit den User-Referenzen.
+//
+// Am Sicherheitsverhalten ändert das nichts: geprüft wird weiterhin JEDE
+// gesetzte Referenz (die Entdopplung entfernt nur Wiederholungen
+// derselben id, keine zu prüfende id), das Ergebnis ist weiterhin
+// fail-closed (fehlt auch nur eine id in der Trefferliste, wird das
+// gesamte Event abgewiesen), und die Meldung bleibt für "existiert
+// nirgends" und "gehört einem fremden Verein" dieselbe — das
+// Existenz-Orakel bleibt geschlossen. Einziger sichtbarer Unterschied:
+// es wird nicht mehr bei der ERSTEN fehlenden Referenz abgebrochen,
+// sondern der ganze (parallele, gebündelte) Satz Abfragen läuft durch.
+// Das kostet im Fehlerfall nichts Nennenswertes — es sind genau die
+// Abfragen, die der Erfolgsfall ohnehin alle braucht — und macht die
+// Laufzeit unabhängig davon, an welcher Stelle eine ungültige Referenz
+// steht (ein zeitbasierter Seitenkanal weniger).
 export async function assertForeignKeysWithinClub(
   gateway: SyncGateway,
   store: EntityStoreName,
@@ -125,24 +153,48 @@ export async function assertForeignKeysWithinClub(
   const refs = FOREIGN_KEY_REFS[store];
   if (!refs) return null;
 
+  // Zielstore -> dopplungsfreie Menge der zu prüfenden ids.
+  const entityIdsByStore = new Map<EntityStoreName, Set<string>>();
+  const userIds = new Set<string>();
+
+  const addEntityId = (targetStore: EntityStoreName, id: string) => {
+    let ids = entityIdsByStore.get(targetStore);
+    if (!ids) { ids = new Set(); entityIdsByStore.set(targetStore, ids); }
+    ids.add(id);
+  };
+
   for (const ref of refs) {
     if (ref.kind === 'nested') {
-      for (const value of ref.extract(payload)) {
-        const ownedByClub = (await gateway.findById(ref.store, value, clubId)) !== null;
-        if (!ownedByClub) return FOREIGN_ENTITY_ERROR;
-      }
+      for (const value of ref.extract(payload)) addEntityId(ref.store, value);
       continue;
     }
 
     const value = payload[ref.field];
     if (value === null || value === undefined) continue; // optionale Referenz, nicht gesetzt
 
-    const ownedByClub =
-      ref.kind === 'entity'
-        ? (await gateway.findById(ref.store, value as string, clubId)) !== null
-        : (await gateway.findClubIdForUser(value as string)) === clubId;
-
-    if (!ownedByClub) return FOREIGN_ENTITY_ERROR;
+    if (ref.kind === 'entity') addEntityId(ref.store, value as string);
+    else userIds.add(value as string);
   }
-  return null;
+
+  if (entityIdsByStore.size === 0 && userIds.size === 0) return null;
+
+  const [storeResults, userResults] = await Promise.all([
+    Promise.all(
+      Array.from(entityIdsByStore.entries()).map(async ([targetStore, ids]) => {
+        const found = await gateway.findExistingIdsInClub(targetStore, Array.from(ids), clubId);
+        // Vollständigkeit statt "irgendwas gefunden": jede angefragte id
+        // muss in der Trefferliste stehen. `found` kann nie ids enthalten,
+        // die nicht angefragt wurden — die Größenprüfung allein wäre
+        // zwar bereits ausreichend, der explizite Abgleich macht die
+        // Absicht aber unabhängig von dieser Zusicherung lesbar.
+        return ids.size === found.size && Array.from(ids).every((id) => found.has(id));
+      }),
+    ),
+    Promise.all(
+      Array.from(userIds).map(async (userId) => (await gateway.findClubIdForUser(userId)) === clubId),
+    ),
+  ]);
+
+  const allOwnedByClub = storeResults.every(Boolean) && userResults.every(Boolean);
+  return allOwnedByClub ? null : FOREIGN_ENTITY_ERROR;
 }

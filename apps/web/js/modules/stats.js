@@ -31,9 +31,21 @@ function renderView(container, athletes, results, sessions, groups) {
 
   // -------- Attendance rate per group --------
   const attCard = el('div', { class: 'card mb-16' }, [el('h3', { class: 'mt-0' }, t('stats.attendanceTitle'))]);
+  // Ineffizienz-Korrektur: lief vormals als `sessions.filter(...)` INNERHALB
+  // der Gruppen-Schleife, also einmal komplett über alle Trainingseinheiten
+  // je Gruppe (Gruppen × Einheiten). Ein einziger Durchlauf über die
+  // Einheiten summiert dasselbe direkt in die jeweilige Gruppe.
+  const attendanceByGroup = new Map(groups.map(g => [g.id, { present: 0, total: 0 }]));
+  for (const s of sessions) {
+    const tally = attendanceByGroup.get(s.groupId);
+    if (!tally) continue; // Einheit ohne (bekannte) Gruppe — zählt in keinen Balken, wie zuvor
+    for (const a of s.attendance || []) {
+      tally.total++;
+      if (a.present) tally.present++;
+    }
+  }
   const bars = groups.map(g => {
-    let present = 0, total = 0;
-    sessions.filter(s => s.groupId === g.id).forEach(s => (s.attendance || []).forEach(a => { total++; if (a.present) present++; }));
+    const { present, total } = attendanceByGroup.get(g.id);
     return { label: g.name, value: total ? Math.round((present / total) * 100) : 0 };
   });
   if (bars.every(b => b.value === 0) && sessions.length === 0) attCard.appendChild(el('p', {}, t('stats.noSessions')));

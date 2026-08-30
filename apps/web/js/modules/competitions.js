@@ -17,7 +17,7 @@ import { field, textInput, selectInput, dateInput, formActions } from '../forms.
 import { EVENTS, COURSES } from '../refdata.js';
 import { navigate } from '../router.js';
 import { t, trCode, trOptions, trOptionsFlat } from '../i18n.js';
-import { buildLiveGroups, renderLiveMode, findResultForEntry } from './competitionLive.js';
+import { buildLiveGroups, renderLiveMode, buildResultIndex, findResultForEntry } from './competitionLive.js';
 import { buildStopwatchPanel } from './stopwatch.js';
 
 export const competitionsModule = {
@@ -83,6 +83,15 @@ async function renderDetail(container, compId) {
   if (!comp) { container.appendChild(emptyState(t('common.notFoundTitle'), t('competitions.notFoundMsg'), el('button', { class: 'btn btn-primary', onclick: () => navigate('competitions') }, t('common.back')))); return; }
   const compResults = results.filter(r => r.competitionId === compId);
   const compEntries = entries.filter(e => e.competitionId === compId);
+  // Ineffizienz-Korrektur: EINMAL je Render aufgebaut statt einmal je
+  // Tabellenzeile linear gesucht. Beide Tabellen dieser Seite
+  // (Ergebnisliste und Startliste) haben je Zeile eine Athlet:innen-
+  // Zuordnung, die Startliste zusätzlich eine Ergebnis-Zuordnung über den
+  // GESAMTEN, über Jahre wachsenden Ergebnisbestand des Vereins (siehe
+  // buildResultIndex() in competitionLive.js) — das Rendern einer
+  // Wettkampfseite war damit quadratisch in der Zahl der Startplätze.
+  const athleteById = new Map(athletes.map(a => [a.id, a]));
+  const resultIndex = buildResultIndex(results);
 
   const wrap = el('div');
   wrap.appendChild(el('button', { class: 'btn btn-ghost btn-sm mb-16', onclick: () => navigate('competitions') }, t('competitions.backToList')));
@@ -109,7 +118,7 @@ async function renderDetail(container, compId) {
     table.appendChild(el('thead', {}, el('tr', {}, [el('th', {}, t('competitions.colAthlete')), el('th', {}, t('competitions.colEvent')), el('th', {}, t('competitions.colTime')), el('th', {}, t('competitions.colPlace')), el('th', {}, t('competitions.colPB')), el('th', {}, '')])));
     const tbody = el('tbody');
     compResults.sort((a, b) => a.event.localeCompare(b.event)).forEach(r => {
-      const athlete = athletes.find(a => a.id === r.athleteId);
+      const athlete = athleteById.get(r.athleteId);
       tbody.appendChild(el('tr', {}, [
         el('td', {}, fullName(athlete)), el('td', {}, trCode(r.event, 'events')), el('td', { class: 'data' }, secToTime(r.time)),
         el('td', {}, r.place ? `${r.place}.` : '—'), el('td', {}, [r.isPB ? badge('PB', 'pb') : null, r.laps?.length > 0 ? ' ' : null, r.laps?.length > 0 ? badge(t('competitions.stopwatchLapCount', { count: r.laps.length }), 'neutral') : null].filter(Boolean)),
@@ -150,7 +159,7 @@ async function renderDetail(container, compId) {
       const tbody = el('tbody');
       groups[key].sort((a, b) => (a.lane ?? 99) - (b.lane ?? 99)).forEach(entry => {
         const liveIndex = liveIndexByKey.get(`${entry.eventNumber}__${entry.heat}`);
-        appendEntryRows(tbody, entry, comp, athletes, results, refreshDetail, liveIndex);
+        appendEntryRows(tbody, entry, comp, athletes, athleteById, results, resultIndex, refreshDetail, liveIndex);
       });
       table.appendChild(tbody);
       startListCard.appendChild(el('div', { class: 'table-wrap mb-8' }, table));
@@ -182,9 +191,13 @@ function groupByHeat(entries) {
 // liveIndexByKey lookup) is the entry's position in the Wettkampfmodus
 // sequence, undefined if it's missing eventNumber/heat and therefore isn't
 // part of that sequence at all (see buildLiveGroups in competitionLive.js).
-function appendEntryRows(tbody, entry, comp, athletes, results, onChanged, liveIndex) {
-  const athlete = athletes.find(a => a.id === entry.athleteId);
-  const existingResult = findResultForEntry(results, entry);
+// `athletes` (das volle Array) wird weiterhin durchgereicht, weil die
+// Modale unten (openEntryModal/openItemModal) eine Auswahlliste über ALLE
+// Athlet:innen brauchen; `athleteById`/`resultIndex` bedienen nur die
+// Zuordnung dieser einen Zeile (siehe renderDetail oben).
+function appendEntryRows(tbody, entry, comp, athletes, athleteById, results, resultIndex, onChanged, liveIndex) {
+  const athlete = athleteById.get(entry.athleteId);
+  const existingResult = findResultForEntry(resultIndex, entry);
   let recordedLaps = existingResult?.laps ? [...existingResult.laps] : [];
 
   const timeInput = textInput(existingResult ? secToTime(existingResult.time) : '', { placeholder: 'mm:ss.cc', style: 'width:100px' });

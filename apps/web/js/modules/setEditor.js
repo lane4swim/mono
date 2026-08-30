@@ -108,19 +108,48 @@ export function cloneItems(items) {
   });
 }
 
+// Ineffizienz-Korrektur: id -> Übung, EINMAL je `exercises`-Array
+// aufgebaut und danach für jede weitere Abfrage desselben Arrays
+// wiederverwendet. Das Array wird von einem `.find(...)` je Satz linear
+// durchsucht — und zwar an fünf Stellen (collectEquipment() unten,
+// setRow()/dem Bearbeiten-Dialog hier, equipmentDescCell() in plans.js,
+// buildSetRow() in planPdfExport.js, der Vorlagenvorschau in
+// templates.js), jeweils einmal PRO SATZ. Ein Wochenplan mit hundert
+// Sätzen gegen einen Übungskatalog mit einigen hundert Einträgen
+// bedeutete damit fünfstellige Vergleichszahlen bei jedem Rendern.
+//
+// Als WeakMap über die Array-Identität statt als Parameter, damit die
+// bestehenden Signaturen (`(…, exercises)`) unverändert bleiben und alle
+// Aufrufer den Index automatisch teilen: `getAll('exercises')` liefert je
+// Render ein NEUES Array, ein veralteter Index kann also gar nicht erst
+// weiterverwendet werden; das alte Array (samt Index) wird verworfen,
+// sobald es unerreichbar ist.
+const exerciseIndexCache = new WeakMap();
+
+export function exerciseById(exercises) {
+  const list = exercises || [];
+  let index = exerciseIndexCache.get(list);
+  if (!index) {
+    index = new Map(list.map(x => [x.id, x]));
+    exerciseIndexCache.set(list, index);
+  }
+  return index;
+}
+
 // Collects the de-duplicated set of equipment codes needed across a
 // (possibly nested, block-containing) list of entries, by looking up
 // each set's linked catalog exercise (if any) and its `equipment` list.
 // Sets not created from a catalog exercise simply contribute nothing —
 // there's no equipment info to draw on for freely-typed sets.
 export function collectEquipment(items, exercises) {
+  const byId = exerciseById(exercises);
   const codes = new Set();
   const walk = (list) => {
     (list || []).forEach(entry => {
       if (entry.kind === 'block') { walk(entry.sets || []); return; }
       if (entry.kind === 'section') { walk(entry.entries || []); return; }
       if (entry.exerciseId) {
-        const ex = exercises.find(x => x.id === entry.exerciseId);
+        const ex = byId.get(entry.exerciseId);
         (ex?.equipment || []).forEach(eq => codes.add(eq));
       }
     });
@@ -221,7 +250,7 @@ function orderButtons(controls) {
 // aggregate summary that depends on it.
 function appendCatalogInfo(container, s, exercises, onEquipmentChange) {
   if (!s.exerciseId) return;
-  const ex = exercises.find(x => x.id === s.exerciseId);
+  const ex = exerciseById(exercises).get(s.exerciseId);
   if (!ex) return;
 
   container.appendChild(el('span', { class: 'hint' }, t('setEditor.fromCatalogHint', { name: ex.name })));

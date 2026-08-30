@@ -1,5 +1,5 @@
 // apps/api/test/sync/sync.service.test.ts
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { createSyncService } from '../../src/modules/sync/sync.service.js';
 import { describeSyncError } from '../../src/modules/sync/sync.errors.js';
 import { splitAtSafeTimestampBoundary } from '../../src/modules/sync/sync.pagination.js';
@@ -919,6 +919,87 @@ describe('syncService.push — Fremdschlüssel-Eigentümerprüfung (Sicherheitsr
       asTrainer(CLUB_A),
     );
     expect(results[0]!.status).toBe('applied');
+  });
+
+  // Ineffizienz-Korrektur (Fremdschlüsselprüfung gebündelt statt seriell,
+  // siehe sync.foreignKeys.ts): die Prüfung stellt je Zielstore GENAU EINE
+  // Existenzabfrage, unabhängig davon, wie viele — und wie oft dieselben —
+  // Referenzen im Payload stecken. Zuvor war es eine eigene, nacheinander
+  // laufende Abfrage je einzelnem Vorkommen.
+  it('stellt für viele (teils wiederholte) exerciseId-Referenzen nur EINE Existenzabfrage je Store', async () => {
+    const { service, gateway } = makeService();
+    const ownExerciseIds = [
+      'cccccccc-0000-0000-0000-00000000000a',
+      'cccccccc-0000-0000-0000-00000000000b',
+      'cccccccc-0000-0000-0000-00000000000c',
+    ];
+    for (const id of ownExerciseIds) {
+      gateway.seed('exercises', {
+        id, clubId: CLUB_A, name: 'Eigene Übung', category: 'kick', stroke: null,
+        description: '', defaultDistance: null, tags: [], equipment: [], comments: [], updatedAt: new Date(), deletedAt: null,
+      });
+    }
+    const lookupSpy = vi.spyOn(gateway, 'findExistingIdsInClub');
+
+    const now = new Date().toISOString();
+    // 30 Sätze, die reihum dieselben drei Übungen referenzieren.
+    const sets = Array.from({ length: 30 }, (_, i) => ({
+      kind: 'set' as const, id: `set-${i}`, description: '', distance: null, reps: 1,
+      intensity: '', restSec: 0, exerciseId: ownExerciseIds[i % ownExerciseIds.length]!, comments: [],
+    }));
+    const payload = {
+      id: '99999999-8888-8888-8888-88888888888a', clubId: CLUB_A, name: 'Vorlage', description: '', tags: [],
+      sets, createdAt: now, updatedAt: now,
+    };
+    const results = await service.push(
+      [{ id: 'evt-fk-batched-exercises', store: 'templates', entityId: payload.id, action: 'create', payload, clientUpdatedAt: now }],
+      asTrainer(CLUB_A),
+    );
+
+    expect(results[0]!.status).toBe('applied');
+    expect(lookupSpy).toHaveBeenCalledTimes(1);
+    // Entdoppelt: die drei verschiedenen ids, nicht 30 Vorkommen.
+    const [, requestedIds, requestedClubId] = lookupSpy.mock.calls[0]!;
+    expect([...requestedIds].sort()).toEqual([...ownExerciseIds].sort());
+    expect(requestedClubId).toBe(CLUB_A);
+  });
+
+  // Fail-closed trotz Bündelung: EINE ungültige Referenz unter vielen
+  // gültigen weist das gesamte Event ab — die Entdopplung darf keine zu
+  // prüfende id verschlucken.
+  it('lehnt das Event ab, wenn unter vielen gültigen exerciseIds eine einzige fremde steckt', async () => {
+    const { service, gateway } = makeService();
+    const ownExerciseIds = ['cccccccc-0000-0000-0000-00000000001a', 'cccccccc-0000-0000-0000-00000000001b'];
+    for (const id of ownExerciseIds) {
+      gateway.seed('exercises', {
+        id, clubId: CLUB_A, name: 'Eigene Übung', category: 'kick', stroke: null,
+        description: '', defaultDistance: null, tags: [], equipment: [], comments: [], updatedAt: new Date(), deletedAt: null,
+      });
+    }
+    const foreignExerciseId = 'cccccccc-0000-0000-0000-00000000001f';
+    gateway.seed('exercises', {
+      id: foreignExerciseId, clubId: CLUB_B, name: 'Fremde Übung', category: 'kick', stroke: null,
+      description: '', defaultDistance: null, tags: [], equipment: [], comments: [], updatedAt: new Date(), deletedAt: null,
+    });
+
+    const now = new Date().toISOString();
+    const allIds = [...ownExerciseIds, ...ownExerciseIds, foreignExerciseId, ...ownExerciseIds];
+    const payload = {
+      id: '99999999-8888-8888-8888-88888888888b', clubId: CLUB_A, name: 'Vorlage', description: '', tags: [],
+      sets: allIds.map((exerciseId, i) => ({
+        kind: 'set' as const, id: `set-${i}`, description: '', distance: null, reps: 1,
+        intensity: '', restSec: 0, exerciseId, comments: [],
+      })),
+      createdAt: now, updatedAt: now,
+    };
+    const results = await service.push(
+      [{ id: 'evt-fk-one-foreign-among-many', store: 'templates', entityId: payload.id, action: 'create', payload, clientUpdatedAt: now }],
+      asTrainer(CLUB_A),
+    );
+
+    expect(results[0]!.status).toBe('error');
+    expect(results[0]!.message).toContain('existiert nicht mehr');
+    expect(await gateway.findById('templates', payload.id)).toBeNull();
   });
 });
 

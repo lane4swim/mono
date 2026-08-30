@@ -162,6 +162,59 @@ describe('push()', () => {
 // packages/shared-types/src/syncEvent.ts: SyncPushRequestSchema) ließ
 // push() dadurch dauerhaft mit einer 400 scheitern, ohne sich je
 // abzubauen. push() muss die Warteschlange stattdessen in Blöcken senden.
+// Ineffizienz-Korrektur: push() liest die sendbaren Events über den
+// status-Index (db.js: getSendableSyncEvents()) statt die gesamte
+// Warteschlange zu laden und zu filtern. Fachlich muss dabei exakt
+// dieselbe Menge herauskommen wie zuvor: 'pending' und 'error' ja,
+// 'synced' und 'failed' nein.
+describe('push() — Auswahl der sendbaren Events', () => {
+  it('sendet ausschließlich "pending"- und "error"-Events, nie "synced" oder "failed"', async () => {
+    await db.put('groups', { name: 'A' });
+    await db.put('groups', { name: 'B' });
+    await db.put('groups', { name: 'C' });
+    await db.put('groups', { name: 'D' });
+    const [a, b, c, d] = await db.getSyncQueue();
+    await db.updateSyncEvent(b.id, { status: 'error', attempts: 1 });
+    await db.updateSyncEvent(c.id, { status: 'synced' });
+    await db.updateSyncEvent(d.id, { status: 'failed', attempts: 5 });
+
+    api.syncPush.mockResolvedValue({ results: [] });
+    const result = await push();
+
+    expect(result.sent).toBe(2);
+    const sentIds = api.syncPush.mock.calls[0][0].map((e) => e.id).sort();
+    expect(sentIds).toEqual([a.id, b.id].sort());
+  });
+});
+
+describe('push() — Reihenfolge der gesendeten Events', () => {
+  it('sendet die Events in Entstehungsreihenfolge (createdAt), nicht in zufälliger Schlüsselreihenfolge', async () => {
+    // createdAt wird beim Einreihen aus der Uhr gelesen (siehe db.js:
+    // enqueueSyncEvent()) — für einen deterministischen Test werden die
+    // drei Events danach gezielt auf auseinanderliegende Zeitpunkte
+    // gesetzt, in einer Reihenfolge, die NICHT der Anlagereihenfolge
+    // entspricht.
+    await db.put('groups', { name: 'A' });
+    await db.put('groups', { name: 'B' });
+    await db.put('groups', { name: 'C' });
+    const [a, b, c] = await db.getSyncQueue();
+    await db.updateSyncEvent(a.id, { createdAt: '2026-01-01T00:00:03.000Z' });
+    await db.updateSyncEvent(b.id, { createdAt: '2026-01-01T00:00:01.000Z' });
+    await db.updateSyncEvent(c.id, { createdAt: '2026-01-01T00:00:02.000Z' });
+
+    api.syncPush.mockResolvedValue({ results: [] });
+    await push();
+
+    const sentIds = api.syncPush.mock.calls[0][0].map((e) => e.id);
+    expect(sentIds).toEqual([b.id, c.id, a.id]);
+    // clientUpdatedAt stammt aus createdAt — die Sortierung und der an den
+    // Server gemeldete Zeitstempel bleiben damit konsistent.
+    expect(api.syncPush.mock.calls[0][0].map((e) => e.clientUpdatedAt)).toEqual([
+      '2026-01-01T00:00:01.000Z', '2026-01-01T00:00:02.000Z', '2026-01-01T00:00:03.000Z',
+    ]);
+  });
+});
+
 describe('push() — Chunking bei großen Warteschlangen', () => {
   it('sendet mehr als PUSH_BATCH_SIZE (200) ausstehende Events in mehreren api.syncPush()-Aufrufen', async () => {
     const EVENT_COUNT = 210;
@@ -216,6 +269,48 @@ describe('pull()', () => {
   // werden, wenn alle Änderungen in eine einzige Seite passen (hasMore:
   // false) — sonst zieht jeder Hintergrund-Sync dauerhaft den kompletten
   // Bestand erneut.
+  // Ineffizienz-Korrektur: eine Pull-Seite wird als Ganzes in EINER
+  // store-übergreifenden Transaktion angewendet (siehe db.js:
+  // applyPulledChanges()) statt einzeln je Änderung. Dieser Test hält fest,
+  // dass dabei WIRKLICH jede Änderung ankommt — gemischt aus Upserts und
+  // Löschungen, verteilt über mehrere Stores, in einem einzigen Aufruf.
+  it('wendet eine gemischte Seite (Upserts + Löschungen über mehrere Stores) vollständig an', async () => {
+    await db.putWithoutSync('groups', { id: 'g-weg', name: 'Wird gelöscht' });
+    await db.putWithoutSync('athletes', { id: 'a-weg', firstName: 'Weg' });
+    api.syncPull.mockResolvedValue({
+      changes: [
+        { store: 'groups', entityId: 'g1', action: 'update', payload: { id: 'g1', name: 'Gruppe 1', deletedAt: null }, updatedAt: '2026-01-01T00:00:00.000Z' },
+        { store: 'athletes', entityId: 'a1', action: 'update', payload: { id: 'a1', firstName: 'Mila', deletedAt: null }, updatedAt: '2026-01-01T00:00:01.000Z' },
+        { store: 'groups', entityId: 'g-weg', action: 'delete', payload: null, updatedAt: '2026-01-01T00:00:02.000Z' },
+        { store: 'athletes', entityId: 'a-weg', action: 'delete', payload: null, updatedAt: '2026-01-01T00:00:03.000Z' },
+        { store: 'results', entityId: 'r1', action: 'update', payload: { id: 'r1', time: 30.5, deletedAt: null }, updatedAt: '2026-01-01T00:00:04.000Z' },
+      ],
+      nextCursor: '2026-01-01T00:00:04.000Z',
+      hasMore: false,
+    });
+
+    const result = await pull();
+    expect(result).toEqual({ received: 5 });
+    expect((await db.get('groups', 'g1')).name).toBe('Gruppe 1');
+    expect((await db.get('athletes', 'a1')).firstName).toBe('Mila');
+    expect((await db.get('results', 'r1')).time).toBe(30.5);
+    expect(await db.get('groups', 'g-weg')).toBeNull();
+    expect(await db.get('athletes', 'a-weg')).toBeNull();
+    // Auch im Bulk-Pfad wird "deletedAt" konsequent entfernt.
+    expect((await db.get('groups', 'g1')).deletedAt).toBeUndefined();
+    // Und weiterhin kein einziges neues Sync-Event für Server-Änderungen.
+    expect(await db.getSyncQueue()).toEqual([]);
+  });
+
+  it('verträgt eine Löschung für eine lokal gar nicht (mehr) vorhandene Zeile', async () => {
+    api.syncPull.mockResolvedValue({
+      changes: [{ store: 'groups', entityId: 'gibt-es-nicht', action: 'delete', payload: null, updatedAt: '2026-01-01T00:00:00.000Z' }],
+      nextCursor: '2026-01-01T00:00:00.000Z',
+      hasMore: false,
+    });
+    await expect(pull()).resolves.toEqual({ received: 1 });
+  });
+
   it('persistiert den vom Server gelieferten Cursor auch bei einer einzigen, abschließenden Seite', async () => {
     api.syncPull.mockResolvedValue({
       changes: [{ store: 'groups', entityId: 'g1', action: 'update', payload: { id: 'g1', name: 'X' }, updatedAt: '2026-01-01T00:00:00.000Z' }],

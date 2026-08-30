@@ -7,7 +7,7 @@
 // damit sie nicht durch einen Pull-Konflikt mit dem eigenen, noch nicht
 // gesendeten Stand kollidieren.
 // ============================================================
-import { getSyncQueue, updateSyncEvent, put, get, putWithoutSync, removeWithoutSync } from './db.js';
+import { getSendableSyncEvents, bulkUpdateSyncEvents, applyPulledChanges, put, get, putWithoutSync, removeWithoutSync } from './db.js';
 import * as api from './apiClient.js';
 
 const META_CURSOR_KEY = 'syncCursor';
@@ -98,8 +98,12 @@ async function renameLocalRecord(store, oldId, newId) {
 // verarbeitete Blöcke bleiben als 'synced'/'error' markiert, der nächste
 // Sync-Zyklus setzt bei den verbleibenden Events fort.
 export async function push() {
-  const queue = await getSyncQueue();
-  const toSend = queue.filter(e => e.status === 'pending' || e.status === 'error');
+  // Ineffizienz-Korrektur: holt nur die tatsächlich sendbaren Events über
+  // den status-Index (siehe db.js: getSendableSyncEvents()), statt die
+  // gesamte Warteschlange zu laden und hier zu filtern — dauerhaft
+  // gescheiterte ('failed') Events samt payload-Blobs wurden sonst bei
+  // jedem Zyklus mitgelesen, obwohl sie nie wieder gesendet werden.
+  const toSend = await getSendableSyncEvents();
   if (toSend.length === 0) return { sent: 0, applied: 0, conflicts: 0, errors: 0 };
 
   let applied = 0, conflicts = 0, errors = 0;
@@ -113,6 +117,17 @@ export async function push() {
     }));
 
     const { results } = await api.syncPush(events);
+
+    // Ineffizienz-Korrektur: die Statusaktualisierungen dieses Blocks
+    // werden gesammelt und am Blockende in EINER Transaktion geschrieben
+    // (siehe db.js: bulkUpdateSyncEvents()) statt einzeln je Ergebnis
+    // (dort zuvor je ein get() und ein put(), also bis zu 400
+    // Transaktionen je 200er-Block). Bewusst je BLOCK geschrieben, nicht
+    // erst am Ende aller Blöcke: scheitert ein späterer Block mit einem
+    // Netzwerkfehler, müssen die Ergebnisse der bereits erfolgreich
+    // gesendeten Blöcke persistiert sein — sonst würden sie beim nächsten
+    // Zyklus erneut gesendet.
+    const queueUpdates = [];
 
     for (const result of results) {
       const sourceEvent = bySourceId.get(result.eventId);
@@ -130,14 +145,14 @@ export async function push() {
         if (sourceEvent && typeof newId === 'string' && newId !== sourceEvent.entityId) {
           await renameLocalRecord(sourceEvent.store, sourceEvent.entityId, newId);
         }
-        await updateSyncEvent(result.eventId, { status: 'synced', syncedAt: new Date().toISOString(), attempts: (sourceEvent?.attempts || 0) + 1, lastError: null });
+        queueUpdates.push({ id: result.eventId, patch: { status: 'synced', syncedAt: new Date().toISOString(), attempts: (sourceEvent?.attempts || 0) + 1, lastError: null } });
       } else if (result.status === 'conflict') {
         conflicts++;
         // Server-Stand ist neuer — das lokale Event wird verworfen (nicht
         // als Fehler markiert, siehe Konfliktstrategie last-write-wins);
         // der nächste pull() bringt den aktuellen Serverstand ohnehin lokal
         // an.
-        await updateSyncEvent(result.eventId, { status: 'synced', syncedAt: new Date().toISOString(), lastError: null });
+        queueUpdates.push({ id: result.eventId, patch: { status: 'synced', syncedAt: new Date().toISOString(), lastError: null } });
       } else {
         errors++;
         const attempts = (sourceEvent?.attempts || 0) + 1;
@@ -146,12 +161,19 @@ export async function push() {
         // toSend-Filter heraus und wird dadurch nicht mehr automatisch
         // wiederholt (siehe Konstanten-Kommentar oben).
         const status = attempts >= MAX_SYNC_ATTEMPTS ? 'failed' : 'error';
-        await updateSyncEvent(result.eventId, { status, attempts, lastError: result.message || 'Unbekannter Fehler.' });
+        queueUpdates.push({ id: result.eventId, patch: { status, attempts, lastError: result.message || 'Unbekannter Fehler.' } });
       }
     }
+
+    await bulkUpdateSyncEvents(queueUpdates);
   }
 
   return { sent: toSend.length, applied, conflicts, errors };
+}
+
+function stripDeletedAt(payload) {
+  const { deletedAt: _deletedAt, ...rest } = payload;
+  return rest;
 }
 
 // Holt Änderungen anderer Geräte/Nutzer:innen des eigenen Vereins seit dem
@@ -170,28 +192,32 @@ export async function pull() {
     iterations++;
 
     const response = await api.syncPull(cursor);
-    for (const change of response.changes) {
-      if (change.action === 'delete') {
-        await removeWithoutSync(change.store, change.entityId).catch(() => { /* bereits lokal entfernt */ });
-      } else {
-        // `deletedAt` ist kein Feld der Entity-Schemas (siehe
-        // packages/shared-types/src/entities.ts) — die generische Sync-API
-        // liefert für nicht gelöschte Zeilen dennoch den vollständigen
-        // Prisma-Datensatz inkl. dieser (stets null-wertigen) Spalte. Würde
-        // sie hier unverändert lokal gespeichert, würde jede spätere
-        // Bearbeitung dieses Datensatzes (siehe modules/*.js: `{ ...data }`)
-        // sie beim nächsten Push wieder mitschicken — der `.strict()`-Zod-
-        // Schema-Check auf dem Server lehnt unbekannte Felder ab, das
-        // Update würde dann mit "Payload entspricht nicht dem Schema"
-        // fehlschlagen. Kein Frontend-Code liest `.deletedAt` lokal
-        // (Löschungen laufen ausschließlich über eigene "delete"-Sync-
-        // Events, siehe oben) — das Feld wird daher beim Übernehmen in die
-        // lokale Ablage konsequent entfernt statt nur ignoriert.
-        const { deletedAt: _deletedAt, ...payload } = change.payload;
-        await putWithoutSync(change.store, payload);
-      }
-      totalChanges++;
-    }
+    // Ineffizienz-Korrektur: die gesamte Seite wird in EINER
+    // store-übergreifenden IndexedDB-Transaktion angewendet (siehe db.js:
+    // applyPulledChanges()) statt in einer je Datensatz. Beim erstmaligen
+    // Vollabzug eines Vereins waren das zuvor hunderte bis tausende
+    // Einzeltransaktionen nacheinander — der spürbar langsamste Teil des
+    // ersten Logins auf einem Mobilgerät.
+    //
+    // `deletedAt` ist kein Feld der Entity-Schemas (siehe
+    // packages/shared-types/src/entities.ts) — die generische Sync-API
+    // liefert für nicht gelöschte Zeilen dennoch den vollständigen
+    // Prisma-Datensatz inkl. dieser (stets null-wertigen) Spalte. Würde
+    // sie unverändert lokal gespeichert, würde jede spätere Bearbeitung
+    // dieses Datensatzes (siehe modules/*.js: `{ ...data }`) sie beim
+    // nächsten Push wieder mitschicken — der `.strict()`-Zod-Schema-Check
+    // auf dem Server lehnt unbekannte Felder ab, das Update würde dann mit
+    // "Payload entspricht nicht dem Schema" fehlschlagen. Kein
+    // Frontend-Code liest `.deletedAt` lokal (Löschungen laufen
+    // ausschließlich über eigene "delete"-Sync-Events) — das Feld wird
+    // daher beim Übernehmen in die lokale Ablage konsequent entfernt statt
+    // nur ignoriert.
+    const changes = response.changes.map((change) =>
+      change.action === 'delete'
+        ? change
+        : { ...change, payload: stripDeletedAt(change.payload) },
+    );
+    totalChanges += await applyPulledChanges(changes);
     cursor = response.nextCursor;
     hasMore = response.hasMore;
     // Sicherheitsnetz: hasMore: true ohne nextCursor dürfte laut

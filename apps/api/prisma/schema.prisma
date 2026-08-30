@@ -98,6 +98,16 @@ model User {
   assignedActionItems ActionItem[] @relation("ActionItemAssignedTrainer")
   passwordResetTokens PasswordResetToken[]
 
+  // Ineffizienz-Korrektur: `clubId` ist zwar ein Fremdschlüssel, Postgres
+  // legt darauf aber — anders als für UNIQUE-Spalten — KEINEN Index an.
+  // Jede Mitgliederabfrage eines Vereins (auth.repository.ts:
+  // listByClub(), das GET /api/users und GET /api/users/trainers bedient,
+  // sowie invitations.repository.ts: countMembersByClub()) lief dadurch
+  // als Sequential Scan über die GESAMTE users-Tabelle aller Vereine —
+  // sichtbar erst mit wachsender Mandantenzahl, dann aber für jeden
+  // Verein gleichzeitig. `deletedAt` steht mit im Index, weil beide
+  // Abfragen ausnahmslos auf aktive (nicht gelöschte) Konten filtern.
+  @@index([clubId, deletedAt])
   @@map("users")
 }
 
