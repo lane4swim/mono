@@ -233,7 +233,7 @@ describe('request() — proaktiver Refresh vor Ablauf (Befund R6)', () => {
       };
     });
 
-    await api.login({ email: 'a@b.de', password: 'x', consent: true });
+    await api.login({ email: 'a@b.de', password: 'x', consent: true, consentVersion: '2026-07-15' });
     expect(globalThis.fetch).toHaveBeenCalledTimes(1);
   });
 });

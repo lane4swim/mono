@@ -1,5 +1,5 @@
 // apps/api/test/auth/auth.service.test.ts
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   createAuthService,
   EmailAlreadyRegisteredError,
@@ -17,6 +17,7 @@ import { InMemoryProfileDataGateway } from '../../src/modules/profile/profile.re
 import { generateFreshKeyPair } from '../../src/auth/keys.js';
 import { verifyAccessToken } from '../../src/auth/tokens.js';
 import { generateInvitationToken } from '../../src/auth/tokens.js';
+import { CURRENT_CONSENT_VERSION, LoginRequestSchema } from '@lane1/shared-types';
 
 const CLUB_ID = '11111111-1111-1111-1111-111111111111';
 const INVITER_ID = '99999999-9999-9999-9999-999999999999';
@@ -196,7 +197,7 @@ describe('authService.login', () => {
   it('meldet mit korrekten Zugangsdaten erfolgreich an', async () => {
     const { service, invitations } = makeService();
     await registerViaInvitation(service, invitations, { email: 'sabine.reuter@example.org' });
-    const result = await service.login({ email: 'sabine.reuter@example.org', password: 'ein-sicheres-passwort', consent: true });
+    const result = await service.login({ email: 'sabine.reuter@example.org', password: 'ein-sicheres-passwort', consent: true, consentVersion: CURRENT_CONSENT_VERSION });
     expect(result.user.email).toBe('sabine.reuter@example.org');
   });
 
@@ -204,7 +205,7 @@ describe('authService.login', () => {
     const { service, invitations } = makeService();
     await registerViaInvitation(service, invitations, { email: 'sabine.reuter@example.org' });
     await expect(
-      service.login({ email: 'sabine.reuter@example.org', password: 'falsches-passwort', consent: true }),
+      service.login({ email: 'sabine.reuter@example.org', password: 'falsches-passwort', consent: true, consentVersion: CURRENT_CONSENT_VERSION }),
     ).rejects.toThrow(InvalidCredentialsError);
   });
 
@@ -215,12 +216,12 @@ describe('authService.login', () => {
     let unknownEmailMessage = '';
     let wrongPasswordMessage = '';
     try {
-      await service.login({ email: 'unbekannt@example.org', password: 'irgendwas', consent: true });
+      await service.login({ email: 'unbekannt@example.org', password: 'irgendwas', consent: true, consentVersion: CURRENT_CONSENT_VERSION });
     } catch (err) {
       unknownEmailMessage = (err as Error).message;
     }
     try {
-      await service.login({ email: 'sabine.reuter@example.org', password: 'falsch', consent: true });
+      await service.login({ email: 'sabine.reuter@example.org', password: 'falsch', consent: true, consentVersion: CURRENT_CONSENT_VERSION });
     } catch (err) {
       wrongPasswordMessage = (err as Error).message;
     }
@@ -239,7 +240,7 @@ describe('authService.login', () => {
     await registerViaInvitation(service, invitations, { email: 'sabine.reuter@example.org' });
 
     const start = Date.now();
-    await service.login({ email: 'unbekannt@example.org', password: 'irgendwas', consent: true }).catch(() => {});
+    await service.login({ email: 'unbekannt@example.org', password: 'irgendwas', consent: true, consentVersion: CURRENT_CONSENT_VERSION }).catch(() => {});
     const elapsedMs = Date.now() - start;
 
     // argon2id mit den hier konfigurierten Kostenparametern (64 MiB
@@ -248,6 +249,61 @@ describe('authService.login', () => {
     // sofortiges Zurückkehren (die vormalige, unsichere Implementierung)
     // läge weit darunter.
     expect(elapsedMs).toBeGreaterThan(15);
+  });
+
+  // Regressionstests für Review 30.08.2026, Befund S1: login() stempelte
+  // bislang JEDEN Login bedingungslos auf CURRENT_CONSENT_VERSION — auch
+  // wenn die Person diese Fassung nie gesehen hatte, und auch dann, wenn
+  // sich gegenüber dem gespeicherten Stand gar nichts geändert hatte.
+  describe('Einwilligungsnachweis (Befund S1)', () => {
+    it('lehnt einen Login ab, der eine andere als die aktuelle Fassung bestätigt (LoginRequestSchema)', () => {
+      // Die Ablehnung sitzt bereits im Schema (z.literal(CURRENT_CONSENT_VERSION),
+      // siehe packages/shared-types/test/auth.test.ts) — service.login() selbst
+      // bekommt eine falsche Version nie zu Gesicht. Dieser Test hält die
+      // Prämisse des Service-Tests unten fest: input.consentVersion ist zum
+      // Zeitpunkt, an dem login() sie liest, bereits garantiert aktuell.
+      const parsed = LoginRequestSchema.safeParse({
+        email: 'a@b.de',
+        password: 'x',
+        consent: true,
+        consentVersion: '2020-01-01',
+      });
+      expect(parsed.success).toBe(false);
+    });
+
+    it('hebt eine veraltete gespeicherte consentVersion beim nächsten Login auf den aktuellen Stand', async () => {
+      const { service, users, invitations } = makeService();
+      const { user: registeredUser } = await registerViaInvitation(service, invitations, { email: 'alte-fassung@example.org' });
+      // Simuliert ein Konto, dessen letzte Zustimmung einer älteren Fassung
+      // der Datenschutzerklärung galt (z. B. vor einer Anhebung von
+      // CURRENT_CONSENT_VERSION registriert).
+      await users.update(registeredUser.id, { consentVersion: '2020-01-01' });
+
+      const result = await service.login({
+        email: 'alte-fassung@example.org',
+        password: 'ein-sicheres-passwort',
+        consent: true,
+        consentVersion: CURRENT_CONSENT_VERSION,
+      });
+
+      expect(result.user.consentVersion).toBe(CURRENT_CONSENT_VERSION);
+    });
+
+    it('schreibt bei bereits aktueller consentVersion nichts erneut (kein Datenbankzugriff, consentGivenAt bleibt unverändert)', async () => {
+      const { service, users, invitations } = makeService();
+      const { user: registeredUser } = await registerViaInvitation(service, invitations, { email: 'aktuell@example.org' });
+
+      const updateSpy = vi.spyOn(users, 'update');
+      const result = await service.login({
+        email: 'aktuell@example.org',
+        password: 'ein-sicheres-passwort',
+        consent: true,
+        consentVersion: CURRENT_CONSENT_VERSION,
+      });
+
+      expect(updateSpy).not.toHaveBeenCalled();
+      expect(result.user.consentGivenAt).toEqual(registeredUser.consentGivenAt);
+    });
   });
 });
 
@@ -475,9 +531,9 @@ describe('authService.resetPassword', () => {
     expect(result.refreshToken).toBeTruthy();
 
     // Das neue Passwort funktioniert, das alte nicht mehr.
-    await expect(service.login({ email: 'reset@example.org', password: 'ein-neues-passwort', consent: true })).resolves.toBeTruthy();
+    await expect(service.login({ email: 'reset@example.org', password: 'ein-neues-passwort', consent: true, consentVersion: CURRENT_CONSENT_VERSION })).resolves.toBeTruthy();
     await expect(
-      service.login({ email: 'reset@example.org', password: 'ein-sicheres-passwort', consent: true }),
+      service.login({ email: 'reset@example.org', password: 'ein-sicheres-passwort', consent: true, consentVersion: CURRENT_CONSENT_VERSION }),
     ).rejects.toThrow(InvalidCredentialsError);
   });
 
@@ -548,10 +604,10 @@ describe('authService.changePassword', () => {
     expect(result.accessToken).toBeTruthy();
 
     await expect(
-      service.login({ email: 'change@example.org', password: 'ein-noch-sichereres-passwort', consent: true }),
+      service.login({ email: 'change@example.org', password: 'ein-noch-sichereres-passwort', consent: true, consentVersion: CURRENT_CONSENT_VERSION }),
     ).resolves.toBeTruthy();
     await expect(
-      service.login({ email: 'change@example.org', password: 'ein-sicheres-passwort', consent: true }),
+      service.login({ email: 'change@example.org', password: 'ein-sicheres-passwort', consent: true, consentVersion: CURRENT_CONSENT_VERSION }),
     ).rejects.toThrow(InvalidCredentialsError);
   });
 
@@ -563,7 +619,7 @@ describe('authService.changePassword', () => {
 
     // Login mit dem UNVERÄNDERTEN, ursprünglichen Passwort funktioniert weiterhin.
     await expect(
-      service.login({ email: 'change2@example.org', password: 'ein-sicheres-passwort', consent: true }),
+      service.login({ email: 'change2@example.org', password: 'ein-sicheres-passwort', consent: true, consentVersion: CURRENT_CONSENT_VERSION }),
     ).resolves.toBeTruthy();
   });
 
@@ -626,10 +682,10 @@ describe('authService.changeEmail (Sicherheitsreview 2026-08-27, Befund H2)', ()
     expect(result.accessToken).toBeTruthy();
 
     await expect(
-      service.login({ email: 'neu@example.org', password: 'ein-sicheres-passwort', consent: true }),
+      service.login({ email: 'neu@example.org', password: 'ein-sicheres-passwort', consent: true, consentVersion: CURRENT_CONSENT_VERSION }),
     ).resolves.toBeTruthy();
     await expect(
-      service.login({ email: 'alt@example.org', password: 'ein-sicheres-passwort', consent: true }),
+      service.login({ email: 'alt@example.org', password: 'ein-sicheres-passwort', consent: true, consentVersion: CURRENT_CONSENT_VERSION }),
     ).rejects.toThrow(InvalidCredentialsError);
   });
 
@@ -640,7 +696,7 @@ describe('authService.changeEmail (Sicherheitsreview 2026-08-27, Befund H2)', ()
     await expect(service.changeEmail(user.id, 'falsches-passwort', 'neu@example.org')).rejects.toThrow(InvalidCurrentPasswordError);
 
     await expect(
-      service.login({ email: 'unveraendert@example.org', password: 'ein-sicheres-passwort', consent: true }),
+      service.login({ email: 'unveraendert@example.org', password: 'ein-sicheres-passwort', consent: true, consentVersion: CURRENT_CONSENT_VERSION }),
     ).resolves.toBeTruthy();
   });
 
@@ -730,7 +786,7 @@ describe('E-Mail-Abgleich ohne Rücksicht auf Groß-/Kleinschreibung (Befund M2)
     await registerViaInvitation(service, invitations, { email: 'Gemischt@Example.org' });
 
     await expect(
-      service.login({ email: 'gemischt@example.org', password: 'ein-sicheres-passwort', consent: true }),
+      service.login({ email: 'gemischt@example.org', password: 'ein-sicheres-passwort', consent: true, consentVersion: CURRENT_CONSENT_VERSION }),
     ).resolves.toBeTruthy();
   });
 

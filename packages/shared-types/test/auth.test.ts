@@ -10,17 +10,26 @@ import {
   ResetPasswordRequestSchema,
   ChangePasswordRequestSchema,
   ChangeEmailRequestSchema,
+  CURRENT_CONSENT_VERSION,
 } from '../src/auth.js';
 
 describe('LoginRequestSchema', () => {
-  it('akzeptiert gültige Zugangsdaten inkl. Einwilligung', () => {
-    expect(LoginRequestSchema.safeParse({ email: 'a@b.de', password: 'x', consent: true }).success).toBe(true);
+  it('akzeptiert gültige Zugangsdaten inkl. Einwilligung zur aktuellen Fassung', () => {
+    expect(
+      LoginRequestSchema.safeParse({ email: 'a@b.de', password: 'x', consent: true, consentVersion: CURRENT_CONSENT_VERSION })
+        .success,
+    ).toBe(true);
   });
   it('lehnt Login ohne Einwilligung ab (DSGVO)', () => {
-    expect(LoginRequestSchema.safeParse({ email: 'a@b.de', password: 'x' }).success).toBe(false);
+    expect(LoginRequestSchema.safeParse({ email: 'a@b.de', password: 'x', consentVersion: CURRENT_CONSENT_VERSION }).success).toBe(
+      false,
+    );
   });
   it('lehnt Login mit consent: false ab', () => {
-    expect(LoginRequestSchema.safeParse({ email: 'a@b.de', password: 'x', consent: false }).success).toBe(false);
+    expect(
+      LoginRequestSchema.safeParse({ email: 'a@b.de', password: 'x', consent: false, consentVersion: CURRENT_CONSENT_VERSION })
+        .success,
+    ).toBe(false);
   });
 
   // Regressionstest für Befund R4 (Code-Review): das nachgestellte
@@ -28,7 +37,7 @@ describe('LoginRequestSchema', () => {
   // lässt bereits nur `true` durch) — die deutsche Meldung erschien daher
   // nie, stattdessen Zods generische "Invalid literal value"-Meldung.
   it('liefert die deutsche Einwilligungs-Meldung, wenn consent fehlt', () => {
-    const result = LoginRequestSchema.safeParse({ email: 'a@b.de', password: 'x' });
+    const result = LoginRequestSchema.safeParse({ email: 'a@b.de', password: 'x', consentVersion: CURRENT_CONSENT_VERSION });
     expect(result.success).toBe(false);
     if (!result.success) {
       const consentIssue = result.error.issues.find((i) => i.path.join('.') === 'consent');
@@ -36,13 +45,48 @@ describe('LoginRequestSchema', () => {
     }
   });
   it('lehnt eine leere E-Mail ab', () => {
-    expect(LoginRequestSchema.safeParse({ email: '', password: 'x', consent: true }).success).toBe(false);
+    expect(
+      LoginRequestSchema.safeParse({ email: '', password: 'x', consent: true, consentVersion: CURRENT_CONSENT_VERSION }).success,
+    ).toBe(false);
   });
   // Sicherheitsreview 2026-08, Befund N7: argon2id verarbeitet beliebig
   // lange Eingaben — verifyPassword() hasht das übermittelte Passwort bei
   // JEDEM Login-Versuch, ein unbegrenztes Feld wäre ein DoS-Verstärker.
   it('lehnt ein zu langes Passwort ab (> 200 Zeichen)', () => {
-    expect(LoginRequestSchema.safeParse({ email: 'a@b.de', password: 'x'.repeat(201), consent: true }).success).toBe(false);
+    expect(
+      LoginRequestSchema.safeParse({
+        email: 'a@b.de',
+        password: 'x'.repeat(201),
+        consent: true,
+        consentVersion: CURRENT_CONSENT_VERSION,
+      }).success,
+    ).toBe(false);
+  });
+
+  // Regressionstest für Review 30.08.2026, Befund S1: `consent: true` allein
+  // sagt nichts darüber, WELCHER Fassung zugestimmt wurde. Ohne diese
+  // Prüfung hätte der Server (siehe auth.service.ts: login()) jede beliebige
+  // — auch eine veraltete oder frei erfundene — Version unter dem Deckmantel
+  // seiner eigenen CURRENT_CONSENT_VERSION protokolliert.
+  it('lehnt Login ohne consentVersion ab, mit der deutschen Meldung', () => {
+    const result = LoginRequestSchema.safeParse({ email: 'a@b.de', password: 'x', consent: true });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const issue = result.error.issues.find((i) => i.path.join('.') === 'consentVersion');
+      expect(issue?.message).toBe('Die Einwilligung bezieht sich nicht auf die aktuelle Fassung der Datenschutzerklärung.');
+    }
+  });
+  it('lehnt eine veraltete oder falsche consentVersion ab, statt sie stillschweigend zu korrigieren', () => {
+    const result = LoginRequestSchema.safeParse({
+      email: 'a@b.de',
+      password: 'x',
+      consent: true,
+      consentVersion: '2020-01-01',
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.some((i) => i.path.join('.') === 'consentVersion')).toBe(true);
+    }
   });
 });
 
@@ -219,7 +263,12 @@ describe('ChangePasswordRequestSchema', () => {
 // einheitliche Adresse.
 describe('E-Mail-Normalisierung der Eingabe-Schemas (Befund M2)', () => {
   it('normalisiert die Login-Adresse auf Kleinschreibung und schneidet Leerzeichen ab', () => {
-    const parsed = LoginRequestSchema.parse({ email: '  Anna@Verein.DE  ', password: 'x', consent: true });
+    const parsed = LoginRequestSchema.parse({
+      email: '  Anna@Verein.DE  ',
+      password: 'x',
+      consent: true,
+      consentVersion: CURRENT_CONSENT_VERSION,
+    });
     expect(parsed.email).toBe('anna@verein.de');
   });
 
@@ -233,6 +282,13 @@ describe('E-Mail-Normalisierung der Eingabe-Schemas (Befund M2)', () => {
   });
 
   it('lehnt eine weiterhin ungültige Adresse ab — die Normalisierung ersetzt die Prüfung nicht', () => {
-    expect(LoginRequestSchema.safeParse({ email: '  KEIN-EMAIL  ', password: 'x', consent: true }).success).toBe(false);
+    expect(
+      LoginRequestSchema.safeParse({
+        email: '  KEIN-EMAIL  ',
+        password: 'x',
+        consent: true,
+        consentVersion: CURRENT_CONSENT_VERSION,
+      }).success,
+    ).toBe(false);
   });
 });

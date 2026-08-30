@@ -39,6 +39,16 @@ export function setLocale(locale) {
   if (!LOCALES[locale]) locale = FALLBACK_LOCALE;
   currentLocale = locale;
   try { localStorage.setItem(STORAGE_KEY, locale); } catch { /* ignore (private mode etc.) */ }
+  // Review 30.08.2026, Befund U3: ohne dies blieb <html lang> dauerhaft auf
+  // dem im Markup fest eingetragenen "de" stehen, auch nachdem auf Englisch
+  // umgestellt wurde — Screenreader sprachen englischen Text mit deutscher
+  // Aussprache, und Browser boten an, die (bereits englische) Seite "aus
+  // dem Deutschen zu übersetzen". Beide LOCALES-Schlüssel ('de-DE'/'en-US')
+  // sind bereits gültige BCP-47-Sprachtags und lassen sich unverändert
+  // übernehmen.
+  if (typeof document !== 'undefined' && document.documentElement) {
+    document.documentElement.lang = currentLocale;
+  }
   listeners.forEach(fn => fn(currentLocale));
 }
 

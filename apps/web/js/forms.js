@@ -8,11 +8,41 @@ import { el } from './dom.js';
 import { dateOnly } from './dates.js';
 import { t } from './i18n.js';
 
+// Review 30.08.2026, Befund U2: field() rendert das <label> und das
+// Eingabefeld nebeneinander im DOM, aber ohne jede programmatische
+// Verbindung (kein "for"/"id") — Screenreader kündigten JEDES
+// Formularfeld der Anwendung als "Eingabefeld, leer" an, unabhängig vom
+// sichtbaren Beschriftungstext, und ein Klick auf die Beschriftung
+// fokussierte das Feld nicht. Da praktisch jedes Formular der Anwendung
+// über field() läuft, behebt eine Verbindung hier alle Aufrufstellen auf
+// einmal, ohne dass eine von ihnen angefasst werden muss.
+let fieldIdCounter = 0;
+
+// inputNode ist meist das Eingabefeld selbst, gelegentlich (z. B.
+// athletes.js: das Aktiv-Kästchen mit begleitendem Text) ein umschließendes
+// <div> — in dem Fall gehört "for" auf das tatsächlich fokussierbare
+// Steuerelement darin, nicht auf den Wrapper (ein <label for> auf ein
+// nicht fokussierbares <div> wäre wirkungslos).
+function resolveLabelTarget(node) {
+  if (!node || typeof node.querySelector !== 'function') return null;
+  if (node.tagName === 'INPUT' || node.tagName === 'SELECT' || node.tagName === 'TEXTAREA') return node;
+  return node.querySelector('input, select, textarea');
+}
+
 export function field(labelText, inputNode, opts = {}) {
+  const hintNode = opts.hint ? el('div', { class: 'hint' }, opts.hint) : null;
+  const target = resolveLabelTarget(inputNode);
+  if (target) {
+    if (!target.id) target.id = `field-${++fieldIdCounter}`;
+    if (hintNode) {
+      if (!hintNode.id) hintNode.id = `${target.id}-hint`;
+      target.setAttribute('aria-describedby', hintNode.id);
+    }
+  }
   return el('div', { class: `field ${opts.span2 ? 'span-2' : ''}` }, [
-    el('label', {}, labelText),
+    el('label', target ? { for: target.id } : {}, labelText),
     inputNode,
-    opts.hint ? el('div', { class: 'hint' }, opts.hint) : null,
+    hintNode,
   ]);
 }
 

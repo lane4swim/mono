@@ -178,8 +178,8 @@ function postJson(path, body, opts) {
 // Gibt user + enabledModules zusammen zurück (nicht nur result.user) —
 // state.js legt daraus die vollständige `current`-Sitzung an, inklusive
 // der gebuchten Module des Vereins (siehe router.js: visibleModules()).
-export async function login({ email, password, consent }) {
-  const result = await postJson('/auth/login', { email, password, consent }, { allowRefreshRetry: false });
+export async function login({ email, password, consent, consentVersion }) {
+  const result = await postJson('/auth/login', { email, password, consent, consentVersion }, { allowRefreshRetry: false });
   setTokens(result);
   return { ...result.user, enabledModules: result.enabledModules };
 }

@@ -14,6 +14,7 @@ import { createSyncService } from '../../src/modules/sync/sync.service.js';
 import { InMemorySyncGateway } from '../../src/modules/sync/sync.gateway.memory.js';
 import { InMemoryMailSender } from '../../src/mail/mailer.memory.js';
 import { InMemoryProfileDataGateway } from '../../src/modules/profile/profile.repository.memory.js';
+import { CURRENT_CONSENT_VERSION } from '@lane1/shared-types';
 
 const testEnv = loadEnv({
   NODE_ENV: 'test',
@@ -153,12 +154,12 @@ describe('POST /auth/login', () => {
   afterAll(async () => { await app.close(); });
 
   it('meldet mit korrekten Zugangsdaten an (200)', async () => {
-    const response = await app.inject({ method: 'POST', url: '/auth/login', payload: { email: 'sabine.reuter@example.org', password: 'ein-sicheres-passwort', consent: true } });
+    const response = await app.inject({ method: 'POST', url: '/auth/login', payload: { email: 'sabine.reuter@example.org', password: 'ein-sicheres-passwort', consent: true, consentVersion: CURRENT_CONSENT_VERSION } });
     expect(response.statusCode).toBe(200);
   });
 
   it('liefert 401 bei falschem Passwort', async () => {
-    const response = await app.inject({ method: 'POST', url: '/auth/login', payload: { email: 'sabine.reuter@example.org', password: 'falsch', consent: true } });
+    const response = await app.inject({ method: 'POST', url: '/auth/login', payload: { email: 'sabine.reuter@example.org', password: 'falsch', consent: true, consentVersion: CURRENT_CONSENT_VERSION } });
     expect(response.statusCode).toBe(401);
   });
 });
@@ -178,7 +179,7 @@ describe('Session-Antworten enthalten enabledModules', () => {
     expect(registerResponse.json().enabledModules).toEqual(['athletes', 'times']);
     const { accessToken, refreshToken } = registerResponse.json();
 
-    const loginResponse = await app.inject({ method: 'POST', url: '/auth/login', payload: { email: 'module-test@example.org', password: 'ein-sicheres-passwort', consent: true } });
+    const loginResponse = await app.inject({ method: 'POST', url: '/auth/login', payload: { email: 'module-test@example.org', password: 'ein-sicheres-passwort', consent: true, consentVersion: CURRENT_CONSENT_VERSION } });
     expect(loginResponse.json().enabledModules).toEqual(['athletes', 'times']);
 
     const refreshResponse = await app.inject({ method: 'POST', url: '/auth/refresh', payload: { refreshToken } });
@@ -202,7 +203,7 @@ describe('Session-Antworten enthalten enabledModules', () => {
     const token = await seedInvitationToken(invitations, { email: 'missing-club-test@example.org' });
     await app.inject({ method: 'POST', url: '/auth/register', payload: { token, name: 'Test', password: 'ein-sicheres-passwort', consent: true } });
 
-    const loginResponse = await app.inject({ method: 'POST', url: '/auth/login', payload: { email: 'missing-club-test@example.org', password: 'ein-sicheres-passwort', consent: true } });
+    const loginResponse = await app.inject({ method: 'POST', url: '/auth/login', payload: { email: 'missing-club-test@example.org', password: 'ein-sicheres-passwort', consent: true, consentVersion: CURRENT_CONSENT_VERSION } });
     expect(loginResponse.json().enabledModules).toEqual([]);
 
     await app.close();
@@ -215,7 +216,7 @@ describe('Rate-Limiting auf /auth/login', () => {
     const token = await seedInvitationToken(invitations, { email: 'ratelimit@example.org' });
     await app.inject({ method: 'POST', url: '/auth/register', payload: { token, name: 'X', password: 'ein-sicheres-passwort', consent: true } });
 
-    const attempt = () => app.inject({ method: 'POST', url: '/auth/login', payload: { email: 'ratelimit@example.org', password: 'falsch', consent: true } });
+    const attempt = () => app.inject({ method: 'POST', url: '/auth/login', payload: { email: 'ratelimit@example.org', password: 'falsch', consent: true, consentVersion: CURRENT_CONSENT_VERSION } });
     const results = [];
     for (let i = 0; i < 6; i++) results.push(await attempt());
     const statusCodes = results.map((r) => r.statusCode);
@@ -239,7 +240,7 @@ describe('Rate-Limiting auf /auth/login', () => {
     const { app } = await buildTestApp();
 
     const attempt = (email: string) =>
-      app.inject({ method: 'POST', url: '/auth/login', payload: { email, password: 'falsch', consent: true } });
+      app.inject({ method: 'POST', url: '/auth/login', payload: { email, password: 'falsch', consent: true, consentVersion: CURRENT_CONSENT_VERSION } });
 
     const firstAccountResults = [];
     for (let i = 0; i < 5; i++) firstAccountResults.push(await attempt('konto-a@example.org'));
@@ -347,7 +348,7 @@ describe('POST /auth/reset-password', () => {
     expect(response.json().accessToken).toBeTruthy();
 
     // Login mit dem neuen Passwort funktioniert.
-    const loginResponse = await app.inject({ method: 'POST', url: '/auth/login', payload: { email: 'reset-route@example.org', password: 'ein-ganz-neues-passwort', consent: true } });
+    const loginResponse = await app.inject({ method: 'POST', url: '/auth/login', payload: { email: 'reset-route@example.org', password: 'ein-ganz-neues-passwort', consent: true, consentVersion: CURRENT_CONSENT_VERSION } });
     expect(loginResponse.statusCode).toBe(200);
     await app.close();
   });
@@ -420,7 +421,7 @@ describe('POST /api/me/password (geschützt)', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json().accessToken).toBeTruthy();
 
-    const loginResponse = await app.inject({ method: 'POST', url: '/auth/login', payload: { email: 'change-route@example.org', password: 'ein-ganz-neues-passwort', consent: true } });
+    const loginResponse = await app.inject({ method: 'POST', url: '/auth/login', payload: { email: 'change-route@example.org', password: 'ein-ganz-neues-passwort', consent: true, consentVersion: CURRENT_CONSENT_VERSION } });
     expect(loginResponse.statusCode).toBe(200);
     await app.close();
   });
@@ -548,7 +549,7 @@ describe('POST /api/me/email (geschützt, Sicherheitsreview 2026-08-27, Befund H
     expect(response.json().user.email).toBe('email-route-neu@example.org');
     expect(response.json().accessToken).toBeTruthy();
 
-    const loginResponse = await app.inject({ method: 'POST', url: '/auth/login', payload: { email: 'email-route-neu@example.org', password: 'ein-sicheres-passwort', consent: true } });
+    const loginResponse = await app.inject({ method: 'POST', url: '/auth/login', payload: { email: 'email-route-neu@example.org', password: 'ein-sicheres-passwort', consent: true, consentVersion: CURRENT_CONSENT_VERSION } });
     expect(loginResponse.statusCode).toBe(200);
     await app.close();
   });

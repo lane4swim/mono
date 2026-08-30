@@ -12,6 +12,7 @@ import { createSyncService } from '../src/modules/sync/sync.service.js';
 import { InMemorySyncGateway } from '../src/modules/sync/sync.gateway.memory.js';
 import { InMemoryMailSender } from '../src/mail/mailer.memory.js';
 import { InMemoryProfileDataGateway } from '../src/modules/profile/profile.repository.memory.js';
+import { CURRENT_CONSENT_VERSION } from '@lane1/shared-types';
 
 const testEnv = loadEnv({
   NODE_ENV: 'test',
@@ -102,7 +103,7 @@ describe('Auth (Phase 1 — jetzt echt implementiert, siehe test/auth/*.test.ts 
     const response = await app.inject({
       method: 'POST',
       url: '/auth/login',
-      payload: { email: 'unbekannt@example.org', password: 'irgendwas', consent: true },
+      payload: { email: 'unbekannt@example.org', password: 'irgendwas', consent: true, consentVersion: CURRENT_CONSENT_VERSION },
     });
     expect(response.statusCode).toBe(401);
   });

@@ -230,7 +230,14 @@ async function applyEnabledModules(nextModules) {
 }
 
 export async function login(email, password, consent) {
-  const user = await api.login({ email, password, consent });
+  // Review 30.08.2026, Befund S1: die Version, der zugestimmt wird, kommt
+  // von hier — derselben Konstante, die authScreens.js im Einwilligungstext
+  // anzeigt (t('auth.consentLabel', { version: CURRENT_CONSENT_VERSION })).
+  // Der Server (LoginRequestSchema) lässt nur seine eigene, tagesaktuelle
+  // Fassung durch; driften beide Konstanten auseinander, scheitert der
+  // Login hier sichtbar, statt den Nachweis stillschweigend falsch zu
+  // protokollieren.
+  const user = await api.login({ email, password, consent, consentVersion: CURRENT_CONSENT_VERSION });
   // Sicherheitsreview 2026-08-29, Befund H1 — siehe
   // ensureLocalStoreBelongsTo(): räumt die lokale Ablage auf, falls sie
   // noch einer anderen Person gehört.

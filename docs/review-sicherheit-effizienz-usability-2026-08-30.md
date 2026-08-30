@@ -39,13 +39,40 @@ Verfügung. Alle Befunde sind statisch am Code belegt, mit Datei und Zeile.
 Schweregrade: **Hoch** = vor dem nächsten Produktivbetrieb beheben,
 **Mittel** = einplanen, **Niedrig** = bei nächster Berührung mitnehmen.
 
+**Update (30. August 2026, im Anschluss an dieses Review).** Die beiden
+Hoch-Befunde (**S1**, **U1**) sowie die beiden verbleibenden
+Barrierefreiheits-Befunde (**U2**, **U3**) sind behoben — siehe die
+jeweiligen **Fix**-Abschnitte. Jeder der vier Fixes trägt eigene, neu
+geschriebene Regressionstests (23 insgesamt: 9 für U1, 6 für U2, 3 für
+U3, 5 für S1), die allesamt ohne die jeweilige Korrektur nachweislich
+fehlschlagen (für U1–U3 per `git stash` der drei geänderten
+Produktivdateien empirisch geprüft; für S1 folgt es unmittelbar aus der
+neuen Schema-Pflichtprüfung). Daneben wurden 35 bereits bestehende
+Login-Testaufrufe lediglich um das neue Pflichtfeld ergänzt, um unter der
+verschärften Validierung weiter zu bestehen — das sind Anpassungen an
+API-Vertragsänderungen, keine neuen Regressionstests. U1 wurde
+zusätzlich in einem echten, headless-gesteuerten Browser gegen `demo.html`
+verifiziert (Playwright gegen die in dieser Umgebung vorinstallierte
+Chromium-Version): Fokusplatzierung, Fokusfalle über acht Tab-Drücke,
+`inert`-Hintergrund, Escape-Verhalten und die Label-Verknüpfung wurden am
+tatsächlich gerenderten Dialog beobachtet, nicht nur in `jsdom`. Gesamtsuite
+danach: **738 Tests, alle grün** (`apps/api` 457, `apps/web` 124,
+`packages/shared-types` 148, `packages/sync-protocol` 9 — Letztere
+unverändert gegenüber dem ursprünglichen Review, das ihre Zahl nicht
+gesondert auswies), `npm run lint`, `npm run typecheck` (API) und
+`npm run build` (alle Workspaces) sauber. Wie bei den Vorreviews stand
+auch hier kein Postgres-Container zur Verfügung — die 457 API-Tests sind
+die Vitest-Suite gegen die `*.repository.memory.ts`-Doubles
+(`npm run test`), nicht die Prisma-Integrationssuite. S2–S5, E1–E4 und U4–U5
+sind unverändert offen.
+
 ---
 
 ## Übersicht
 
 | # | Befund | Ort | Schwere |
 |---|--------|-----|---------|
-| **S1** | Jeder Login stempelt die Einwilligung blind auf die *aktuelle* Version — eine geänderte Datenschutzerklärung gilt damit als angenommen, ohne dass sie jemand gesehen hat. Die Versionskonstante wird zusätzlich an zwei Orten gepflegt | `auth.service.ts:311-319`; `shared-types/src/auth.ts:18` + `web/js/state.js:26` | **Hoch** |
+| **S1** | Jeder Login stempelt die Einwilligung blind auf die *aktuelle* Version — eine geänderte Datenschutzerklärung gilt damit als angenommen, ohne dass sie jemand gesehen hat. Die Versionskonstante wird zusätzlich an zwei Orten gepflegt | `auth.service.ts:311-319`; `shared-types/src/auth.ts:18` + `web/js/state.js:26` | **Hoch — behoben** |
 | **S2** | Rate-Limits außerhalb von Login/Passwort-vergessen zählen **nur nach IP** — ein Verein hinter NAT sperrt sich selbst aus; genau der Fall, den `plugins/security.ts` für den Login ausdrücklich vermeiden wollte | `auth.route.ts:29,81,99,158,231,264` | Mittel |
 | **S3** | `/auth/forgot-password` verrät per Laufzeit, ob eine Adresse existiert — der Timing-Ausgleich des Logins wurde hier nicht mitgezogen | `auth.service.ts:407` | Niedrig |
 | **S4** | E-Mail-Wechsel benachrichtigt die **bisherige** Adresse nicht (Ergänzung zu B1 des Vorreviews, das die *neue* Adresse betrachtete) | `auth.service.ts: changeEmail()` | Niedrig |
@@ -53,9 +80,9 @@ Schweregrade: **Hoch** = vor dem nächsten Produktivbetrieb beheben,
 | **E1** | `requesterFrom()` liest den Verein bei **jeder** Sync-Anfrage — bei einem Erstabgleich bis zu 1.000-mal dieselbe Zeile | `sync.route.ts:51` | Mittel |
 | **E2** | `push()` verarbeitet 200 Events streng seriell mit je 3 Rundreisen — ~600 nacheinander laufende Abfragen pro Anfrage | `sync.service.ts: push()` | Mittel |
 | **E3** | `pull()` filtert Leserechte **nach** der Paginierung — Athlet:innen bezahlen den Datenbestand des ganzen Vereins für ihren Bruchteil davon | `sync.service.ts: pull()` | Niedrig–Mittel |
-| **U1** | **Kein Dialog der Anwendung ist bedienbar ohne Maus:** kein `role="dialog"`, kein Fokuswechsel, keine Fokusfalle, keine Fokusrückgabe, Hintergrund nicht inert | `web/js/modal.js:10` | **Hoch** |
-| **U2** | `<label>` und Eingabefeld sind Geschwister ohne `for`/`id` — jedes Formularfeld der Anwendung ist für Screenreader unbeschriftet, Labelklick fokussiert nicht | `web/js/forms.js:11` | Mittel |
-| **U3** | `<html lang>` bleibt fest `"de"`, auch auf Englisch | `web/index.html:2`, `demo.html:2`, `admin/index.html:2`; `web/js/i18n.js:38` | Mittel |
+| **U1** | **Kein Dialog der Anwendung ist bedienbar ohne Maus:** kein `role="dialog"`, kein Fokuswechsel, keine Fokusfalle, keine Fokusrückgabe, Hintergrund nicht inert | `web/js/modal.js:10` | **Hoch — behoben** |
+| **U2** | `<label>` und Eingabefeld sind Geschwister ohne `for`/`id` — jedes Formularfeld der Anwendung ist für Screenreader unbeschriftet, Labelklick fokussiert nicht | `web/js/forms.js:11` | Mittel — behoben |
+| **U3** | `<html lang>` bleibt fest `"de"`, auch auf Englisch | `web/index.html:2`, `demo.html:2`, `admin/index.html:2`; `web/js/i18n.js:38` | Mittel — behoben |
 | **U4** | Ein 429 auf `/auth/refresh` endet als **stiller Logout** — ununterscheidbar von „Sitzung abgelaufen" | `web/js/apiClient.js:160-167`, `web/js/state.js:52-56` | Mittel |
 | **U5** | Service Worker: `skipWaiting()`/`clients.claim()` erreichen ihren Zweck nicht (die laufende Sitzung behält ihren Code), und es gibt keinen Hinweis „neue Version verfügbar" — eine über Stunden offene PWA bleibt beliebig lange veraltet | `web/sw.js:89,96-97` | Niedrig |
 
@@ -146,6 +173,55 @@ rechtlicher Konsequenz.
    generierten Datei oder über einen Build-Schritt aus
    `packages/shared-types`, statt sie zu wiederholen. Solange das nicht
    geschieht, mindestens ein Test, der beide Werte vergleicht.
+
+**Fix (30.08.2026).** Umgesetzt wie Empfehlung 1 und 2; Empfehlung 3 (eine
+eigene, vom Frontend als "neue Erklärung anzeigen" behandelte
+Re-Consent-Antwort) bewusst zurückgestellt — das wäre eine neue
+UI-Fläche (Bildschirm, Fehlerklasse, i18n-Text) für einen Fall, der mit
+der heutigen einzigen Version noch nie eintritt; Empfehlung 4 durch die
+im Folgenden beschriebene Testabsicherung ersetzt (siehe deren Begründung
+unten), da eine echte einmalige Quelle den bewusst build-losen
+`apps/web` widerspricht (siehe dessen `package.json`-Beschreibung).
+
+* `packages/shared-types/src/auth.ts`: `LoginRequestSchema` verlangt jetzt
+  `consentVersion: z.literal(CURRENT_CONSENT_VERSION)` — dieselbe Technik
+  wie beim bestehenden `consent: z.literal(true)`. Der Client bestätigt
+  damit nachweislich *die Fassung, die der Server für aktuell hält*; eine
+  veraltete oder erfundene Version scheitert bereits an der
+  Eingabevalidierung, bevor `login()` sie überhaupt zu Gesicht bekommt.
+* `apps/api/src/modules/auth/auth.service.ts: login()`: schreibt
+  `consentGivenAt`/`consentVersion` nur noch, wenn
+  `user.consentVersion !== CURRENT_CONSENT_VERSION` — der zuvor
+  bedingungslose `UPDATE` bei jedem Login entfällt für den Normalfall
+  (deckt nebenbei die E4-Notiz unter „Effizienz" ab).
+* `apps/web/js/apiClient.js`/`state.js`: `login()` sendet jetzt
+  `consentVersion: CURRENT_CONSENT_VERSION` (der Frontend-eigenen
+  Konstante) mit — derselbe Wert, den `authScreens.js` im
+  Einwilligungstext bereits anzeigt.
+* **Statt** der einmaligen Quelle aus Empfehlung 4 (siehe deren
+  Begründung — ein echter Import würde den bewusst build-losen `apps/web`
+  brechen): `packages/shared-types/test/auth.test.ts` enthält jetzt zwei
+  Regressionstests, die eine fehlende bzw. veraltete `consentVersion`
+  ablehnen; `apps/api/test/auth/auth.service.test.ts` (neuer Abschnitt
+  „Einwilligungsnachweis (Befund S1)") deckt die beiden Verhaltensfälle im
+  Service selbst ab: ein Konto mit veralteter gespeicherter
+  `consentVersion` wird beim nächsten Login auf den aktuellen Stand
+  gehoben; ein Konto, dessen Stand bereits aktuell ist, löst **keinen**
+  `users.update()`-Aufruf aus (per `vi.spyOn` geprüft) und sein
+  `consentGivenAt` bleibt unverändert. Alle drei Tests scheitern
+  nachweislich gegen den Stand vor diesem Fix. Die eigentliche
+  Divergenz-Gefahr aus Empfehlung 4 — zwei getrennt gepflegte
+  `CURRENT_CONSENT_VERSION`-Konstanten — bleibt bestehen, ist durch diesen
+  Fix aber entschärft: ein Auseinanderlaufen führt jetzt zu einem lauten,
+  sofort bemerkten Login-Fehler statt zu einem still falsch
+  protokollierten Einwilligungsnachweis.
+* Testfolge: alle bestehenden Login-Aufrufstellen mit `consent: true` in
+  `apps/api/test/auth/{auth.route,auth.service}.test.ts` (9 bzw. 16
+  Stellen), `apps/api/test/health.test.ts` (1 Stelle),
+  `packages/shared-types/test/auth.test.ts` (8 Stellen) und
+  `apps/web/test/apiClient.test.js` (1 Stelle) um `consentVersion`
+  ergänzt — 35 Stellen insgesamt. `acceptInvitation()`-Aufrufe (eigenes
+  Schema, von S1 nicht betroffen) blieben unverändert.
 
 ---
 
@@ -427,6 +503,45 @@ Rund 25 Zeilen, ein Ort, sämtliche Aufrufstellen profitieren. Von allen Befunde
 dieses Reviews hat dieser das mit Abstand beste Verhältnis von Aufwand zu
 Wirkung.
 
+**Fix (30.08.2026).** Umgesetzt wie vorgeschlagen, mit einer Präzisierung:
+die anfängliche Fokusplatzierung sucht das erste fokussierbare Element
+gezielt **im Inhalt** (`bodyNode`), nicht im gesamten Dialog — der
+×-Schließen-Knopf steht im Kopf immer vor `bodyNode` und wäre sonst bei
+jedem einzigen Dialog das Ergebnis der Suche, unabhängig vom eigentlichen
+Formularinhalt (z. B. würde `confirmAction()` beim Öffnen auf das ×
+statt auf „Abbrechen" fokussieren). Die Fokusfalle selbst umfasst
+weiterhin den **gesamten** Dialog inklusive ×-Knopf — nur die anfängliche
+Platzierung überspringt ihn.
+
+* `apps/web/js/modal.js: openModal()`: `role="dialog"`, `aria-modal="true"`,
+  `aria-labelledby` (verweist auf eine neu vergebene ID der `<h3>`),
+  `tabindex="-1"` auf die Dialogbox; Fokus beim Öffnen auf das erste
+  fokussierbare Element in `bodyNode` (ersatzweise die Box selbst);
+  `#app-shell` erhält `inert`, solange der Dialog offen ist, und verliert
+  es beim Schließen wieder; eine Fokusfalle in `onKey` hält Tab/Shift+Tab
+  innerhalb des Dialogs (inkl. ×-Knopf); `close()` gibt den Fokus an das
+  vor dem Öffnen fokussierte Element zurück.
+* Neue Testdatei `apps/web/test/modal.test.js` (9 Tests, `jsdom`-Umgebung
+  über die `// @vitest-environment jsdom`-Pragma je Testdatei — die
+  übrigen `apps/web`-Tests laufen bewusst weiter in der schnelleren reinen
+  Node-Umgebung, siehe `vitest.config.js`): Rolle/Name, anfängliche
+  Fokusplatzierung (inkl. des Sonderfalls „nur Text, kein Steuerelement"),
+  `inert` beim Öffnen/Schließen, Fokusrückgabe, Fokusfalle vorwärts und
+  rückwärts, Escape, Klick auf Hintergrund vs. auf die Box selbst. Alle 9
+  Tests scheitern nachweislich gegen den Stand vor diesem Fix (per
+  `git stash` der drei Fix-Dateien empirisch geprüft).
+* Zusätzlich **in einem echten Browser** verifiziert (nicht nur `jsdom`):
+  `demo.html` unter der in dieser Umgebung vorinstallierten
+  headless-Chromium-Version geladen, den „Add focus area"-Dialog geöffnet
+  und per DOM-Inspektion bestätigt — `role="dialog"`/`aria-modal="true"`,
+  Fokus auf dem ersten `<select>` des Formulars, `#app-shell` trägt
+  `inert`, acht aufeinanderfolgende Tab-Drücke bleiben innerhalb der
+  Dialogbox, Escape schließt den Dialog und entfernt `inert` wieder. Dies
+  deckt eine Lücke ab, die `jsdom` allein nicht abdecken kann: `jsdom`
+  führt kein echtes Fokus-Timing/-Layout aus, ein realer Browser schon.
+* U2 und U3 (unten) wirken sich auf denselben Dialog aus, wurden im
+  selben Durchgang mitgeprüft und sind ebenfalls behoben.
+
 ### U2 — Formularfelder sind nicht beschriftet (Mittel)
 
 **Ort.** `apps/web/js/forms.js:11` (`field()`).
@@ -464,6 +579,29 @@ Verbindung implizit herstellt — verlangt allerdings eine Anpassung an
 `css/styles.css`, weil sich die Selektorstruktur ändert. Die ID-Variante ist
 die risikoärmere.
 
+**Fix (30.08.2026).** Umgesetzt wie empfohlen, ID-Variante (Modulzähler
+`fieldIdCounter`), mit einer Ergänzung für einen in der Empfehlung nicht
+bedachten Fall: `athletes.js` übergibt `field()` an einer Stelle (Aktiv-
+Status) kein Eingabefeld direkt, sondern ein umschließendes `<div>` mit
+einer Checkbox und begleitendem Text darin — ein `for` auf dieses `<div>`
+wäre wirkungslos, da es selbst nicht fokussierbar ist. `field()` löst das
+per `resolveLabelTarget()` auf: ist `inputNode` selbst ein
+`INPUT`/`SELECT`/`TEXTAREA`, wird es direkt verlinkt; sonst wird das
+erste `input`/`select`/`textarea` darin gesucht.
+
+* `apps/web/js/forms.js: field()`: vergibt bei Bedarf eine `id` auf das
+  aufgelöste Zielelement, setzt `for` auf dem `<label>` entsprechend, und
+  verknüpft einen vorhandenen `hint` per `aria-describedby`. Kein Feld
+  bleibt ohne `for`, sofern irgendein fokussierbares Steuerelement
+  auffindbar ist — reiner Infotext (`opts.hint` ohne Eingabefeld) bleibt
+  bewusst ohne `for`.
+* Neue Testdatei `apps/web/test/forms.test.js` (6 Tests): `for`/`id`-
+  Verknüpfung, eindeutige IDs bei mehreren Feldern auf derselben Seite,
+  `aria-describedby` für `hint`, unverändertes Verhalten für `<select>`,
+  der Wrapper-Fall (Checkbox + Begleittext), und der Fall ohne
+  fokussierbares Element (kein `for`). Scheitert nachweislich gegen den
+  Stand vor diesem Fix.
+
 ### U3 — `<html lang>` folgt der Sprachwahl nicht (Mittel)
 
 **Ort.** `apps/web/index.html:2`, `demo.html:2`, `admin/index.html:2`
@@ -496,6 +634,25 @@ document.documentElement.lang = locale;   // 'de-DE' | 'en-US'
 
 Beide Werte sind gültige BCP-47-Tags und können unverändert übernommen
 werden.
+
+**Fix (30.08.2026).** Umgesetzt wie empfohlen — eine Zeile in
+`setLocale()`.
+
+* `apps/web/js/i18n.js: setLocale()`: setzt
+  `document.documentElement.lang = currentLocale` (hinter einer
+  `typeof document !== 'undefined'`-Absicherung, da `i18n.js` auch von
+  `apps/web/test/i18n.test.js` in der reinen Node-Umgebung ohne
+  `document` importiert wird).
+* Neue Testdatei `apps/web/test/i18n.documentLang.test.js` (3 Tests, in
+  einer eigenen Datei statt einer Ergänzung von `i18n.test.js`, damit nur
+  dieser eine Test die `jsdom`-Umgebung braucht — die übrigen,
+  reinen String-Tests von `i18n.js` bleiben in der schnelleren
+  Node-Umgebung): Wechsel auf Englisch, Wechsel zurück auf Deutsch,
+  Rückfall auf Deutsch bei einer unbekannten Locale. Scheitert
+  nachweislich gegen den Stand vor diesem Fix.
+* Live im Browser verifiziert (siehe U1-Fix): die dort geladene
+  `demo.html` zeigte nach dem automatischen Erkennen der Browsersprache
+  korrekt `<html lang="en-US">`.
 
 ### U4 — Ein Rate-Limit-Treffer endet als stiller Logout (Mittel)
 
@@ -633,12 +790,9 @@ wurden gezielt untersucht und gaben **keinen** Anlass zu einem Befund:
 
 ## Empfohlene Reihenfolge
 
-1. **U1** (Dialog-Barrierefreiheit) — größte Wirkung je Zeile, eine Datei,
-   keine Aufruferänderung.
-2. **S1** (Einwilligungsversion) — rechtlich relevant; die doppelte
-   Konstante ist eine tickende Divergenz.
-3. **U2**, **U3** — je eine Funktion, zusammen mit U1 als ein
-   Barrierefreiheits-Durchgang zu erledigen.
+1. ~~**U1** (Dialog-Barrierefreiheit)~~ — **behoben** (30.08.2026).
+2. ~~**S1** (Einwilligungsversion)~~ — **behoben** (30.08.2026).
+3. ~~**U2**, **U3**~~ — **behoben** (30.08.2026), im selben Durchgang wie U1.
 4. **S2** + **U4** — gemeinsam anzufassen: die Ursache und ihre sichtbare
    Folge.
 5. **E1**, **E2** — messbar auf dem Raspberry-Pi-Deployment; E1 zuerst,
@@ -647,7 +801,11 @@ wurden gezielt untersucht und gaben **keinen** Anlass zu einem Befund:
    jeweiligen Bereichs.
 
 Für jeden Befund gilt die Hausregel der bisherigen Reviews: ein
-Regressionstest, der ohne die Korrektur nachweislich fehlschlägt. Bei
-**U1**–**U3** ist das gut möglich — die Testumgebung (`vitest` mit
-`jsdom`) kann `role`, `aria-labelledby`, `document.activeElement`,
-`label.htmlFor` und `documentElement.lang` unmittelbar prüfen.
+Regressionstest, der ohne die Korrektur nachweislich fehlschlägt. Für
+**U1**–**U3** ist das jetzt eingelöst — `vitest` mit einer
+`jsdom`-Umgebung (per `// @vitest-environment jsdom`-Pragma, nur für die
+drei betroffenen Testdateien) prüft `role`, `aria-labelledby`,
+`document.activeElement`, `label.htmlFor` und `documentElement.lang`
+unmittelbar; U1 zusätzlich in einem echten Browser (siehe dessen
+Fix-Abschnitt). Dieselbe Technik trägt auch **S1**, dort in Zod-Schema-
+und Service-Tests statt in `jsdom`.

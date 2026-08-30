@@ -309,14 +309,22 @@ export function createAuthService(deps: AuthServiceDeps) {
       const passwordOk = await verifyPassword(input.password, user.passwordHash);
       if (!passwordOk) throw new InvalidCredentialsError();
 
-      // input.consent ist bereits durch LoginRequestSchema (consent:
-      // z.literal(true)) erzwungen — jeder Login aktualisiert den
-      // Nachweis-Zeitstempel/die -Version erneut (z. B. nach einer
-      // geänderten Datenschutzerklärung).
-      const updated = await deps.users.update(user.id, {
-        consentGivenAt: new Date(),
-        consentVersion: CURRENT_CONSENT_VERSION,
-      });
+      // Review 30.08.2026, Befund S1: input.consentVersion ist durch
+      // LoginRequestSchema (z.literal(CURRENT_CONSENT_VERSION)) bereits auf
+      // exakt die aktuelle Fassung geprüft — der Datensatz unten spiegelt
+      // damit eine tatsächlich vom Client bestätigte Version wider, keine
+      // vom Server unterstellte. Geschrieben wird trotzdem nur, wenn sich
+      // etwas ändert (das gespeicherte consentVersion also veraltet war):
+      // sonst würde jeder Routine-Login dieselbe Zeile erneut schreiben und
+      // consentGivenAt ohne fachlichen Anlass vorrücken, obwohl niemand neu
+      // zugestimmt hat.
+      const updated =
+        user.consentVersion === CURRENT_CONSENT_VERSION
+          ? user
+          : await deps.users.update(user.id, {
+              consentGivenAt: new Date(),
+              consentVersion: CURRENT_CONSENT_VERSION,
+            });
 
       const tokens = await issueTokens(updated);
       const enabledModules = await resolveEnabledModules(deps.clubs, updated.clubId);
