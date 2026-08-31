@@ -1866,6 +1866,113 @@ describe('syncService.push — Kommentar-Autor:innen-Prüfung (Sicherheitsreview
   });
 });
 
+// Review 30.08.2026, Befund E2: push() lädt "existing"-Datensätze und den
+// Verarbeitet-Status seitdem vorab für den GESAMTEN Batch statt je Event
+// einzeln (siehe sync.service.ts: touchedInThisPush-/processedEventIds-
+// Kommentare). Diese Suite deckt sowohl die beiden Korrektheits-
+// Fallstricke ab, die eine naive "einmal alles vorab laden"-Optimierung
+// hätte (dieselbe entityId zweimal im selben Batch; dieselbe event.id
+// zweimal im selben Batch), als auch die tatsächlich eingesparten
+// Datenbank-Zugriffe.
+describe('syncService.push — Batch-Optimierung (Review 30.08.2026, Befund E2)', () => {
+  it('wendet ein "create" und ein direkt darauffolgendes "update" auf DIESELBE entityId innerhalb EINES Batches korrekt an (kein veralteter Vorab-Ladewert)', async () => {
+    const { service, gateway } = makeService();
+    const payload = makeGroupPayload();
+    const createEvent = {
+      id: 'evt-e2-create', store: 'groups' as const, entityId: payload.id, action: 'create' as const,
+      payload, clientUpdatedAt: payload.updatedAt,
+    };
+    const updatedPayload = { ...payload, name: 'Geänderter Name', updatedAt: new Date(Date.now() + 1000).toISOString() };
+    const updateEvent = {
+      id: 'evt-e2-update', store: 'groups' as const, entityId: payload.id, action: 'update' as const,
+      payload: updatedPayload, clientUpdatedAt: updatedPayload.updatedAt,
+    };
+
+    // Ohne touchedInThisPush hätte das zweite Event fälschlich den vorab
+    // geladenen (VOR dem Batch noch nicht existenten) Stand gesehen und
+    // wäre dadurch statt in den update()-Zweig in den create()-Zweig
+    // gelaufen — mit derselben id wie das soeben erst im selben Batch
+    // angelegte Ergebnis: ein Unique-Constraint-Fehler (P2002) statt der
+    // erwarteten Aktualisierung.
+    const results = await service.push([createEvent, updateEvent], asTrainer(CLUB_A));
+
+    expect(results[0]).toEqual({ eventId: 'evt-e2-create', status: 'applied' });
+    expect(results[1]).toEqual({ eventId: 'evt-e2-update', status: 'applied' });
+    const stored = await gateway.findById('groups', payload.id);
+    expect(stored?.name).toBe('Geänderter Name');
+  });
+
+  it('erkennt eine INNERHALB DESSELBEN Batches doppelt gesendete event.id als bereits verarbeitet, ohne sie zweimal anzuwenden', async () => {
+    const { service, gateway } = makeService();
+    const payload = makeGroupPayload();
+    const event = {
+      id: 'evt-e2-dup', store: 'groups' as const, entityId: payload.id, action: 'create' as const,
+      payload, clientUpdatedAt: payload.updatedAt,
+    };
+
+    // processedEventIds (siehe PushCtx-Kommentar in sync.service.ts) muss
+    // die erste Anwendung noch INNERHALB desselben push()-Aufrufs
+    // vermerken, damit das zweite Vorkommen derselben event.id als
+    // Idempotenz-Fast-Path erkannt wird, statt denselben create()-Versuch
+    // ein zweites Mal auszuführen (P2002).
+    const results = await service.push([event, event], asTrainer(CLUB_A));
+
+    expect(results[0]).toEqual({ eventId: 'evt-e2-dup', status: 'applied' });
+    expect(results[1]).toEqual({ eventId: 'evt-e2-dup', status: 'applied' });
+    const stored = await gateway.findById('groups', payload.id);
+    expect(stored?.name).toBe('Leistungsgruppe');
+  });
+
+  it('lädt "existing"-Datensätze und den Verarbeitet-Status für einen Batch mit mehreren, voneinander unabhängigen Events je genau EINMAL vorab, statt je Event einzeln', async () => {
+    class CountingGateway extends InMemorySyncGateway {
+      findByIdCalls = 0;
+      findManyByIdsInClubCalls = 0;
+      findProcessedEventIdsCalls = 0;
+
+      override async findById(...args: Parameters<InMemorySyncGateway['findById']>): ReturnType<InMemorySyncGateway['findById']> {
+        this.findByIdCalls++;
+        return super.findById(...args);
+      }
+      override async findManyByIdsInClub(
+        ...args: Parameters<InMemorySyncGateway['findManyByIdsInClub']>
+      ): ReturnType<InMemorySyncGateway['findManyByIdsInClub']> {
+        this.findManyByIdsInClubCalls++;
+        return super.findManyByIdsInClub(...args);
+      }
+      override async findProcessedEventIds(
+        ...args: Parameters<InMemorySyncGateway['findProcessedEventIds']>
+      ): ReturnType<InMemorySyncGateway['findProcessedEventIds']> {
+        this.findProcessedEventIdsCalls++;
+        return super.findProcessedEventIds(...args);
+      }
+    }
+    const gateway = new CountingGateway();
+    const service = createSyncService({ gateway });
+
+    const events = Array.from({ length: 20 }, (_, i) => {
+      const payload = makeGroupPayload({ id: `dddddddd-dddd-dddd-dddd-${String(i).padStart(12, '0')}` });
+      return {
+        id: `evt-e2-batch-${i}`, store: 'groups' as const, entityId: payload.id, action: 'create' as const,
+        payload, clientUpdatedAt: payload.updatedAt,
+      };
+    });
+
+    const results = await service.push(events, asTrainer(CLUB_A));
+    expect(results.every((r) => r.status === 'applied')).toBe(true);
+
+    // GENAU EINE Vorab-Abfrage für den Verarbeitet-Status des gesamten
+    // Batches (statt 20 einzelnen isEventProcessed()-Aufrufen).
+    expect(gateway.findProcessedEventIdsCalls).toBe(1);
+    // GENAU EINE "existing"-Vorab-Abfrage je betroffenem Store — hier
+    // ausschließlich "groups" — statt 20 einzelnen findById()-Aufrufen.
+    expect(gateway.findManyByIdsInClubCalls).toBe(1);
+    // Kein einziger der teuren Live-Fallback-Aufrufe (siehe
+    // touchedInThisPush-Kommentar in sync.service.ts) — jede entityId kommt
+    // in diesem Batch nur einmal vor.
+    expect(gateway.findByIdCalls).toBe(0);
+  });
+});
+
 describe('splitAtSafeTimestampBoundary()', () => {
   function row(entityId: string, ms: number): ChangedRecord {
     return { store: 'groups', entityId, action: 'update', payload: null, updatedAt: new Date(ms) };

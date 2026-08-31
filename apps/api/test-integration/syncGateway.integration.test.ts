@@ -13,6 +13,7 @@
 import { describe, it, expect, afterEach, afterAll } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
+import { ENTITY_STORE_NAMES } from '@lane1/shared-types';
 import { PrismaSyncGateway } from '../src/modules/sync/sync.gateway.js';
 import { getTestPrisma, closeTestPrisma, truncateAll, createTestClub } from './helpers.js';
 
@@ -118,7 +119,7 @@ describe('PrismaSyncGateway.listChangedSince()', () => {
     const newer = await prisma.group.create({ data: { clubId: clubA.id, name: 'Neuer', updatedAt: new Date('2026-06-01T00:00:00.000Z') } });
     await prisma.group.create({ data: { clubId: clubB.id, name: 'Fremder Verein' } });
 
-    const changes = await gateway.listChangedSince(clubA.id, null, 100);
+    const changes = await gateway.listChangedSince(clubA.id, null, 100, ENTITY_STORE_NAMES);
     expect(changes.map((c) => c.entityId)).toEqual([older.id, newer.id]);
   });
 
@@ -127,7 +128,7 @@ describe('PrismaSyncGateway.listChangedSince()', () => {
     await prisma.group.create({ data: { clubId: club.id, name: 'Alt', updatedAt: new Date('2026-01-01T00:00:00.000Z') } });
     const recent = await prisma.group.create({ data: { clubId: club.id, name: 'Neu', updatedAt: new Date('2026-06-01T00:00:00.000Z') } });
 
-    const changes = await gateway.listChangedSince(club.id, new Date('2026-03-01T00:00:00.000Z'), 100);
+    const changes = await gateway.listChangedSince(club.id, new Date('2026-03-01T00:00:00.000Z'), 100, ENTITY_STORE_NAMES);
     expect(changes.map((c) => c.entityId)).toEqual([recent.id]);
   });
 
@@ -135,7 +136,7 @@ describe('PrismaSyncGateway.listChangedSince()', () => {
     const club = await createTestClub();
     const row = await prisma.group.create({ data: { clubId: club.id, name: 'Wird gelöscht', deletedAt: new Date() } });
 
-    const changes = await gateway.listChangedSince(club.id, null, 100);
+    const changes = await gateway.listChangedSince(club.id, null, 100, ENTITY_STORE_NAMES);
     expect(changes).toEqual([expect.objectContaining({ entityId: row.id, action: 'delete', payload: null })]);
   });
 
@@ -146,7 +147,7 @@ describe('PrismaSyncGateway.listChangedSince()', () => {
       data: { clubId: club.id, store: 'athletes', entityId: 'purged-athlete', deletedAt: new Date('2026-06-01T00:00:00.000Z') },
     });
 
-    const changes = await gateway.listChangedSince(club.id, null, 100);
+    const changes = await gateway.listChangedSince(club.id, null, 100, ENTITY_STORE_NAMES);
     expect(changes.map((c) => c.entityId)).toEqual([stillExisting.id, 'purged-athlete']);
     expect(changes[1]).toMatchObject({ store: 'athletes', action: 'delete', payload: null });
   });
@@ -184,7 +185,7 @@ describe('PrismaSyncGateway.listChangedSince()', () => {
       let changes;
       try {
         const instrumentedGateway = new PrismaSyncGateway(instrumented);
-        changes = await instrumentedGateway.listChangedSince(club.id, null, 5);
+        changes = await instrumentedGateway.listChangedSince(club.id, null, 5, ENTITY_STORE_NAMES);
       } finally {
         await instrumented.$disconnect();
       }
@@ -216,7 +217,7 @@ describe('PrismaSyncGateway.listChangedSince()', () => {
         data: { clubId: club.id, date: new Date(), attendance: [], updatedAt: new Date('2026-01-02') },
       });
 
-      const changes = await gateway.listChangedSince(club.id, null, 100);
+      const changes = await gateway.listChangedSince(club.id, null, 100, ENTITY_STORE_NAMES);
       expect(changes.map((c) => c.entityId)).toEqual([group.id, session.id]);
       expect(changes[0]?.payload).toMatchObject({ name: 'X' });
       expect(changes[1]?.payload).toMatchObject({ id: session.id });

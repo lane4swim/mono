@@ -8,7 +8,6 @@
 // bereits für genau diesen Zweck vorbereitet wurde.
 import type { PrismaClient } from '@prisma/client';
 import type { EntityStoreName } from '@lane1/shared-types';
-import { ENTITY_STORE_NAMES } from '@lane1/shared-types';
 import { getEntityDelegate } from '../../db/entityRegistry.js';
 
 export interface SyncRecord {
@@ -91,9 +90,31 @@ export interface SyncGateway {
   // Ergebnis ununterscheidbar (beide fehlen schlicht) — dasselbe
   // Existenz-Orakel-Verhalten wie beim club-gescopten findById().
   findExistingIdsInClub(store: EntityStoreName, ids: readonly string[], clubId: string): Promise<Set<string>>;
-  // Änderungen eines Vereins seit einem Zeitpunkt, über alle Stores hinweg,
-  // absteigend nach updatedAt limitiert (Pagination via `limit`).
-  listChangedSince(clubId: string, since: Date | null, limit: number): Promise<ChangedRecord[]>;
+  // Review 30.08.2026, Befund E2: Batch-Variante von findById() für die
+  // "existing"-Ermittlung in push() — anders als findExistingIdsInClub()
+  // (reine Existenzmenge, genügt für die Fremdschlüsselprüfung) liefert
+  // diese Methode die VOLLSTÄNDIGEN Datensätze, die push() für die
+  // Konfliktentscheidung (resolveConflict() braucht updatedAt), die
+  // Eigentümerprüfung von "results" (athleteId) und die
+  // Kommentar-Autor:innenschaft (sync.commentAuthorship.ts) benötigt.
+  // clubId ist PFLICHT, aus demselben Grund wie bei findExistingIdsInClub().
+  findManyByIdsInClub(store: EntityStoreName, ids: readonly string[], clubId: string): Promise<Map<string, SyncRecord>>;
+  // Batch-Variante von isEventProcessed() für push()s Idempotenz-Vorabprüfung
+  // (Review 30.08.2026, Befund E2) — liefert die Teilmenge von `eventIds`,
+  // die für `clubId` BEREITS verarbeitet wurde. isEventProcessed() bleibt
+  // daneben unverändert bestehen (siehe dessen Kommentar unten — u. a.
+  // intern von applyAndMarkProcessed() genutzt).
+  findProcessedEventIds(eventIds: readonly string[], clubId: string): Promise<Set<string>>;
+  // Änderungen eines Vereins seit einem Zeitpunkt, absteigend nach
+  // updatedAt limitiert (Pagination via `limit`). `stores` (Review
+  // 30.08.2026, Befund E3) grenzt bereits die Watermark-Abfragen selbst
+  // auf die für die anfragende Rolle/das gebuchte Modul-Set lesbaren
+  // Stores ein (siehe sync.service.ts: pull(), canRead()) — PFLICHT statt
+  // optional, damit kein Aufrufer versehentlich alle zehn Stores abfragt,
+  // ohne das bewusst zu entscheiden. Ersetzt NICHT die anwendungsseitige
+  // Rechteprüfung in pull() (`changes.filter(canRead)`), die unverändert
+  // bestehen bleibt — reine zusätzliche Verengung der Abfrage selbst.
+  listChangedSince(clubId: string, since: Date | null, limit: number, stores: readonly EntityStoreName[]): Promise<ChangedRecord[]>;
   // clubId-gescoped: eine Event-id ist zwar client-generiert und praktisch
   // garantiert global eindeutig (UUID), ein Abgleich ohne clubId würde
   // aber ein fremdes Event-ID-Ratespiel konsequenzlos mit "applied"
@@ -152,15 +173,6 @@ export interface SyncGatewayTestSurface {
   markEventProcessed(eventId: string, clubId: string, store: EntityStoreName, action: string): Promise<void>;
 }
 
-// Genau diese Liste entscheidet in listChangedSince() unten, welche
-// Stores beim Pull überhaupt betrachtet werden — ein hier fehlender Store
-// würde ohne jede Fehlermeldung stillschweigend nie ausgeliefert.
-// ENTITY_STORE_NAMES (siehe packages/shared-types/src/entities.ts) ist
-// aus ENTITY_SCHEMAS abgeleitet, statt hier als eigene Kopie erneut
-// aufgezählt zu werden — dieselbe Liste, die bereits STORE_PERMISSIONS in
-// sync.service.ts über den Record<EntityStoreName, …>-Typ absichert.
-const ALL_STORES: EntityStoreName[] = ENTITY_STORE_NAMES;
-
 export class PrismaSyncGateway implements SyncGateway, SyncGatewayTestSurface {
   constructor(private readonly prisma: PrismaClient) {}
 
@@ -188,6 +200,28 @@ export class PrismaSyncGateway implements SyncGateway, SyncGatewayTestSurface {
       select: { id: true },
     })) as Array<{ id: string }>;
     return new Set(rows.map((row) => row.id));
+  }
+
+  // Siehe Interface-Kommentar oben (Befund E2). EINE Abfrage je Store statt
+  // einer je Event — anders als findExistingIdsInClub() werden hier die
+  // VOLLSTÄNDIGEN Zeilen benötigt (push() braucht u. a. updatedAt für
+  // resolveConflict()).
+  async findManyByIdsInClub(store: EntityStoreName, ids: readonly string[], clubId: string): Promise<Map<string, SyncRecord>> {
+    if (ids.length === 0) return new Map();
+    const delegate = getEntityDelegate(this.prisma, store);
+    const rows = (await delegate.findMany({ where: { id: { in: [...ids] }, clubId } })) as SyncRecord[];
+    return new Map(rows.map((row) => [row.id, row]));
+  }
+
+  // Siehe Interface-Kommentar oben (Befund E2). EINE Abfrage für den
+  // gesamten Push-Batch statt einer je Event.
+  async findProcessedEventIds(eventIds: readonly string[], clubId: string): Promise<Set<string>> {
+    if (eventIds.length === 0) return new Set();
+    const rows = await this.prisma.syncedEvent.findMany({
+      where: { id: { in: [...eventIds] }, clubId },
+      select: { id: true },
+    });
+    return new Set(rows.map((row: { id: string }) => row.id));
   }
 
   async create(store: EntityStoreName, payload: Record<string, unknown>): Promise<void> {
@@ -253,12 +287,12 @@ export class PrismaSyncGateway implements SyncGateway, SyncGatewayTestSurface {
   // gemeldeten Cursor liegt. Die umgekehrte Reihenfolge (Payload ÄLTER als
   // der gemeldete Zeitstempel) kann dagegen nicht auftreten — genau das
   // wäre der gefährliche Fall (stiller Datenverlust) gewesen.
-  async listChangedSince(clubId: string, since: Date | null, limit: number): Promise<ChangedRecord[]> {
+  async listChangedSince(clubId: string, since: Date | null, limit: number, stores: readonly EntityStoreName[]): Promise<ChangedRecord[]> {
     type Candidate = { store: EntityStoreName; id: string; updatedAt: Date; deleted: boolean };
 
     const [storeWatermarks, tombstones] = await Promise.all([
       Promise.all(
-        ALL_STORES.map(async (store) => {
+        stores.map(async (store) => {
           const delegate = getEntityDelegate(this.prisma, store);
           const rows = (await delegate.findMany({
             where: { clubId, ...(since ? { updatedAt: { gt: since } } : {}) },
@@ -269,8 +303,12 @@ export class PrismaSyncGateway implements SyncGateway, SyncGatewayTestSurface {
           return rows.map((row): Candidate => ({ store, id: row.id, updatedAt: row.updatedAt, deleted: row.deletedAt !== null }));
         }),
       ),
+      // Review 30.08.2026, Befund E3: zusätzlich zur Store-Auswahl oben auch
+      // hier per `store: { in: [...stores] }` eingegrenzt — ein Löschvermerk
+      // aus einem für die anfragende Rolle/das Modul-Set nicht lesbaren
+      // Store wäre sonst weiterhin unnötig mitgeladen worden.
       this.prisma.syncTombstone.findMany({
-        where: { clubId, ...(since ? { deletedAt: { gt: since } } : {}) },
+        where: { clubId, store: { in: [...stores] }, ...(since ? { deletedAt: { gt: since } } : {}) },
         orderBy: { deletedAt: 'asc' },
         take: limit,
         select: { store: true, entityId: true, deletedAt: true },

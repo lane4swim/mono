@@ -69,6 +69,29 @@ export class InMemorySyncGateway implements SyncGateway {
     return found;
   }
 
+  // Spiegelt PrismaSyncGateway.findManyByIdsInClub() (Befund E2): liefert
+  // die vollständigen Datensätze der angefragten ids, die im eigenen Verein
+  // liegen — ein Treffer aus einem fremden Verein wird wie "nicht
+  // vorhanden" behandelt, analog zu findById()/findExistingIdsInClub().
+  async findManyByIdsInClub(store: EntityStoreName, ids: readonly string[], clubId: string): Promise<Map<string, SyncRecord>> {
+    const table = this.table(store);
+    const found = new Map<string, SyncRecord>();
+    for (const id of ids) {
+      const record = table.get(id);
+      if (record && record.clubId === clubId) found.set(id, record);
+    }
+    return found;
+  }
+
+  // Spiegelt PrismaSyncGateway.findProcessedEventIds() (Befund E2).
+  async findProcessedEventIds(eventIds: readonly string[], clubId: string): Promise<Set<string>> {
+    const found = new Set<string>();
+    for (const id of eventIds) {
+      if (this.processedEvents.get(id) === clubId) found.add(id);
+    }
+    return found;
+  }
+
   // Code-Review, Befund L5: create()/update()/softDelete()/
   // markEventProcessed() sind keine SyncGateway-Interfacemethoden mehr
   // (siehe SyncGatewayTestSurface-Kommentar in sync.gateway.ts) — kein
@@ -160,9 +183,13 @@ export class InMemorySyncGateway implements SyncGateway {
     }
   }
 
-  async listChangedSince(clubId: string, since: Date | null, limit: number): Promise<ChangedRecord[]> {
+  // `stores` (Review 30.08.2026, Befund E3): spiegelt PrismaSyncGateway —
+  // nur die übergebenen Stores werden überhaupt betrachtet.
+  async listChangedSince(clubId: string, since: Date | null, limit: number, stores: readonly EntityStoreName[]): Promise<ChangedRecord[]> {
+    const readable = new Set(stores);
     const changes: ChangedRecord[] = [];
     for (const [store, records] of this.data.entries()) {
+      if (!readable.has(store)) continue;
       for (const record of records.values()) {
         if (record.clubId !== clubId) continue;
         if (since && record.updatedAt.getTime() <= since.getTime()) continue;
@@ -177,6 +204,7 @@ export class InMemorySyncGateway implements SyncGateway {
     }
     for (const t of this.tombstones) {
       if (t.clubId !== clubId) continue;
+      if (!readable.has(t.store)) continue;
       if (since && t.deletedAt.getTime() <= since.getTime()) continue;
       changes.push({ store: t.store, entityId: t.entityId, action: 'delete', payload: null, updatedAt: t.deletedAt });
     }

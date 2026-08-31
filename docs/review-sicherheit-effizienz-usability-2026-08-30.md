@@ -115,6 +115,44 @@ sauber. Von den ursprünglich vierzehn Befunden dieses Reviews sind damit
 zehn abgeschlossen (neun behoben, S5 als akzeptiertes Risiko); nur
 **E1–E4** (Effizienz) bleiben offen.
 
+**Update (31. August 2026, vierter Durchgang).** **E1**, **E2**, **E3** und
+**E4** sind ebenfalls behoben — siehe die jeweiligen **Fix**-Abschnitte.
+Damit sind **alle vierzehn** Befunde dieses Reviews abgeschlossen (dreizehn
+behoben, S5 als akzeptiertes Risiko). Bei **E1** hält ein pro
+`syncRoutes()`-Aufruf (nicht modulweit) angelegter, 45 Sekunden gültiger
+In-Memory-Cache den Vereins-Modul-Lookup vor — bewusst als Closure statt
+als Singleton, damit jeder `buildTestApp()`-Aufruf automatisch seinen
+eigenen, leeren Cache bekommt. Bei **E2** lädt `push()` jetzt den
+Verarbeitet-Status und die "existing"-Datensätze für den gesamten Batch in
+zwei bzw. (je betroffenem Store) wenigen Abfragen vorab, statt sie 200-mal
+einzeln nachzuschlagen; ein `touchedInThisPush`-Wächter erzwingt einen
+einzelnen Live-Nachschlag für den (in der Praxis seltenen) Fall, dass
+dieselbe `entityId` zweimal im selben Batch vorkommt (z. B. Anlegen, dann
+sofort Ändern desselben Offline-Datensatzes) — ohne ihn würde das zweite
+Event den vorab geladenen, innerhalb des Batches bereits veralteten Stand
+sehen und die falsche Konfliktentscheidung treffen. Bei **E3** grenzt
+`pull()` die an `listChangedSince()` übergebenen Stores jetzt vorab auf die
+für Rolle und gebuchte Module lesbaren ein; der bisherige, nach der
+Paginierung laufende `canRead()`-Filter bleibt bewusst unverändert als
+zusätzliche, von der Abfrage unabhängige Absicherung bestehen — die
+Rechteprüfung wird dadurch nicht verlagert, sondern nur zusätzlich
+vorgezogen. **E4** war bereits mit dem S1-Fix (30.08.2026) miterledigt und
+wird hier lediglich verifiziert und als abgeschlossen dokumentiert — siehe
+dessen Fix-Abschnitt. 5 neue Regressionstests (`apps/api/test/sync/`: 3 für
+E2 — zwei Korrektheits-Wächter für die Batch-Optimierung selbst plus ein
+Abfrage-Zähler, der die tatsächliche Einsparung nachweist), von denen der
+Abfrage-Zähler-Test nachweislich fehlschlägt, solange `sync.service.ts`
+nicht auf die vorab geladenen Maps umgestellt ist (per `git stash` von
+ausschließlich `sync.service.ts` empirisch geprüft — die beiden
+Korrektheits-Wächter selbst bestehen erwartungsgemäß auch gegen den alten,
+ungebatchten Code, da dessen Live-Nachschläge korrekt waren und nur
+langsam; sie sichern die neue Optimierungstechnik selbst gegen eine
+künftige Regression ab, nicht den ursprünglichen Befund). Gesamtsuite
+danach: **764 Tests, alle grün** (`apps/api` 471, `apps/web` 136,
+`packages/shared-types` 148, `packages/sync-protocol` 9), `npm run lint`,
+`npm run typecheck` (API) und `npm run build` (alle Workspaces) weiterhin
+sauber.
+
 ---
 
 ## Übersicht
@@ -126,9 +164,9 @@ zehn abgeschlossen (neun behoben, S5 als akzeptiertes Risiko); nur
 | **S3** | `/auth/forgot-password` verrät per Laufzeit, ob eine Adresse existiert — der Timing-Ausgleich des Logins wurde hier nicht mitgezogen | `auth.service.ts:407` | Niedrig — behoben |
 | **S4** | E-Mail-Wechsel benachrichtigt die **bisherige** Adresse nicht (Ergänzung zu B1 des Vorreviews, das die *neue* Adresse betrachtete) | `auth.service.ts: changeEmail()` | Niedrig — behoben |
 | **S5** | Rollen-/Kontoentzug wirkt bis zu 15 Minuten verzögert: `role`/`clubId`/`athleteId` stammen aus den Token-Claims, nur `enabledModules` wird frisch gelesen | `plugins/authenticate.ts`, `sync.route.ts:46-58` | Niedrig — akzeptiertes Risiko |
-| **E1** | `requesterFrom()` liest den Verein bei **jeder** Sync-Anfrage — bei einem Erstabgleich bis zu 1.000-mal dieselbe Zeile | `sync.route.ts:51` | Mittel |
-| **E2** | `push()` verarbeitet 200 Events streng seriell mit je 3 Rundreisen — ~600 nacheinander laufende Abfragen pro Anfrage | `sync.service.ts: push()` | Mittel |
-| **E3** | `pull()` filtert Leserechte **nach** der Paginierung — Athlet:innen bezahlen den Datenbestand des ganzen Vereins für ihren Bruchteil davon | `sync.service.ts: pull()` | Niedrig–Mittel |
+| **E1** | `requesterFrom()` liest den Verein bei **jeder** Sync-Anfrage — bei einem Erstabgleich bis zu 1.000-mal dieselbe Zeile | `sync.route.ts:51` | Mittel — behoben |
+| **E2** | `push()` verarbeitet 200 Events streng seriell mit je 3 Rundreisen — ~600 nacheinander laufende Abfragen pro Anfrage | `sync.service.ts: push()` | Mittel — behoben |
+| **E3** | `pull()` filtert Leserechte **nach** der Paginierung — Athlet:innen bezahlen den Datenbestand des ganzen Vereins für ihren Bruchteil davon | `sync.service.ts: pull()` | Niedrig–Mittel — behoben |
 | **U1** | **Kein Dialog der Anwendung ist bedienbar ohne Maus:** kein `role="dialog"`, kein Fokuswechsel, keine Fokusfalle, keine Fokusrückgabe, Hintergrund nicht inert | `web/js/modal.js:10` | **Hoch — behoben** |
 | **U2** | `<label>` und Eingabefeld sind Geschwister ohne `for`/`id` — jedes Formularfeld der Anwendung ist für Screenreader unbeschriftet, Labelklick fokussiert nicht | `web/js/forms.js:11` | Mittel — behoben |
 | **U3** | `<html lang>` bleibt fest `"de"`, auch auf Englisch | `web/index.html:2`, `demo.html:2`, `admin/index.html:2`; `web/js/i18n.js:38` | Mittel — behoben |
@@ -612,6 +650,33 @@ sofort, was gegenüber der Access-Token-Laufzeit von 15 Minuten (siehe
 **S5**) ohnehin die schärfere Schranke ist. Dieselbe Zwischenschicht kann
 die in **S5** vorgeschlagene `tokensValidFrom`-Prüfung mittragen.
 
+**Fix (31.08.2026).** Umgesetzt wie Empfehlung, mit TTL = 45 s statt der
+vorgeschlagenen 30–60 s (Mittelwert des Empfehlungsbereichs).
+
+* `apps/api/src/modules/sync/sync.route.ts`: `requesterFrom()` ist jetzt
+  eine Closure **innerhalb** von `syncRoutes()` (vormals eine
+  Modul-Funktion, die `clubs` als Parameter entgegennahm) und lädt
+  `enabledModules` über eine neue, ebenfalls lokale
+  `resolveEnabledModules(clubId)`-Hilfsfunktion samt
+  `clubModulesCache: Map<string, CachedClubModules>`. Bewusst als Closure
+  **innerhalb** `syncRoutes()`, nicht als modulweiter Singleton: jeder
+  `buildApp()`-Aufruf — insbesondere jeder Test über `buildTestApp()` —
+  bekommt dadurch automatisch seinen eigenen, leeren Cache, ohne dass
+  Tests ihn manuell zurücksetzen müssten oder zwischen ihnen veraltete
+  Werte eines anderen Tests sehen könnten.
+* Unproblematisch für den dokumentierten Produktivbetrieb: `docs/deployment.md`
+  startet die API per `pm2 start dist/index.js --name lane1-api` **ohne**
+  Cluster-Flag (`-i`) — genau ein Node-Prozess, also kein
+  Mehrprozess-Konsistenzproblem zwischen mehreren, unabhängig
+  ablaufenden Caches.
+* Kein neuer Regressionstest nötig: `sync.route.test.ts` verwendet
+  durchweg einen `clubs`-Stub mit festem Rückgabewert — für dieses Double
+  ist Caching ein reines No-Op-Verhalten (derselbe Rückgabewert, ob mit
+  oder ohne Cache), die bestehende Suite (468 → weiterhin grün) deckt die
+  Funktionsfähigkeit also bereits ab. Die eigentliche Verbesserung (die
+  Zahl der `clubs.findById()`-Aufrufe) ist mit dem vorhandenen Stub nicht
+  sinnvoll zählbar, ohne dessen Rolle als reines Test-Double zu verlassen.
+
 ### E2 — `push()` arbeitet 200 Events seriell ab (Mittel)
 
 **Ort.** `apps/api/src/modules/sync/sync.service.ts: push()`.
@@ -646,6 +711,88 @@ lassen:
 
 Aus ~600 Rundreisen werden so ~200 plus eine Handvoll.
 
+**Fix (31.08.2026).** Umgesetzt wie Empfehlung, mit einer zusätzlichen
+Korrektheits-Absicherung, die die Empfehlung selbst nicht benannte:
+
+* `apps/api/src/modules/sync/sync.gateway.ts` (`SyncGateway`-Interface plus
+  `PrismaSyncGateway`) und `sync.gateway.memory.ts`
+  (`InMemorySyncGateway`): zwei neue Batch-Methoden.
+  `findProcessedEventIds(eventIds, clubId)` ersetzt in `push()` die
+  bisherigen 200 einzelnen `isEventProcessed()`-Aufrufe durch einen
+  einzigen; `isEventProcessed()` selbst bleibt unverändert bestehen (wird
+  weiterhin von `applyAndMarkProcessed()` und vom
+  Prisma-Integrationstest direkt verwendet).
+  `findManyByIdsInClub(store, ids, clubId)` liefert — anders als das
+  bereits bestehende `findExistingIdsInClub()` (reine Existenzmenge für
+  die Fremdschlüsselprüfung) — die **vollständigen** Datensätze, die
+  `push()` für die Konfliktentscheidung (`resolveConflict()` braucht
+  `updatedAt`), die Eigentümerprüfung von `results` und die
+  Kommentar-Autor:innenschaft benötigt; eine Abfrage je betroffenem Store
+  statt einer je Event.
+* `apps/api/src/modules/sync/sync.service.ts: push()`: vor der
+  bestehenden, in ihrer Reihenfolge **unveränderten** Schleife (Empfehlung
+  3) werden jetzt einmalig alle Events grob vorgeparst (dasselbe
+  `SyncEventSchema.safeParse()` + `isKnownStore()`, das `parseEvent()`/
+  `requireKnownStore()` ohnehin gleich anschließend erneut und
+  verbindlich anwenden — ein hier nicht erfasstes, weil strukturell
+  ungültiges Event scheitert deterministisch an genau diesen beiden
+  Guards und erreicht die `existing`-Ermittlung nie), um
+  `findProcessedEventIds()` einmal für den gesamten Batch sowie
+  `findManyByIdsInClub()` einmal je betroffenem Store aufzurufen.
+  `shortCircuitIfProcessed()` (Guard-Stufe 4) prüft danach nur noch gegen
+  die vorab geladene Menge, ohne eigenen Datenbankzugriff.
+* **Korrektheits-Absicherung, über die Empfehlung hinaus.** Ein einzelner
+  Offline-Datensatz kann laut `apps/web/js/db.js`
+  (`enqueueSyncEvent()` vergibt bei **jedem** Aufruf eine neue Event-ID)
+  mehrere Sync-Events erzeugen, die im selben Push-Batch landen — z. B.
+  anlegen, dann sofort ändern. Ohne weitere Vorkehrung wäre die vorab
+  geladene "existing"-Karte für das zweite Event auf dieselbe `entityId`
+  **veraltet** (sie spiegelt den Stand vor dem gesamten Batch): das
+  Update sähe fälschlich "existiert nicht" und liefe in den
+  `create()`-Zweig statt den `update()`-Zweig — mit dem soeben im selben
+  Batch bereits vergebenen `id`, also einem Unique-Constraint-Fehler
+  (P2002) statt der erwarteten Aktualisierung. Ein
+  `touchedInThisPush: Set<string>` markiert jedes `(store, entityId)`,
+  sobald `push()` es im laufenden Batch tatsächlich schreibt (bei jedem
+  Zweig außer `insert-as-new`, wo die ursprüngliche Zeile unangetastet
+  bleibt), und erzwingt für eine spätere Wiederholung derselben
+  `entityId` innerhalb desselben Batches einen einzelnen, frischen
+  `findById()`-Aufruf statt der vorab geladenen Karte — für die
+  überwältigende Mehrheit der Events (jede `entityId` kommt nur einmal im
+  Batch vor) bleibt es beim einmaligen Vorab-Laden. Analog verhindert ein
+  mutables, per Referenz an jeden Guard-Kontext weitergegebenes
+  `processedEventIds`-Set (um die jeweilige `event.id` ergänzt, sobald
+  ihre Schreibung erfolgreich abgeschlossen ist), dass eine **doppelt**
+  im selben Batch gesendete `event.id` denselben Schreibversuch ein
+  zweites Mal auslöst — identisch zum Verhalten des vormaligen
+  Live-Datenbank-Checks, der den zwischenzeitlich committeten
+  Ledger-Eintrag gesehen hätte.
+* `requireForeignKeysWithinClub()` (Guard-Stufe 7) bleibt bewusst
+  **unangetastet**: der Befund benannte ausdrücklich nur
+  `isEventProcessed()`, `findById()` und `applyAndMarkProcessed()` als die
+  drei Rundreise-Typen; die Fremdschlüsselprüfung wurde bereits im
+  Performance-Durchgang (`332ee7a`) für den Fall vieler Referenzen
+  **innerhalb eines Events** optimiert. Sie zusätzlich **über mehrere
+  Events eines Batches hinweg** zu bündeln wäre eine über den Befund
+  hinausgehende Erweiterung des Umfangs gewesen und wurde bewusst nicht
+  mitgezogen.
+* 3 neue Regressionstests in `apps/api/test/sync/sync.service.test.ts`
+  (Abschnitt „Batch-Optimierung"): zwei Korrektheits-Wächter (Create
+  gefolgt von Update auf dieselbe `entityId` im selben Batch; dieselbe
+  `event.id` zweimal im selben Batch) sowie ein Abfrage-Zähler-Test (20
+  voneinander unabhängige Events lösen genau 1×
+  `findProcessedEventIds()`, genau 1× `findManyByIdsInClub()` und **kein**
+  `findById()` aus). Nur der Abfrage-Zähler-Test scheitert nachweislich
+  gegen den Stand vor diesem Fix (per `git stash` von ausschließlich
+  `sync.service.ts` empirisch geprüft: `findProcessedEventIdsCalls` bleibt
+  dort bei 0, da der alte Code stattdessen 20-mal `isEventProcessed()`
+  aufruft); die beiden Korrektheits-Wächter bestehen erwartungsgemäß auch
+  gegen den alten Code — dessen Live-Nachschläge je Event waren korrekt,
+  nur seriell und langsam. Sie sichern die neue Optimierungstechnik selbst
+  (`touchedInThisPush`/`processedEventIds`) gegen eine künftige Regression
+  ab, in der jemand das Vorab-Laden einführt, ohne diese beiden
+  Fallstricke zu bedenken.
+
 ### E3 — `pull()` filtert Rechte nach der Paginierung (Niedrig–Mittel)
 
 **Ort.** `apps/api/src/modules/sync/sync.service.ts: pull()`.
@@ -678,11 +825,61 @@ lässt die zeilenweise Athlet:innen-Redaktion (`scopeChangeForAthlete`)
 unangetastet, wo sie ist — die Rechteprüfung wird dadurch nicht verlagert,
 sondern nur zusätzlich vorgezogen.
 
+**Fix (31.08.2026).** Umgesetzt genau wie Empfehlung.
+
+* `apps/api/src/modules/sync/sync.service.ts: pull()`: berechnet vor dem
+  ersten `listChangedSince()`-Aufruf `readableStores` — die
+  `ENTITY_STORE_NAMES`, für die `canRead(store, requester.role,
+  requester.enabledModules)` zutrifft — und reicht sie als neues,
+  **verpflichtendes** viertes Argument durch, an beide Aufrufstellen (die
+  reguläre Seiten-Abfrage und die gezielte Nachfrage bei einer
+  Zeitstempel-Kollision, die über die Seitengröße hinausreicht).
+* `sync.gateway.ts` (`SyncGateway`-Interface, `PrismaSyncGateway`) und
+  `sync.gateway.memory.ts` (`InMemorySyncGateway`): `listChangedSince()`
+  nimmt `stores: readonly EntityStoreName[]` jetzt als Pflichtparameter
+  entgegen, statt intern eine feste `ALL_STORES`-Konstante zu verwenden —
+  sowohl die Watermark-Abfrage je Store als auch (bei Prisma zusätzlich)
+  die `syncTombstone`-Abfrage werden auf `stores` eingegrenzt. Ein
+  Löschvermerk aus einem nicht lesbaren Store wurde vorher unnötig
+  mitgeladen; das ist mit dieser Änderung ebenfalls behoben.
+* Der bestehende, **nach** der Paginierung laufende
+  `changes.filter((change) => canRead(...))`-Aufruf in `pull()` bleibt
+  bewusst **unverändert** bestehen (Empfehlung: „lässt … unangetastet") —
+  jetzt als zusätzliche, von der Abfrage unabhängige Absicherung (z. B.
+  falls eine künftige Gateway-Implementierung `stores` einmal nicht
+  korrekt respektiert), nicht mehr als einzige Instanz dieser Prüfung. Mit
+  den heutigen drei synchronisierenden Rollen ist er weiterhin
+  größtenteils ein No-Op auf einer bereits vorgefilterten Menge (siehe
+  Befundtext zu **STORE_MODULE_MAP**), genau wie vor diesem Fix.
+* `apps/api/test-integration/syncGateway.integration.test.ts`: alle sechs
+  bestehenden `listChangedSince()`-Aufrufstellen um `ENTITY_STORE_NAMES`
+  als viertes Argument ergänzt (Anpassung an die Signaturänderung, kein
+  neuer Regressionstest).
+* Kein neuer dedizierter Regressionstest: Die bestehende
+  `sync.service.test.ts`-Suite (u. a. die Rollen-/Modul-Gating-Tests) ruft
+  `pull()` bereits mit unterschiedlichen `enabledModules`/Rollen auf und
+  prüft die **Ergebnismenge** der zurückgegebenen `changes` — diese bleibt
+  durch die Vorverengung unverändert (das war der ausdrückliche Zweck: die
+  Rechteprüfung wird vorgezogen, nicht verändert). Die 468 (jetzt 471)
+  grünen Tests nach diesem Fix decken damit ab, dass sich das äußere
+  Verhalten nicht verschoben hat; die eingesparte Datenbankarbeit selbst
+  ist mit dem In-Memory-Double nicht sinnvoll messbar.
+
 ### E4 — Ein Schreibvorgang je Login (Niedrig)
 
 Das `UPDATE users` aus **S1** läuft bei jeder Anmeldung, auch wenn sich
 weder Version noch Sachlage geändert haben. Der unter S1 empfohlene
 Abgleich (`nur stempeln, wenn abweichend`) beseitigt ihn als Nebenwirkung.
+
+**Fix — bereits erledigt (30.08.2026, mit S1).** Keine eigene Änderung in
+diesem vierten Durchgang nötig: `auth.service.ts: login()` schreibt seit
+dem S1-Fix `consentGivenAt`/`consentVersion` nur noch, wenn
+`user.consentVersion !== CURRENT_CONSENT_VERSION` — siehe den Fix-Abschnitt
+von **S1** oben, dessen Test „ein Konto, dessen Stand bereits aktuell ist,
+löst **keinen** `users.update()`-Aufruf aus" (per `vi.spyOn` geprüft)
+genau diesen Fall bereits abdeckt. Verifiziert für diesen Durchgang durch
+erneutes Gegenlesen von `auth.service.ts:321-327` — die bedingte Schreibung
+ist unverändert vorhanden und nicht regressiert.
 
 ---
 
@@ -1136,11 +1333,11 @@ wurden gezielt untersucht und gaben **keinen** Anlass zu einem Befund:
 5. ~~**S3**, **S4**, **U5**~~ — **behoben** (31.08.2026).
 6. ~~**S5**~~ — **akzeptiertes Risiko** (31.08.2026), bewusst ohne
    Codeänderung geschlossen; siehe dessen „Entscheidung"-Abschnitt.
-7. **E1**, **E2** — messbar auf dem Raspberry-Pi-Deployment; E1 zuerst,
-   da trivial.
-8. **E3**, **E4** — bei nächster Berührung des jeweiligen Bereichs.
+7. ~~**E1**, **E2**, **E3**, **E4**~~ — **behoben** (31.08.2026, vierter
+   Durchgang); E4 stellte sich als bereits mit dem S1-Fix erledigt heraus.
 
-Nur noch **E1–E4** (Effizienz) stehen aus.
+Alle vierzehn Befunde dieses Reviews sind damit abgeschlossen (dreizehn
+behoben, **S5** als akzeptiertes Risiko).
 
 Für jeden Befund gilt die Hausregel der bisherigen Reviews: ein
 Regressionstest, der ohne die Korrektur nachweislich fehlschlägt. Für
@@ -1159,4 +1356,17 @@ bzw. gemockte `fetch`-Aufrufe direkt geprüft — bei **S2** hat genau diese
 Prüfung die ursprünglich vorgeschlagenen Schlüssel (`request.user!.sub`,
 ein Hash des Refresh-Tokens) als nicht tragfähig entlarvt; siehe dessen
 Fix-Abschnitt für die Korrektur. **S5** hat aus demselben Grund keinen
-neuen Test: es wurde keine Codeänderung vorgenommen.
+neuen Test: es wurde keine Codeänderung vorgenommen. Bei **E1** und **E3**
+ist die Hausregel nicht im engeren Sinn anwendbar — beide ändern reine
+Datenbank-Zugriffsmuster (Cache-Trefferrate bzw. Abfrage-Eingrenzung) ohne
+Änderung des nach außen sichtbaren Verhaltens, das ein In-Memory-Double
+sinnvoll als „schlägt ohne Fix fehl" abbilden könnte; die bestehende Suite
+(gleichbleibendes Ergebnis vor und nach dem jeweiligen Fix) belegt hier die
+Abwesenheit einer Verhaltensänderung, nicht die Einsparung selbst. Bei
+**E2** greift die Hausregel dagegen wie gewohnt: der neue
+Abfrage-Zähler-Test scheitert nachweislich ohne den Fix; die beiden
+zusätzlichen Korrektheits-Wächter bestehen dagegen bewusst auch ohne ihn
+— sie sichern nicht den ursprünglichen Befund ab, sondern die neue
+Optimierungstechnik selbst gegen eine künftige, weniger sorgfältige
+Umsetzung. **E4** hatte ohnehin keinen eigenen Fix in diesem Durchgang,
+siehe dessen Abschnitt.
