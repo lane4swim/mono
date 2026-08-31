@@ -5,7 +5,7 @@ import { describeSyncError } from '../../src/modules/sync/sync.errors.js';
 import { splitAtSafeTimestampBoundary } from '../../src/modules/sync/sync.pagination.js';
 import { InMemorySyncGateway } from '../../src/modules/sync/sync.gateway.memory.js';
 import type { ChangedRecord } from '../../src/modules/sync/sync.gateway.js';
-import { MODULE_KEYS } from '@lane1/shared-types';
+import { MODULE_KEYS, ENTITY_STORE_NAMES } from '@lane1/shared-types';
 
 const CLUB_A = '11111111-1111-1111-1111-111111111111';
 const CLUB_B = '22222222-2222-2222-2222-222222222222';
@@ -1863,6 +1863,89 @@ describe('syncService.push — Kommentar-Autor:innen-Prüfung (Sicherheitsreview
       asTrainer(CLUB_A),
     );
     expect(results[0]!.status).toBe('applied');
+  });
+});
+
+// Review 30.08.2026, Befund E3: `pull()` entscheidet seitdem VOR der
+// Datenbankabfrage, welche Stores überhaupt abgefragt werden
+// (`readableStores`), statt den gesamten Vereinsbestand zu laden und erst
+// nach der Paginierung zu filtern. Damit ist diese Berechnung neu
+// tragend: wäre sie zu ENG, fiele ein ganzer Store stillschweigend aus dem
+// Sync heraus (stiller Datenverlust auf dem Gerät) — genau die
+// Fehlerwirkung, vor der der zuvor an dieser Stelle stehende
+// ALL_STORES-Kommentar in sync.gateway.ts gewarnt hat. Die übrige Suite
+// ruft `pull()` ausschließlich mit `enabledModules: MODULE_KEYS` (allen
+// Modulen) auf und würde eine solche Verengung daher NICHT bemerken.
+describe('syncService.pull — Store-Vorauswahl nach gebuchten Modulen (Review 30.08.2026, Befund E3)', () => {
+  // MODULE_PACKAGES (packages/shared-types/src/modules.ts): das Paket
+  // "athletes" trägt die Stores "athletes" und "groups"; "plans" und
+  // "sessions" hängen an eigenen, hier bewusst NICHT gebuchten Paketen.
+  const ONLY_ATHLETES = ['athletes'];
+
+  // Bewusst über ENTITY_STORE_NAMES statt über eine handverlesene
+  // Store-Auswahl: eine feste Liste hätte genau die Lücke, die dieser
+  // Block schließen soll — ein Store, an den beim Schreiben des Tests
+  // niemand gedacht hat, ist auch der Store, dessen stilles Ausbleiben
+  // niemandem auffällt. Empirisch geprüft: mit einer handverlesenen
+  // Auswahl (groups/plans/sessions) blieb ein künstlich aus
+  // `readableStores` entferntes "entries" bzw. "competitions" von der
+  // GESAMTEN Suite unbemerkt.
+  function seedOnePerStore(gateway: InMemorySyncGateway) {
+    ENTITY_STORE_NAMES.forEach((store, i) => {
+      gateway.seed(store, {
+        id: `${store}-1`, clubId: CLUB_A,
+        updatedAt: new Date(Date.UTC(2026, 0, 1, 0, 0, 0, i)), deletedAt: null,
+      });
+    });
+  }
+
+  it('liefert bei eingeschränktem Modul-Set NUR die Änderungen der lesbaren Stores', async () => {
+    const { service, gateway } = makeService();
+    seedOnePerStore(gateway);
+
+    const result = await service.pull(
+      {},
+      { userId: TRAINER_USER_ID, clubId: CLUB_A, role: 'trainer', athleteId: null, enabledModules: ONLY_ATHLETES },
+    );
+
+    // Paket "athletes" trägt genau die Stores "athletes" und "groups".
+    expect(result.changes.map((c) => c.store).sort()).toEqual(['athletes', 'groups']);
+  });
+
+  it('liefert bei vollem Modul-Set JEDEN Store aus — die Vorauswahl darf keinen stillschweigend auslassen', async () => {
+    // Gegenprobe zum Test darüber, und der eigentliche Wächter gegen den
+    // stillen Datenverlust: schlägt fehl, sobald `readableStores` auch nur
+    // EINEN eigentlich lesbaren Store auslässt. Ohne diese Gegenprobe wäre
+    // "gar nichts ausliefern" eine den anderen Test bestehende
+    // Implementierung.
+    const { service, gateway } = makeService();
+    seedOnePerStore(gateway);
+
+    const result = await service.pull(
+      {},
+      { userId: TRAINER_USER_ID, clubId: CLUB_A, role: 'trainer', athleteId: null, enabledModules: MODULE_KEYS },
+    );
+
+    expect(result.changes.map((c) => c.store).sort()).toEqual([...ENTITY_STORE_NAMES].sort());
+  });
+
+  it('unterdrückt auch Löschvermerke (Tombstones) aus einem nicht gebuchten Store', async () => {
+    // Die Tombstone-Abfrage wird seit diesem Fix ebenfalls auf `stores`
+    // eingegrenzt (siehe PrismaSyncGateway.listChangedSince()) — das darf
+    // am nach außen sichtbaren Ergebnis nichts ändern.
+    const tombstones = [
+      { clubId: CLUB_A, store: 'athletes' as const, entityId: 'ath-1', deletedAt: new Date('2026-07-01T00:00:00.000Z') },
+      { clubId: CLUB_A, store: 'plans' as const, entityId: 'plan-1', deletedAt: new Date('2026-07-02T00:00:00.000Z') },
+    ];
+    const gateway = new InMemorySyncGateway(tombstones);
+    const service = createSyncService({ gateway });
+
+    const result = await service.pull(
+      {},
+      { userId: TRAINER_USER_ID, clubId: CLUB_A, role: 'trainer', athleteId: null, enabledModules: ONLY_ATHLETES },
+    );
+
+    expect(result.changes.map((c) => c.entityId)).toEqual(['ath-1']);
   });
 });
 

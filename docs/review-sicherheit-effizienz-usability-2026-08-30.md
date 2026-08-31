@@ -138,20 +138,34 @@ zusätzliche, von der Abfrage unabhängige Absicherung bestehen — die
 Rechteprüfung wird dadurch nicht verlagert, sondern nur zusätzlich
 vorgezogen. **E4** war bereits mit dem S1-Fix (30.08.2026) miterledigt und
 wird hier lediglich verifiziert und als abgeschlossen dokumentiert — siehe
-dessen Fix-Abschnitt. 5 neue Regressionstests (`apps/api/test/sync/`: 3 für
-E2 — zwei Korrektheits-Wächter für die Batch-Optimierung selbst plus ein
-Abfrage-Zähler, der die tatsächliche Einsparung nachweist), von denen der
-Abfrage-Zähler-Test nachweislich fehlschlägt, solange `sync.service.ts`
-nicht auf die vorab geladenen Maps umgestellt ist (per `git stash` von
-ausschließlich `sync.service.ts` empirisch geprüft — die beiden
-Korrektheits-Wächter selbst bestehen erwartungsgemäß auch gegen den alten,
-ungebatchten Code, da dessen Live-Nachschläge korrekt waren und nur
-langsam; sie sichern die neue Optimierungstechnik selbst gegen eine
-künftige Regression ab, nicht den ursprünglichen Befund). Gesamtsuite
-danach: **764 Tests, alle grün** (`apps/api` 471, `apps/web` 136,
-`packages/shared-types` 148, `packages/sync-protocol` 9), `npm run lint`,
-`npm run typecheck` (API) und `npm run build` (alle Workspaces) weiterhin
-sauber.
+dessen Fix-Abschnitt. **8 neue Regressionstests** (`apps/api/test/sync/`:
+2 für E1, 3 für E2, 3 für E3). Zwei davon scheitern nachweislich gegen den
+Stand vor dem jeweiligen Fix: der E1-Cache-Test (fünf Anfragen lösen fünf
+statt einen Club-Lookup aus) und der E2-Abfrage-Zähler. Die übrigen sechs
+bestehen erwartungsgemäß auch gegen den alten Code und sind das auch
+absichtlich: E2s und E1s Korrektheits-Wächter sichern die neuen
+Optimierungen selbst ab (dass der Cache verfällt; dass eine doppelte
+`entityId`/`event.id` im selben Batch nicht auf veraltete Vorab-Daten
+trifft), und E3s drei Tests decken eine Stelle ab, die durch den Fix
+**neu tragend** geworden ist — siehe dort.
+
+**Nachtrag aus dem Selbst-Review dieses Durchgangs.** Der erste Anlauf
+dieses vierten Durchgangs lieferte E1 und E3 ohne eigene Tests aus und
+begründete das in diesem Dokument mit zwei Behauptungen, die beide einer
+Prüfung nicht standhielten: E1 sei „mit dem vorhandenen Stub nicht
+sinnvoll zählbar" (falsch — ein `vi.fn()` genügt), und E3 sei durch
+bestehende Tests abgedeckt, die `pull()` „bereits mit unterschiedlichen
+`enabledModules`" aufriefen (falsch — **jeder** `pull()`-Test der Suite
+benutzte `MODULE_KEYS`). Letzteres war die ernstere der beiden Lücken:
+E3 macht die `readableStores`-Berechnung erstmals dafür verantwortlich,
+welche Stores überhaupt abgefragt werden, und ein künstlich daraus
+entferntes `entries` oder `competitions` ließ die gesamte Suite grün —
+ein ganzer Store wäre stillschweigend nie mehr synchronisiert worden. Die
+acht Tests oben sind das Ergebnis; die betroffenen Fix-Abschnitte sind
+korrigiert. Gesamtsuite danach: **769 Tests, alle grün** (`apps/api` 476,
+`apps/web` 136, `packages/shared-types` 148, `packages/sync-protocol` 9),
+`npm run lint`, `npm run typecheck` (API) und `npm run build` (alle
+Workspaces) weiterhin sauber.
 
 ---
 
@@ -669,13 +683,31 @@ vorgeschlagenen 30–60 s (Mittelwert des Empfehlungsbereichs).
   Cluster-Flag (`-i`) — genau ein Node-Prozess, also kein
   Mehrprozess-Konsistenzproblem zwischen mehreren, unabhängig
   ablaufenden Caches.
-* Kein neuer Regressionstest nötig: `sync.route.test.ts` verwendet
-  durchweg einen `clubs`-Stub mit festem Rückgabewert — für dieses Double
-  ist Caching ein reines No-Op-Verhalten (derselbe Rückgabewert, ob mit
-  oder ohne Cache), die bestehende Suite (468 → weiterhin grün) deckt die
-  Funktionsfähigkeit also bereits ab. Die eigentliche Verbesserung (die
-  Zahl der `clubs.findById()`-Aufrufe) ist mit dem vorhandenen Stub nicht
-  sinnvoll zählbar, ohne dessen Rolle als reines Test-Double zu verlassen.
+* 2 neue Regressionstests in `apps/api/test/sync/sync.route.test.ts`
+  (Abschnitt „Vereins-Modul-Lookup je Sync-Anfrage"). Der `clubs`-Stub in
+  `buildTestApp()` ist dafür von einer nackten Pfeilfunktion auf `vi.fn()`
+  umgestellt und wird mit zurückgegeben — Rückgabewert und Verhalten
+  unverändert, nur zählbar.
+  1. **Der Cache greift überhaupt:** fünf aufeinanderfolgende Pull-Anfragen
+     desselben Vereins lösen genau **einen** `clubs.findById()`-Aufruf aus;
+     eine Anfrage eines ANDEREN Vereins löst einen zweiten aus (der Cache
+     ist nach `clubId` geschlüsselt — ein gemeinsamer Eintrag wäre ein
+     Mandantendurchbruch auf der Rechte-Ebene). Dieser Test schlägt gegen
+     den Stand vor dem Fix nachweislich fehl (`expected "vi.fn()" to be
+     called 1 times, but got 5 times`; per `git checkout 726110e --
+     sync.route.ts` empirisch geprüft).
+  2. **Der Cache verfällt auch wieder:** nach Vorstellen von `Date.now()`
+     um 46 s (> `CLUB_MODULES_CACHE_TTL_MS`) wird erneut gelesen. Diese
+     zweite Hälfte ist die sicherheitsrelevante — ein Cache ohne Verfall
+     ließe ein per Superadmin abbestelltes Modul nie wirksam werden. Sie
+     besteht erwartungsgemäß auch gegen den alten Code (der ohne Cache
+     ohnehin bei jeder Anfrage liest) und sichert damit nicht den Befund
+     ab, sondern die Unbedenklichkeit des Fixes selbst.
+
+  Eine frühere Fassung dieses Abschnitts hielt einen Regressionstest hier
+  für nicht sinnvoll möglich („mit dem vorhandenen Stub nicht sinnvoll
+  zählbar"). Das war falsch — das Zählen der Aufrufe eines Test-Doubles ist
+  Standard und war ohne Weiteres möglich; die Tests sind nachgereicht.
 
 ### E2 — `push()` arbeitet 200 Events seriell ab (Mittel)
 
@@ -767,6 +799,22 @@ Korrektheits-Absicherung, die die Empfehlung selbst nicht benannte:
   zweites Mal auslöst — identisch zum Verhalten des vormaligen
   Live-Datenbank-Checks, der den zwischenzeitlich committeten
   Ledger-Eintrag gesehen hätte.
+* **Tatsächlich erreichte Zahlen** (gemessen, indem sämtliche
+  Gateway-Aufrufe eines 200-Event-Batches gezählt wurden; die Messung
+  selbst war ein Wegwerf-Test und ist nicht Teil des Commits). Die
+  Schätzung der Empfehlung oben („aus ~600 werden ~200 plus eine
+  Handvoll") trifft nur für Stores **ohne** Fremdschlüssel-Referenzen zu:
+
+  | 200er-Batch | vorher | nachher |
+  |---|---|---|
+  | `groups` (keine Referenzen) | ~600 | **202** (1 + 1 + 200 Schreibtransaktionen) |
+  | `results` (athleteId-Referenz) | ~800 | **402** (zusätzlich 200× die Fremdschlüsselprüfung) |
+
+  Die verbleibenden 200 Schreibtransaktionen sind der bewusst seriell
+  belassene Teil (Empfehlung 3). Die 200 Fremdschlüsselprüfungen sind der
+  im nächsten Punkt begründete, absichtlich nicht mitgezogene Rest —
+  „~200 plus eine Handvoll" wird für solche Stores also **nicht**
+  erreicht, die Halbierung gegenüber vorher schon.
 * `requireForeignKeysWithinClub()` (Guard-Stufe 7) bleibt bewusst
   **unangetastet**: der Befund benannte ausdrücklich nur
   `isEventProcessed()`, `findById()` und `applyAndMarkProcessed()` als die
@@ -855,15 +903,46 @@ sondern nur zusätzlich vorgezogen.
   bestehenden `listChangedSince()`-Aufrufstellen um `ENTITY_STORE_NAMES`
   als viertes Argument ergänzt (Anpassung an die Signaturänderung, kein
   neuer Regressionstest).
-* Kein neuer dedizierter Regressionstest: Die bestehende
-  `sync.service.test.ts`-Suite (u. a. die Rollen-/Modul-Gating-Tests) ruft
-  `pull()` bereits mit unterschiedlichen `enabledModules`/Rollen auf und
-  prüft die **Ergebnismenge** der zurückgegebenen `changes` — diese bleibt
-  durch die Vorverengung unverändert (das war der ausdrückliche Zweck: die
-  Rechteprüfung wird vorgezogen, nicht verändert). Die 468 (jetzt 471)
-  grünen Tests nach diesem Fix decken damit ab, dass sich das äußere
-  Verhalten nicht verschoben hat; die eingesparte Datenbankarbeit selbst
-  ist mit dem In-Memory-Double nicht sinnvoll messbar.
+* **Neu tragende Stelle — und die Testlücke, die das zunächst aufriss.**
+  Vor diesem Fix entschied `canRead()` erst NACH der Abfrage, was der
+  Client zu sehen bekommt; ein Fehler darin ließ höchstens zu viel durch.
+  Jetzt entscheidet `readableStores` zusätzlich, was überhaupt ABGEFRAGT
+  wird — ein Fehler in die andere Richtung (ein Store fällt versehentlich
+  heraus) liefert diesen Store stillschweigend nie mehr aus: stiller
+  Datenverlust auf dem Gerät, ohne Fehlermeldung. Das ist genau die
+  Fehlerwirkung, vor der der mit diesem Fix entfallene
+  `ALL_STORES`-Kommentar in `sync.gateway.ts` gewarnt hatte („ein hier
+  fehlender Store würde ohne jede Fehlermeldung stillschweigend nie
+  ausgeliefert") — das Risiko ist mit dem Fix von dort nach `pull()`
+  gewandert.
+
+  Eine frühere Fassung dieses Abschnitts hielt das für durch die
+  bestehende Suite abgedeckt („ruft `pull()` bereits mit unterschiedlichen
+  `enabledModules`/Rollen auf"). Das war **falsch**: die Rollen variieren,
+  `enabledModules` war in JEDEM `pull()`-Test der Suite `MODULE_KEYS`
+  (alle Module gebucht) — `sync.permissions.test.ts` prüft `canRead()` nur
+  als reine Funktion, nie über `pull()`. Empirisch belegt: ein künstlich
+  aus `readableStores` entferntes `entries` bzw. `competitions` ließ die
+  **gesamte** Suite (476 Tests) grün.
+* 3 neue Regressionstests in `apps/api/test/sync/sync.service.test.ts`
+  (Abschnitt „Store-Vorauswahl nach gebuchten Modulen"), die diese Lücke
+  schließen: bei eingeschränktem Modul-Set kommen nur die lesbaren Stores
+  zurück; bei vollem Modul-Set **jeder** Store; Löschvermerke (Tombstones)
+  aus einem nicht gebuchten Store bleiben unterdrückt. Der zweite Test
+  läuft bewusst über `ENTITY_STORE_NAMES` statt über eine handverlesene
+  Store-Auswahl — eine feste Liste hätte genau die Lücke, die der Test
+  schließen soll (ein Store, an den beim Schreiben niemand denkt, ist auch
+  der, dessen Ausbleiben niemandem auffällt). Mit einer zuerst
+  geschriebenen handverlesenen Fassung (groups/plans/sessions) blieb das
+  entfernte `entries` weiterhin unbemerkt; über `ENTITY_STORE_NAMES`
+  schlägt der Test fehl.
+* Diese drei Tests sind **Verhaltens-Bewahrungs**-Tests, keine
+  „scheitert ohne den Fix"-Regressionstests im Sinne der Hausregel: die
+  Ergebnismenge war vor dem Fix dieselbe (der Nachfilter erledigte
+  dasselbe), sie bestehen also auch gegen den alten Code. Sie sichern die
+  neu tragend gewordene `readableStores`-Berechnung ab — geprüft, indem
+  ein Store künstlich aus ihr entfernt wurde (siehe oben). Die eingesparte
+  Datenbankarbeit selbst ist mit dem In-Memory-Double nicht messbar.
 
 ### E4 — Ein Schreibvorgang je Login (Niedrig)
 
@@ -1356,17 +1435,17 @@ bzw. gemockte `fetch`-Aufrufe direkt geprüft — bei **S2** hat genau diese
 Prüfung die ursprünglich vorgeschlagenen Schlüssel (`request.user!.sub`,
 ein Hash des Refresh-Tokens) als nicht tragfähig entlarvt; siehe dessen
 Fix-Abschnitt für die Korrektur. **S5** hat aus demselben Grund keinen
-neuen Test: es wurde keine Codeänderung vorgenommen. Bei **E1** und **E3**
-ist die Hausregel nicht im engeren Sinn anwendbar — beide ändern reine
-Datenbank-Zugriffsmuster (Cache-Trefferrate bzw. Abfrage-Eingrenzung) ohne
-Änderung des nach außen sichtbaren Verhaltens, das ein In-Memory-Double
-sinnvoll als „schlägt ohne Fix fehl" abbilden könnte; die bestehende Suite
-(gleichbleibendes Ergebnis vor und nach dem jeweiligen Fix) belegt hier die
-Abwesenheit einer Verhaltensänderung, nicht die Einsparung selbst. Bei
-**E2** greift die Hausregel dagegen wie gewohnt: der neue
-Abfrage-Zähler-Test scheitert nachweislich ohne den Fix; die beiden
-zusätzlichen Korrektheits-Wächter bestehen dagegen bewusst auch ohne ihn
-— sie sichern nicht den ursprünglichen Befund ab, sondern die neue
+neuen Test: es wurde keine Codeänderung vorgenommen. Bei **E1** und **E2**
+greift die Hausregel wie gewohnt — je ein Test (Anzahl der Club-Lookups
+bzw. der Gateway-Abfragen) scheitert nachweislich ohne den jeweiligen Fix.
+Bei **E3** ist sie nicht im engeren Sinn anwendbar: die Ergebnismenge ist
+vor und nach dem Fix identisch (der Nachfilter erledigte dasselbe), ein
+„scheitert ohne den Fix"-Test kann es hier also gar nicht geben. An seine
+Stelle tritt die Gegenprobe: ein künstlich aus `readableStores` entfernter
+Store lässt die neuen Tests fehlschlagen — was, wie der Nachtrag oben
+festhält, vor ihnen nicht der Fall war. Die jeweils zusätzlichen
+Korrektheits-Wächter bei **E1** und **E2** bestehen bewusst auch ohne den
+Fix: sie sichern nicht den ursprünglichen Befund ab, sondern die neue
 Optimierungstechnik selbst gegen eine künftige, weniger sorgfältige
 Umsetzung. **E4** hatte ohnehin keinen eigenen Fix in diesem Durchgang,
 siehe dessen Abschnitt.
