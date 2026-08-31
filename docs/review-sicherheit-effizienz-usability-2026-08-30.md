@@ -167,6 +167,32 @@ korrigiert. Gesamtsuite danach: **769 Tests, alle grün** (`apps/api` 476,
 `npm run lint`, `npm run typecheck` (API) und `npm run build` (alle
 Workspaces) weiterhin sauber.
 
+**Verifikationsdurchgang (31. August 2026).** Alle Fixes zu **S1–S4** und
+**U1–U5** wurden unabhängig am Code nachgeprüft, nicht anhand dieses
+Dokuments: jede behauptete Änderung wurde an ihrer Stelle im Quelltext
+bestätigt, und für jeden Befund wurde empirisch geprüft, dass die
+zugehörigen Tests ohne die jeweilige Korrektur tatsächlich fehlschlagen
+(die betroffene Produktivdatei jeweils per `git checkout 27265b8 --`
+auf den Stand vor dem Review zurückgesetzt): S1/S3/S4 4 Fehlschläge,
+S2 2, U1 7, U2 3, U3 3, U4 3 (2 + 1 über zwei Dateien). Die Hausregel ist
+für diese neun Befunde damit belegt — anders als zunächst für E1/E3, siehe
+den Nachtrag im vierten Durchgang. Zwei Lücken kamen dabei ans Licht,
+beide inzwischen geschlossen:
+
+1. **S1** — die beiden von Hand gepflegten `CURRENT_CONSENT_VERSION`-
+   Konstanten wurden von keinem Test verglichen, obwohl Empfehlung 4 genau
+   das als Rückfallebene verlangt hatte. Seit dem S1-Fix wäre eine
+   Divergenz kein still falscher Nachweis mehr, sondern ein vollständiger
+   **Anmelde-Ausfall**. Test nachgereicht.
+2. **U5** — der neue CI-Schritt verlangte eine `CACHE_VERSION`-Anhebung
+   auch für Änderungen, die gar nicht ausgeliefert werden (Testdateien,
+   Konfiguration), und hätte damit regelmäßig den Cache aller Clients ohne
+   Anlass verworfen. Pathspec eingegrenzt.
+
+Beide Nachträge stehen bei den jeweiligen Fix-Abschnitten. Gesamtsuite
+danach: **770 Tests, alle grün** (`apps/api` 476, `apps/web` 137,
+`packages/shared-types` 148, `packages/sync-protocol` 9).
+
 ---
 
 ## Übersicht
@@ -316,6 +342,23 @@ unten), da eine echte einmalige Quelle den bewusst build-losen
   Fix aber entschärft: ein Auseinanderlaufen führt jetzt zu einem lauten,
   sofort bemerkten Login-Fehler statt zu einem still falsch
   protokollierten Einwilligungsnachweis.
+* **Nachtrag (31.08.2026, Verifikationsdurchgang).** Der Absatz darüber
+  blieb bei „laut und sofort bemerkt" stehen — laut ist dieser Fehler
+  allerdings erst in **Produktion**: kein Test verglich die beiden
+  Konstanten, jeder benutzte nur jeweils eine davon. Und das Schadensbild
+  ist seit diesem Fix GRÖSSER als vorher: vorher stempelte der Server bei
+  Divergenz still seine eigene Version (falscher Nachweis, aber die
+  Anmeldung lief); seit `z.literal(CURRENT_CONSENT_VERSION)` scheitert bei
+  Divergenz **jede Anmeldung** mit einer 400 — ein vollständiger
+  Anmelde-Ausfall. Empfehlung 4s Rückfallebene („mindestens ein Test, der
+  beide Werte vergleicht") ist deshalb nachgereicht:
+  `apps/web/test/consentVersion.test.js` liest die ausgelieferte Zeile aus
+  `state.js` und vergleicht sie gegen die importierte Konstante aus
+  `packages/shared-types`. Die Begründung, das sei wegen des build-losen
+  `apps/web` nicht möglich, trug nicht: `apps/web/test/db.test.js` nutzt
+  für den `CLUB_SCOPED_STORES`-Abgleich seit Längerem exakt dieselbe
+  Technik und hält den Grundsatz dort ausdrücklich fest („Ein TEST darf
+  shared-types aber laden, nur die ausgelieferte App nicht").
 * Testfolge: alle bestehenden Login-Aufrufstellen mit `consent: true` in
   `apps/api/test/auth/{auth.route,auth.service}.test.ts` (9 bzw. 16
   Stellen), `apps/api/test/health.test.ts` (1 Stelle),
@@ -1339,6 +1382,19 @@ mitten in einer Eingabe).
   Änderung lokal verifiziert (beide Richtungen: schlägt fehl, wenn
   `apps/web/js/i18n/*.js` geändert wird, ohne `sw.js` anzufassen; besteht,
   wenn `CACHE_VERSION` mit angehoben wurde).
+* **Nachtrag (31.08.2026, Verifikationsdurchgang).** Der Schritt prüfte
+  pauschal `-- apps/web` und verlangte damit auch für eine reine
+  Test-Änderung (`apps/web/test/`, `vitest.config.js`, `package.json`,
+  `eslint.config.cjs`, `README.md` — nichts davon steht in
+  `PRECACHE_URLS`, nichts davon erreicht je einen Browser) eine
+  `CACHE_VERSION`-Anhebung. Das ist nicht bloß lästig: jede Anhebung
+  verwirft den Cache **aller** Clients und erzwingt den erneuten Download
+  aller 58 precachten Dateien — ein hoher Preis für eine geänderte
+  Testdatei, und ein wirksamer Anreiz, die Prüfung zu umgehen. Der Schritt
+  schließt diese Pfade jetzt per `:(exclude)`-Pathspec aus; beide
+  Richtungen erneut gegen die echte Historie geprüft (Commit `726110e`
+  — ausgelieferte Dateien — löst weiterhin aus, ein reiner Test-Commit
+  nicht mehr).
 * 6 neue Regressionstests in `apps/web/test/swUpdate.test.js` (`jsdom`-
   Umgebung): sofortiger Hinweis bei bereits wartendem Worker beim
   Registrieren; Hinweis bei einem über `updatefound` erkannten Update,
