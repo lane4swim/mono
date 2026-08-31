@@ -193,10 +193,19 @@ export function insertEntry(list, index, entry) {
   return at;
 }
 
+// Sortiert Übungen nach (übersetzter) Kategorie, dann nach Bezeichnung —
+// gemeinsam genutzt vom Katalog-Dropdown hier UND vom Übungskatalog
+// selbst (catalog.js), damit beide Ansichten dieselbe Reihenfolge zeigen.
+export function compareByCategoryThenName(a, b) {
+  const catA = trLabel(EXERCISE_CATEGORIES, a.category, 'exerciseCategories') || '';
+  const catB = trLabel(EXERCISE_CATEGORIES, b.category, 'exerciseCategories') || '';
+  return catA.localeCompare(catB) || (a.name || '').localeCompare(b.name || '');
+}
+
 function buildExerciseOptions(exercises) {
   return [{ value: '', label: t('setEditor.pickExercise') }, ...exercises
     .slice()
-    .sort((a, b) => a.name.localeCompare(b.name))
+    .sort(compareByCategoryThenName)
     .map(ex => ({ value: ex.id, label: `${trLabel(EXERCISE_CATEGORIES, ex.category, 'exerciseCategories')} · ${ex.name}` }))];
 }
 
@@ -350,24 +359,33 @@ function buildSetRow(s, exercises, controls, onEquipmentChange) {
 // verschachteln (siehe Datenmodell oben). `allowSection` ist NUR auf
 // oberster Ebene true (Standard hier: false) — Abschnitte selbst lassen
 // sich weder in einem Block noch in einem anderen Abschnitt anlegen.
-function buildAddControls(exercises, { onAdd, allowBlock = true, allowSection = false, className = 'flex gap-8', style = '', labels = {} }) {
-  const row = el('div', { class: className, style });
+//
+// Zwei Zeilen statt einer, nach Bedeutung gruppiert: oben die
+// STRUKTUR-Elemente (Abschnitt, Wiederholungsblock — beide fassen
+// weitere Einträge), unten die INHALTS-Elemente (leerer Satz, Übernahme
+// aus dem Übungskatalog — beide erzeugen direkt einen Satz). Die obere
+// Zeile entfällt ganz, wenn an dieser Stelle weder Abschnitt noch Block
+// erlaubt ist (z. B. innerhalb eines Blocks).
+function buildAddControls(exercises, { onAdd, allowBlock = true, allowSection = false, style = '', labels = {} }) {
+  const container = el('div', { class: 'add-controls', style });
 
-  row.appendChild(el('button', {
-    type: 'button', class: 'btn btn-ghost btn-sm', onclick: () => onAdd(newBlankSet()),
-  }, labels.blank || t('setEditor.addBlank')));
-
-  if (allowBlock) {
-    row.appendChild(el('button', {
-      type: 'button', class: 'btn btn-primary btn-sm', onclick: () => onAdd(newBlock()),
-    }, labels.block || t('setEditor.addBlock')));
-  }
-
+  const structureRow = el('div', { class: 'flex gap-8', style: 'flex-wrap:wrap' });
   if (allowSection) {
-    row.appendChild(el('button', {
+    structureRow.appendChild(el('button', {
       type: 'button', class: 'btn btn-primary btn-sm', onclick: () => onAdd(newSection()),
     }, labels.section || t('setEditor.addSection')));
   }
+  if (allowBlock) {
+    structureRow.appendChild(el('button', {
+      type: 'button', class: 'btn btn-primary btn-sm', onclick: () => onAdd(newBlock()),
+    }, labels.block || t('setEditor.addBlock')));
+  }
+  if (structureRow.childNodes.length > 0) container.appendChild(structureRow);
+
+  const contentRow = el('div', { class: 'flex gap-8', style: 'flex-wrap:wrap' });
+  contentRow.appendChild(el('button', {
+    type: 'button', class: 'btn btn-ghost btn-sm', onclick: () => onAdd(newBlankSet()),
+  }, labels.blank || t('setEditor.addBlank')));
 
   if (exercises.length > 0) {
     const exerciseSel = selectInput(buildExerciseOptions(exercises), '', { style: 'min-width:220px' });
@@ -382,11 +400,12 @@ function buildAddControls(exercises, { onAdd, allowBlock = true, allowSection = 
       exerciseSel.value = '';
       onAdd(setFromExercise(ex));
     });
-    row.appendChild(exerciseSel);
-    row.appendChild(useBtn);
+    contentRow.appendChild(exerciseSel);
+    contentRow.appendChild(useBtn);
   }
+  container.appendChild(contentRow);
 
-  return row;
+  return container;
 }
 
 // Ein Einfügepunkt ZWISCHEN zwei Einträgen (bzw. vor dem ersten): eine
@@ -417,8 +436,6 @@ function buildInsertPoint(list, index, exercises, { allowBlock = true, allowSect
       buildAddControls(exercises, {
         allowBlock,
         allowSection,
-        className: 'flex gap-8',
-        style: 'flex-wrap:wrap',
         // Nach dem Einfügen zeichnet redraw() die ganze Liste neu — das
         // Panel verschwindet dabei von selbst, ohne eigenes Aufräumen.
         onAdd: (entry) => { insertEntry(list, index, entry); redraw(); },

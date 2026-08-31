@@ -302,6 +302,10 @@ tr:hover td{ background: var(--c-foam-2); }
   padding: 8px 10px; margin: 4px 0;
 }
 .insert-panel .hint{ margin:0; }
+/* Hinzufügen-Steuerelemente (setEditor.js buildAddControls): zwei
+   sinnvoll gruppierte Zeilen untereinander statt einer einzigen Reihe —
+   oben Struktur (Abschnitt/Block), unten Inhalt (leerer Satz/Katalog). */
+.add-controls{ display:flex; flex-direction:column; gap:8px; }
 .day-block{ border: 1px solid var(--c-line); border-radius: var(--radius-md); padding: 14px 16px; margin-bottom: 12px; }
 .day-block-head{ display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
 

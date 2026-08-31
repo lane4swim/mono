@@ -10,6 +10,7 @@ import { EXERCISE_CATEGORIES, STROKES, EQUIPMENT_ITEMS } from '../refdata.js';
 import { t, trLabel, trCode, trOptions } from '../i18n.js';
 import { renderCommentThread } from './comments.js';
 import { libraryTransferButtons } from './libraryTransfer.js';
+import { compareByCategoryThenName } from './setEditor.js';
 
 const VIEW_STORAGE_KEY = 'lane1-catalog-view';
 function loadCatalogView() {
@@ -89,6 +90,7 @@ function renderList(container, exercises) {
     let filtered = exercises;
     if (catFilter !== 'all') filtered = filtered.filter(e => e.category === catFilter);
     if (search) filtered = filtered.filter(e => (e.name + ' ' + (e.description || '')).toLowerCase().includes(search));
+    filtered = filtered.slice().sort(compareByCategoryThenName);
     if (filtered.length === 0) { host.appendChild(emptyState(t('catalog.noExercisesTitle'), t('catalog.noExercisesMsg'), null)); return; }
     if (viewMode === 'list') drawTable(filtered); else drawGrid(filtered);
   }
