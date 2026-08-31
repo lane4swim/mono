@@ -233,7 +233,67 @@ describe('request() — proaktiver Refresh vor Ablauf (Befund R6)', () => {
       };
     });
 
-    await api.login({ email: 'a@b.de', password: 'x', consent: true });
+    await api.login({ email: 'a@b.de', password: 'x', consent: true, consentVersion: '2026-07-15' });
     expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+// Regressionstests für Review 30.08.2026, Befund U4: ein Ratenlimit-Treffer
+// (429) beim reaktiven Refresh-Versuch behandelte die Sitzung bislang wie
+// einen echten Auth-Fehler (clearTokens() + Rückfall auf den ursprünglichen
+// 401) — ununterscheidbar von "Sitzung abgelaufen", obwohl das Refresh
+// Token selbst weiterhin gültig war (siehe Befund S2: gerade /auth/refresh
+// ist der praktisch relevante Fall, da apiClient.js jede Sitzung
+// automatisch/proaktiv erneuert).
+describe('request() — ein 429 beim Refresh-Versuch beendet die Sitzung NICHT (Befund U4)', () => {
+  it('behält die gespeicherten Tokens und wirft den 429 (nicht den ursprünglichen 401), wenn /auth/refresh mit einem Ratenlimit-Treffer scheitert', async () => {
+    api.setTokens({ accessToken: 'abgelaufenes-access-token', refreshToken: 'gueltiges-refresh-token', expiresIn: 900 });
+
+    globalThis.fetch = vi.fn(async (url) => {
+      if (String(url).endsWith('/auth/refresh')) {
+        return { status: 429, ok: false, json: async () => ({ error: 'rate_limited', message: 'Zu viele Anfragen.' }) };
+      }
+      // Die eigentliche Anfrage (z. B. GET /api/me) scheitert mit dem
+      // ursprünglichen 401 — genau der Auslöser für den Refresh-Versuch.
+      return { status: 401, ok: false, json: async () => ({ error: 'unauthorized', message: 'abgelaufen' }) };
+    });
+
+    let caughtError;
+    try {
+      await api.getMe();
+    } catch (err) {
+      caughtError = err;
+    }
+
+    expect(caughtError).toBeInstanceOf(api.ApiError);
+    expect(caughtError.status).toBe(429);
+    // Die Sitzung bleibt bestehen — clearTokens() wurde NICHT aufgerufen.
+    expect(api.getStoredRefreshToken()).toBe('gueltiges-refresh-token');
+  });
+
+  it('löscht die Tokens weiterhin, wenn der Refresh Token selbst tatsächlich ungültig ist (401, kein Ratenlimit)', async () => {
+    api.setTokens({ accessToken: 'abgelaufenes-access-token', refreshToken: 'widerrufenes-refresh-token', expiresIn: 900 });
+
+    globalThis.fetch = vi.fn(async (url) => {
+      if (String(url).endsWith('/auth/refresh')) {
+        return { status: 401, ok: false, json: async () => ({ error: 'unauthorized', message: 'Refresh Token ungültig.' }) };
+      }
+      return { status: 401, ok: false, json: async () => ({ error: 'unauthorized', message: 'abgelaufen' }) };
+    });
+
+    await expect(api.getMe()).rejects.toThrow();
+    // Anders als beim 429 oben: ein echter Auth-Fehler beendet die Sitzung
+    // weiterhin wie vor diesem Fix.
+    expect(api.getStoredRefreshToken()).toBeNull();
+  });
+});
+
+describe('describeError() — eigene Meldung für 429 (Befund U4)', () => {
+  it('zeigt eine eigene, verständliche Meldung statt der generischen Server-Fehlermeldung', async () => {
+    const { t } = await import('../js/i18n.js');
+    const err = new api.ApiError(429, { message: 'Rate limit exceeded' });
+    const message = api.describeError(err);
+    expect(message).toBe(t('common.errorRateLimited'));
+    expect(message).not.toBe('Rate limit exceeded');
   });
 });

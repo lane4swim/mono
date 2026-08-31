@@ -309,14 +309,22 @@ export function createAuthService(deps: AuthServiceDeps) {
       const passwordOk = await verifyPassword(input.password, user.passwordHash);
       if (!passwordOk) throw new InvalidCredentialsError();
 
-      // input.consent ist bereits durch LoginRequestSchema (consent:
-      // z.literal(true)) erzwungen — jeder Login aktualisiert den
-      // Nachweis-Zeitstempel/die -Version erneut (z. B. nach einer
-      // geänderten Datenschutzerklärung).
-      const updated = await deps.users.update(user.id, {
-        consentGivenAt: new Date(),
-        consentVersion: CURRENT_CONSENT_VERSION,
-      });
+      // Review 30.08.2026, Befund S1: input.consentVersion ist durch
+      // LoginRequestSchema (z.literal(CURRENT_CONSENT_VERSION)) bereits auf
+      // exakt die aktuelle Fassung geprüft — der Datensatz unten spiegelt
+      // damit eine tatsächlich vom Client bestätigte Version wider, keine
+      // vom Server unterstellte. Geschrieben wird trotzdem nur, wenn sich
+      // etwas ändert (das gespeicherte consentVersion also veraltet war):
+      // sonst würde jeder Routine-Login dieselbe Zeile erneut schreiben und
+      // consentGivenAt ohne fachlichen Anlass vorrücken, obwohl niemand neu
+      // zugestimmt hat.
+      const updated =
+        user.consentVersion === CURRENT_CONSENT_VERSION
+          ? user
+          : await deps.users.update(user.id, {
+              consentGivenAt: new Date(),
+              consentVersion: CURRENT_CONSENT_VERSION,
+            });
 
       const tokens = await issueTokens(updated);
       const enabledModules = await resolveEnabledModules(deps.clubs, updated.clubId);
@@ -402,12 +410,32 @@ export function createAuthService(deps: AuthServiceDeps) {
     // "gefunden" und "nicht gefunden" ähnlich schnell (dominiert von der
     // DB-Abfrage) bleibt, statt für den "gefunden"-Fall um einen vollen
     // SMTP-Roundtrip zu wachsen.
+    //
+    // Review 30.08.2026, Befund S3: dieselbe Überlegung galt bislang nicht
+    // für die Arbeit ZWISCHEN der Suche und dem E-Mail-Versand — der
+    // Nicht-Treffer-Pfad kehrte sofort zurück, während der Treffer-Pfad
+    // zusätzlich ein Token erzeugte, hashte und in die Datenbank schrieb.
+    // Zwar leichtgewichtige Operationen (randomBytes()/SHA-256, kein
+    // teurer argon2id-Vergleich wie bei login()), aber eine stabile,
+    // messbare Differenz — genug, um die Adressliste eines Vereins über
+    // wiederholte Zeitmessungen durchzuprobieren. Token-Erzeugung/-Hash
+    // läuft jetzt auf BEIDEN Pfaden; der Schreibvorgang selbst lässt sich
+    // für den Nicht-Treffer-Fall nicht spiegeln (kein Konto, in das
+    // geschrieben werden könnte) und wird deshalb — wie der Mailversand
+    // unten — ebenfalls nicht awaitet.
     async requestPasswordReset(email: string): Promise<void> {
       const user = await deps.users.findByEmail(email); // liefert nie gelöschte Konten
+      const { plainToken, tokenHash, expiresAt } = generatePasswordResetToken(deps.passwordResetTtlMinutes);
       if (!user) return;
 
-      const { plainToken, tokenHash, expiresAt } = generatePasswordResetToken(deps.passwordResetTtlMinutes);
-      await deps.passwordResetTokens.create(user.id, tokenHash, expiresAt);
+      // Bewusst ohne await (Befund S3, siehe Kommentar oben). Ein
+      // Fehlschlag (z. B. DB kurzzeitig nicht erreichbar) darf die
+      // generische Antwort an die aufrufende Person nicht verändern —
+      // wird daher nur serverseitig geloggt, nie an den Client
+      // durchgereicht.
+      deps.passwordResetTokens.create(user.id, tokenHash, expiresAt).catch((err) => {
+        console.error('[auth] Fehler beim Speichern des Passwort-Zurücksetzen-Tokens:', err);
+      });
 
       // Bewusst ohne await: siehe Kommentar oben. Ein Fehlschlag (z. B.
       // SMTP kurzzeitig nicht erreichbar) darf die generische Antwort an
@@ -498,6 +526,19 @@ export function createAuthService(deps: AuthServiceDeps) {
       await deps.passwordResetTokens.markAllUsedForUser(userId);
       await deps.refreshTokens.revokeAllForUser(userId);
 
+      // Review 30.08.2026, Befund S4: ein kurzzeitig entwendetes, noch
+      // gültiges Access Token reicht — kombiniert mit diesem aktuellen
+      // Passwort — bereits aus, um das Konto zu übernehmen; die
+      // rechtmäßige Person erfährt davon sonst erst beim nächsten eigenen
+      // Anmeldeversuch. Bewusst ohne await (wie der Mailversand bei
+      // requestPasswordReset()): ein Fehlschlag darf den erfolgreichen
+      // Passwortwechsel selbst nicht verzögern oder scheitern lassen.
+      deps.mailer
+        .sendAccountSecurityChangeNotice({ to: user.email, recipientName: user.name, changeType: 'password', locale: user.locale })
+        .catch((err) => {
+          console.error('[auth] Fehler beim Versand des Sicherheitshinweises nach Passwortwechsel:', err);
+        });
+
       const tokens = await issueTokens(updated);
       const enabledModules = await resolveEnabledModules(deps.clubs, updated.clubId);
       return { ...tokens, user: toPublicUser(updated), enabledModules };
@@ -569,6 +610,19 @@ export function createAuthService(deps: AuthServiceDeps) {
       }
 
       await deps.refreshTokens.revokeAllForUser(userId);
+
+      // Review 30.08.2026, Befund S4: geht an user.email — die Adresse VOR
+      // diesem Wechsel, nicht `updated.email` (die neue). Nur die
+      // bisherige Adresse ist noch ein Kanal, über den die rechtmäßige
+      // Person eine unautorisierte Änderung überhaupt erfahren kann: die
+      // neue Adresse gehört im Übernahme-Fall bereits der angreifenden
+      // Person. Bewusst ohne await, aus demselben Grund wie bei
+      // changePassword() oben.
+      deps.mailer
+        .sendAccountSecurityChangeNotice({ to: user.email, recipientName: user.name, changeType: 'email', locale: user.locale })
+        .catch((err) => {
+          console.error('[auth] Fehler beim Versand des Sicherheitshinweises nach E-Mail-Wechsel:', err);
+        });
 
       const tokens = await issueTokens(updated);
       const enabledModules = await resolveEnabledModules(deps.clubs, updated.clubId);

@@ -49,8 +49,19 @@ export async function restoreSession() {
     current = { ...result.user, enabledModules: result.enabledModules };
     setLocale(current?.locale || detectInitialLocale());
     return current;
-  } catch {
-    api.clearTokens();
+  } catch (err) {
+    // Review 30.08.2026, Befund U4: ein Ratenlimit-Treffer (429) auf
+    // /auth/refresh (siehe Befund S2) bedeutet nicht, dass die Sitzung
+    // ungültig ist — nur, dass DIESER Wiederherstellungsversuch gerade
+    // nicht möglich war (z. B. beim gleichzeitigen Neustart mehrerer
+    // Geräte hinter derselben NAT nach einem Netzwerkausfall). Die
+    // gespeicherten Tokens bleiben in diesem Fall erhalten, damit ein
+    // späterer restoreSession()-Aufruf (erneutes Laden der Seite) die
+    // Sitzung noch wiederherstellen kann — nur ein echter Auth-Fehler
+    // (Refresh Token ungültig/abgelaufen/widerrufen) räumt sie ab.
+    if (!(err instanceof api.ApiError && err.status === 429)) {
+      api.clearTokens();
+    }
     current = null;
     return null;
   }
@@ -230,7 +241,14 @@ async function applyEnabledModules(nextModules) {
 }
 
 export async function login(email, password, consent) {
-  const user = await api.login({ email, password, consent });
+  // Review 30.08.2026, Befund S1: die Version, der zugestimmt wird, kommt
+  // von hier — derselben Konstante, die authScreens.js im Einwilligungstext
+  // anzeigt (t('auth.consentLabel', { version: CURRENT_CONSENT_VERSION })).
+  // Der Server (LoginRequestSchema) lässt nur seine eigene, tagesaktuelle
+  // Fassung durch; driften beide Konstanten auseinander, scheitert der
+  // Login hier sichtbar, statt den Nachweis stillschweigend falsch zu
+  // protokollieren.
+  const user = await api.login({ email, password, consent, consentVersion: CURRENT_CONSENT_VERSION });
   // Sicherheitsreview 2026-08-29, Befund H1 — siehe
   // ensureLocalStoreBelongsTo(): räumt die lokale Ablage auf, falls sie
   // noch einer anderen Person gehört.

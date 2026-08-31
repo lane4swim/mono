@@ -111,6 +111,12 @@ export function describeError(err, { on401Message } = {}) {
   if (err instanceof NetworkError) return t('common.errorNetwork');
   if (err instanceof ApiError) {
     if (err.status === 401 && on401Message) return on401Message;
+    // Review 30.08.2026, Befund U4: ohne diesen Zweig zeigte ein 429
+    // (Ratenlimit-Treffer, siehe Befund S2) dieselbe generische
+    // Server-Fehlermeldung wie jeder andere Fehler — nicht unterscheidbar
+    // von einem echten Problem, obwohl ein erneuter Versuch nach kurzer
+    // Zeit genügt.
+    if (err.status === 429) return t('common.errorRateLimited');
     return err.message;
   }
   return t('common.errorUnknown');
@@ -160,7 +166,20 @@ async function request(path, options = {}, { allowRefreshRetry = true } = {}) {
     if (err instanceof ApiError && err.status === 401 && allowRefreshRetry && getStoredRefreshToken()) {
       try {
         await refreshTokens();
-      } catch {
+      } catch (refreshErr) {
+        // Review 30.08.2026, Befund U4: ein Ratenlimit-Treffer (429) auf
+        // /auth/refresh (siehe Befund S2 — dessen Grenzwert jetzt gerade
+        // deshalb angehoben ist, weil mehrere Geräte hinter derselben NAT
+        // regelmäßig gleichzeitig proaktiv erneuern) sagt nichts darüber
+        // aus, ob die Sitzung noch gültig ist — nur, dass DIESER
+        // Erneuerungsversuch gerade nicht möglich war. Tokens bleiben
+        // erhalten, der 429 wird durchgereicht (statt des ursprünglichen
+        // 401), damit describeError() eine passende Meldung zeigen kann,
+        // statt eine noch gültige Sitzung wie bei einem echten
+        // Auth-Fehler zu beenden.
+        if (refreshErr instanceof ApiError && refreshErr.status === 429) {
+          throw refreshErr;
+        }
         clearTokens();
         throw err;
       }
@@ -178,8 +197,8 @@ function postJson(path, body, opts) {
 // Gibt user + enabledModules zusammen zurück (nicht nur result.user) —
 // state.js legt daraus die vollständige `current`-Sitzung an, inklusive
 // der gebuchten Module des Vereins (siehe router.js: visibleModules()).
-export async function login({ email, password, consent }) {
-  const result = await postJson('/auth/login', { email, password, consent }, { allowRefreshRetry: false });
+export async function login({ email, password, consent, consentVersion }) {
+  const result = await postJson('/auth/login', { email, password, consent, consentVersion }, { allowRefreshRetry: false });
   setTokens(result);
   return { ...result.user, enabledModules: result.enabledModules };
 }

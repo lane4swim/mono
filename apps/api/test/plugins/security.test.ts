@@ -188,7 +188,9 @@ describe('trustProxy — nur die konfigurierte Proxy-Adresse wird vertraut (Sich
   });
   afterAll(async () => { await app.close(); });
 
-  it('zwei unterschiedliche Clients HINTER der vertrauenswürdigen Proxy-Adresse teilen sich NICHT dasselbe /auth/refresh-Budget (10/min)', async () => {
+  // Review 30.08.2026, Befund S2: Grenzwert von 10 auf 60/min angehoben
+  // (siehe auth.route.ts) — beide Tests unten auf 60 nachgezogen.
+  it('zwei unterschiedliche Clients HINTER der vertrauenswürdigen Proxy-Adresse teilen sich NICHT dasselbe /auth/refresh-Budget (60/min)', async () => {
     // remoteAddress simuliert die Verbindung von Nginx (die einzige
     // vertrauenswürdige Adresse); ein einzelner Wert in "X-Forwarded-For"
     // entspricht dem Normalfall (kein weiterer Hop davor) — das ist exakt
@@ -204,9 +206,9 @@ describe('trustProxy — nur die konfigurierte Proxy-Adresse wird vertraut (Sich
       });
 
     const clientA = [];
-    for (let i = 0; i < 10; i++) clientA.push(await attempt('203.0.113.10'));
+    for (let i = 0; i < 60; i++) clientA.push(await attempt('203.0.113.10'));
     expect(clientA.every((r) => r.statusCode === 401)).toBe(true);
-    // Client A ist jetzt bei seinem 10/10-Limit — der 11. eigene Versuch
+    // Client A ist jetzt bei seinem 60/60-Limit — der 61. eigene Versuch
     // würde 429 liefern (siehe "Rate-Limiting auf /auth/refresh" oben).
 
     const clientB = await attempt('203.0.113.20');
@@ -227,18 +229,21 @@ describe('trustProxy — nur die konfigurierte Proxy-Adresse wird vertraut (Sich
         payload: { refreshToken: 'ungueltiges-token-fuer-rate-limit-test' },
       });
 
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 60; i++) {
       // Jeder Versuch behauptet fälschlich, von einer ANDEREN Adresse zu
       // kommen — ohne den H1-Fix (`trustProxy: true`) bekäme jeder Versuch
       // dadurch sein eigenes, frisches Budget und wäre weiterhin 401.
-      const res = await attempt(`203.0.113.${200 + i}`);
+      // Über zwei Oktette verteilt (10.0.<i/250>.<i%250>), damit 60
+      // Durchläufe nicht denselben letzten Oktett-Bereich (0-255)
+      // überschreiten.
+      const res = await attempt(`10.0.${Math.floor(i / 250)}.${i % 250}`);
       expect(res.statusCode).toBe(401);
     }
     // Mit dem Fix zählt ausschließlich die echte, gleichbleibende Adresse
-    // (198.51.100.50) — deren gemeinsames Budget ist nach zehn Versuchen
+    // (198.51.100.50) — deren gemeinsames Budget ist nach 60 Versuchen
     // erschöpft, unabhängig vom vorangestellten Fälschungswert.
-    const eleventh = await attempt('203.0.113.250');
-    expect(eleventh.statusCode).toBe(429);
+    const sixtyFirst = await attempt('203.0.113.250');
+    expect(sixtyFirst.statusCode).toBe(429);
   });
 });
 

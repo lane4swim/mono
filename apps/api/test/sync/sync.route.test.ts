@@ -1,5 +1,5 @@
 // apps/api/test/sync/sync.route.test.ts
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { MODULE_KEYS } from '@lane1/shared-types';
 import { buildApp } from '../../src/app.js';
 import { loadEnv } from '../../src/config/env.js';
@@ -38,7 +38,11 @@ async function buildTestApp() {
   // Verhalten), nicht das Modul-Gating — jeder Verein hat hier daher
   // standardmäßig alle Module gebucht (siehe sync.permissions.test.ts für
   // gezielte Tests eines eingeschränkten Modul-Sets).
-  const clubs = { findById: async () => ({ enabledModules: [...MODULE_KEYS] }) };
+  // `vi.fn()` statt einer nackten Pfeilfunktion, damit die Aufrufzahl
+  // zählbar ist — der Cache aus Befund E1 (siehe sync.route.ts) lässt sich
+  // sonst nicht von seinem Fehlen unterscheiden. Rückgabewert und
+  // Verhalten sind identisch zu vorher.
+  const clubs = { findById: vi.fn(async () => ({ enabledModules: [...MODULE_KEYS] })) };
   const authService = createAuthService({
     users: new InMemoryUserRepository(),
     refreshTokens: new InMemoryRefreshTokenRepository(),
@@ -57,7 +61,7 @@ async function buildTestApp() {
   const gateway = new InMemorySyncGateway();
   const syncService = createSyncService({ gateway });
   const app = await buildApp(testEnv, { authService, invitationsService, syncService, clubs, keyPair });
-  return { app, gateway, keyPair };
+  return { app, gateway, keyPair, clubs };
 }
 
 async function tokenFor(keyPair: KeyPair, role: string, clubId: string | null, athleteId: string | null = null) {
@@ -75,6 +79,79 @@ function makeGroupEvent(id: string, overrides: Partial<Record<string, unknown>> 
   const payload = { id, clubId: CLUB_ID, name: 'Leistungsgruppe', description: '', createdAt: now, updatedAt: now, ...overrides };
   return { id: `evt-${id}`, store: 'groups' as const, entityId: id, action: 'create' as const, payload, clientUpdatedAt: payload.updatedAt };
 }
+
+// Review 30.08.2026, Befund E1: requesterFrom() las die Club-Zeile bei
+// JEDER Push-/Pull-Anfrage neu — ein Erstabgleich (bis zu
+// MAX_PULL_ITERATIONS = 1000 Pull-Seiten) fragte damit bis zu 1.000-mal
+// dieselbe Zeile ab. Beide Tests prüfen die zwei Hälften des Fixes: dass
+// überhaupt zwischengespeichert wird, UND dass der Zwischenspeicher
+// wieder verfällt. Die zweite Hälfte ist die sicherheitsrelevante: ein
+// dauerhaft gültiger Cache würde ein per Superadmin abbestelltes Modul nie
+// wirksam werden lassen.
+describe('Vereins-Modul-Lookup je Sync-Anfrage (Review 30.08.2026, Befund E1)', () => {
+  it('liest die Club-Zeile für mehrere aufeinanderfolgende Anfragen desselben Vereins nur EINMAL, je Verein aber getrennt', async () => {
+    const { app, keyPair, clubs } = await buildTestApp();
+    const token = await tokenFor(keyPair, 'trainer', CLUB_ID);
+
+    for (let i = 0; i < 5; i++) {
+      const response = await app.inject({
+        method: 'GET', url: '/api/sync/pull',
+        headers: { authorization: `Bearer ${token}` },
+      });
+      expect(response.statusCode).toBe(200);
+    }
+    // Ohne den Cache: fünf Aufrufe für fünf Anfragen.
+    expect(clubs.findById).toHaveBeenCalledTimes(1);
+
+    // Ein ANDERER Verein darf den Eintrag des ersten nicht mitbenutzen —
+    // sonst bekäme er dessen Modul-Set (ein Mandantendurchbruch auf der
+    // Rechte-Ebene). Der Cache ist nach clubId geschlüsselt, also ein
+    // zweiter Lookup.
+    const otherClubToken = await tokenFor(keyPair, 'trainer', '99999999-9999-9999-9999-999999999999');
+    const otherResponse = await app.inject({
+      method: 'GET', url: '/api/sync/pull',
+      headers: { authorization: `Bearer ${otherClubToken}` },
+    });
+    expect(otherResponse.statusCode).toBe(200);
+    expect(clubs.findById).toHaveBeenCalledTimes(2);
+
+    await app.close();
+  });
+
+  it('liest die Club-Zeile nach Ablauf der Cache-Lebensdauer erneut (ein abbestelltes Modul wird wirksam, statt dauerhaft veraltet zu bleiben)', async () => {
+    const { app, keyPair, clubs } = await buildTestApp();
+    const token = await tokenFor(keyPair, 'trainer', CLUB_ID);
+
+    const first = await app.inject({
+      method: 'GET', url: '/api/sync/pull',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(first.statusCode).toBe(200);
+    expect(clubs.findById).toHaveBeenCalledTimes(1);
+
+    // Nur `Date.now()` vorstellen (der einzige Zeitgeber des Caches),
+    // nicht die echten Timer — Fastify und die Token-Prüfung laufen
+    // dadurch unbeeinflusst weiter. 46 s > CLUB_MODULES_CACHE_TTL_MS
+    // (45 s), aber weit unter der Access-Token-Laufzeit von 900 s, das
+    // Token bleibt also gültig.
+    const realNow = Date.now();
+    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => realNow + 46_000);
+    try {
+      const second = await app.inject({
+        method: 'GET', url: '/api/sync/pull',
+        headers: { authorization: `Bearer ${token}` },
+      });
+      expect(second.statusCode).toBe(200);
+      // Ein Cache ohne Verfall bliebe hier bei 1 — und ein abbestelltes
+      // Modul würde nie greifen.
+      expect(clubs.findById).toHaveBeenCalledTimes(2);
+    } finally {
+      nowSpy.mockRestore();
+    }
+
+    await app.close();
+  });
+});
 
 describe('POST /api/sync/push', () => {
   it('lehnt nicht authentifizierte Anfragen ab (401)', async () => {

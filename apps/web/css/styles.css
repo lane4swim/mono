@@ -258,6 +258,11 @@ tr:hover td{ background: var(--c-foam-2); }
 .toast.err{ border-left-color: var(--c-danger); }
 @keyframes toast-in{ from{ opacity:0; transform: translateX(12px); } to{ opacity:1; transform:none; } }
 
+/* Review 30.08.2026, Befund U5 — anders als ein Toast (ui.js) bewusst
+   OHNE automatisches Verschwinden: ein Update-Hinweis darf nicht
+   verpasst werden, bevor die Person aktiv reagiert (Neu-laden-Knopf). */
+.update-banner{ position:fixed; left:18px; right:18px; bottom:18px; margin:0 auto; max-width:420px; display:flex; align-items:center; justify-content:space-between; gap:12px; background: var(--c-deep); color:var(--c-white); padding: 12px 16px; border-radius: var(--radius-sm); font-size: var(--fs-sm); box-shadow: var(--shadow-md); border-left: 4px solid var(--c-chlorine); z-index: 310; animation: toast-in .2s var(--ease); }
+
 /* Attendance / list rows */
 .list-row{ display:flex; align-items:center; gap:12px; padding: 10px 6px; border-bottom: 1px solid var(--c-line); }
 .list-row:last-child{ border-bottom:none; }

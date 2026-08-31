@@ -2,7 +2,8 @@
 //
 // Phase 1: echte Authentifizierungs-Routen (ersetzen die 501-Platzhalter
 // aus Phase 0). Siehe Abschnitt 5 des Backend-Entwicklungsplans.
-import type { FastifyInstance } from 'fastify';
+import { createHash } from 'node:crypto';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import {
   AcceptInvitationRequestSchema,
   LoginRequestSchema,
@@ -18,6 +19,39 @@ import type { AuthService } from './auth.service.js';
 import { requireRole } from '../../plugins/authorize.js';
 import { parseInput } from '../../plugins/parseInput.js';
 
+// Review 30.08.2026, Befund S2: Rate-Limits für /api/me/password und
+// /api/me/email zählten bislang NUR nach IP — die dortigen (jetzt
+// überholten) Kommentare erklärten, dass request.user im keyGenerator
+// technisch nicht erreichbar ist, weil der globale Rate-Limit-Hook
+// (plugins/security.ts: hook: 'preHandler') vor JEDEM route-eigenen
+// preHandler läuft, also auch vor app.authenticate. Der rohe
+// Authorization-Header steht zu diesem Zeitpunkt aber schon zur
+// Verfügung — HTTP-Header werden vom Server unabhängig von jeder
+// Parsing-/Auth-Stufe bereitgestellt, anders als request.user (das erst
+// app.authenticate setzt) oder request.body (das erst preValidation
+// parst). Ein Hash des vorgelegten Access Tokens trennt die Budgets
+// unterschiedlicher angemeldeter Personen genauso zuverlässig wie
+// request.user.sub, ohne auf dessen Auswertung warten zu müssen.
+//
+// Bewusst NICHT dasselbe Muster für /auth/refresh, /auth/register,
+// /auth/logout und /auth/reset-password unten (siehe deren jeweilige
+// Kommentare): dort steht kein bereits gültiges, vom Server ausgestelltes
+// Geheimnis zur Verfügung, sondern GENAU der Wert, den ein Angreifer zu
+// erraten/stehlen versucht (Refresh-/Einladungs-/Reset-Token). Ein
+// Schlüssel aus DIESEM Wert ließe sich durch einfaches Wechseln des
+// geratenen Werts bei jedem Versuch umgehen — jeder neue Versuch bekäme
+// sein eigenes, frisches Budget, wodurch das Limit seinen eigentlichen
+// Zweck (das Durchprobieren vieler Werte zu verlangsamen) verlöre. Beim
+// Access Token hier ist das anders: ein Angreifer besitzt zu jedem
+// Zeitpunkt höchstens die Token, die er tatsächlich erbeutet hat, und
+// kann sie nicht beliebig neu erzeugen — der Schlüssel bleibt für seine
+// Versuche stabil.
+function accessTokenRateLimitKey(request: FastifyRequest): string {
+  const header = request.headers.authorization;
+  if (!header?.startsWith('Bearer ')) return `${request.ip}:no-token`;
+  return createHash('sha256').update(header).digest('hex');
+}
+
 export async function authRoutes(app: FastifyInstance, opts: { authService: AuthService }) {
   const { authService } = opts;
 
@@ -25,8 +59,14 @@ export async function authRoutes(app: FastifyInstance, opts: { authService: Auth
     '/auth/register',
     {
       // Trotz Einladungspflicht weiterhin rate-limitiert — verhindert
-      // automatisiertes Durchprobieren von Einladungs-Tokens.
-      config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
+      // automatisiertes Durchprobieren von Einladungs-Tokens. Bewusst
+      // weiterhin NUR nach IP geschlüsselt, nicht nach dem Token selbst
+      // (siehe die ausführliche Begründung bei accessTokenRateLimitKey()
+      // oben) — der Grenzwert ist stattdessen von 10 auf 20 pro Minute
+      // angehoben (Review 30.08.2026, Befund S2), damit eine Trainings-
+      // gruppe, die gemeinsam am Vereinsheim-WLAN mehrere Einladungen
+      // annimmt, sich nicht gegenseitig aussperrt.
+      config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
     },
     async (request, reply) => {
       const body = parseInput(AcceptInvitationRequestSchema, request.body, reply);
@@ -77,8 +117,24 @@ export async function authRoutes(app: FastifyInstance, opts: { authService: Auth
       // gestohlener/erratener Refresh-Tokens sowie übermäßiges Ausnutzen
       // der Token-Rotation. Schlüssel bewusst nur nach IP (nicht nach
       // Refresh-Token, der ja gerade erst validiert werden soll und für
-      // nicht authentifizierte Anfragen kein sinnvoller Schlüssel wäre).
-      config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
+      // nicht authentifizierte Anfragen kein sinnvoller Schlüssel wäre) —
+      // siehe die ausführliche Begründung bei accessTokenRateLimitKey()
+      // oben, warum ein Schlüssel aus dem Token selbst hier sogar
+      // KONTRAPRODUKTIV wäre.
+      //
+      // Review 30.08.2026, Befund S2: Grenzwert von 10 auf 60 pro Minute
+      // angehoben — das ist der praktisch relevante Fall der IP-Schlüsse-
+      // lung, da apiClient.js JEDE angemeldete Sitzung automatisch und
+      // ohne Zutun proaktiv erneuert (siehe dort:
+      // PROACTIVE_REFRESH_MARGIN_MS), nicht nur bei einer bewussten
+      // Nutzer:innen-Aktion wie einem Login. Mehrere Geräte am selben
+      // Vereinsheim-WLAN erneuern dadurch unabhängig voneinander,
+      // gebündelt auf dieselbe öffentliche IP — 10/Minute reichte dafür
+      // in der Praxis nicht. Die 256 Bit Entropie des Refresh Tokens
+      // (siehe auth/tokens.ts) machen ein tatsächliches Erraten so oder
+      // so unerreichbar; der höhere Grenzwert ändert daran nichts
+      // Messbares, nimmt aber echten Nutzer:innen die Reibung.
+      config: { rateLimit: { max: 60, timeWindow: '1 minute' } },
     },
     async (request, reply) => {
       const body = parseInput(RefreshRequestSchema, request.body, reply);
@@ -95,7 +151,13 @@ export async function authRoutes(app: FastifyInstance, opts: { authService: Auth
       // Ebenfalls spezifisch begrenzt (siehe /auth/refresh oben) — auch
       // wenn Logout selbst harmlos ist, verhindert das Limit, dass diese
       // Route zum Durchprobieren/Invalidieren fremder Refresh-Tokens
-      // missbraucht wird.
+      // missbraucht wird. Review 30.08.2026, Befund S2: bewusst
+      // unverändert (weder Schlüssel noch Grenzwert) — anders als
+      // /auth/refresh löst Logout keine automatische Hintergrundlast aus,
+      // eine legitime NAT-Kollision ist hier unrealistisch; ein Schlüssel
+      // aus dem Refresh Token selbst wäre aus demselben Grund wie bei
+      // /auth/refresh kontraproduktiv (siehe accessTokenRateLimitKey()
+      // oben).
       config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
     },
     async (request, reply) => {
@@ -153,6 +215,12 @@ export async function authRoutes(app: FastifyInstance, opts: { authService: Auth
   // Durchprobieren erratener/gestohlener Reset-Tokens — das Token selbst
   // ist mit 256 Bit Entropie zwar praktisch nicht erratbar, dies ist
   // zusätzliche Tiefenverteidigung, analog zu /auth/refresh.
+  // Review 30.08.2026, Befund S2: bewusst unverändert (weder Schlüssel
+  // noch Grenzwert) — ein Passwort-Reset ist eine seltene, bewusste
+  // Einzelhandlung ohne automatischen Hintergrund-Trigger, eine legitime
+  // NAT-Kollision ist hier unrealistisch; ein Schlüssel aus dem
+  // vorgelegten Reset-Token wäre aus demselben Grund wie bei
+  // /auth/refresh kontraproduktiv (siehe accessTokenRateLimitKey() oben).
   app.post(
     '/auth/reset-password',
     { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } },
@@ -217,18 +285,22 @@ export async function authRoutes(app: FastifyInstance, opts: { authService: Auth
   // AKTUELLE Sitzung ohne erneuten Login weiterläuft, während alle
   // ANDEREN Sitzungen widerrufen werden.
   //
-  // Rate-Limit bewusst nur nach IP (nicht IP + Nutzer:in wie bei
-  // /auth/login): der globale Rate-Limit-Hook läuft (siehe
-  // plugins/security.ts: hook: 'preHandler') VOR jedem route-eigenen
-  // preHandler — also auch vor app.authenticate unten —, request.user ist
-  // im keyGenerator zu diesem Zeitpunkt daher noch NICHT gesetzt. Analog zu
-  // /auth/refresh: verhindert dennoch automatisiertes Durchprobieren des
-  // aktuellen Passworts mit einem entwendeten, noch gültigen Access Token.
+  // Rate-Limit verhindert automatisiertes Durchprobieren des aktuellen
+  // Passworts mit einem entwendeten, noch gültigen Access Token. Bis
+  // Review 30.08.2026 (Befund S2) war der Schlüssel nur die IP —
+  // request.user ist im keyGenerator technisch nicht erreichbar (der
+  // globale Rate-Limit-Hook läuft laut plugins/security.ts:
+  // hook: 'preHandler' VOR jedem route-eigenen preHandler, also auch vor
+  // app.authenticate unten), wodurch sich ein Verein hinter NAT dieselbe
+  // Fünf-Versuche-Grenze teilte, unabhängig davon, wie viele
+  // unterschiedliche Konten dahinterstanden. accessTokenRateLimitKey()
+  // (siehe oben) löst das über den bereits vorliegenden, rohen
+  // Authorization-Header statt über request.user.
   app.post(
     '/api/me/password',
     {
       preHandler: app.authenticate,
-      config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
+      config: { rateLimit: { max: 5, timeWindow: '1 minute', keyGenerator: accessTokenRateLimitKey } },
     },
     async (request, reply) => {
       const body = parseInput(ChangePasswordRequestSchema, request.body, reply);
@@ -252,16 +324,14 @@ export async function authRoutes(app: FastifyInstance, opts: { authService: Auth
   // AKTUELLE Sitzung ohne erneuten Login weiterläuft, während alle
   // ANDEREN Sitzungen widerrufen werden.
   //
-  // Rate-Limit bewusst nur nach IP (nicht IP + Nutzer:in), aus demselben
-  // Grund wie /api/me/password oben: der globale Rate-Limit-Hook läuft
-  // (siehe plugins/security.ts: hook: 'preHandler') VOR jedem
-  // route-eigenen preHandler wie app.authenticate — request.user ist im
-  // keyGenerator zu diesem Zeitpunkt noch nicht gesetzt.
+  // Rate-Limit-Schlüssel: siehe /api/me/password oben und
+  // accessTokenRateLimitKey() (Review 30.08.2026, Befund S2) — derselbe
+  // Grund gilt hier unverändert.
   app.post(
     '/api/me/email',
     {
       preHandler: app.authenticate,
-      config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
+      config: { rateLimit: { max: 5, timeWindow: '1 minute', keyGenerator: accessTokenRateLimitKey } },
     },
     async (request, reply) => {
       const body = parseInput(ChangeEmailRequestSchema, request.body, reply);

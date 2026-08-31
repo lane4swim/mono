@@ -19,6 +19,7 @@ import { randomUUID } from 'node:crypto';
 import {
   SyncEventSchema,
   ENTITY_SCHEMAS,
+  ENTITY_STORE_NAMES,
   type SyncEvent,
   type SyncEventResult,
   type SyncChange,
@@ -26,7 +27,7 @@ import {
   type Role,
 } from '@lane1/shared-types';
 import { resolveConflict } from '@lane1/sync-protocol';
-import type { SyncGateway } from './sync.gateway.js';
+import type { SyncGateway, SyncRecord } from './sync.gateway.js';
 import { isKnownStore, canRead, canWrite } from './sync.permissions.js';
 import { assertForeignKeysWithinClub } from './sync.foreignKeys.js';
 import { scopeChangeForAthlete } from './sync.athleteScope.js';
@@ -82,6 +83,16 @@ interface PushCtx {
   readonly requester: SyncRequester;
   readonly gateway: SyncGateway;
   readonly raw: unknown;
+  // Review 30.08.2026, Befund E2: EINE, für den gesamten push()-Aufruf
+  // gemeinsame (Referenz-)Instanz statt je Event ein eigener
+  // Datenbank-Zugriff (siehe shortCircuitIfProcessed() unten und die
+  // Vorab-Batch-Abfrage in push() selbst). Wird nach jeder erfolgreich
+  // ANGEWENDETEN Schreibung um die jeweilige event.id ergänzt — dadurch
+  // erkennt eine SPÄTERE, doppelte event.id INNERHALB DESSELBEN Batches
+  // (z. B. ein versehentlich zweimal gesendetes Event) den bereits
+  // erfolgten Abschluss genauso zuverlässig wie zuvor der Live-Datenbank-
+  // Check, nur ohne dessen Zugriff je Event.
+  readonly processedEventIds: Set<string>;
   event?: SyncEvent;
   store?: EntityStoreName;
   validatedPayload?: Record<string, unknown> | null;
@@ -144,24 +155,34 @@ function requireWritePermission(ctx: PushCtx): SyncEventResult | null {
 // Stufe 4: Idempotenz-FAST-PATH — bereits verarbeitete Events werden als
 // "applied" gemeldet (nicht als Fehler), damit ein Client, der wegen eines
 // Verbindungsabbruchs dieselbe Antwort nicht sah, beim erneuten Senden ein
-// konsistentes Ergebnis bekommt. clubId-gescoped (siehe
-// SyncGateway.isEventProcessed()-Kommentar in sync.gateway.ts) — ein
-// fremdes, erratenes Event-ID bekommt dadurch die korrekte, ungescopte
-// Antwort statt eines wirkungslosen "applied".
+// konsistentes Ergebnis bekommt.
+//
+// Review 30.08.2026, Befund E2: prüft seitdem NUR NOCH gegen
+// ctx.processedEventIds (siehe PushCtx-Kommentar oben) — vormals ein
+// eigener ctx.gateway.isEventProcessed()-Datenbankzugriff JE Event (bei
+// den bis zu 200 Events eines Batches also bis zu 200 Abfragen allein für
+// diesen Fast-Path). Die Menge wird VOR der Schleife einmalig per
+// SyncGateway.findProcessedEventIds() für den gesamten Batch geladen
+// (siehe push() unten) und danach synchron, ohne DB-Zugriff, konsultiert.
+// Das clubId-Scoping (ein fremdes, erratenes Event-ID bekommt dadurch die
+// korrekte, ungescopte Antwort statt eines wirkungslosen "applied")
+// bleibt erhalten — findProcessedEventIds() ist genau wie isEventProcessed()
+// zuvor mit `clubId` gescoped.
 //
 // Bewusst nur ein FAST-PATH, keine alleinige Korrektheitsgarantie: dieser
 // Check ist ein reines Check-then-Act ohne Sperre — zwei praktisch
-// gleichzeitige Pushes desselben Events könnten diese Prüfung beide
-// passieren, bevor eine von beiden den Ledger-Eintrag geschrieben hat. Er
-// spart in diesem (Normal-)Fall lediglich die nachfolgenden Guards sowie
-// den Transaktionsversuch für ein Event, dessen Ergebnis ohnehin
-// feststeht. Die tatsächliche, nebenläufigkeitssichere Garantie liefert
-// erst applyAndMarkProcessed() (siehe push() unten), das die
-// Datenänderung UND den Ledger-Eintrag atomar in einer Transaktion
+// gleichzeitige Pushes desselben Events (aus ZWEI unterschiedlichen
+// push()-Aufrufen, mit je eigener processedEventIds-Menge) könnten diese
+// Prüfung beide passieren, bevor eine von beiden den Ledger-Eintrag
+// geschrieben hat. Er spart in diesem (Normal-)Fall lediglich die
+// nachfolgenden Guards sowie den Transaktionsversuch für ein Event, dessen
+// Ergebnis ohnehin feststeht. Die tatsächliche, nebenläufigkeitssichere
+// Garantie liefert erst applyAndMarkProcessed() (siehe push() unten), das
+// die Datenänderung UND den Ledger-Eintrag atomar in einer Transaktion
 // zusammenfasst.
-async function shortCircuitIfProcessed(ctx: PushCtx): Promise<SyncEventResult | null> {
+function shortCircuitIfProcessed(ctx: PushCtx): SyncEventResult | null {
   const event = ctx.event!;
-  if (await ctx.gateway.isEventProcessed(event.id, ctx.requester.clubId)) {
+  if (ctx.processedEventIds.has(event.id)) {
     return { eventId: event.id, status: 'applied' };
   }
   return null;
@@ -258,8 +279,84 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
     async push(events: unknown[], requester: SyncRequester): Promise<SyncEventResult[]> {
       const results: SyncEventResult[] = [];
 
+      // Review 30.08.2026, Befund E2: Vorab-Batch-Abfragen statt bis zu drei
+      // Datenbank-Zugriffen JE Event (isEventProcessed(), findById() hier,
+      // plus applyAndMarkProcessed() selbst — Letzteres bleibt unverändert
+      // je Event, siehe Begründung bei requireForeignKeysWithinClub oben:
+      // außerhalb des hier betrachteten Umfangs). Bei den bis zu 200 Events
+      // eines Batches waren das vormals bis zu ~600 serielle
+      // Datenbank-Round-Trips allein für die ersten beiden.
+      //
+      // Bewusst NUR eine grobe, fehlertolerante Vorab-Erfassung (dasselbe
+      // SyncEventSchema.safeParse() + isKnownStore()-Prüfung wie parseEvent()/
+      // requireKnownStore() oben) — ein Event, das hier nicht erfasst wird
+      // (weil strukturell ungültig oder unbekannter Store), scheitert
+      // deterministisch auch gleich an genau diesen beiden Guards weiter
+      // unten und erreicht die `existing`-Ermittlung ohnehin nie. Die
+      // eigentliche, sicherheitsrelevante Validierung bleibt vollständig in
+      // PUSH_GUARDS — diese Vorab-Erfassung dient AUSSCHLIESSLICH dazu, zu
+      // wissen, welche (store, entityId)- bzw. event.id-Werte überhaupt
+      // vorab nachgeladen werden lohnen.
+      const prefetchTargets: Array<{ id: string; store: EntityStoreName; entityId: string }> = [];
       for (const raw of events) {
-        const ctx: PushCtx = { requester, gateway: deps.gateway, raw };
+        const parsed = SyncEventSchema.safeParse(raw);
+        if (!parsed.success || !isKnownStore(parsed.data.store)) continue;
+        prefetchTargets.push({ id: parsed.data.id, store: parsed.data.store, entityId: parsed.data.entityId });
+      }
+
+      // Stufe-4-Fast-Path (shortCircuitIfProcessed) für den GESAMTEN Batch
+      // in einer Abfrage statt einer je Event. Mutable und BEWUSST per
+      // Referenz an jeden ctx weitergegeben (siehe PushCtx-Kommentar oben)
+      // — wird unten nach jeder erfolgreich abgeschlossenen Schreibung um
+      // die jeweilige event.id ergänzt, damit eine spätere doppelte
+      // event.id INNERHALB dieses Batches sie ebenfalls als bereits
+      // verarbeitet erkennt (identisch zum Verhalten des vormaligen
+      // Live-Checks, der den zwischenzeitlich committeten Ledger-Eintrag
+      // gesehen hätte).
+      const processedEventIds = await deps.gateway.findProcessedEventIds(
+        prefetchTargets.map((t) => t.id),
+        requester.clubId,
+      );
+
+      // "existing"-Vorabladung, gruppiert nach Store — eine
+      // findManyByIdsInClub()-Abfrage JE BETROFFENEM STORE statt einer
+      // findById()-Abfrage je Event.
+      const entityIdsByStore = new Map<EntityStoreName, Set<string>>();
+      for (const target of prefetchTargets) {
+        let ids = entityIdsByStore.get(target.store);
+        if (!ids) { ids = new Set(); entityIdsByStore.set(target.store, ids); }
+        ids.add(target.entityId);
+      }
+      const prefetchedExisting = new Map<string, SyncRecord>();
+      await Promise.all(
+        Array.from(entityIdsByStore.entries()).map(async ([store, ids]) => {
+          const found = await deps.gateway.findManyByIdsInClub(store, Array.from(ids), requester.clubId);
+          for (const [id, record] of found) prefetchedExisting.set(`${store}:${id}`, record);
+        }),
+      );
+
+      // Korrektheits-Absicherung (Review 30.08.2026, Befund E2): ein
+      // einzelner Offline-Datensatz kann laut apps/web/js/db.js
+      // (enqueueSyncEvent() vergibt bei JEDEM Aufruf eine NEUE event-id)
+      // mehrere Sync-Events erzeugen, die im SELBEN Push-Batch landen
+      // (z. B. anlegen, dann sofort ändern). Das oben vorab geladene
+      // `prefetchedExisting` spiegelt den Datenbankstand VOR dem gesamten
+      // Batch — für ein zweites Event auf dieselbe (store, entityId) wäre
+      // es nach der ersten, im Batch bereits angewendeten Schreibung
+      // VERALTET (z. B. fälschlich weiterhin "existiert nicht", obwohl das
+      // vorherige Event im selben Batch den Datensatz gerade angelegt hat
+      // — mit gravierender Folge: resolveConflict() bekäme `null` statt
+      // der soeben geschriebenen Zeile und träfe dadurch die falsche
+      // Konfliktentscheidung). `touchedInThisPush` erzwingt für genau
+      // diesen (in der Praxis seltenen) Fall einen frischen, einzelnen
+      // findById()-Aufruf statt der vorgeladenen Karte — für die
+      // überwältigende Mehrheit der Events (jede entityId kommt nur einmal
+      // im Batch vor) bleibt es bei der vorgeladenen Karte ohne
+      // zusätzlichen Zugriff.
+      const touchedInThisPush = new Set<string>();
+
+      for (const raw of events) {
+        const ctx: PushCtx = { requester, gateway: deps.gateway, raw, processedEventIds };
 
         let guardResult: SyncEventResult | null = null;
         for (const guard of PUSH_GUARDS) {
@@ -281,7 +378,15 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
         // nicht existent — verhindert sowohl einen Infoleak über das
         // "conflict"-Ergebnis als auch, dass unten fälschlich der
         // update()-Zweig statt insert-as-new/create() gewählt wird.
-        const existing = await deps.gateway.findById(store, event.entityId, requester.clubId);
+        //
+        // Siehe touchedInThisPush-Kommentar oben: nur für eine (store,
+        // entityId), die INNERHALB DIESES Batches bereits geschrieben
+        // wurde, erfolgt hier noch ein einzelner Live-Zugriff — sonst
+        // genügt die vorab geladene Karte.
+        const existingKey = `${store}:${event.entityId}`;
+        const existing = touchedInThisPush.has(existingKey)
+          ? await deps.gateway.findById(store, event.entityId, requester.clubId)
+          : (prefetchedExisting.get(existingKey) ?? null);
 
         // Zeilenebene, ergänzend zur Store-Ebene oben (Sicherheitsreview
         // 2026-08, Befund N1): "results" steht laut STORE_PERMISSIONS als
@@ -359,6 +464,18 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
         // alle vier Zweige, daher hier einmal statt viermal aufgebaut.
         const ledgerEvent = { id: event.id, clubId: requester.clubId, store, action: event.action };
 
+        // Review 30.08.2026, Befund E2: markiert (store, entityId) VOR dem
+        // eigentlichen Schreibversuch als "in diesem Batch berührt" (siehe
+        // touchedInThisPush-Kommentar oben) — für delete/update/regulären
+        // create wird die bestehende Zeile unter genau dieser entityId
+        // verändert. NICHT für insert-as-new: dort bleibt die ürsprüngliche
+        // Zeile unter `event.entityId` unverändert (es wird eine NEUE Zeile
+        // unter einer neu vergebenen id angelegt) — die vorab geladene
+        // Karte bleibt für diese entityId also weiterhin gültig.
+        if (decision.outcome !== 'insert-as-new') {
+          touchedInThisPush.add(existingKey);
+        }
+
         try {
           if (event.action === 'delete') {
             // Datenänderung UND Ledger-Eintrag werden ATOMAR in einer
@@ -372,6 +489,7 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
             // insert-as-new-Zweig braucht ihn, um zu wissen, ob die HIER
             // erzeugte serverVersion.id tatsächlich geschrieben wurde.
             await deps.gateway.applyAndMarkProcessed({ kind: 'softDelete', store, id: event.entityId, clubId: requester.clubId }, ledgerEvent);
+            processedEventIds.add(event.id);
             results.push({ eventId: event.id, status: 'applied' });
           } else if (decision.outcome === 'insert-as-new') {
             // "results": nie überschreiben. Die eingehende Payload trägt
@@ -387,6 +505,7 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
               { kind: 'create', store, payload: { ...(validatedPayload as Record<string, unknown>), id: newId } },
               ledgerEvent,
             );
+            processedEventIds.add(event.id);
             // 'already-processed': ein GLEICHZEITIGER Versuch hat den
             // Ledger-Eintrag zuerst geschrieben — DIESER Aufruf hat seine
             // eigene, hier lokal erzeugte newId dadurch NIE tatsächlich
@@ -407,9 +526,11 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
               { kind: 'update', store, id: event.entityId, clubId: requester.clubId, payload: validatedPayload as Record<string, unknown> },
               ledgerEvent,
             );
+            processedEventIds.add(event.id);
             results.push({ eventId: event.id, status: 'applied' });
           } else {
             await deps.gateway.applyAndMarkProcessed({ kind: 'create', store, payload: validatedPayload as Record<string, unknown> }, ledgerEvent);
+            processedEventIds.add(event.id);
             results.push({ eventId: event.id, status: 'applied' });
           }
         } catch (err) {
@@ -425,7 +546,18 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
       requester: SyncRequester,
     ): Promise<{ changes: SyncChange[]; nextCursor: string | null; hasMore: boolean }> {
       const since = query.cursor ? new Date(query.cursor) : query.since ? new Date(query.since) : null;
-      const rows = await deps.gateway.listChangedSince(requester.clubId, since, PULL_PAGE_SIZE + 1);
+
+      // Review 30.08.2026, Befund E3: vorgezogen statt (wie bisher) erst
+      // NACH der Paginierung auf dem bereits geladenen `page` angewendet
+      // (siehe canRead()-Filter weiter unten, der UNVERÄNDERT bestehen
+      // bleibt — dies hier verengt zusätzlich bereits die Abfrage selbst).
+      // Ohne diese Vorab-Einschränkung skalierten sowohl die
+      // Datenbankarbeit als auch die Zahl benötigter Seiten mit dem
+      // GESAMTEN Vereinsbestand, unabhängig davon, wie viel davon die
+      // anfragende Rolle/das gebuchte Modul-Set überhaupt sehen darf.
+      const readableStores = ENTITY_STORE_NAMES.filter((store) => canRead(store, requester.role, requester.enabledModules));
+
+      const rows = await deps.gateway.listChangedSince(requester.clubId, since, PULL_PAGE_SIZE + 1, readableStores);
       // Bleibt für den Rest der Funktion unverändert — auch im
       // Extremfall-Zweig unten (siehe dortiger Kommentar: dort wird
       // absichtlich weiterhin `true` angenommen, nicht neu berechnet).
@@ -445,7 +577,7 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
       // Pull-Zyklus klärt das.
       if (hasMore && page.length === 0) {
         const tiedAt = rows[0]!.updatedAt;
-        const widened = await deps.gateway.listChangedSince(requester.clubId, new Date(tiedAt.getTime() - 1), PULL_TIE_SAFETY_LIMIT);
+        const widened = await deps.gateway.listChangedSince(requester.clubId, new Date(tiedAt.getTime() - 1), PULL_TIE_SAFETY_LIMIT, readableStores);
         page = widened.filter((row) => row.updatedAt.getTime() === tiedAt.getTime());
       }
 
@@ -468,6 +600,14 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
       // STORE_MODULE_MAP in sync.permissions.ts): Changes aus einem Store,
       // dessen Modul-Paket der Verein nicht gebucht hat, werden ebenso
       // unterdrückt.
+      //
+      // Review 30.08.2026, Befund E3: `readableStores` oben grenzt dieselbe
+      // Bedingung bereits VOR der Datenbankabfrage ein — dieser Filter hier
+      // bleibt trotzdem unverändert bestehen, als zusätzliche, von der
+      // Abfrage unabhängige Absicherung (z. B. falls eine künftige
+      // Gateway-Implementierung `stores` einmal nicht korrekt respektiert).
+      // Er ist jetzt im Normalfall ein No-Op auf einer bereits vorgefilterten
+      // Menge, nicht mehr die einzige Instanz dieser Prüfung.
       changes = changes.filter((change) => canRead(change.store, requester.role, requester.enabledModules));
 
       // Rollen-Scopierung beim Lesen, Zeilen-/Feld-Ebene (siehe

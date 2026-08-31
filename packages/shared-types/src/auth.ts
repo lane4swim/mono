@@ -26,6 +26,23 @@ export const CURRENT_CONSENT_VERSION = '2026-07-15';
 // an `z.literal()`.
 const consentField = z.literal(true, { message: 'Die Einwilligung zur Datenverarbeitung ist erforderlich.' });
 
+// Review 30.08.2026, Befund S1: `consent: true` allein sagt nur "irgendeine
+// Einwilligung wurde bestätigt" — WELCHER Fassung, geht daraus nicht
+// hervor. auth.service.ts: login() stempelte bislang bedingungslos die
+// server-eigene CURRENT_CONSENT_VERSION auf jeden Login, unabhängig davon,
+// ob die angemeldete Person diese Fassung je gesehen hat — bei einer
+// angehobenen Datenschutzerklärung schrieb der nächste Routine-Login die
+// neue Version, ohne dass irgendjemand ihr zugestimmt hätte. Der Client
+// muss die Version jetzt explizit benennen; z.literal() (wie bei
+// consentField oben) lässt ausschließlich die tagesaktuelle Fassung durch
+// — driftet CURRENT_CONSENT_VERSION zwischen Backend und Frontend
+// auseinander (siehe die bislang doppelt gepflegte Konstante in
+// apps/web/js/state.js), scheitert der Login jetzt sichtbar an dieser
+// Stelle, statt eine falsche Fassung stillschweigend zu protokollieren.
+const consentVersionField = z.literal(CURRENT_CONSENT_VERSION, {
+  message: 'Die Einwilligung bezieht sich nicht auf die aktuelle Fassung der Datenschutzerklärung.',
+});
+
 // `.max(200)` (Sicherheitsreview 2026-08, Befund N7): argon2id verarbeitet
 // beliebig lange Eingaben — verifyPassword() hasht das übermittelte
 // Passwort bei JEDEM Login-Versuch gegen den gespeicherten Hash, ein
@@ -38,6 +55,7 @@ export const LoginRequestSchema = z.object({
   email: NormalizedEmailSchema,
   password: z.string().min(1).max(200),
   consent: consentField,
+  consentVersion: consentVersionField,
 });
 export type LoginRequest = z.infer<typeof LoginRequestSchema>;
 

@@ -35,9 +35,28 @@ export interface PasswordResetMailPayload {
   locale?: string;
 }
 
+// Review 30.08.2026, Befund S4: eine Benachrichtigung an die BISHERIGE
+// E-Mail-Adresse bzw. an die (unveränderte) Adresse des Kontos, wenn das
+// Passwort gewechselt wird — der einzige Kanal, der einer rechtmäßigen
+// Person nach einer Kontoübernahme über ein kurzzeitig entwendetes Access
+// Token noch bleibt (siehe changeEmail()/changePassword() in
+// auth.service.ts: beide widerrufen bereits alle ANDEREN Sitzungen, aber
+// ohne diese Benachrichtigung erfährt die betroffene Person nichts davon,
+// bevor sie selbst versucht, sich erneut anzumelden). Ein gemeinsamer
+// Payload-/Vorlagentyp für beide Auslöser (statt zwei fast identischer
+// Kopien) — der Text unterscheidet sich nur in EINEM Wort ("E-Mail-Adresse"
+// vs. "Passwort"), die Struktur der Nachricht ist identisch.
+export interface AccountSecurityChangeMailPayload {
+  to: string;
+  recipientName?: string | null;
+  changeType: 'email' | 'password';
+  locale?: string;
+}
+
 export interface MailSender {
   sendInvitationEmail(payload: InvitationMailPayload): Promise<void>;
   sendPasswordResetEmail(payload: PasswordResetMailPayload): Promise<void>;
+  sendAccountSecurityChangeNotice(payload: AccountSecurityChangeMailPayload): Promise<void>;
 }
 
 type SupportedLocale = 'de-DE' | 'en-US';
@@ -196,6 +215,79 @@ export function buildPasswordResetHtmlBody(payload: PasswordResetMailPayload): s
   `.trim();
 }
 
+// Review 30.08.2026, Befund S4 — dieselbe Struktur (exportierte, einzeln
+// testbare Subject/Text/HTML-Builder) wie bei den beiden E-Mail-Typen
+// oben. Bewusst OHNE Link/Aktion: es gibt (noch) keinen
+// Rückabwicklungsmechanismus (siehe dortiger Kommentar in
+// auth.service.ts) — die Nachricht ist rein informativ und verweist auf
+// den einzigen heute verfügbaren Weg, tatsächlich etwas zu tun (die
+// eigene Vereinsleitung kontaktieren).
+const CHANGE_TYPE_LABEL: Record<SupportedLocale, Record<AccountSecurityChangeMailPayload['changeType'], string>> = {
+  'de-DE': { email: 'E-Mail-Adresse', password: 'Passwort' },
+  'en-US': { email: 'email address', password: 'password' },
+};
+
+export function buildAccountSecurityChangeSubject(payload: AccountSecurityChangeMailPayload): string {
+  const locale = resolveLocale(payload.locale);
+  return locale === 'en-US' ? 'Your Lane 1 account was changed' : 'Ihr Lane-1-Konto wurde geändert';
+}
+
+export function buildAccountSecurityChangeTextBody(payload: AccountSecurityChangeMailPayload): string {
+  const locale = resolveLocale(payload.locale);
+  const changed = CHANGE_TYPE_LABEL[locale][payload.changeType];
+  if (locale === 'en-US') {
+    return [
+      payload.recipientName ? `Hi ${payload.recipientName},` : 'Hi,',
+      '',
+      `The ${changed} for your Lane 1 account was just changed. This message went to your PREVIOUS address on file, independent of the change itself.`,
+      '',
+      "If you made this change yourself, you can ignore this email — nothing further to do.",
+      '',
+      "If you did NOT make this change, your account may be compromised: please contact your club's administrator immediately.",
+      '',
+      'Best regards,',
+      'The Lane 1 team',
+    ].join('\n');
+  }
+  return [
+    payload.recipientName ? `Hallo ${payload.recipientName},` : 'Hallo,',
+    '',
+    `Das ${changed} Ihres Lane-1-Kontos wurde soeben geändert. Diese Nachricht ging an Ihre BISHERIGE hinterlegte Adresse, unabhängig von der Änderung selbst.`,
+    '',
+    'Wenn Sie diese Änderung selbst vorgenommen haben, können Sie diese E-Mail ignorieren — es ist nichts weiter zu tun.',
+    '',
+    'Falls Sie diese Änderung NICHT vorgenommen haben, könnte Ihr Konto kompromittiert sein: Bitte wenden Sie sich umgehend an Ihre Vereinsleitung.',
+    '',
+    'Sportliche Grüße,',
+    'Ihr Lane-1-Team',
+  ].join('\n');
+}
+
+export function buildAccountSecurityChangeHtmlBody(payload: AccountSecurityChangeMailPayload): string {
+  const locale = resolveLocale(payload.locale);
+  const changed = CHANGE_TYPE_LABEL[locale][payload.changeType];
+  if (locale === 'en-US') {
+    return `
+      <p>${payload.recipientName ? `Hi ${escapeHtml(payload.recipientName)},` : 'Hi,'}</p>
+      <p>The <strong>${escapeHtml(changed)}</strong> for your Lane 1 account was just changed. This message went to your
+         previous address on file, independent of the change itself.</p>
+      <p>If you made this change yourself, you can ignore this email.</p>
+      <p style="color:#B3261E;font-weight:bold">If you did NOT make this change, your account may be compromised:
+         please contact your club's administrator immediately.</p>
+      <p>Best regards,<br>The Lane 1 team</p>
+    `.trim();
+  }
+  return `
+    <p>${payload.recipientName ? `Hallo ${escapeHtml(payload.recipientName)},` : 'Hallo,'}</p>
+    <p>Das <strong>${escapeHtml(changed)}</strong> Ihres Lane-1-Kontos wurde soeben geändert. Diese Nachricht ging an
+       Ihre bisherige hinterlegte Adresse, unabhängig von der Änderung selbst.</p>
+    <p>Wenn Sie diese Änderung selbst vorgenommen haben, können Sie diese E-Mail ignorieren.</p>
+    <p style="color:#B3261E;font-weight:bold">Falls Sie diese Änderung NICHT vorgenommen haben, könnte Ihr Konto
+       kompromittiert sein: Bitte wenden Sie sich umgehend an Ihre Vereinsleitung.</p>
+    <p>Sportliche Grüße,<br>Ihr Lane-1-Team</p>
+  `.trim();
+}
+
 // Sicherheitskorrektur (Code-Review, Befund S8): escapte bislang keine
 // einfachen Anführungszeichen. Heute folgenlos, da jedes Attribut in
 // buildHtmlBody() doppelt gequotet ist (ein `'` bricht ein `"`-delimitiertes
@@ -287,6 +379,17 @@ export class SmtpMailSender implements MailSender {
       html: buildPasswordResetHtmlBody(payload),
     });
   }
+
+  async sendAccountSecurityChangeNotice(payload: AccountSecurityChangeMailPayload): Promise<void> {
+    const transport = await this.getTransport();
+    await transport.sendMail({
+      from: `"${this.config.fromName}" <${this.config.fromEmail}>`,
+      to: payload.to,
+      subject: buildAccountSecurityChangeSubject(payload),
+      text: buildAccountSecurityChangeTextBody(payload),
+      html: buildAccountSecurityChangeHtmlBody(payload),
+    });
+  }
 }
 
 // Ausweichlösung, wenn kein SMTP konfiguriert ist (z. B. lokale
@@ -326,6 +429,16 @@ export class ConsoleMailSender implements MailSender {
     console.warn(
       `[mail] Kein SMTP konfiguriert — Passwort-Zurücksetzen-E-Mail an ${payload.to} konnte nicht versendet werden. ` +
         `Ohne SMTP-Konfiguration ist "Passwort vergessen" nicht nutzbar (kein alternativer Zustellweg für einen derart sicherheitskritischen Link).`,
+    );
+  }
+
+  // Trägt kein Geheimnis/Token (anders als die beiden Methoden oben) —
+  // unbedenklich zu loggen, dient hier ausschließlich als sichtbarer
+  // Hinweis, dass die betroffene Person diese Benachrichtigung ohne
+  // SMTP-Konfiguration nicht erreicht.
+  async sendAccountSecurityChangeNotice(payload: AccountSecurityChangeMailPayload): Promise<void> {
+    console.warn(
+      `[mail] Kein SMTP konfiguriert — Sicherheitshinweis (${payload.changeType}) an ${payload.to} konnte nicht versendet werden.`,
     );
   }
 }
