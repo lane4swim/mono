@@ -66,6 +66,25 @@ die Vitest-Suite gegen die `*.repository.memory.ts`-Doubles
 (`npm run test`), nicht die Prisma-Integrationssuite. S2–S5, E1–E4 und U4–U5
 sind unverändert offen.
 
+**Update (30. August 2026, zweiter Durchgang).** **S2** und **U4** sind
+ebenfalls behoben — siehe die jeweiligen **Fix**-Abschnitte. Bei **S2**
+stellten sich beide ursprünglich vorgeschlagenen Rate-Limit-Schlüssel
+(`request.user!.sub`; ein Hash des vorgelegten Refresh-Tokens) beim
+tatsächlichen Implementieren als technisch nicht tragfähig heraus — der
+Fix-Abschnitt dokumentiert beide Korrekturen samt Begründung ausführlich,
+da sie den zuvor vorgeschlagenen Lösungsweg grundlegend ändern. Für **S2**
+ein neuer Regressionstest (zwei Konten hinter derselben IP teilen sich das
+`/api/me/password`-Budget nicht mehr) plus drei bestehende
+`/auth/refresh`-Tests auf den angehobenen Grenzwert nachgezogen; für
+**U4** sechs neue Tests in `apps/web`. Alle vier neuen/geänderten
+`apps/api`-Tests und alle sechs neuen `apps/web`-Tests scheitern
+nachweislich ohne die jeweilige Korrektur (per `git stash` der geänderten
+Produktivdateien empirisch geprüft). S3–S5, E1–E4 und U5 bleiben
+unverändert offen. Gesamtsuite danach: **745 Tests, alle grün** (`apps/api`
+458, `apps/web` 130, `packages/shared-types` 148, `packages/sync-protocol`
+9), `npm run lint`, `npm run typecheck` (API) und `npm run build` (alle
+Workspaces) weiterhin sauber.
+
 ---
 
 ## Übersicht
@@ -73,7 +92,7 @@ sind unverändert offen.
 | # | Befund | Ort | Schwere |
 |---|--------|-----|---------|
 | **S1** | Jeder Login stempelt die Einwilligung blind auf die *aktuelle* Version — eine geänderte Datenschutzerklärung gilt damit als angenommen, ohne dass sie jemand gesehen hat. Die Versionskonstante wird zusätzlich an zwei Orten gepflegt | `auth.service.ts:311-319`; `shared-types/src/auth.ts:18` + `web/js/state.js:26` | **Hoch — behoben** |
-| **S2** | Rate-Limits außerhalb von Login/Passwort-vergessen zählen **nur nach IP** — ein Verein hinter NAT sperrt sich selbst aus; genau der Fall, den `plugins/security.ts` für den Login ausdrücklich vermeiden wollte | `auth.route.ts:29,81,99,158,231,264` | Mittel |
+| **S2** | Rate-Limits außerhalb von Login/Passwort-vergessen zählen **nur nach IP** — ein Verein hinter NAT sperrt sich selbst aus; genau der Fall, den `plugins/security.ts` für den Login ausdrücklich vermeiden wollte | `auth.route.ts:29,81,99,158,231,264` | Mittel — behoben |
 | **S3** | `/auth/forgot-password` verrät per Laufzeit, ob eine Adresse existiert — der Timing-Ausgleich des Logins wurde hier nicht mitgezogen | `auth.service.ts:407` | Niedrig |
 | **S4** | E-Mail-Wechsel benachrichtigt die **bisherige** Adresse nicht (Ergänzung zu B1 des Vorreviews, das die *neue* Adresse betrachtete) | `auth.service.ts: changeEmail()` | Niedrig |
 | **S5** | Rollen-/Kontoentzug wirkt bis zu 15 Minuten verzögert: `role`/`clubId`/`athleteId` stammen aus den Token-Claims, nur `enabledModules` wird frisch gelesen | `plugins/authenticate.ts`, `sync.route.ts:46-58` | Niedrig |
@@ -83,7 +102,7 @@ sind unverändert offen.
 | **U1** | **Kein Dialog der Anwendung ist bedienbar ohne Maus:** kein `role="dialog"`, kein Fokuswechsel, keine Fokusfalle, keine Fokusrückgabe, Hintergrund nicht inert | `web/js/modal.js:10` | **Hoch — behoben** |
 | **U2** | `<label>` und Eingabefeld sind Geschwister ohne `for`/`id` — jedes Formularfeld der Anwendung ist für Screenreader unbeschriftet, Labelklick fokussiert nicht | `web/js/forms.js:11` | Mittel — behoben |
 | **U3** | `<html lang>` bleibt fest `"de"`, auch auf Englisch | `web/index.html:2`, `demo.html:2`, `admin/index.html:2`; `web/js/i18n.js:38` | Mittel — behoben |
-| **U4** | Ein 429 auf `/auth/refresh` endet als **stiller Logout** — ununterscheidbar von „Sitzung abgelaufen" | `web/js/apiClient.js:160-167`, `web/js/state.js:52-56` | Mittel |
+| **U4** | Ein 429 auf `/auth/refresh` endet als **stiller Logout** — ununterscheidbar von „Sitzung abgelaufen" | `web/js/apiClient.js:160-167`, `web/js/state.js:52-56` | Mittel — behoben |
 | **U5** | Service Worker: `skipWaiting()`/`clients.claim()` erreichen ihren Zweck nicht (die laufende Sitzung behält ihren Code), und es gibt keinen Hinweis „neue Version verfügbar" — eine über Stunden offene PWA bleibt beliebig lange veraltet | `web/sw.js:89,96-97` | Niedrig |
 
 ---
@@ -266,6 +285,91 @@ Konto, ohne dass eine Datenbankabfrage nötig wäre, und liegt zum
 `preHandler`-Zeitpunkt bereits im geparsten Body. Das IP-Limit als
 großzügigere zweite Schranke daneben bestehen lassen (etwa 100/Minute), um
 den ursprünglichen Missbrauchsschutz nicht zu verlieren.
+
+**Fix (30.08.2026) — mit zwei Korrekturen an der eigenen Empfehlung
+oben.** Bei der Umsetzung stellten sich beide oben vorgeschlagenen
+Schlüssel als nicht tragfähig heraus — nicht als Stilfrage, sondern aus
+zwei unabhängigen technischen Gründen, die erst beim tatsächlichen
+Implementieren sichtbar wurden:
+
+1. **`request.user!.sub` ist im `keyGenerator` tatsächlich nicht
+   erreichbar — nicht nur unbequem, sondern strukturell.** Die
+   ursprünglichen (jetzt überholten) Code-Kommentare bei `/api/me/password`
+   und `/api/me/email` behaupteten das bereits, und die Prüfung bestätigt
+   es: Fastify hängt einen per `addHook(hook, fn)` registrierten Hook —
+   genau so registriert `@fastify/rate-limit` sich selbst (siehe
+   `plugins/security.ts`) — bei JEDER Route VOR deren eigene, im
+   Routen-Objekt angegebene `preHandler`-Option. Das gilt unabhängig davon,
+   ob der Rate-Limiter global oder (versuchsweise) in einem verschachtelten
+   Plugin-Scope registriert wird — die Verschachtelung ändert an dieser
+   Reihenfolge nichts. `app.authenticate` als route-eigene `preHandler`-
+   Option läuft deshalb IMMER nach dem Rate-Limiter, egal wie die
+   Registrierung strukturiert ist. Eine Umgehung — `app.authenticate`
+   stattdessen als `preValidation`-Hook der Route registrieren (läuft vor
+   `preHandler`, `request.user` stünde damit rechtzeitig zur Verfügung) —
+   wurde erwogen und verworfen: Sie hätte einen fehlenden/ungültigen Token
+   sofort mit 401 beantwortet, BEVOR der Rate-Limiter überhaupt greift —
+   unauthentifizierte Anfragen an diese beiden Routen wären dadurch
+   überhaupt nicht mehr rate-limitiert gewesen (schlechter als der
+   Ausgangszustand, nicht besser).
+   
+   **Tatsächliche Lösung:** Der rohe `Authorization`-Header steht — anders
+   als `request.user` oder `request.body` — bereits ab dem allerersten
+   Hook zur Verfügung, unabhängig von jeder Parsing- oder Auth-Stufe. Ein
+   SHA-256-Hash dieses Headers (`accessTokenRateLimitKey()` in
+   `auth.route.ts`, mit `${request.ip}:no-token` als Schlüssel bei
+   fehlendem Header) trennt die Budgets verschiedener angemeldeter
+   Personen genauso zuverlässig wie `request.user.sub` — ohne auf dessen
+   Auswertung warten zu müssen.
+
+2. **Ein Schlüssel aus dem vorgelegten Refresh-/Einladungs-/Reset-Token
+   wäre für `/auth/refresh` kontraproduktiv gewesen — er hätte das Limit
+   praktisch abgeschaltet.** Der Zweck dieser Limits ist laut den
+   BESTEHENDEN Code-Kommentaren an allen vier betroffenen Routen explizit
+   die Abwehr von automatisiertem Durchprobieren/Erraten des jeweiligen
+   Tokens. Würde der Schlüssel aus GENAU diesem Wert gebildet, bekäme jeder
+   neue Rateversuch mit einem anderen erfundenen Token sein eigenes,
+   frisches Budget — ein Angreifer, der bei jedem Versuch einen neuen Wert
+   ausprobiert, würde nie gedrosselt, weil er den Schlüssel selbst frei
+   wählt. Das ist der exakte Gegensatz zur Absicht des Limits. Betroffen:
+   `/auth/refresh`, `/auth/register`, `/auth/logout`, `/auth/reset-password`
+   — bei allen vieren ist der im Body übertragene Wert genau das Geheimnis,
+   das erraten werden soll, nicht eine bereits besessene, stabile
+   Kennung wie beim Access Token unter Punkt 1 oben.
+   
+   **Tatsächliche Lösung:** Schlüssel bei allen vieren unverändert IP-only
+   belassen; stattdessen den Grenzwert dort angehoben, wo eine legitime
+   NAT-Kollision praktisch vorkommt: `/auth/refresh` 10 → 60/Minute (der
+   praktisch relevante Fall — `apiClient.js` erneuert JEDE Sitzung
+   automatisch/proaktiv, nicht nur bei einer bewussten Aktion),
+   `/auth/register` 10 → 20/Minute (eine Trainingsgruppe, die gemeinsam
+   Einladungen annimmt). `/auth/logout` und `/auth/reset-password`
+   unverändert gelassen — beides seltene, bewusste Einzelaktionen ohne
+   automatischen Hintergrund-Trigger, eine legitime Kollision ist dort
+   unrealistisch. Die 256 Bit Entropie der betroffenen Token (siehe
+   `auth/tokens.ts`) machen ein tatsächliches Erraten ohnehin unerreichbar;
+   die höheren Grenzwerte ändern daran nichts Messbares, nehmen aber
+   echten Nutzer:innen die Reibung.
+
+* `apps/api/src/modules/auth/auth.route.ts`: neue Funktion
+  `accessTokenRateLimitKey()` (ausführlich kommentiert, inkl. der
+  Begründung, warum sie bewusst NICHT für die vier token-basierten Routen
+  gilt), als `keyGenerator` für `/api/me/password` und `/api/me/email`
+  eingesetzt; Grenzwerte von `/auth/refresh` und `/auth/register` erhöht;
+  `/auth/logout` und `/auth/reset-password` mit einem Kommentar versehen,
+  der die bewusste Nicht-Änderung begründet.
+* Neuer Regressionstest in `apps/api/test/auth/auth.route.test.ts`: zwei
+  Konten hinter derselben (in `app.inject()` nicht gesetzten, also
+  identischen) IP teilen sich nicht mehr dasselbe `/api/me/password`-
+  Budget — Konto B kann noch abrufen, nachdem Konto A seines ausgeschöpft
+  hat. Bestehende Rate-Limit-Tests für `/auth/refresh` (in
+  `auth.route.test.ts` und zweimal in `test/plugins/security.test.ts`, dort
+  im Zusammenhang mit dem `trustProxy`-Befund H1) auf die neuen Grenzwerte
+  nachgezogen. Alle drei neuen/geänderten Tests scheitern nachweislich
+  gegen den Stand vor diesem Fix (per `git stash` von `auth.route.ts`
+  empirisch geprüft); die bestehenden `/api/me/password`- und
+  `/api/me/email`-Tests bestehen unverändert, da sie durchgehend denselben
+  Access Token verwenden und somit denselben Schlüssel treffen.
 
 ---
 
@@ -698,6 +802,49 @@ Mit dem in **S2** empfohlenen kontobezogenen Schlüssel verschwindet die
 Ursache; die beiden Punkte hier sorgen dafür, dass der Rest-Fall
 verständlich bleibt.
 
+**Fix (30.08.2026).** Umgesetzt wie empfohlen — mit einer Präzisierung
+gegenüber dem eigenen Empfehlungstext: **S2**s tatsächlicher Fix (siehe
+dortiger Fix-Abschnitt) hebt für `/auth/refresh` nur den *Grenzwert* an
+(10 → 60/Minute), ändert den Schlüssel aber bewusst NICHT auf einen
+kontobezogenen — ein Schlüssel aus dem Refresh Token selbst hätte das
+Limit dort gegen automatisiertes Erraten wirkungslos gemacht (siehe dort).
+Ein 429 auf `/auth/refresh` wird dadurch seltener, aber nicht unmöglich —
+der hier beschriebene Fix bleibt deshalb kein bloßes Sicherheitsnetz für
+einen inzwischen beseitigten Fall, sondern eigenständig notwendig.
+
+* `apps/web/js/apiClient.js: request()`: der reaktive 401-Retry
+  unterscheidet jetzt, WARUM der anschließende `refreshTokens()`-Versuch
+  scheitert. Nur bei einem 429 werden die Tokens NICHT gelöscht — der
+  429-Fehler selbst wird durchgereicht (statt des ursprünglichen 401),
+  damit `describeError()` eine treffende Meldung zeigen kann. Jeder andere
+  Fehlschlag (401, Netzwerkfehler, 5xx) verhält sich unverändert wie
+  zuvor.
+* `apps/web/js/state.js: restoreSession()`: dieselbe Unterscheidung beim
+  Wiederherstellen einer Sitzung nach einem Seiten-Reload — ein 429 lässt
+  die gespeicherten Tokens unangetastet, damit ein späterer
+  `restoreSession()`-Aufruf (erneutes Laden der Seite) die Sitzung noch
+  finden kann; nur ein echter Auth-Fehler (401) räumt sie ab.
+* `apps/web/js/apiClient.js: describeError()`: neuer Zweig für Status 429
+  (`t('common.errorRateLimited')`), samt dem neuen Schlüssel in
+  `i18n/de-DE.js` und `i18n/en-US.js`. `describeAuthError()` in
+  `modules/authScreens.js` (die separate, auf den Login-/Registrierungs-
+  Bildschirmen verwendete Fehlerzuordnung) bleibt bewusst unangetastet —
+  U4 nennt ausdrücklich nur die beiden oben genannten Stellen als Ort des
+  Befunds.
+* Sechs neue Regressionstests: drei in `apps/web/test/apiClient.test.js`
+  (429 beim Refresh-Versuch behält die Tokens und wirft den 429 statt des
+  401; ein ECHTER 401 löscht sie weiterhin — Kontrolltest, dass die
+  bisherige Handhabung für den nicht betroffenen Fall unverändert bleibt;
+  `describeError()`s neuer 429-Zweig) sowie drei weitere in der neuen
+  Datei `apps/web/test/state.restoreSession.test.js` (429 → kein
+  `clearTokens()`; 401 → weiterhin `clearTokens()`; ein sonstiger Fehler,
+  z. B. offline → weiterhin `clearTokens()`, unverändertes Verhalten).
+  Eigene Datei statt einer Ergänzung von `state.localStoreOwner.test.js`:
+  dessen bestehender `apiClient.js`-Mock führt keine `ApiError`-Klasse, die
+  ein `instanceof`-Vergleich hier braucht. Alle sechs Tests scheitern
+  nachweislich gegen den Stand vor diesem Fix (per `git stash` von
+  `apiClient.js`/`state.js` empirisch geprüft).
+
 ### U5 — Aktualisierungen erreichen eine offene Sitzung nie (Niedrig)
 
 **Ort.** `apps/web/sw.js:89` (`skipWaiting()`), `96-97`
@@ -793,8 +940,8 @@ wurden gezielt untersucht und gaben **keinen** Anlass zu einem Befund:
 1. ~~**U1** (Dialog-Barrierefreiheit)~~ — **behoben** (30.08.2026).
 2. ~~**S1** (Einwilligungsversion)~~ — **behoben** (30.08.2026).
 3. ~~**U2**, **U3**~~ — **behoben** (30.08.2026), im selben Durchgang wie U1.
-4. **S2** + **U4** — gemeinsam anzufassen: die Ursache und ihre sichtbare
-   Folge.
+4. ~~**S2** + **U4**~~ — **behoben** (30.08.2026), gemeinsam angefasst: die
+   Ursache (S2) und ihre sichtbare Folge (U4).
 5. **E1**, **E2** — messbar auf dem Raspberry-Pi-Deployment; E1 zuerst,
    da trivial.
 6. **S3**, **S4**, **S5**, **E3**, **U5** — bei nächster Berührung des
@@ -808,4 +955,9 @@ drei betroffenen Testdateien) prüft `role`, `aria-labelledby`,
 `document.activeElement`, `label.htmlFor` und `documentElement.lang`
 unmittelbar; U1 zusätzlich in einem echten Browser (siehe dessen
 Fix-Abschnitt). Dieselbe Technik trägt auch **S1**, dort in Zod-Schema-
-und Service-Tests statt in `jsdom`.
+und Service-Tests statt in `jsdom`. **S2** und **U4** sind über
+Fastify-Injection (`app.inject()`) bzw. gemockte `fetch`-Aufrufe direkt
+geprüft — bei **S2** hat genau diese Prüfung die ursprünglich
+vorgeschlagenen Schlüssel (`request.user!.sub`, ein Hash des
+Refresh-Tokens) als nicht tragfähig entlarvt; siehe dessen Fix-Abschnitt
+für die Korrektur.

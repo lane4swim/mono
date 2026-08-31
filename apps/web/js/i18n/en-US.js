@@ -10,6 +10,7 @@ export default {
     all: 'All', optional: 'optional', notFoundTitle: 'Not found',
     nothingHereTitle: 'Nothing here', retry: 'Retry', close: 'Close',
     somethingWentWrong: 'Something went wrong', more: 'More',
+    errorRateLimited: 'Too many requests from your network. Please try again in a minute.',
   },
   auth: {
     loginTitle: 'Sign in', loginIntro: 'Sign in with your club account.',

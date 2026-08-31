@@ -10,6 +10,12 @@ export default {
     all: 'Alle', optional: 'optional', notFoundTitle: 'Nicht gefunden',
     nothingHereTitle: 'Nichts hier', retry: 'Erneut versuchen', close: 'Schließen',
     somethingWentWrong: 'Etwas ist schiefgelaufen', more: 'Mehr',
+    // Review 30.08.2026, Befund U4: apiClient.js: describeError() zeigte
+    // bei einem Ratenlimit-Treffer (HTTP 429) bislang dieselbe generische
+    // Server-Fehlermeldung wie bei jedem anderen Fehler — für Nutzer:innen
+    // ununterscheidbar von einem echten Problem, obwohl ein erneuter
+    // Versuch nach kurzer Zeit funktionieren würde.
+    errorRateLimited: 'Zu viele Anfragen aus deinem Netzwerk. Bitte in einer Minute erneut versuchen.',
   },
   auth: {
     loginTitle: 'Anmelden', loginIntro: 'Melde dich mit deinem Vereinskonto an.',
