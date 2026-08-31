@@ -29,6 +29,40 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Voller Verlauf statt des Standard-Shallow-Checkouts (Tiefe 1) —
+          # der Befund-U5-Schritt unten vergleicht per `git diff` gegen die
+          # Basis dieses Pushes/PRs und bräuchte deren Commit sonst nicht
+          # verfügbar.
+          fetch-depth: 0
+
+      - name: apps/web-Änderungen erfordern eine CACHE_VERSION-Anhebung (Befund U5)
+        # Review 30.08.2026, Befund U5: sw.js' CACHE_VERSION entscheidet,
+        # ob eine bereits offene Sitzung ein Update überhaupt bemerkt
+        # (siehe dortiger Kommentar in apps/web/sw.js) — bislang erzwang
+        # nichts, dass sie bei einer Änderung unterhalb apps/web/ auch
+        # tatsächlich mit angehoben wird. Vergleicht die geänderten
+        # Dateien dieses Pushes/PRs gegen dessen Basis: taucht dabei
+        # irgendetwas unterhalb apps/web/ auf, muss die CACHE_VERSION-Zeile
+        # selbst ebenfalls im Diff von sw.js stehen.
+        run: |
+          BASE_SHA="${{ github.event.pull_request.base.sha || github.event.before }}"
+          if [ -z "$BASE_SHA" ] || ! git cat-file -e "$BASE_SHA" 2>/dev/null; then
+            echo "Keine nutzbare Basis-Referenz (z. B. erster Commit auf dem Branch) — Prüfung übersprungen."
+            exit 0
+          fi
+          CHANGED_WEB_FILES=$(git diff --name-only "$BASE_SHA" HEAD -- apps/web)
+          if [ -z "$CHANGED_WEB_FILES" ]; then
+            echo "Keine Änderungen unterhalb apps/web/ — nichts zu prüfen."
+            exit 0
+          fi
+          echo "Geänderte Dateien unterhalb apps/web/:"
+          echo "$CHANGED_WEB_FILES"
+          if ! git diff "$BASE_SHA" HEAD -- apps/web/sw.js | grep -q '^[+-]const CACHE_VERSION'; then
+            echo "::error::apps/web/ wurde geändert, aber CACHE_VERSION in apps/web/sw.js nicht angehoben (siehe docs/review-sicherheit-effizienz-usability-2026-08-30.md, Befund U5)."
+            exit 1
+          fi
+          echo "CACHE_VERSION wurde angehoben."
 
       - uses: actions/setup-node@v7
         with:

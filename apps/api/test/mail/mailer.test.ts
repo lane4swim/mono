@@ -8,6 +8,9 @@ import {
   buildPasswordResetSubject,
   buildPasswordResetTextBody,
   buildPasswordResetHtmlBody,
+  buildAccountSecurityChangeSubject,
+  buildAccountSecurityChangeTextBody,
+  buildAccountSecurityChangeHtmlBody,
   SmtpMailSender,
   ConsoleMailSender,
 } from '../../src/mail/mailer.js';
@@ -265,6 +268,72 @@ describe('Passwort-Reset-E-Mail — Lokalisierung', () => {
   it('enthält den Hinweis, dass eine nicht angeforderte Mail ignoriert werden kann (beide Sprachen)', () => {
     expect(buildPasswordResetTextBody(basePayload)).toContain('nicht angefordert');
     expect(buildPasswordResetTextBody({ ...basePayload, locale: 'en-US' })).toContain("didn't request this");
+  });
+});
+
+// Review 30.08.2026, Befund S4: Benachrichtigung an die BISHERIGE Adresse
+// (E-Mail-Wechsel) bzw. an die unveränderte Adresse (Passwortwechsel) —
+// der einzige Kanal, der einer rechtmäßigen Person nach einer
+// Kontoübernahme über ein entwendetes Access Token noch bleibt.
+describe('InMemoryMailSender — Sicherheitshinweis nach Konto-Änderung (Befund S4)', () => {
+  it('zeichnet einen gesendeten Sicherheitshinweis auf', async () => {
+    const mailer = new InMemoryMailSender();
+    await mailer.sendAccountSecurityChangeNotice({ to: 'alt@example.org', recipientName: 'Sabine Reuter', changeType: 'email' });
+    expect(mailer.sentAccountSecurityChangeEmails).toHaveLength(1);
+    expect(mailer.sentAccountSecurityChangeEmails[0]).toMatchObject({ to: 'alt@example.org', changeType: 'email' });
+  });
+});
+
+describe('ConsoleMailSender — Sicherheitshinweis: kein Fehlschlag, sichtbares Log', () => {
+  it('protokolliert Empfänger und Änderungsart', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const mailer = new ConsoleMailSender();
+      await mailer.sendAccountSecurityChangeNotice({ to: 'trainer@example.org', changeType: 'password' });
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      const logged = warnSpy.mock.calls[0]!.join(' ');
+      expect(logged).toContain('trainer@example.org');
+      expect(logged).toContain('password');
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+});
+
+describe('buildAccountSecurityChangeHtmlBody() — HTML-Escaping', () => {
+  it('escaped recipientName', () => {
+    const html = buildAccountSecurityChangeHtmlBody({
+      to: 'x@example.org',
+      recipientName: '<script>alert(1)</script>',
+      changeType: 'email',
+    });
+    expect(html).not.toContain('<script>alert(1)</script>');
+    expect(html).toContain('&lt;script&gt;');
+  });
+});
+
+describe('Sicherheitshinweis nach Konto-Änderung — Lokalisierung (Befund S4)', () => {
+  const basePayload = { to: 'x@example.org', changeType: 'email' as const };
+
+  it('baut Betreff/Text auf Deutsch, wenn locale fehlt (Fallback), und nennt "E-Mail-Adresse"', () => {
+    expect(buildAccountSecurityChangeSubject(basePayload)).toBe('Ihr Lane-1-Konto wurde geändert');
+    expect(buildAccountSecurityChangeTextBody(basePayload)).toContain('E-Mail-Adresse');
+  });
+
+  it('baut Betreff/Text auf Englisch für locale "en-US"', () => {
+    const payload = { ...basePayload, locale: 'en-US' };
+    expect(buildAccountSecurityChangeSubject(payload)).toBe('Your Lane 1 account was changed');
+    expect(buildAccountSecurityChangeTextBody(payload)).toContain('email address');
+  });
+
+  it('unterscheidet im Text zwischen "E-Mail-Adresse" und "Passwort" je nach changeType', () => {
+    expect(buildAccountSecurityChangeTextBody({ to: 'x@example.org', changeType: 'email' })).toContain('E-Mail-Adresse');
+    expect(buildAccountSecurityChangeTextBody({ to: 'x@example.org', changeType: 'password' })).toContain('Passwort');
+  });
+
+  it('weist in beiden Sprachen darauf hin, sich bei einer nicht selbst veranlassten Änderung an die Vereinsleitung zu wenden', () => {
+    expect(buildAccountSecurityChangeTextBody(basePayload)).toContain('Vereinsleitung');
+    expect(buildAccountSecurityChangeTextBody({ ...basePayload, locale: 'en-US' })).toContain("administrator");
   });
 });
 

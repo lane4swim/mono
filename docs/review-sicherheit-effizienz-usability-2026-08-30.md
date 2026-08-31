@@ -85,6 +85,36 @@ unverändert offen. Gesamtsuite danach: **745 Tests, alle grün** (`apps/api`
 9), `npm run lint`, `npm run typecheck` (API) und `npm run build` (alle
 Workspaces) weiterhin sauber.
 
+**Update (31. August 2026, dritter Durchgang).** **S3**, **S4** und **U5**
+sind behoben — siehe die jeweiligen **Fix**-Abschnitte. **S5** ist
+stattdessen bewusst als **akzeptiertes Risiko** geschlossen worden, ohne
+Codeänderung — siehe dessen neuen „Entscheidung"-Abschnitt: die
+vorgeschlagene `tokensValidFrom`-Prüfung hätte eine bereits bestehende,
+in `plugins/authenticate.ts` ausführlich dokumentierte Abwägung
+rückgängig gemacht (kein DB-Lookup auf den beiden höchstfrequentierten
+Endpunkten der Anwendung), und die HÄLFTE des im Befund geschilderten
+Schadensbilds (Rollenwechsel eines bestehenden Kontos) ist im heutigen
+Funktionsumfang ohnehin unerreichbar — es gibt schlicht keine Möglichkeit,
+die Rolle eines bestehenden Kontos zu ändern. Bei **S4** ging der Fix über
+die im Befund als Kern benannte Stelle hinaus: sowohl `changeEmail()` ALS
+AUCH `changePassword()` benachrichtigen jetzt die betroffene Adresse — der
+im Befund beschriebene Kontoübernahme-Pfad gelingt über einen reinen
+Passwortwechsel genauso gut wie über einen E-Mail-Wechsel, eine
+Benachrichtigung nur bei Letzterem hätte den naheliegenderen Weg lautlos
+gelassen. 16 neue Regressionstests (1 für S3, 9 für S4, 6 für U5), die
+allesamt ohne die jeweilige Korrektur nachweislich fehlschlagen (für S3
+per `vi.spyOn()` auf ein nie auflösendes Promise — der Testlauf hängt statt
+fehlzuschlagen, geprüft per `git stash` + `timeout`; für S4 und U5 jeweils
+per `git stash`/Entfernen der neuen Datei). U5 zusätzlich in einem echten,
+headless-gesteuerten Browser verifiziert (Registrierung/Aktivierung beim
+ersten Laden, kein Fehlalarm bei unverändertem Worker). Gesamtsuite danach:
+**761 Tests, alle grün** (`apps/api` 468, `apps/web` 136,
+`packages/shared-types` 148, `packages/sync-protocol` 9), `npm run lint`,
+`npm run typecheck` (API) und `npm run build` (alle Workspaces) weiterhin
+sauber. Von den ursprünglich vierzehn Befunden dieses Reviews sind damit
+zehn abgeschlossen (neun behoben, S5 als akzeptiertes Risiko); nur
+**E1–E4** (Effizienz) bleiben offen.
+
 ---
 
 ## Übersicht
@@ -93,9 +123,9 @@ Workspaces) weiterhin sauber.
 |---|--------|-----|---------|
 | **S1** | Jeder Login stempelt die Einwilligung blind auf die *aktuelle* Version — eine geänderte Datenschutzerklärung gilt damit als angenommen, ohne dass sie jemand gesehen hat. Die Versionskonstante wird zusätzlich an zwei Orten gepflegt | `auth.service.ts:311-319`; `shared-types/src/auth.ts:18` + `web/js/state.js:26` | **Hoch — behoben** |
 | **S2** | Rate-Limits außerhalb von Login/Passwort-vergessen zählen **nur nach IP** — ein Verein hinter NAT sperrt sich selbst aus; genau der Fall, den `plugins/security.ts` für den Login ausdrücklich vermeiden wollte | `auth.route.ts:29,81,99,158,231,264` | Mittel — behoben |
-| **S3** | `/auth/forgot-password` verrät per Laufzeit, ob eine Adresse existiert — der Timing-Ausgleich des Logins wurde hier nicht mitgezogen | `auth.service.ts:407` | Niedrig |
-| **S4** | E-Mail-Wechsel benachrichtigt die **bisherige** Adresse nicht (Ergänzung zu B1 des Vorreviews, das die *neue* Adresse betrachtete) | `auth.service.ts: changeEmail()` | Niedrig |
-| **S5** | Rollen-/Kontoentzug wirkt bis zu 15 Minuten verzögert: `role`/`clubId`/`athleteId` stammen aus den Token-Claims, nur `enabledModules` wird frisch gelesen | `plugins/authenticate.ts`, `sync.route.ts:46-58` | Niedrig |
+| **S3** | `/auth/forgot-password` verrät per Laufzeit, ob eine Adresse existiert — der Timing-Ausgleich des Logins wurde hier nicht mitgezogen | `auth.service.ts:407` | Niedrig — behoben |
+| **S4** | E-Mail-Wechsel benachrichtigt die **bisherige** Adresse nicht (Ergänzung zu B1 des Vorreviews, das die *neue* Adresse betrachtete) | `auth.service.ts: changeEmail()` | Niedrig — behoben |
+| **S5** | Rollen-/Kontoentzug wirkt bis zu 15 Minuten verzögert: `role`/`clubId`/`athleteId` stammen aus den Token-Claims, nur `enabledModules` wird frisch gelesen | `plugins/authenticate.ts`, `sync.route.ts:46-58` | Niedrig — akzeptiertes Risiko |
 | **E1** | `requesterFrom()` liest den Verein bei **jeder** Sync-Anfrage — bei einem Erstabgleich bis zu 1.000-mal dieselbe Zeile | `sync.route.ts:51` | Mittel |
 | **E2** | `push()` verarbeitet 200 Events streng seriell mit je 3 Rundreisen — ~600 nacheinander laufende Abfragen pro Anfrage | `sync.service.ts: push()` | Mittel |
 | **E3** | `pull()` filtert Leserechte **nach** der Paginierung — Athlet:innen bezahlen den Datenbestand des ganzen Vereins für ihren Bruchteil davon | `sync.service.ts: pull()` | Niedrig–Mittel |
@@ -103,7 +133,7 @@ Workspaces) weiterhin sauber.
 | **U2** | `<label>` und Eingabefeld sind Geschwister ohne `for`/`id` — jedes Formularfeld der Anwendung ist für Screenreader unbeschriftet, Labelklick fokussiert nicht | `web/js/forms.js:11` | Mittel — behoben |
 | **U3** | `<html lang>` bleibt fest `"de"`, auch auf Englisch | `web/index.html:2`, `demo.html:2`, `admin/index.html:2`; `web/js/i18n.js:38` | Mittel — behoben |
 | **U4** | Ein 429 auf `/auth/refresh` endet als **stiller Logout** — ununterscheidbar von „Sitzung abgelaufen" | `web/js/apiClient.js:160-167`, `web/js/state.js:52-56` | Mittel — behoben |
-| **U5** | Service Worker: `skipWaiting()`/`clients.claim()` erreichen ihren Zweck nicht (die laufende Sitzung behält ihren Code), und es gibt keinen Hinweis „neue Version verfügbar" — eine über Stunden offene PWA bleibt beliebig lange veraltet | `web/sw.js:89,96-97` | Niedrig |
+| **U5** | Service Worker: `skipWaiting()`/`clients.claim()` erreichen ihren Zweck nicht (die laufende Sitzung behält ihren Code), und es gibt keinen Hinweis „neue Version verfügbar" — eine über Stunden offene PWA bleibt beliebig lange veraltet | `web/sw.js:89,96-97` | Niedrig — behoben |
 
 ---
 
@@ -403,6 +433,25 @@ erzeugen und hashen, Ergebnis verwerfen. Der Schreibvorgang lässt sich
 nicht spiegeln; ihn dem Antwortpfad zu entziehen (nicht `await`en, analog
 zum bereits so gehandhabten Mailversand) gleicht auch diesen Anteil an.
 
+**Fix (31.08.2026).** Umgesetzt wie empfohlen.
+
+* `apps/api/src/modules/auth/auth.service.ts: requestPasswordReset()`:
+  Token-Erzeugung/-Hash (`generatePasswordResetToken()`) läuft jetzt VOR
+  der `if (!user) return`-Prüfung, also auf beiden Pfaden identisch. Der
+  Schreibvorgang (`passwordResetTokens.create()`) ist jetzt — wie der
+  bereits zuvor so behandelte Mailversand direkt darunter — nicht mehr
+  `await`et; ein Fehlschlag wird nur serverseitig geloggt, nie an den
+  Client durchgereicht. Der ursprüngliche Kopfkommentar der Funktion
+  beschrieb nur die Mailversand-Asymmetrie als adressiert; er ist um den
+  hier behobenen zweiten Anteil ergänzt, statt einen zweiten,
+  widersprüchlichen Kommentar danebenzustellen.
+* Neuer Regressionstest in `apps/api/test/auth/auth.service.test.ts`: ein
+  absichtlich nie auflösendes `passwordResetTokens.create()` (per
+  `vi.spyOn().mockReturnValue()`) darf `requestPasswordReset()` nicht
+  blockieren — vor diesem Fix wäre der Test in einen Timeout gelaufen
+  (empirisch mit `git stash` geprüft: der Testlauf hängt tatsächlich,
+  statt fehlzuschlagen, und musste per `timeout` abgebrochen werden).
+
 ---
 
 ### S4 — E-Mail-Wechsel ohne Benachrichtigung der bisherigen Adresse (Niedrig)
@@ -428,6 +477,43 @@ senden. Der Mailer und ein lokalisiertes Template-Muster existieren bereits
 (`mail/mailer.ts`), der Versand kann wie beim Passwort-Reset
 fire-and-forget erfolgen. Eine Rückabwicklungs-Frist über einen
 Einmal-Link wäre die stärkere, aber auch aufwendigere Ausbaustufe.
+
+**Fix (31.08.2026).** Beides umgesetzt — `changeEmail()` **und**
+`changePassword()`, nicht nur Ersteres. Grund: die im Befund beschriebene
+Kontoübernahme mit einem gestohlenen Access Token gelingt einer
+angreifenden Person genauso gut allein über einen Passwortwechsel (sofort
+wirksame Aussperrung, ohne den Umweg über die E-Mail-Adresse) — eine
+Benachrichtigung nur bei `changeEmail()` hätte diesen naheliegenderen Weg
+lautlos gelassen. Die Rückabwicklungs-Frist über einen Einmal-Link
+(zweiter Teil der Empfehlung) bleibt bewusst offen — eine eigenständige,
+größere Ausbaustufe, wie die Empfehlung selbst schon einordnet.
+
+* `apps/api/src/mail/mailer.ts`: neuer Payload-Typ
+  `AccountSecurityChangeMailPayload` und `sendAccountSecurityChangeNotice()`
+  in `MailSender` — EIN gemeinsamer Vorlagensatz für beide Auslöser
+  (`changeType: 'email' | 'password'`) statt zweier fast identischer
+  Kopien, da sich der Text nur in einem Wort unterscheidet. Bewusst ohne
+  Link/Aktion in der Nachricht selbst — mangels Rückabwicklungsmechanismus
+  (siehe oben) verweist sie auf den einzigen heute verfügbaren nächsten
+  Schritt: die eigene Vereinsleitung kontaktieren. `SmtpMailSender`,
+  `ConsoleMailSender` (unbedenklich zu loggen — kein Geheimnis/Token wie
+  bei den beiden anderen Mailtypen) und `InMemoryMailSender` (Testdouble)
+  entsprechend ergänzt.
+* `apps/api/src/modules/auth/auth.service.ts`: `changeEmail()`
+  benachrichtigt `user.email` — die Adresse **vor** dem Wechsel, nicht
+  `updated.email` — genau der Kanal, den der Befund als fehlend
+  identifiziert; `changePassword()` benachrichtigt dieselbe (unveränderte)
+  Adresse. Beide Aufrufe fire-and-forget (nicht `await`et), analog zum
+  bereits so gehandhabten Mailversand bei `requestPasswordReset()` — ein
+  Fehlschlag darf den eigentlichen, bereits abgeschlossenen Wechsel nicht
+  im Nachhinein scheitern lassen.
+* 9 neue Tests: 2 in `auth.service.test.ts` (je ein Test pro Auslöser,
+  prüft Empfänger-Adresse und `changeType`), 7 in `mail/mailer.test.ts`
+  (Aufzeichnung im Testdouble, HTML-Escaping von `recipientName`,
+  Lokalisierung beider Sprachen, Unterscheidung "E-Mail-Adresse" vs.
+  "Passwort" im Text, der Hinweis auf die Vereinsleitung in beiden
+  Sprachen). Alle 9 scheitern nachweislich gegen den Stand vor diesem Fix
+  (per `git stash` empirisch geprüft).
 
 ---
 
@@ -456,6 +542,49 @@ Rollenwechsel und Löschvormerkung, im `authenticate`-Plugin gegen die
 `iat`-Claim geprüft. Da `requesterFrom()` ohnehin je Anfrage die Datenbank
 befragt, ließe sich die Prüfung dort ohne zusätzliche Rundreise
 unterbringen — sinnvollerweise gemeinsam mit dem Cache aus **E1**.
+
+**Entscheidung (31.08.2026): akzeptiertes Risiko, absichtlich
+unverändert.** Zwei Korrekturen an der eigenen Einschätzung oben, beide
+erst beim Versuch der Umsetzung sichtbar geworden — und dieselbe
+Fehlerklasse zeigt, warum ein zweiter Blick vor der Umsetzung lohnt,
+statt eine plausibel klingende Empfehlung ungeprüft zu übernehmen:
+
+1. **„`requesterFrom()` befragt ohnehin je Anfrage die Datenbank" ist
+   ungenau.** `requesterFrom()` fragt ausschließlich `clubs.findById()` ab
+   (für `enabledModules`) — **nie** die `users`-Tabelle. Eine
+   `tokensValidFrom`-Prüfung wäre keine Erweiterung einer bereits
+   vorhandenen Abfrage, sondern eine ZUSÄTZLICHE, neue Datenbankabfrage auf
+   den beiden höchstfrequentierten Endpunkten der gesamten Anwendung
+   (`/api/sync/push`/`pull`, laut deren eigenem Kopfkommentar "den Kern der
+   App-Last tragen"). Das ist exakt die Kostenabwägung, die
+   `plugins/authenticate.ts` bereits ausführlich dokumentiert (Sicherheits-
+   review 2026-08, Befund N4 — bewusste Entscheidung GEGEN einen
+   DB-Lookup je authentifizierter Anfrage, zugunsten des Performance-
+   Vorteils kurzlebiger, zustandsloser Access Tokens) — dieser Befund
+   benennt damit ein bereits bekanntes, absichtlich in Kauf genommenes
+   Verhalten neu, keine unbemerkte Lücke.
+2. **Die Hälfte des beschriebenen Schadensbilds ist heute unerreichbar.**
+   Ein Rollenwechsel eines BESTEHENDEN Kontos existiert als Funktion
+   schlicht nicht — `UpdateUserInput` (auth.repository.ts) erlaubt
+   ausschließlich `name`/`email`/`locale`/`consentGivenAt`/
+   `consentVersion`/`deletedAt`/`passwordHash`; `role`, `clubId` und
+   `athleteId` werden nur bei der Kontoerstellung (Einladungsannahme)
+   gesetzt und danach nie mehr verändert. Der im Befund geschilderte
+   „Trainer:in zu Athlet:in herabstufen"-Fall kann im heutigen
+   Funktionsumfang gar nicht eintreten.
+
+Real und reproduzierbar bleibt nur die zweite Hälfte: ein zur Löschung
+vorgemerktes Konto kann bis zu 15 Minuten weitersynchronisieren, bevor
+sein Access Token regulär abläuft. Das ist exakt der in Befund N4 bereits
+benannte Trade-off, nicht neu. Eine `tokensValidFrom`-Prüfung würde ihn
+zwar schließen, aber nur um den Preis, die N4-Entscheidung für die am
+stärksten frequentierten Endpunkte der App rückgängig zu machen — ohne
+den in **E1** vorgesehenen Cache wäre das eine zusätzliche Datenbank-
+abfrage pro Sync-Anfrage. Bleibt deshalb bewusst unverändert; siehe die
+ausführliche Begründung direkt in `plugins/authenticate.ts`. Sollte
+künftig doch eine Rollenänderung eingeführt werden, oder sollte **E1**s
+Cache ohnehin gebaut werden, sinkt der Grenzaufwand einer
+`tokensValidFrom`-Prüfung deutlich — dann lohnt ein erneuter Blick.
 
 ---
 
@@ -893,6 +1022,68 @@ stale-while-revalidate, und die neue Fassung erscheint erst beim
 2. Einen CI-Schritt ergänzen, der bei Änderungen unterhalb `apps/web/`
    eine Änderung an `CACHE_VERSION` verlangt.
 
+**Fix (31.08.2026).** Beide Empfehlungen umgesetzt — Empfehlung 1 in der
+„freundlicheren" Variante (Hinweis + Knopf, kein automatischer Reload
+mitten in einer Eingabe).
+
+* `apps/web/sw.js`: `self.skipWaiting()` beim Install entfernt; ein neuer
+  `message`-Handler ruft es stattdessen erst auf explizite Anforderung
+  auf (`event.data === 'SKIP_WAITING'`). `CACHE_VERSION` auf `lane1-v29`
+  angehoben (diese Änderung selbst berührt precachte Dateien, siehe
+  unten).
+* Neues, eigenständiges Modul `apps/web/js/swUpdate.js`
+  (`registerServiceWorker()`, `notifyUpdateAvailable()`) statt einer
+  Erweiterung direkt in `app.js`: `app.js` ist ein Bootstrap-Skript mit
+  weitreichenden Seiteneffekten (kompletter Anmelde-/Sync-Ablauf) und
+  ließe sich nur mit erheblichem Mock-Aufwand isoliert testen — diese
+  Logik hier hängt nur von `dom.js`/`i18n.js` ab und ist dadurch ohne den
+  Rest des Boot-Vorgangs testbar. `registerServiceWorker()` erkennt einen
+  bereits wartenden Worker sowohl beim Registrieren selbst
+  (`registration.waiting`) als auch über `updatefound`/`statechange`
+  während der laufenden Sitzung — jeweils nur dann, wenn zusätzlich schon
+  ein `navigator.serviceWorker.controller` existiert (unterscheidet ein
+  echtes Update vom allerersten Install, bei dem es nichts zu melden
+  gibt). `notifyUpdateAvailable()` hängt einen Hinweis mit
+  Neu-laden-Knopf an `document.body` an, der `SKIP_WAITING` an den
+  wartenden Worker schickt; ein `controllerchange`-Hörer lädt danach
+  GENAU EINMAL neu. `app.js` ruft nur noch `registerServiceWorker()`
+  auf.
+* `apps/web/css/styles.css`: neue `.update-banner`-Regel — anders als ein
+  `.toast` (verschwindet nach 3s automatisch) bewusst OHNE
+  Selbstverschwinden, ein Update-Hinweis darf nicht verpasst werden,
+  bevor die Person aktiv reagiert.
+* Neue i18n-Schlüssel `common.updateAvailable`/`common.updateReload` in
+  `de-DE`/`en-US`.
+* `.github/workflows/ci.yml` (Empfehlung 2): neuer, früher Schritt
+  vergleicht die geänderten Dateien des Pushes/PRs gegen dessen Basis
+  (`fetch-depth: 0` im Checkout, vorher fehlte die dafür nötige Historie)
+  — taucht dabei irgendetwas unterhalb `apps/web/` auf, muss
+  `CACHE_VERSION` in `apps/web/sw.js` ebenfalls im Diff stehen, sonst
+  schlägt der Schritt fehl. Gegen die tatsächliche Git-Historie dieser
+  Änderung lokal verifiziert (beide Richtungen: schlägt fehl, wenn
+  `apps/web/js/i18n/*.js` geändert wird, ohne `sw.js` anzufassen; besteht,
+  wenn `CACHE_VERSION` mit angehoben wurde).
+* 6 neue Regressionstests in `apps/web/test/swUpdate.test.js` (`jsdom`-
+  Umgebung): sofortiger Hinweis bei bereits wartendem Worker beim
+  Registrieren; Hinweis bei einem über `updatefound` erkannten Update,
+  aber NICHT beim allerersten Install (kein vorhandener Controller); genau
+  ein Reload trotz mehrfach feuerndem `controllerchange`; kein doppelter
+  Hinweis bei einem zweiten Aufruf; der Neu-laden-Knopf sendet
+  `SKIP_WAITING` an den wartenden Worker. Da `jsdom` keine echte
+  Service-Worker-API kennt, bauen die Tests ein minimales Double von
+  `ServiceWorkerRegistration`/`ServiceWorker` nach (eigene
+  `addEventListener()`/`_emit()`-Helfer). `window.location.reload` ließ
+  sich nicht per `vi.spyOn()` ersetzen (jsdoms `Location`-Methoden sind
+  nicht konfigurierbar) — der gängige Workaround (`delete
+  window.location; window.location = { reload: vi.fn() }`) kommt
+  stattdessen zum Einsatz. Alle 6 Tests scheitern nachweislich gegen den
+  Stand vor diesem Fix — ohne `swUpdate.js` schlägt bereits der Import
+  fehl (per Entfernen der Datei empirisch geprüft).
+* Zusätzlich in einem echten, headless-gesteuerten Browser verifiziert:
+  `index.html` lädt fehlerfrei, der Service Worker registriert und
+  aktiviert sich beim ersten Laden; ein zweites Laden (unveränderter
+  Worker) zeigt korrekt KEINEN Update-Hinweis (kein Fehlalarm).
+
 ---
 
 ## Was geprüft wurde und hielt
@@ -942,22 +1133,30 @@ wurden gezielt untersucht und gaben **keinen** Anlass zu einem Befund:
 3. ~~**U2**, **U3**~~ — **behoben** (30.08.2026), im selben Durchgang wie U1.
 4. ~~**S2** + **U4**~~ — **behoben** (30.08.2026), gemeinsam angefasst: die
    Ursache (S2) und ihre sichtbare Folge (U4).
-5. **E1**, **E2** — messbar auf dem Raspberry-Pi-Deployment; E1 zuerst,
+5. ~~**S3**, **S4**, **U5**~~ — **behoben** (31.08.2026).
+6. ~~**S5**~~ — **akzeptiertes Risiko** (31.08.2026), bewusst ohne
+   Codeänderung geschlossen; siehe dessen „Entscheidung"-Abschnitt.
+7. **E1**, **E2** — messbar auf dem Raspberry-Pi-Deployment; E1 zuerst,
    da trivial.
-6. **S3**, **S4**, **S5**, **E3**, **U5** — bei nächster Berührung des
-   jeweiligen Bereichs.
+8. **E3**, **E4** — bei nächster Berührung des jeweiligen Bereichs.
+
+Nur noch **E1–E4** (Effizienz) stehen aus.
 
 Für jeden Befund gilt die Hausregel der bisherigen Reviews: ein
 Regressionstest, der ohne die Korrektur nachweislich fehlschlägt. Für
 **U1**–**U3** ist das jetzt eingelöst — `vitest` mit einer
 `jsdom`-Umgebung (per `// @vitest-environment jsdom`-Pragma, nur für die
-drei betroffenen Testdateien) prüft `role`, `aria-labelledby`,
+betroffenen Testdateien) prüft `role`, `aria-labelledby`,
 `document.activeElement`, `label.htmlFor` und `documentElement.lang`
-unmittelbar; U1 zusätzlich in einem echten Browser (siehe dessen
-Fix-Abschnitt). Dieselbe Technik trägt auch **S1**, dort in Zod-Schema-
-und Service-Tests statt in `jsdom`. **S2** und **U4** sind über
-Fastify-Injection (`app.inject()`) bzw. gemockte `fetch`-Aufrufe direkt
-geprüft — bei **S2** hat genau diese Prüfung die ursprünglich
-vorgeschlagenen Schlüssel (`request.user!.sub`, ein Hash des
-Refresh-Tokens) als nicht tragfähig entlarvt; siehe dessen Fix-Abschnitt
-für die Korrektur.
+unmittelbar; U1 und **U5** zusätzlich in einem echten Browser (siehe deren
+Fix-Abschnitte). Dieselbe `jsdom`-Technik trägt auch **U5**s
+`ServiceWorkerRegistration`-Double. **S1** und **S3** sind in
+Zod-Schema- bzw. Service-Tests direkt geprüft — bei **S3** über ein
+absichtlich nie auflösendes gemocktes Promise, das den Testlauf ohne den
+Fix in einen Timeout laufen lässt, statt ihn schlicht fehlschlagen zu
+lassen. **S2** und **U4** sind über Fastify-Injection (`app.inject()`)
+bzw. gemockte `fetch`-Aufrufe direkt geprüft — bei **S2** hat genau diese
+Prüfung die ursprünglich vorgeschlagenen Schlüssel (`request.user!.sub`,
+ein Hash des Refresh-Tokens) als nicht tragfähig entlarvt; siehe dessen
+Fix-Abschnitt für die Korrektur. **S5** hat aus demselben Grund keinen
+neuen Test: es wurde keine Codeänderung vorgenommen.

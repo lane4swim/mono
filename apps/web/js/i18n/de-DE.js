@@ -16,6 +16,11 @@ export default {
     // ununterscheidbar von einem echten Problem, obwohl ein erneuter
     // Versuch nach kurzer Zeit funktionieren würde.
     errorRateLimited: 'Zu viele Anfragen aus deinem Netzwerk. Bitte in einer Minute erneut versuchen.',
+    // Review 30.08.2026, Befund U5: app.js zeigt dies, sobald sw.js einen
+    // neuen, bereits installierten, aber noch nicht aktivierten Worker
+    // meldet (siehe dortiger Kommentar).
+    updateAvailable: 'Eine neue Version ist verfügbar.',
+    updateReload: 'Neu laden',
   },
   auth: {
     loginTitle: 'Anmelden', loginIntro: 'Melde dich mit deinem Vereinskonto an.',

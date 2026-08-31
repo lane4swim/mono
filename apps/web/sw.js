@@ -6,8 +6,21 @@
 // through to the network — see the fetch handler below.
 // Bump CACHE_VERSION whenever any cached file changes so clients
 // pick up the new version instead of serving stale assets.
-// ============================================================
-const CACHE_VERSION = 'lane1-v28';
+//
+// Review 30.08.2026, Befund U5: NICHT mehr self.skipWaiting() beim
+// Install — ein neuer Worker installiert sich zwar (füllt seinen eigenen
+// Cache vollständig), aktiviert sich aber erst, wenn app.js dies über
+// eine "SKIP_WAITING"-Nachricht ausdrücklich anstößt (siehe der
+// 'message'-Handler unten sowie registerServiceWorker() in app.js). Vorher
+// übernahm ein frisch installierter Worker sofort die Kontrolle über
+// bereits offene Tabs (self.clients.claim() im 'activate'-Handler
+// unten), ohne dass deren bereits geladenes JavaScript davon betroffen
+// war — eine über Stunden offene PWA (z. B. auf einem Tablet am
+// Beckenrand) blieb dadurch beliebig lange auf dem alten Stand, ohne
+// jeden Hinweis. app.js zeigt jetzt stattdessen einen Hinweis an, sobald
+// ein neuer Worker bereitsteht, und lässt die Person selbst entscheiden,
+// wann neu geladen wird.
+const CACHE_VERSION = 'lane1-v29';
 const PRECACHE_URLS = [
   './',
   './index.html',
@@ -20,6 +33,7 @@ const PRECACHE_URLS = [
   './help/help.css',
   './js/app.js',
   './js/app-demo.js',
+  './js/swUpdate.js',
   './js/shell.js',
   './js/moduleRegistry.js',
   './js/apiClient.js',
@@ -86,7 +100,6 @@ self.addEventListener('install', (event) => {
           cache.add(url).catch((err) => console.warn('[sw] Precache fehlgeschlagen für', url, err))
         )
       ))
-      .then(() => self.skipWaiting())
   );
 });
 
@@ -96,6 +109,14 @@ self.addEventListener('activate', (event) => {
       Promise.all(keys.filter((k) => k !== CACHE_VERSION).map((k) => caches.delete(k)))
     ).then(() => self.clients.claim())
   );
+});
+
+// Review 30.08.2026, Befund U5: einzige Möglichkeit für einen wartenden
+// Worker, tatsächlich zu aktivieren — ausgelöst über
+// registration.waiting.postMessage('SKIP_WAITING') aus app.js, nachdem
+// die Person den Hinweis "Neue Version verfügbar" bestätigt hat.
+self.addEventListener('message', (event) => {
+  if (event.data === 'SKIP_WAITING') self.skipWaiting();
 });
 
 self.addEventListener('fetch', (event) => {

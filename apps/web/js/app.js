@@ -32,6 +32,7 @@
 // ============================================================
 import { pendingSyncCount } from './db.js';
 import { wipeDemoDataIfPresent } from './seed.js';
+import { registerServiceWorker } from './swUpdate.js';
 import { restoreSession, getCurrentUser, setUserLocale, logout, onUserChange, isLoggedIn } from './state.js';
 import { currentRoute, onRouteChange } from './router.js';
 import { toast } from './ui.js';
@@ -245,11 +246,5 @@ setupSettingsModal({
   exportPrefix: 'lane1-export',
   getExportData: async () => (await import('./db.js')).exportAll(),
 });
-
-function registerServiceWorker() {
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js').catch(() => { /* offline-first: fail silently */ });
-  }
-}
 
 boot();

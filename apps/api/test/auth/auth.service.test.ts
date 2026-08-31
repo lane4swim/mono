@@ -10,6 +10,7 @@ import {
   InvalidOrExpiredResetTokenError,
 } from '../../src/modules/auth/auth.service.js';
 import { InMemoryUserRepository, InMemoryRefreshTokenRepository, InMemoryPasswordResetTokenRepository } from '../../src/modules/auth/auth.repository.memory.js';
+import type { PasswordResetTokenRecord } from '../../src/modules/auth/auth.repository.js';
 import { createInvitationsService } from '../../src/modules/invitations/invitations.service.js';
 import { InMemoryClubRepository, InMemoryInvitationRepository, InMemoryAthleteRepository } from '../../src/modules/invitations/invitations.repository.memory.js';
 import { InMemoryMailSender } from '../../src/mail/mailer.memory.js';
@@ -507,6 +508,33 @@ describe('authService.requestPasswordReset', () => {
     await service.requestPasswordReset('geloescht@example.org');
     expect(mailer.sentPasswordResetEmails).toHaveLength(0);
   });
+
+  // Regressionstest für Review 30.08.2026, Befund S3: der Schreibvorgang
+  // in passwordResetTokens (nicht spiegelbar für den Nicht-Treffer-Fall,
+  // siehe dortiger Kommentar) darf die Antwort nicht verzögern — genau wie
+  // der bereits fire-and-forget behandelte Mailversand. Ein NIE
+  // auflösendes create() darf requestPasswordReset() deshalb nicht
+  // blockieren.
+  it('wartet NICHT auf das Schreiben des Reset-Tokens, bevor es zurückkehrt (Zeitangleichung an den Nicht-Treffer-Pfad)', async () => {
+    const { service, invitations, passwordResetTokens } = makeService();
+    await registerViaInvitation(service, invitations, { email: 'zeitangleichung@example.org' });
+
+    let releaseCreate: ((record: PasswordResetTokenRecord) => void) | undefined;
+    const pendingCreate = new Promise<PasswordResetTokenRecord>((resolve) => {
+      releaseCreate = resolve;
+    });
+    const createSpy = vi.spyOn(passwordResetTokens, 'create').mockReturnValue(pendingCreate);
+
+    // Löst requestPasswordReset() NICHT auf, solange create() aussteht —
+    // vor diesem Fix hätte das `create()` awaitet und der Test wäre nie
+    // fertig geworden (Timeout).
+    await expect(service.requestPasswordReset('zeitangleichung@example.org')).resolves.toBeUndefined();
+    expect(createSpy).toHaveBeenCalledOnce();
+
+    // Aufräumen: das ausstehende Promise nicht offen lassen.
+    releaseCreate!({ id: 'x', userId: 'x', tokenHash: 'x', expiresAt: new Date(), usedAt: null, createdAt: new Date() });
+    await pendingCreate;
+  });
 });
 
 describe('authService.resetPassword', () => {
@@ -670,6 +698,24 @@ describe('authService.changePassword', () => {
     const stored = await passwordResetTokens.findByHash(hashPasswordResetToken(resetToken));
     expect(stored?.usedAt).toBeTruthy();
   });
+
+  // Regressionstest für Review 30.08.2026, Befund S4: ein kurzzeitig
+  // entwendetes Access Token reicht — kombiniert mit dem aktuellen
+  // Passwort — bereits aus, um das Konto zu übernehmen. Die rechtmäßige
+  // Person muss davon erfahren, ohne selbst einen Anmeldeversuch zu
+  // brauchen.
+  it('benachrichtigt die (unveränderte) hinterlegte Adresse über den Passwortwechsel', async () => {
+    const { service, invitations, mailer } = makeService();
+    const { user } = await registerViaInvitation(service, invitations, { email: 'benachrichtigung-passwort@example.org' });
+
+    await service.changePassword(user.id, 'ein-sicheres-passwort', 'ein-neues-passwort');
+
+    expect(mailer.sentAccountSecurityChangeEmails).toHaveLength(1);
+    expect(mailer.sentAccountSecurityChangeEmails[0]).toMatchObject({
+      to: 'benachrichtigung-passwort@example.org',
+      changeType: 'password',
+    });
+  });
 });
 
 describe('authService.changeEmail (Sicherheitsreview 2026-08-27, Befund H2)', () => {
@@ -769,6 +815,24 @@ describe('authService.changeEmail (Sicherheitsreview 2026-08-27, Befund H2)', ()
 
     const result = await service.changeEmail(user.id, 'ein-sicheres-passwort', 'eigene-m2@example.org');
     expect(result.user.email).toBe('eigene-m2@example.org');
+  });
+
+  // Regressionstest für Review 30.08.2026, Befund S4: ohne diese
+  // Benachrichtigung war die BISHERIGE Adresse der einzige Kanal, der
+  // einer rechtmäßigen Person nach einer Kontoübernahme (kurzzeitig
+  // entwendetes Access Token) noch geblieben wäre — und genau dieser
+  // Kanal blieb bislang stumm.
+  it('benachrichtigt die BISHERIGE (nicht die neue) Adresse über den E-Mail-Wechsel', async () => {
+    const { service, invitations, mailer } = makeService();
+    const { user } = await registerViaInvitation(service, invitations, { email: 'alte-adresse@example.org' });
+
+    await service.changeEmail(user.id, 'ein-sicheres-passwort', 'neue-adresse@example.org');
+
+    expect(mailer.sentAccountSecurityChangeEmails).toHaveLength(1);
+    expect(mailer.sentAccountSecurityChangeEmails[0]).toMatchObject({
+      to: 'alte-adresse@example.org',
+      changeType: 'email',
+    });
   });
 });
 
