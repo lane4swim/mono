@@ -475,5 +475,5 @@ Erweiterungen, z. B. Echtzeit-Sync).
 
 Für die Veröffentlichung auf einem Hetzner-Server siehe die separat
 erstellte `docs/deployment.md` (sowie die Varianten für andere Umgebungen:
-`docs/deployment-raspberry-pi.md`, `docs/deployment-macos.md`,
-`docs/deployment-github-codespaces.md`).
+`docs/deployment-netcup.md`, `docs/deployment-raspberry-pi.md`,
+`docs/deployment-macos.md`, `docs/deployment-github-codespaces.md`).
