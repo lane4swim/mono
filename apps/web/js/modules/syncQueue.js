@@ -10,7 +10,7 @@
 // ============================================================
 import { getSyncQueue, updateSyncEvent, clearSyncedEvents, remove } from '../db.js';
 import { runSync } from '../syncClient.js';
-import { ApiError, NetworkError } from '../apiClient.js';
+import { ApiError, NetworkError, apiErrorMessage } from '../apiClient.js';
 import { IS_DEMO } from '../demoMode.js';
 import { el, clear, beginRender } from '../dom.js';
 import { badge, emptyState, laneWave, toast, statCard } from '../ui.js';
@@ -144,7 +144,7 @@ async function runRealSync(onDone) {
     }
   } catch (err) {
     if (err instanceof NetworkError) toast(t('syncqueue.errorOffline'), 'error');
-    else if (err instanceof ApiError) toast(t('syncqueue.errorApi', { message: err.message }), 'error');
+    else if (err instanceof ApiError) toast(t('syncqueue.errorApi', { message: apiErrorMessage(err) }), 'error');
     else toast(t('syncqueue.errorUnknown'), 'error');
   }
   onDone?.();

@@ -99,6 +99,28 @@ export class ApiError extends Error {
 // Passwort").
 export class NetworkError extends Error {}
 
+// Übersetzt den stabilen, sprachunabhängigen `body.error`-Code einer
+// ApiError (siehe apps/api/src/plugins/httpErrorHandler.ts:
+// HTTP_ERROR_REGISTRY) über common.apiErrors.<code> in beiden
+// Sprachdateien. `err.message` trägt dagegen IMMER den deutschen
+// Originaltext aus der jeweiligen Fehlerklasse im Backend (die API selbst
+// lokalisiert nicht, siehe dortiger Kommentar) — als Anzeigetext daher nur
+// für deutschsprachige Nutzer:innen brauchbar. Ein unbekannter/neuer Code
+// ohne passenden Eintrag in apiErrors fällt auf t('common.errorUnknown')
+// zurück statt auf err.message, damit nie unübersetzter deutscher Text
+// durchrutscht, nur weil eine neue Backend-Fehlerklasse noch keinen
+// Wörterbucheintrag hat (auf Kosten von Detailinformation im Einzelfall —
+// bewusster Kompromiss, siehe README "Mehrsprachigkeit").
+export function apiErrorMessage(err) {
+  const code = err.body?.error;
+  if (!code) return t('common.errorUnknown');
+  const key = `common.apiErrors.${code}`;
+  const translated = t(key);
+  // t() gibt den Schlüssel selbst zurück, wenn er in keiner Sprachdatei
+  // existiert (siehe i18n.js) — genau das Signal für "kein Eintrag".
+  return translated === key ? t('common.errorUnknown') : translated;
+}
+
 // Übersetzt einen ApiError/NetworkError in eine anzeigbare Meldung — vormals
 // dreimal wortgleich (bis auf drei parallele Schlüsselpaare in beiden
 // Sprachdateien) in profile.js, userManagement.js und admin/admin.js
@@ -117,7 +139,7 @@ export function describeError(err, { on401Message } = {}) {
     // von einem echten Problem, obwohl ein erneuter Versuch nach kurzer
     // Zeit genügt.
     if (err.status === 429) return t('common.errorRateLimited');
-    return err.message;
+    return apiErrorMessage(err);
   }
   return t('common.errorUnknown');
 }
