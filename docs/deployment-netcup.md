@@ -18,6 +18,28 @@ Am Ende dieser Anleitung ist unter einer eigenen Adresse (z. B. `https://trainin
 - alles verschlüsselt (HTTPS, kostenloses Zertifikat),
 - mit automatischen Neustarts, falls der Server einmal neu startet.
 
+### 0.1 Schritte 6–9 automatisiert per Script
+
+Wer die Befehle aus den Abschnitten 6–9 nicht Schritt für Schritt von Hand eintippen möchte, kann stattdessen `scripts/setup-netcup.sh` ausführen — es fasst alles von der Softwareinstallation bis zur Nginx-Konfiguration in einem Lauf zusammen (analog zu `scripts/setup-codespace.sh` für die Codespaces-Variante, siehe `docs/deployment-github-codespaces.md`, Abschnitt 0.2):
+
+```bash
+bash scripts/setup-netcup.sh
+```
+
+Vorausgesetzt sind die Abschnitte 1–5 (Server angelegt, SSH-Zugang als `deploy`-Benutzer, Grundhärtung erledigt, Domain per A-Record bereits auf den Server zeigend — **ohne funktionierendes DNS schlägt Schritt 10, siehe unten, später fehl**) sowie ein bereits im Arbeitsverzeichnis liegendes Repository (Abschnitt 7, Variante A oder B). Das Script deckt dann genau ab: Abschnitt 6 (Node.js/PostgreSQL/Nginx/PM2/Git installieren), 7 samt 7.1–7.4 (npm-Abhängigkeiten, `apps/api/.env` inkl. JWT-Schlüsseln, `prisma migrate deploy`, Backend bauen), 8 samt 8.1 (PM2 starten inkl. Autostart per `pm2 startup`/`pm2 save`, ersten Superadmin anlegen) und 9 (Nginx konfigurieren) — mit denselben Befehlen und Begründungen, die in den jeweiligen Abschnitten unten ausführlich erklärt sind.
+
+Das Script fragt dabei interaktiv nach allem, was nicht automatisch ermittelt werden kann:
+
+- **Domain** (Abschnitt 5) — nötig für `CORS_ORIGIN`/`FRONTEND_BASE_URL` und den Nginx-`server_name`.
+- **Superadmin-E-Mail-Adresse und -Passwort** (Schritt 8.1) — das Passwort wird mit verdeckter Eingabe und Bestätigung abgefragt, mindestens 8 Zeichen; es gibt bewusst **kein** Default-Passwort (Sicherheitsreview 2026-08, Befund H1).
+- **SMTP-Zugangsdaten** (optional, Schritt 7.2) — wird gefragt, ob Einladungs-E-Mails direkt jetzt per SMTP versendet werden sollen; bei „Nein" bzw. ohne Antwort landen Einladungen vorerst nur im Server-Log (später jederzeit in `apps/api/.env` nachtragbar).
+
+Datenbank-Passwörter und das JWT-Schlüsselpaar werden automatisch erzeugt (nie interaktiv abgefragt) und landen ausschließlich in `apps/api/.env`, `apps/api/.env.migrate` bzw. `apps/api/keys/` — alle mit `chmod 600`/`700` geschützt. Für einen nicht-interaktiven Lauf (z. B. um alles vorab per Umgebungsvariable festzulegen) lassen sich sämtliche Werte auch vorgeben, siehe Kopfkommentar in `scripts/setup-netcup.sh`.
+
+Am Ende gibt das Script eine Zusammenfassung aus — ausschließlich die Superadmin-E-Mail-Adresse, nie ein Passwort — sowie den Hinweis, mit Abschnitt 10 (HTTPS) fortzufahren. Es ist wiederholt ausführbar: bereits installierte Software, eine bestehende `.env` und ein bereits angelegter Superadmin werden übersprungen statt erneut angelegt/überschrieben, PM2 und Nginx werden bei einem erneuten Lauf einfach neu gestartet.
+
+**Bewusst NICHT** Teil des Scripts: Abschnitt 1–5 (Produktwahl, Server-/SSH-Key-/Firewall-Einrichtung im netcup SCP, Server-Grundhärtung, Domain/DNS) und Abschnitt 10+ (HTTPS per certbot, Testen, Backups, künftige Updates, laufende Wartung) — dafür weiterhin den jeweiligen Abschnitten unten folgen.
+
 ---
 
 ## 1. Produktwahl bei netcup
