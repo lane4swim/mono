@@ -109,6 +109,12 @@ const FOREIGN_KEY_REFS: Partial<Record<EntityStoreName, ForeignKeyRef[]>> = {
 // und schließt so das Existenz-Orakel, statt es nur zu verschieben.
 export const FOREIGN_ENTITY_ERROR =
   'Die referenzierte Person oder der referenzierte Datensatz existiert nicht mehr (wurde vermutlich zwischenzeitlich endgültig gelöscht).';
+// Stabiler, sprachunabhängiger Stellvertreter für FOREIGN_ENTITY_ERROR
+// (siehe apps/web/js/i18n/{de-DE,en-US}.js: common.syncErrors) — dieselbe
+// Konstante wird auch von sync.errors.ts für Prismas P2003 verwendet, da
+// beide Fälle bewusst dieselbe Nutzermeldung tragen (siehe dortiger
+// Kommentar).
+export const FOREIGN_ENTITY_ERROR_CODE = 'foreign_entity_missing';
 
 // Prüft alle für `store` relevanten Fremdschlüsselfelder eines bereits
 // Zod-validierten Payloads: jede gesetzte (nicht-null/undefined) Referenz

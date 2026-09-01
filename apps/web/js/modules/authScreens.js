@@ -280,7 +280,16 @@ function describeAuthError(err, { on410Message } = {}) {
     if (err.status === 401) return t('auth.errorInvalidCredentials');
     if (err.status === 410) return on410Message ?? t('auth.errorInvitationExpired');
     if (err.status === 409) return t('auth.errorEmailTaken');
-    return err.message;
+    // Review 2026-09-01: ein 429 (Ratenlimit, z. B. login/register/
+    // forgot-password) fiel hier bislang auf err.message durch — die
+    // (englische) Standardmeldung von @fastify/rate-limit, unabhängig von
+    // der aktiven Sprache. Analog zum 429-Zweig in apiClient.js:
+    // describeError().
+    if (err.status === 429) return t('common.errorRateLimited');
+    // apiErrorMessage() übersetzt über den stabilen body.error-Code statt
+    // den immer-deutschen err.message roh anzuzeigen (siehe dortiger
+    // Kommentar in apiClient.js).
+    return api.apiErrorMessage(err);
   }
   return t('auth.errorUnknown');
 }

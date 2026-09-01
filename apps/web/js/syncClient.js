@@ -161,7 +161,13 @@ export async function push() {
         // toSend-Filter heraus und wird dadurch nicht mehr automatisch
         // wiederholt (siehe Konstanten-Kommentar oben).
         const status = attempts >= MAX_SYNC_ATTEMPTS ? 'failed' : 'error';
-        queueUpdates.push({ id: result.eventId, patch: { status, attempts, lastError: result.message || 'Unbekannter Fehler.' } });
+        // `lastError` bleibt die (deutsche) Server-Diagnosemeldung — für
+        // Fehlerberichte/Logs. `lastErrorCode` ist der stabile, über
+        // apps/web/js/i18n/{de-DE,en-US}.js: common.syncErrors übersetzte
+        // Stellvertreter, den modules/syncQueue.js für die Anzeige nutzt
+        // (siehe dortiger Kommentar) — analog zu apiErrorMessage() in
+        // apiClient.js für reguläre HTTP-4xx-Antworten.
+        queueUpdates.push({ id: result.eventId, patch: { status, attempts, lastError: result.message || 'Unbekannter Fehler.', lastErrorCode: result.code ?? null } });
       }
     }
 

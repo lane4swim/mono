@@ -13,6 +13,41 @@ export default {
     errorRateLimited: 'Too many requests from your network. Please try again in a minute.',
     updateAvailable: 'A new version is available.',
     updateReload: 'Reload',
+    // See the matching comment in de-DE.js — keep both files' apiErrors
+    // in sync with apps/api/src/plugins/httpErrorHandler.ts.
+    apiErrors: {
+      email_taken: 'This email address is already registered.',
+      athlete_already_linked: 'A user account already exists for this athlete profile.',
+      invalid_credentials: 'Email address or password is invalid.',
+      invalid_refresh_token: 'Your session has expired. Please sign in again.',
+      not_found: 'The requested item could not be found.',
+      invalid_invitation: 'This invitation is invalid, expired, revoked, or has already been used.',
+      club_id_required: 'Please select a club.',
+      invalid_current_password: 'The current password is incorrect.',
+      invalid_reset_token: 'This password reset link is invalid, expired, or has already been used.',
+      erasure_already_requested: 'A deletion request already exists for this account.',
+      forbidden: 'You do not have permission to do this.',
+      club_not_found: 'Club not found.',
+      athlete_not_found: 'The referenced athlete profile was not found.',
+      athlete_club_mismatch: 'The referenced athlete profile does not belong to this invitation\'s target club.',
+      unauthorized: 'Please sign in again.',
+      validation_failed: 'Please check your input.',
+      bad_request: 'The request could not be processed.',
+      internal_error: 'An unexpected error occurred.',
+    },
+    // See the matching comment in de-DE.js — keep both files' syncErrors
+    // in sync with apps/api/src/modules/sync/sync.service.ts.
+    syncErrors: {
+      invalid_event: 'This record has an invalid format.',
+      unknown_store: 'Unknown data type.',
+      write_not_permitted: 'You do not have permission to make this change.',
+      invalid_payload: 'The data does not match the expected format.',
+      club_mismatch: 'This record does not belong to your club.',
+      foreign_entity_missing: 'The referenced person or record no longer exists (it was likely permanently deleted in the meantime).',
+      results_own_only: 'You may only edit your own results.',
+      comment_authorship_invalid: 'Other people\'s comments can only be carried over unchanged; new comments must be attributed to you.',
+      sync_internal_error: 'The operation could not be applied (internal error).',
+    },
   },
   auth: {
     loginTitle: 'Sign in', loginIntro: 'Sign in with your club account.',

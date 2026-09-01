@@ -2086,11 +2086,12 @@ describe('splitAtSafeTimestampBoundary()', () => {
 });
 
 describe('describeSyncError()', () => {
-  it('übersetzt einen Fehler mit Prisma-Code "P2003" (Fremdschlüssel-Verletzung) in eine verständliche deutsche Meldung', () => {
+  it('übersetzt einen Fehler mit Prisma-Code "P2003" (Fremdschlüssel-Verletzung) in eine verständliche deutsche Meldung samt stabilem Code', () => {
     const fakeError = { code: 'P2003', message: 'Foreign key constraint failed on the field: `athleteId`' };
-    expect(describeSyncError(fakeError)).toBe(
-      'Die referenzierte Person oder der referenzierte Datensatz existiert nicht mehr (wurde vermutlich zwischenzeitlich endgültig gelöscht).',
-    );
+    expect(describeSyncError(fakeError)).toEqual({
+      message: 'Die referenzierte Person oder der referenzierte Datensatz existiert nicht mehr (wurde vermutlich zwischenzeitlich endgültig gelöscht).',
+      code: 'foreign_entity_missing',
+    });
   });
 
   it('gibt für einen normalen Error NICHT dessen Original-Nachricht zurück (kein Leak interner Fehlerdetails)', () => {
@@ -2098,16 +2099,16 @@ describe('describeSyncError()', () => {
     // erreichen (siehe Kommentar bei describeSyncError() — Prismas Texte
     // nennen z. B. Spalten-/Constraint-Namen aus dem internen Schema).
     expect(describeSyncError(new Error('Unique constraint failed on the fields: (`tokenHash`)')))
-      .toBe('Der Vorgang konnte nicht angewendet werden (interner Fehler).');
+      .toEqual({ message: 'Der Vorgang konnte nicht angewendet werden (interner Fehler).', code: 'sync_internal_error' });
   });
 
-  it('liefert einen generischen Text für Fehler ohne erkennbare Form', () => {
-    expect(describeSyncError('nur ein String')).toBe('Der Vorgang konnte nicht angewendet werden (interner Fehler).');
-    expect(describeSyncError(undefined)).toBe('Der Vorgang konnte nicht angewendet werden (interner Fehler).');
+  it('liefert einen generischen Text samt Code für Fehler ohne erkennbare Form', () => {
+    expect(describeSyncError('nur ein String')).toEqual({ message: 'Der Vorgang konnte nicht angewendet werden (interner Fehler).', code: 'sync_internal_error' });
+    expect(describeSyncError(undefined)).toEqual({ message: 'Der Vorgang konnte nicht angewendet werden (interner Fehler).', code: 'sync_internal_error' });
   });
 
   it('behandelt einen Fehler mit anderem Code nicht als Fremdschlüssel-Verletzung', () => {
     const fakeError = { code: 'P2002', message: 'Unique constraint failed' };
-    expect(describeSyncError(fakeError)).toBe('Der Vorgang konnte nicht angewendet werden (interner Fehler).');
+    expect(describeSyncError(fakeError)).toEqual({ message: 'Der Vorgang konnte nicht angewendet werden (interner Fehler).', code: 'sync_internal_error' });
   });
 });

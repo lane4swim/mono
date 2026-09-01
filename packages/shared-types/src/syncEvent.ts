@@ -57,7 +57,20 @@ export const SyncEventResultSchema = z.object({
   eventId: z.string().min(1),
   status: SyncEventResultStatusSchema,
   serverVersion: z.record(z.unknown()).nullable().optional(),
+  // `message` ist IMMER Deutsch (siehe sync.service.ts) — reine
+  // Diagnose-/Log-Information, keine für Endnutzer:innen lokalisierte
+  // Anzeige. `code` ist der dafür vorgesehene, sprachunabhängige
+  // Stellvertreter: eine feste, kleine Menge stabiler Bezeichner (siehe
+  // apps/api/src/modules/sync/sync.service.ts, PUSH_GUARDS und
+  // umliegender Code), die das Frontend über
+  // apps/web/js/i18n/{de-DE,en-US}.js: common.syncErrors übersetzt
+  // (apps/web/js/apiClient.js: syncErrorMessage()). Analog zum
+  // {error, message}-Muster der regulären HTTP-4xx-Antworten (siehe
+  // httpErrorHandler.ts), nur unter dem Namen `code` statt `error` — der
+  // Name `error` war hier bereits an anderer Stelle (SyncEventResultStatus
+  // "error") vergeben.
   message: z.string().optional(),
+  code: z.string().optional(),
 });
 export type SyncEventResult = z.infer<typeof SyncEventResultSchema>;
 

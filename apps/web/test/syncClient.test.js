@@ -73,6 +73,32 @@ describe('push()', () => {
     expect(updated.lastError).toBe('Payload ungültig.');
   });
 
+  // Lokalisierung der Sync-Push-Fehler (siehe modules/syncQueue.js:
+  // describeSyncEventError()): der Server liefert seit
+  // apps/api/src/modules/sync/sync.service.ts zusätzlich zur immer
+  // deutschen `message` einen stabilen `code` — push() muss ihn
+  // unverändert nach `lastErrorCode` durchreichen, damit die Anzeige ihn
+  // übersetzen kann.
+  it('übernimmt den `code` eines Fehler-Ergebnisses als `lastErrorCode`', async () => {
+    await db.put('groups', { name: 'X' });
+    const [event] = await db.getSyncQueue();
+    api.syncPush.mockResolvedValue({ results: [{ eventId: event.id, status: 'error', message: 'Payload entspricht nicht dem Schema für "groups".', code: 'invalid_payload' }] });
+
+    await push();
+    const updated = (await db.getSyncQueue()).find((e) => e.id === event.id);
+    expect(updated.lastErrorCode).toBe('invalid_payload');
+  });
+
+  it('setzt `lastErrorCode` auf null, wenn ein Fehler-Ergebnis (Alt-Server, andere Codes) keinen `code` trägt', async () => {
+    await db.put('groups', { name: 'X' });
+    const [event] = await db.getSyncQueue();
+    api.syncPush.mockResolvedValue({ results: [{ eventId: event.id, status: 'error', message: 'X' }] });
+
+    await push();
+    const updated = (await db.getSyncQueue()).find((e) => e.id === event.id);
+    expect(updated.lastErrorCode).toBeNull();
+  });
+
   it('erhöht "attempts" bei jedem erneuten Fehlversuch desselben Events', async () => {
     await db.put('results', { event: '100m Freistil', time: 60 });
     const [event] = await db.getSyncQueue();

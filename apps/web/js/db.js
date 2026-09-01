@@ -271,7 +271,7 @@ export async function enqueueSyncEvent(store, entityId, action, payload){
   const evt = {
     id: uid(), store, entityId, action, payload,
     createdAt: new Date().toISOString(), status: 'pending',
-    attempts: 0, lastError: null, syncedAt: null,
+    attempts: 0, lastError: null, lastErrorCode: null, syncedAt: null,
   };
   return put('syncQueue', evt);
 }
@@ -289,7 +289,7 @@ export async function bulkEnqueueSyncEvents(items){
   const events = items.map(({ store, entityId, action, payload }) => ({
     id: uid(), store, entityId, action, payload,
     createdAt: now, status: 'pending',
-    attempts: 0, lastError: null, syncedAt: null,
+    attempts: 0, lastError: null, lastErrorCode: null, syncedAt: null,
   }));
   return bulkPut('syncQueue', events);
 }

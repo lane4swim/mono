@@ -10,7 +10,7 @@
 // ============================================================
 import { getSyncQueue, updateSyncEvent, clearSyncedEvents, remove } from '../db.js';
 import { runSync } from '../syncClient.js';
-import { ApiError, NetworkError } from '../apiClient.js';
+import { ApiError, NetworkError, apiErrorMessage } from '../apiClient.js';
 import { IS_DEMO } from '../demoMode.js';
 import { el, clear, beginRender } from '../dom.js';
 import { badge, emptyState, laneWave, toast, statCard } from '../ui.js';
@@ -24,6 +24,23 @@ const ENTITY_KEYS = {
 };
 
 const ACTION_KEYS = { create: 'actionCreate', update: 'actionUpdate', delete: 'actionDelete' };
+
+// `evt.lastError` (siehe db.js/syncClient.js) ist IMMER die deutsche
+// Diagnosemeldung des Servers (apps/api: sync.service.ts) — als Anzeige
+// für nicht-deutschsprachige Nutzer:innen ungeeignet. `evt.lastErrorCode`
+// ist der dazu stabile, sprachunabhängige Stellvertreter (siehe dortiger
+// Kommentar); übersetzt über common.syncErrors. Ein fehlender/unbekannter
+// Code (z. B. ein älteres, vor dieser Änderung gespeichertes Event) fällt
+// auf die rohe Meldung zurück statt auf einen unübersetzten Punkt-Pfad —
+// besser eine deutsche Meldung anzeigen als gar keine.
+function describeSyncEventError(evt) {
+  if (evt.lastErrorCode) {
+    const key = `common.syncErrors.${evt.lastErrorCode}`;
+    const translated = t(key);
+    if (translated !== key) return translated;
+  }
+  return evt.lastError;
+}
 
 export const syncQueueModule = {
   id: 'syncqueue',
@@ -106,9 +123,9 @@ function renderView(container, queue) {
         el('td', { class: 'data text-sm' }, timeLabel),
         el('td', {}, label),
         el('td', {}, ACTION_KEYS[evt.action] ? t(`syncqueue.${ACTION_KEYS[evt.action]}`) : evt.action),
-        el('td', {}, [statusEl, (evt.status === 'error' || evt.status === 'failed') && evt.lastError ? el('div', { class: 'hint', style: 'margin-top:3px' }, evt.lastError) : null]),
+        el('td', {}, [statusEl, (evt.status === 'error' || evt.status === 'failed') && evt.lastError ? el('div', { class: 'hint', style: 'margin-top:3px' }, describeSyncEventError(evt)) : null]),
         el('td', {}, String(evt.attempts || 0)),
-        el('td', {}, evt.status !== 'synced' ? el('button', { class: 'btn btn-ghost btn-sm', onclick: async () => { await updateSyncEvent(evt.id, { status: 'pending', lastError: null }); toast(t('syncqueue.retryQueued')); refresh(); } }, t('common.retry')) : el('button', { class: 'btn btn-danger btn-sm', onclick: async () => { await remove('syncQueue', evt.id); toast(t('syncqueue.entryRemoved')); refresh(); } }, t('common.remove'))),
+        el('td', {}, evt.status !== 'synced' ? el('button', { class: 'btn btn-ghost btn-sm', onclick: async () => { await updateSyncEvent(evt.id, { status: 'pending', lastError: null, lastErrorCode: null }); toast(t('syncqueue.retryQueued')); refresh(); } }, t('common.retry')) : el('button', { class: 'btn btn-danger btn-sm', onclick: async () => { await remove('syncQueue', evt.id); toast(t('syncqueue.entryRemoved')); refresh(); } }, t('common.remove'))),
       ]);
       tbody.appendChild(row);
     });
@@ -144,7 +161,7 @@ async function runRealSync(onDone) {
     }
   } catch (err) {
     if (err instanceof NetworkError) toast(t('syncqueue.errorOffline'), 'error');
-    else if (err instanceof ApiError) toast(t('syncqueue.errorApi', { message: err.message }), 'error');
+    else if (err instanceof ApiError) toast(t('syncqueue.errorApi', { message: apiErrorMessage(err) }), 'error');
     else toast(t('syncqueue.errorUnknown'), 'error');
   }
   onDone?.();

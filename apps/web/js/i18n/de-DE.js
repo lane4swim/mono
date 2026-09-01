@@ -21,6 +21,52 @@ export default {
     // meldet (siehe dortiger Kommentar).
     updateAvailable: 'Eine neue Version ist verfügbar.',
     updateReload: 'Neu laden',
+    // Übersetzung der stabilen `body.error`-Codes aus
+    // apps/api/src/plugins/httpErrorHandler.ts (HTTP_ERROR_REGISTRY) sowie
+    // der übrigen, dort dokumentierten Codes (validation_failed,
+    // bad_request, internal_error, unauthorized) — siehe apiClient.js:
+    // apiErrorMessage(). Jeder neue Code dort braucht hier UND in
+    // en-US.js einen passenden Eintrag, sonst zeigt apiErrorMessage()
+    // stattdessen den generischen errorUnknown-Text.
+    apiErrors: {
+      email_taken: 'Diese E-Mail-Adresse ist bereits registriert.',
+      athlete_already_linked: 'Für dieses Athletenprofil existiert bereits ein Nutzerkonto.',
+      invalid_credentials: 'E-Mail-Adresse oder Passwort ist ungültig.',
+      invalid_refresh_token: 'Die Sitzung ist abgelaufen. Bitte erneut anmelden.',
+      not_found: 'Der angeforderte Eintrag wurde nicht gefunden.',
+      invalid_invitation: 'Diese Einladung ist ungültig, abgelaufen, widerrufen oder wurde bereits verwendet.',
+      club_id_required: 'Bitte einen Verein auswählen.',
+      invalid_current_password: 'Das aktuelle Passwort ist nicht korrekt.',
+      invalid_reset_token: 'Dieser Link zum Zurücksetzen des Passworts ist ungültig, abgelaufen oder wurde bereits verwendet.',
+      erasure_already_requested: 'Für dieses Konto liegt bereits eine Löschanfrage vor.',
+      forbidden: 'Für diese Aktion fehlt die Berechtigung.',
+      club_not_found: 'Verein wurde nicht gefunden.',
+      athlete_not_found: 'Das referenzierte Athletenprofil wurde nicht gefunden.',
+      athlete_club_mismatch: 'Das referenzierte Athletenprofil gehört nicht zum Zielverein dieser Einladung.',
+      unauthorized: 'Bitte erneut anmelden.',
+      validation_failed: 'Bitte die Eingaben überprüfen.',
+      bad_request: 'Die Anfrage konnte nicht verarbeitet werden.',
+      internal_error: 'Ein unerwarteter Fehler ist aufgetreten.',
+    },
+    // Übersetzung der stabilen `code`-Werte einzelner Sync-Push-Ergebnisse
+    // (status: 'error', siehe packages/shared-types/src/syncEvent.ts:
+    // SyncEventResultSchema und apps/api/src/modules/sync/sync.service.ts)
+    // — eigene Tabelle statt apiErrors oben, da diese Codes NICHT über
+    // HTTP_ERROR_REGISTRY laufen (der Push-Request selbst antwortet mit
+    // HTTP 200, auch wenn einzelne Events darin scheitern). Siehe
+    // modules/syncQueue.js: describeSyncEventError(). Jeder neue Code dort
+    // braucht hier UND in en-US.js einen passenden Eintrag.
+    syncErrors: {
+      invalid_event: 'Der Datensatz hat ein ungültiges Format.',
+      unknown_store: 'Unbekannter Datentyp.',
+      write_not_permitted: 'Du hast keine Berechtigung, diese Änderung vorzunehmen.',
+      invalid_payload: 'Die Daten entsprechen nicht dem erwarteten Format.',
+      club_mismatch: 'Dieser Datensatz gehört nicht zu deinem Verein.',
+      foreign_entity_missing: 'Die referenzierte Person oder der referenzierte Datensatz existiert nicht mehr (wurde vermutlich zwischenzeitlich endgültig gelöscht).',
+      results_own_only: 'Du darfst nur eigene Ergebnisse bearbeiten.',
+      comment_authorship_invalid: 'Fremde Kommentare können nur unverändert übernommen werden; neue Kommentare müssen dir selbst zugeordnet sein.',
+      sync_internal_error: 'Der Vorgang konnte nicht angewendet werden (interner Fehler).',
+    },
   },
   auth: {
     loginTitle: 'Anmelden', loginIntro: 'Melde dich mit deinem Vereinskonto an.',

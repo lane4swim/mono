@@ -135,6 +135,11 @@ function fingerprint(value: unknown): string {
 // einem Verstoß eine Fehlermeldung zurück, sonst `null` — Stores ohne
 // eingebettete Kommentare (alle übrigen sieben) sind immer `null`
 // (No-op).
+// Stabiler, sprachunabhängiger Stellvertreter für den (einzigen)
+// Fehlertext unten (siehe apps/web/js/i18n/{de-DE,en-US}.js:
+// common.syncErrors).
+export const COMMENT_AUTHORSHIP_ERROR_CODE = 'comment_authorship_invalid';
+
 export function assertCommentAuthorship(
   store: EntityStoreName,
   payload: Record<string, unknown>,
