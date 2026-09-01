@@ -29,9 +29,9 @@ import {
 import { resolveConflict } from '@lane1/sync-protocol';
 import type { SyncGateway, SyncRecord } from './sync.gateway.js';
 import { isKnownStore, canRead, canWrite } from './sync.permissions.js';
-import { assertForeignKeysWithinClub } from './sync.foreignKeys.js';
+import { assertForeignKeysWithinClub, FOREIGN_ENTITY_ERROR_CODE } from './sync.foreignKeys.js';
 import { scopeChangeForAthlete } from './sync.athleteScope.js';
-import { assertCommentAuthorship } from './sync.commentAuthorship.js';
+import { assertCommentAuthorship, COMMENT_AUTHORSHIP_ERROR_CODE } from './sync.commentAuthorship.js';
 import { PULL_PAGE_SIZE, PULL_TIE_SAFETY_LIMIT, splitAtSafeTimestampBoundary } from './sync.pagination.js';
 import { describeSyncError } from './sync.errors.js';
 
@@ -112,7 +112,7 @@ type PushGuard = (ctx: PushCtx) => Promise<SyncEventResult | null> | SyncEventRe
 function parseEvent(ctx: PushCtx): SyncEventResult | null {
   const parsed = SyncEventSchema.safeParse(ctx.raw);
   if (!parsed.success) {
-    return { eventId: (ctx.raw as { id?: string })?.id ?? 'unknown', status: 'error', message: 'Event-Struktur ungültig.' };
+    return { eventId: (ctx.raw as { id?: string })?.id ?? 'unknown', status: 'error', message: 'Event-Struktur ungültig.', code: 'invalid_event' };
   }
   ctx.event = parsed.data;
   return null;
@@ -130,7 +130,7 @@ function parseEvent(ctx: PushCtx): SyncEventResult | null {
 function requireKnownStore(ctx: PushCtx): SyncEventResult | null {
   const event = ctx.event!;
   if (!isKnownStore(event.store)) {
-    return { eventId: event.id, status: 'error', message: `Unbekannter Store "${event.store}".` };
+    return { eventId: event.id, status: 'error', message: `Unbekannter Store "${event.store}".`, code: 'unknown_store' };
   }
   ctx.store = event.store;
   return null;
@@ -147,7 +147,7 @@ function requireWritePermission(ctx: PushCtx): SyncEventResult | null {
   const event = ctx.event!;
   const store = ctx.store!;
   if (!canWrite(store, ctx.requester.role, ctx.requester.enabledModules)) {
-    return { eventId: event.id, status: 'error', message: `Die Rolle "${ctx.requester.role}" darf den Store "${store}" nicht verändern.` };
+    return { eventId: event.id, status: 'error', message: `Die Rolle "${ctx.requester.role}" darf den Store "${store}" nicht verändern.`, code: 'write_not_permitted' };
   }
   return null;
 }
@@ -210,7 +210,7 @@ function validatePayload(ctx: PushCtx): SyncEventResult | null {
   const entitySchema = ENTITY_SCHEMAS[store];
   const parsedPayload = entitySchema.safeParse(event.payload);
   if (!parsedPayload.success) {
-    return { eventId: event.id, status: 'error', message: `Payload entspricht nicht dem Schema für "${store}".` };
+    return { eventId: event.id, status: 'error', message: `Payload entspricht nicht dem Schema für "${store}".`, code: 'invalid_payload' };
   }
   // "createdAt"/"updatedAt" sind im Entity-Schema Pflichtfelder (siehe
   // packages/shared-types/src/entities.ts) — der CLIENT setzt sie beim
@@ -240,7 +240,7 @@ function requireOwnClub(ctx: PushCtx): SyncEventResult | null {
   if (event.action === 'delete') return null;
   const payloadClubId = (ctx.validatedPayload as { clubId?: string } | null)?.clubId;
   if (payloadClubId !== ctx.requester.clubId) {
-    return { eventId: event.id, status: 'error', message: 'clubId des Events stimmt nicht mit dem eigenen Verein überein.' };
+    return { eventId: event.id, status: 'error', message: 'clubId des Events stimmt nicht mit dem eigenen Verein überein.', code: 'club_mismatch' };
   }
   return null;
 }
@@ -259,7 +259,7 @@ async function requireForeignKeysWithinClub(ctx: PushCtx): Promise<SyncEventResu
   if (event.action === 'delete') return null;
   const fkError = await assertForeignKeysWithinClub(ctx.gateway, store, ctx.validatedPayload as Record<string, unknown>, ctx.requester.clubId);
   if (fkError) {
-    return { eventId: event.id, status: 'error', message: fkError };
+    return { eventId: event.id, status: 'error', message: fkError, code: FOREIGN_ENTITY_ERROR_CODE };
   }
   return null;
 }
@@ -406,13 +406,13 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
           const ownAthleteId = requester.athleteId;
           const existingAthleteId = (existing as { athleteId?: unknown } | null)?.athleteId;
           if (existing && existingAthleteId !== ownAthleteId) {
-            results.push({ eventId: event.id, status: 'error', message: 'Athlet:innen dürfen nur eigene Ergebnisse ändern oder löschen.' });
+            results.push({ eventId: event.id, status: 'error', message: 'Athlet:innen dürfen nur eigene Ergebnisse ändern oder löschen.', code: 'results_own_only' });
             continue;
           }
           if (event.action !== 'delete') {
             const payloadAthleteId = (validatedPayload as { athleteId?: unknown } | null)?.athleteId;
             if (payloadAthleteId !== ownAthleteId) {
-              results.push({ eventId: event.id, status: 'error', message: 'Athlet:innen dürfen nur eigene Ergebnisse anlegen oder ändern.' });
+              results.push({ eventId: event.id, status: 'error', message: 'Athlet:innen dürfen nur eigene Ergebnisse anlegen oder ändern.', code: 'results_own_only' });
               continue;
             }
           }
@@ -438,7 +438,7 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
             requester.userId,
           );
           if (authorshipError) {
-            results.push({ eventId: event.id, status: 'error', message: authorshipError });
+            results.push({ eventId: event.id, status: 'error', message: authorshipError, code: COMMENT_AUTHORSHIP_ERROR_CODE });
             continue;
           }
         }
@@ -534,7 +534,8 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
             results.push({ eventId: event.id, status: 'applied' });
           }
         } catch (err) {
-          results.push({ eventId: event.id, status: 'error', message: describeSyncError(err) });
+          const { message, code } = describeSyncError(err);
+          results.push({ eventId: event.id, status: 'error', message, code });
         }
       }
 

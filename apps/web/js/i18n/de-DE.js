@@ -48,6 +48,25 @@ export default {
       bad_request: 'Die Anfrage konnte nicht verarbeitet werden.',
       internal_error: 'Ein unerwarteter Fehler ist aufgetreten.',
     },
+    // Übersetzung der stabilen `code`-Werte einzelner Sync-Push-Ergebnisse
+    // (status: 'error', siehe packages/shared-types/src/syncEvent.ts:
+    // SyncEventResultSchema und apps/api/src/modules/sync/sync.service.ts)
+    // — eigene Tabelle statt apiErrors oben, da diese Codes NICHT über
+    // HTTP_ERROR_REGISTRY laufen (der Push-Request selbst antwortet mit
+    // HTTP 200, auch wenn einzelne Events darin scheitern). Siehe
+    // modules/syncQueue.js: describeSyncEventError(). Jeder neue Code dort
+    // braucht hier UND in en-US.js einen passenden Eintrag.
+    syncErrors: {
+      invalid_event: 'Der Datensatz hat ein ungültiges Format.',
+      unknown_store: 'Unbekannter Datentyp.',
+      write_not_permitted: 'Du hast keine Berechtigung, diese Änderung vorzunehmen.',
+      invalid_payload: 'Die Daten entsprechen nicht dem erwarteten Format.',
+      club_mismatch: 'Dieser Datensatz gehört nicht zu deinem Verein.',
+      foreign_entity_missing: 'Die referenzierte Person oder der referenzierte Datensatz existiert nicht mehr (wurde vermutlich zwischenzeitlich endgültig gelöscht).',
+      results_own_only: 'Du darfst nur eigene Ergebnisse bearbeiten.',
+      comment_authorship_invalid: 'Fremde Kommentare können nur unverändert übernommen werden; neue Kommentare müssen dir selbst zugeordnet sein.',
+      sync_internal_error: 'Der Vorgang konnte nicht angewendet werden (interner Fehler).',
+    },
   },
   auth: {
     loginTitle: 'Anmelden', loginIntro: 'Melde dich mit deinem Vereinskonto an.',

@@ -35,6 +35,19 @@ export default {
       bad_request: 'The request could not be processed.',
       internal_error: 'An unexpected error occurred.',
     },
+    // See the matching comment in de-DE.js — keep both files' syncErrors
+    // in sync with apps/api/src/modules/sync/sync.service.ts.
+    syncErrors: {
+      invalid_event: 'This record has an invalid format.',
+      unknown_store: 'Unknown data type.',
+      write_not_permitted: 'You do not have permission to make this change.',
+      invalid_payload: 'The data does not match the expected format.',
+      club_mismatch: 'This record does not belong to your club.',
+      foreign_entity_missing: 'The referenced person or record no longer exists (it was likely permanently deleted in the meantime).',
+      results_own_only: 'You may only edit your own results.',
+      comment_authorship_invalid: 'Other people\'s comments can only be carried over unchanged; new comments must be attributed to you.',
+      sync_internal_error: 'The operation could not be applied (internal error).',
+    },
   },
   auth: {
     loginTitle: 'Sign in', loginIntro: 'Sign in with your club account.',
