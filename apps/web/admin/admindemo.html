@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lane 1 · Superadmin (Demo)</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="../icons/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../css/styles.css">
+<link rel="stylesheet" href="./admin.css">
+<style>
+  /* Nur für diese Demo-Seite: der Hinweisbalken oben sowie der rein
+     CSS-basierte Auf/Zu-Mechanismus für die Dialog-Vorschau unten (kein
+     JavaScript — siehe Kopfkommentar). */
+  .demo-banner{
+    background: var(--c-deep); color: var(--c-white); font-size: var(--fs-xs);
+    text-align:center; padding: 8px 16px; letter-spacing: .02em;
+  }
+  #demo-invite-toggle{ position:absolute; opacity:0; pointer-events:none; }
+  .modal-root{ display:none; }
+  #demo-invite-toggle:checked ~ #admin-shell .modal-root{ display:flex; }
+</style>
+</head>
+<body>
+
+<!--
+  admindemo.html — rein statische Vorschau der Superadmin-Oberfläche
+  (siehe ./index.html + ./admin.js für die echte, funktionale Version).
+
+  Zeigt ausschließlich das LAYOUT, inklusive der neuen Option "Weitere:n
+  Superadmin einladen" — bewusst OHNE jede echte Funktionalität: kein
+  Login, kein API-Zugriff, kein admin.js. Alle Beispieldaten (Vereine,
+  Nutzername, Formularfelder) sind statisch. Der einzige interaktive
+  Effekt ist rein optisch (Dialog-Vorschau öffnen/schließen) und läuft
+  ohne JavaScript über eine versteckte Checkbox (siehe <style> oben) —
+  absichtlich keine Business-Logik, damit diese Seite als reines
+  Design-/Layout-Mockup unabhängig von der echten Superadmin-Ansicht
+  gepflegt werden kann, ohne dass ein Klick hier je etwas Echtes auslöst.
+
+  Die Option "Weitere:n Superadmin einladen" selbst ist im echten Backend
+  aktuell bewusst NICHT vorhanden (siehe
+  packages/shared-types/src/invitation.ts und
+  apps/api/scripts/createSuperAdmin.ts: Superadmin-Konten werden aus
+  Sicherheitsgründen nie über die API vergeben, nur per CLI-Skript). Diese
+  Seite zeigt daher nur, wie eine solche Option AUSSEHEN würde — keine
+  Aussage darüber, ob/wie sie einmal tatsächlich angebunden würde.
+-->
+<div class="demo-banner">Statische Vorschau — keine echte Funktionalität, keine Serververbindung</div>
+
+<input type="checkbox" id="demo-invite-toggle" aria-hidden="true" tabindex="-1">
+
+<div id="admin-shell">
+  <header class="topbar">
+    <div class="topbar-brand">
+      <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+        <path d="M2 22c3 0 3-3 6-3s3 3 6 3 3-3 6-3 3 3 6 3" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+      </svg>
+      <span class="brand-name">Lane 1 · Superadmin</span>
+    </div>
+    <div class="topbar-user">
+      <span class="current-user-label">Max Mustermann (Superadministrator:in)</span>
+      <button class="btn btn-ghost btn-sm" type="button" disabled>Abmelden</button>
+    </div>
+  </header>
+
+  <main class="view admin-view" tabindex="-1">
+    <div class="page-head">
+      <div>
+        <div class="page-eyebrow">Superadmin</div>
+        <h1 class="mt-0">Vereine</h1>
+      </div>
+      <div class="page-actions">
+        <label for="demo-invite-toggle" class="btn btn-ghost">+ Weitere:n Superadmin einladen</label>
+        <button class="btn btn-primary" type="button" disabled>+ Verein anlegen</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Verein</th>
+              <th class="data">Admins</th>
+              <th class="data">Trainer:innen</th>
+              <th class="data">Athlet:innen</th>
+              <th>Angelegt am</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>SC Wasserfreunde Musterstadt</td>
+              <td class="data">2</td>
+              <td class="data">6</td>
+              <td class="data">48</td>
+              <td>03.02.2026</td>
+              <td><button class="btn btn-ghost btn-sm" type="button" disabled>Bearbeiten</button></td>
+            </tr>
+            <tr>
+              <td>Schwimmverein Nordstadt e.V.</td>
+              <td class="data">1</td>
+              <td class="data">3</td>
+              <td class="data">21</td>
+              <td>17.04.2026</td>
+              <td><button class="btn btn-ghost btn-sm" type="button" disabled>Bearbeiten</button></td>
+            </tr>
+            <tr>
+              <td>TSG Delphine Talheim</td>
+              <td class="data">1</td>
+              <td class="data">4</td>
+              <td class="data">33</td>
+              <td>29.07.2026</td>
+              <td><button class="btn btn-ghost btn-sm" type="button" disabled>Bearbeiten</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <div class="modal-root">
+    <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="demo-invite-title">
+      <div class="modal-head">
+        <h3 class="mt-0" id="demo-invite-title">Weitere:n Superadmin einladen</h3>
+        <label for="demo-invite-toggle" class="modal-close" aria-label="Schließen">×</label>
+      </div>
+      <div class="form-grid">
+        <div class="field span-2">
+          <label for="demo-invite-name">Name</label>
+          <input id="demo-invite-name" type="text" placeholder="Vor- und Nachname" disabled>
+        </div>
+        <div class="field span-2">
+          <label for="demo-invite-email">E-Mail-Adresse</label>
+          <input id="demo-invite-email" type="email" placeholder="name@verein-dachverband.de" disabled>
+          <span class="hint">Die eingeladene Person erhält vollen Zugriff auf die Superadmin-Oberfläche — alle Vereine, alle Daten. Nur an vertrauenswürdige Personen versenden.</span>
+        </div>
+        <div class="form-actions" style="grid-column:1/-1">
+          <label for="demo-invite-toggle" class="btn btn-ghost">Abbrechen</label>
+          <button class="btn btn-primary" type="button" disabled>Einladen</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
