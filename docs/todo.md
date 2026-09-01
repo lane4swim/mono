@@ -12,8 +12,8 @@
 - [X] Module zubuchbar gestalten
 - [ ] Kann Nutzer Sprache anfragen für Fehlermeldungen?
 - [ ] Gelöschter Autor wird auf Deutsch bezeichnet (Konstante in commentAnonymization.ts)
-- [ ] Super-Admin Interface als Demo
-- [ ] Neue Super-Admin einladen
+- [X] Super-Admin Interface als Demo
+- [ ] ~Neue Super-Admin einladen~
 
 # Zukünftige Entwicklungen
 - [ ] CD-fähig je Verein (Logo, Farben)
