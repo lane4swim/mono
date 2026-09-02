@@ -46,7 +46,7 @@ export async function restoreSession() {
     // geschlossen, nicht abgemeldet hat).
     await ensureLocalStoreBelongsTo(result.user.id);
     await applyEnabledModules(result.enabledModules);
-    current = { ...result.user, enabledModules: result.enabledModules };
+    current = { ...result.user, enabledModules: result.enabledModules, clubNationalID: result.clubNationalID, clubNationalIDType: result.clubNationalIDType };
     setLocale(current?.locale || detectInitialLocale());
     return current;
   } catch (err) {
@@ -350,6 +350,20 @@ export async function updateProfile(patch) {
   const updated = await api.updateMe(patch);
   await applyEnabledModules(updated.enabledModules);
   current = updated;
+  emit();
+  return current;
+}
+
+// Aktualisiert NUR den lokalen Session-Cache (current) nach einem
+// erfolgreichen api.updateClubIdentity()-Aufruf (siehe modules/
+// userManagement.js) — die eigentliche Persistierung ist zu diesem
+// Zeitpunkt bereits über PATCH /api/clubs/:id/identity erfolgt, hier geht
+// es nur darum, dass ein sofort danach gestarteter Ergebnisimport
+// (modules/resultsImportUI.js: matchOwnClub()) die neue Vereinskennung
+// ohne Neuanmeldung sieht.
+export function setClubIdentity(nationalID, nationalIDType) {
+  if (!current) return null;
+  current = { ...current, clubNationalID: nationalID, clubNationalIDType: nationalIDType };
   emit();
   return current;
 }

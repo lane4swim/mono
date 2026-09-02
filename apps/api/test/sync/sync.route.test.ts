@@ -42,7 +42,7 @@ async function buildTestApp() {
   // zählbar ist — der Cache aus Befund E1 (siehe sync.route.ts) lässt sich
   // sonst nicht von seinem Fehlen unterscheiden. Rückgabewert und
   // Verhalten sind identisch zu vorher.
-  const clubs = { findById: vi.fn(async () => ({ enabledModules: [...MODULE_KEYS] })) };
+  const clubs = { findById: vi.fn(async () => ({ enabledModules: [...MODULE_KEYS], nationalID: null, nationalIDType: null })) };
   const authService = createAuthService({
     users: new InMemoryUserRepository(),
     refreshTokens: new InMemoryRefreshTokenRepository(),

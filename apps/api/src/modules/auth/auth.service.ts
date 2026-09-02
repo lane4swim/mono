@@ -126,7 +126,7 @@ export interface InvitationValidator {
 // (login/refresh/acceptInvitation/getMe) einzubetten (siehe
 // resolveEnabledModules() unten).
 export interface ClubModulesLookup {
-  findById(clubId: string): Promise<{ enabledModules: string[] } | null>;
+  findById(clubId: string): Promise<{ enabledModules: string[]; nationalID: string | null; nationalIDType: string | null } | null>;
 }
 
 export interface AuthServiceDeps {
@@ -165,6 +165,19 @@ async function resolveEnabledModules(clubs: ClubModulesLookup, clubId: string | 
   if (!clubId) return [];
   const club = await clubs.findById(clubId);
   return club?.enabledModules ?? [];
+}
+
+// Analog zu resolveEnabledModules() oben, für die externe Vereinskennung
+// des Ergebnisimports (DSV7/Lenex, siehe
+// docs/dsv7-lenex-import-plan.md Abschnitt 3.1) — wird zusätzlich in
+// dieselben Session-/Profil-Antworten eingebettet, damit das Frontend den
+// eigenen Verein beim Import automatisch gegen die Datei abgleichen kann
+// (apps/web/js/modules/resultsImportUI.js), ohne einen eigenen Endpunkt
+// dafür aufrufen zu müssen.
+async function resolveClubIdentity(clubs: ClubModulesLookup, clubId: string | null): Promise<{ clubNationalID: string | null; clubNationalIDType: string | null }> {
+  if (!clubId) return { clubNationalID: null, clubNationalIDType: null };
+  const club = await clubs.findById(clubId);
+  return { clubNationalID: club?.nationalID ?? null, clubNationalIDType: club?.nationalIDType ?? null };
 }
 
 export function createAuthService(deps: AuthServiceDeps) {
@@ -284,7 +297,8 @@ export function createAuthService(deps: AuthServiceDeps) {
 
       const tokens = await issueTokens(user);
       const enabledModules = await resolveEnabledModules(deps.clubs, user.clubId);
-      return { ...tokens, user: toPublicUser(user), enabledModules };
+      const clubIdentity = await resolveClubIdentity(deps.clubs, user.clubId);
+      return { ...tokens, user: toPublicUser(user), enabledModules, ...clubIdentity };
     },
 
     async login(input: LoginRequest) {
@@ -328,7 +342,8 @@ export function createAuthService(deps: AuthServiceDeps) {
 
       const tokens = await issueTokens(updated);
       const enabledModules = await resolveEnabledModules(deps.clubs, updated.clubId);
-      return { ...tokens, user: toPublicUser(updated), enabledModules };
+      const clubIdentity = await resolveClubIdentity(deps.clubs, updated.clubId);
+      return { ...tokens, user: toPublicUser(updated), enabledModules, ...clubIdentity };
     },
 
     async refresh(plainRefreshToken: string) {
@@ -381,7 +396,8 @@ export function createAuthService(deps: AuthServiceDeps) {
       await deps.refreshTokens.revoke(existing.id);
       const tokens = await issueTokens(user);
       const enabledModules = await resolveEnabledModules(deps.clubs, user.clubId);
-      return { ...tokens, user: toPublicUser(user), enabledModules };
+      const clubIdentity = await resolveClubIdentity(deps.clubs, user.clubId);
+      return { ...tokens, user: toPublicUser(user), enabledModules, ...clubIdentity };
     },
 
     async logout(plainRefreshToken: string) {
@@ -493,7 +509,8 @@ export function createAuthService(deps: AuthServiceDeps) {
 
       const tokens = await issueTokens(updated);
       const enabledModules = await resolveEnabledModules(deps.clubs, updated.clubId);
-      return { ...tokens, user: toPublicUser(updated), enabledModules };
+      const clubIdentity = await resolveClubIdentity(deps.clubs, updated.clubId);
+      return { ...tokens, user: toPublicUser(updated), enabledModules, ...clubIdentity };
     },
 
     // Passwortwechsel für die AKTUELL eingeloggte Person (Sicherheitsreview
@@ -541,7 +558,8 @@ export function createAuthService(deps: AuthServiceDeps) {
 
       const tokens = await issueTokens(updated);
       const enabledModules = await resolveEnabledModules(deps.clubs, updated.clubId);
-      return { ...tokens, user: toPublicUser(updated), enabledModules };
+      const clubIdentity = await resolveClubIdentity(deps.clubs, updated.clubId);
+      return { ...tokens, user: toPublicUser(updated), enabledModules, ...clubIdentity };
     },
 
     // E-Mail-Wechsel für die AKTUELL eingeloggte Person (Sicherheitsreview
@@ -626,14 +644,16 @@ export function createAuthService(deps: AuthServiceDeps) {
 
       const tokens = await issueTokens(updated);
       const enabledModules = await resolveEnabledModules(deps.clubs, updated.clubId);
-      return { ...tokens, user: toPublicUser(updated), enabledModules };
+      const clubIdentity = await resolveClubIdentity(deps.clubs, updated.clubId);
+      return { ...tokens, user: toPublicUser(updated), enabledModules, ...clubIdentity };
     },
 
     async getMe(userId: string) {
       const user = await deps.users.findById(userId);
       if (!user) throw new UserNotFoundError();
       const enabledModules = await resolveEnabledModules(deps.clubs, user.clubId);
-      return { ...toPublicUser(user), enabledModules };
+      const clubIdentity = await resolveClubIdentity(deps.clubs, user.clubId);
+      return { ...toPublicUser(user), enabledModules, ...clubIdentity };
     },
 
     // Sicherheitsreview 2026-08-27, Befund H2: `email` ist bewusst KEIN
@@ -650,7 +670,8 @@ export function createAuthService(deps: AuthServiceDeps) {
       // updateProfile()) — ohne dieses Feld ginge die zuvor bei
       // Login/Refresh geladene Modul-Information dabei verloren.
       const enabledModules = await resolveEnabledModules(deps.clubs, updated.clubId);
-      return { ...toPublicUser(updated), enabledModules };
+      const clubIdentity = await resolveClubIdentity(deps.clubs, updated.clubId);
+      return { ...toPublicUser(updated), enabledModules, ...clubIdentity };
     },
 
     // Art. 15 DSGVO (Recht auf Auskunft): bündelt den eigenen Nutzer-
