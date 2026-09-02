@@ -293,14 +293,22 @@ Einstiegspunkt: `apps/web/js/modules/competitions.js`, `renderDetail()`
 1. Soll die DSV-Vereinskennzahl im lokalen `Club`-Modell hinterlegt werden (für
    automatische Vereinsfilterung), oder reicht die manuelle Auswahl im Vorschau-Dialog
    (empfohlen als MVP, kein Datenmodell-Zusatz nötig)?
+   Entscheidung: Füge eine Vereinskennzahl (`nationalID`) ergänzt um einen Formathinweis (`nationalIDType`).
+   Damit können auch andere nationale oder internationale IDs erfasst werden.
 2. Sollen unbekannte/nicht zuordenbare Events automatisch der `EVENTS`-Liste hinzugefügt
    werden dürfen, oder ausschließlich manuell gepflegt werden?
+   Entscheidung: Unbekannte/nicht zuordenbare Events sollen nach Nutzerentscheid entweder einem
+   bestehenden Event zugeordnet werden, ein neues Event angelegt werden, oder ignoriert werden.
 3. Was passiert mit DSV-ID-Feldern (`PNERGEBNIS.DSV-ID`)? Soll `Athlete` künftig eine
    DSV-ID-Spalte erhalten, um Namens-Mehrdeutigkeiten robuster aufzulösen?
+   Entscheidung: Füge eine Athletenkennzahl (`nationalID`) ergänzt um einen Formathinweis (`nationalIDType`).
 4. Wie soll ein disqualifiziertes/nicht angetretenes Ergebnis (`Grund der Nichtwertung`)
    im lokalen Modell abgebildet werden – neues Statusfeld auf `Result`, oder Kommentar/
    Notiz?
+   Entscheidung: Neues Statusfeld
 5. Soll `place` immer aus der Datei übernommen werden, auch wenn er von der lokal
    berechneten Platzierung abweicht?
+   Entscheidung: Immer aus der Datei übernehmen.
 6. Woher kommen Testdateien für den Lenex-Import (bisher nur eine DSV7-Beispieldatei
    verfügbar)?
+   Entscheidung: Lenex-Import als zukünftige Erweiterung (Schnittstelle bzw. Funktion mit gleicher Signatur) betrachten.
