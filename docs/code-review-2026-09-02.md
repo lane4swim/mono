@@ -1,0 +1,548 @@
+# Code-Review — Redundanzen, Schwachstellen, Ineffizienzen, Codepraxis (2. September 2026)
+
+**Auftrag.** Durchgehendes Code-Review über das gesamte Repository
+(`apps/api`, `apps/web`, `packages/*`, `scripts/`, CI) mit Blick auf
+**Redundanzen**, **Schwachstellen**, **Ineffizienzen** und
+**unterdurchschnittliche Codepraxis**.
+
+**Abgrenzung zu den Vorreviews.** Die Codebasis trägt bereits vier
+Sicherheitsreviews (`security-review-2026-08*.md`), ein Code-Review
+(`code-review-2026-08.md`), ein Wartbarkeitsreview
+(`code-review-wartbarkeit-2026-08.md`), einen Performance-Durchgang
+(Commit `332ee7a`) und das Review vom 30.08.2026
+(`review-sicherheit-effizienz-usability-2026-08-30.md`). **Kein Befund
+hier ist eine Wiederholung.** Der Schwerpunkt liegt auf dem seither
+hinzugekommenen Code — dem DSV7-Ergebnisimport (PR #43,
+`apps/web/js/resultsImport/*`, `modules/resultsImportUI.js`, die neuen
+Felder in `packages/shared-types/src/entities.ts`) und
+`scripts/setup-netcup.sh` (PR #39) — sowie auf den Nahtstellen, an denen
+dieser neue Code auf bestehende, bislang für sich genommen korrekte Logik
+trifft.
+
+**Ergebnis vorweg.** Die harten serverseitigen Kontrollen halten: kein
+Befund erlaubt Kontoübernahme, Rechteausweitung über die API oder einen
+Mandantendurchbruch. Die Guard-Kette in `sync.service.ts`, die
+Rollen-/Modul-Matrix in `sync.permissions.ts`, die Fremdschlüsselprüfung
+und die Athlet:innen-Redaktion beim Pull wurden gegengelesen und sind
+schlüssig.
+
+Die schwerwiegendsten Befunde sind **stiller Datenverlust**: **K1** und
+**K3** erzeugen Datensätze, die lokal gespeichert und der Person als
+„gespeichert" gemeldet werden, die der Server aber **niemals** annehmen
+kann — sie laufen durch fünf Push-Versuche und landen dann als `failed` in
+einer Warteschlange, die niemand ansieht. **K2** entwertet die
+PB-Erkennung dauerhaft, und zwar ausgelöst durch genau das Feature, das
+gerade dazugekommen ist.
+
+**Prüfstand.** `npm install` sauber, `npm audit --omit=dev` ohne Befund.
+Tests: `apps/web` 195, `packages/shared-types` 148, `packages/sync-protocol`
+9, `apps/api` 475 von 477 grün — die beiden roten in
+`test/db/prisma.test.ts` sind ein Umgebungsartefakt (siehe **P5**), CI
+ist davon nicht betroffen. `eslint` über alle Workspaces sauber. **K1**,
+**K2** und **K4** sind zusätzlich durch Ausführen reproduziert, nicht nur
+statisch belegt.
+
+Schweregrade: **Hoch** = vor dem nächsten Produktivbetrieb beheben,
+**Mittel** = einplanen, **Niedrig** = bei nächster Berührung mitnehmen.
+
+| Nr. | Kurz | Schwere | Ort |
+|-----|------|---------|-----|
+| K1 | Importierte Zwischenzeiten ohne Distanz sind dauerhaft nicht synchronisierbar | **Hoch** | `dsv7Parser.js:230,310` |
+| K2 | `isPB` bleibt dauerhaft `false`, sobald ein Ergebnis ohne Zeit existiert | **Hoch** | `competitions.js:212`, `competitionLive.js:158`, `importRunner.js:45` |
+| K3 | `uid()`-Ausweichpfad erzeugt Nicht-UUIDs, die kein Entity-Schema annimmt | **Hoch** | `db.js:104-107` |
+| K4 | `STERGEBNIS` wird nicht je Wertung dedupliziert (anders als `PNERGEBNIS`) | Mittel | `dsv7Parser.js:271` |
+| D1 | Beide Setup-Skripte scheitern beim zweiten Lauf | **Hoch** | `setup-netcup.sh:333`, `setup-codespace.sh:288` |
+| D2 | DB-Passwörter auf der `psql`-Kommandozeile | Mittel | `setup-netcup.sh:114,121`, `setup-codespace.sh:82,89` |
+| R1 | Doppelte, serielle Club-Abfrage in jeder Auth-Antwort (8 Stellen) | Mittel | `auth.service.ts:299,344,398,511,560,646,654,672` |
+| R2 | `clubModulesCache` räumt nie auf | Niedrig | `sync.route.ts:63` |
+| P1 | Reset-Mail kann vor/ohne den Token-Schreibvorgang hinausgehen | Mittel | `auth.service.ts:452-471` |
+| P2 | Unescapte Attributwerte in `charts.js` | Niedrig | `charts.js:62,86` |
+| P3 | `EVENTS.push()` mutiert ein exportiertes Referenzdaten-Array | Niedrig | `resultsImportUI.js:153` |
+| P4 | Falscher Pfad in einer Begründung | Niedrig | `conflictResolution.ts:67` |
+| P5 | `npm test` scheitert im frischen Klon | Niedrig | `test/db/prisma.test.ts` |
+
+---
+
+## K1 — Importierte Zwischenzeiten ohne Distanz sind dauerhaft nicht synchronisierbar
+
+**Schwere: Hoch.** `apps/web/js/resultsImport/dsv7Parser.js:230` (und
+identisch `:310` für Staffeln):
+
+```js
+target.splits.push({ distanceM: toInt(distanzRaw), time: splitTime });
+```
+
+`toInt()` (`:67-71`) liefert `undefined`, sobald das Distanz-Feld leer ist
+oder keine Zahl enthält. `ResultSplitSchema`
+(`packages/shared-types/src/entities.ts:158-162`) verlangt aber:
+
+```ts
+distanceM: z.number().positive(),
+```
+
+— ein Pflichtfeld in einem `.strict()`-Objekt. Verifiziert:
+`safeParse({ distanceM: undefined, time: 30.5 })` schlägt fehl, ebenso
+`distanceM: 0` (wegen `.positive()`).
+
+**Ablauf des Datenverlusts.** Der Import schreibt das Ergebnis über
+`db.js: put()` lokal, `executeImportPlan()` meldet Erfolg, die Person sieht
+den Toast „Import abgeschlossen". Der daraufhin erzeugte Push scheitert in
+`validatePayload()` (`sync.service.ts:203`) mit `invalid_payload`. Weil
+das ein **dauerhafter** Fehler ist, wiederholt `syncClient.js` ihn
+`MAX_SYNC_ATTEMPTS`-mal (`:31`) und markiert das Event danach als
+`failed` — womit es aus `getSendableSyncEvents()` herausfällt und nie
+wieder gesendet wird. Das Ergebnis existiert nur noch auf diesem einen
+Gerät und ist bei einem Logout (`wipeAll()`) weg.
+
+**Reproduktion.** Eine `PNZWISCHENZEIT`-Zeile mit leerem Distanz-Feld
+(`PNZWISCHENZEIT:149;1;E;;00:00:30,10;`) ergibt
+`splits: [{ time: 30.1 }]` — ohne `distanceM`.
+
+**Verwandt, dieselbe Stelle.** `ResultSchema.time` ist
+`z.number().positive().nullable()`. Der Parser (`:198`) setzt
+`time = timeToSec(endzeit)`, sobald `status === 'OK'`. Trägt eine Zeile
+`status` „OK" und trotzdem den Platzhalter `00:00:00,00`, ist das
+Ergebnis `0` — von `.positive()` ebenfalls abgelehnt, mit demselben
+Verlauf.
+
+**Empfehlung.** Im Parser filtern statt im Schema aufweichen: eine
+Zwischenzeit ohne positive Distanz gehört nicht in `splits` (sie ist ohne
+Distanz fachlich auch nicht darstellbar). Analog `time` auf `null`
+abbilden, wenn `timeToSec()` nicht positiv ist. Ein Test je Fall in
+`apps/web/test/dsv7Parser.test.js`, plus — als Netz gegen die ganze
+Fehlerklasse — ein Test, der einen `buildImportPlan()`-Entwurf gegen
+`ResultSchema` parst.
+
+---
+
+## K2 — `isPB` bleibt dauerhaft `false`, sobald ein Ergebnis ohne Zeit existiert
+
+**Schwere: Hoch.** Drei Stellen bestimmen die persönliche Bestzeit:
+
+```js
+// modules/competitions.js:212 (Schnellerfassung)
+const isPB = others.length === 0 || others.every(r => sec < r.time);
+// modules/competitionLive.js:158 (Wettkampfmodus, "Ziel")
+const isPB = others.length === 0 || others.every(r => finalTime < r.time);
+// resultsImport/importRunner.js:45 (Import)
+proposed.isPB = others.length === 0 || others.every((r) => r.time != null && proposed.time < r.time);
+```
+
+`Result.time` ist seit dem Import-Feature `nullable`
+(`entities.ts:172`) — genau dafür ist es gedacht: DS (Disqualifikation),
+NA (nicht angetreten), AB, AU, ZU tragen keine Zeit. Trifft eine solche
+Zeile auf die ersten beiden Ausdrücke, wird `sec < null` zu `sec < 0`
+ausgewertet, also `false`; `every` bricht ab, `isPB` ist `false`. Die
+dritte Stelle kommt über den expliziten `r.time != null`-Zweig zum selben
+Ergebnis.
+
+**Wirkung.** Ein einziges disqualifiziertes Ergebnis — importiert oder von
+Hand erfasst — sorgt dafür, dass diese Person auf dieser Strecke **nie
+wieder** eine Bestzeit angezeigt bekommt, gleich wie schnell sie schwimmt.
+Verifiziert: `30.0 < null` → `false`.
+
+Das ist kein neuer Fehler in `importRunner.js`; die Coercion-Fassung in
+`competitions.js`/`competitionLive.js` liegt länger vor. Sie war nur
+unerreichbar, solange `time` nicht `null` sein konnte — der Import macht
+sie jetzt erreichbar, und `importRunner.js` hat die falsche Semantik
+mitübernommen statt sie zu korrigieren.
+
+**Empfehlung.** Ergebnisse ohne Zeit nehmen an einem Bestzeit-Vergleich
+gar nicht teil. Eine gemeinsame Funktion für alle drei Stellen, etwa in
+`swimTime.js`:
+
+```js
+export function isPersonalBest(time, others) {
+  if (time == null) return false;
+  const timed = others.filter((r) => r.time != null);
+  return timed.every((r) => time < r.time);
+}
+```
+
+(Der `others.length === 0`-Sonderfall entfällt dabei — `every` auf einer
+leeren Liste ist bereits `true`.)
+
+**Nebenbefund, gleiche Stelle, Niedrig.** Keine der drei Stellen setzt
+`isPB` auf dem bisherigen Bestzeit-Datensatz zurück. Nach einer neuen
+Bestzeit tragen beide Datensätze `isPB: true`, und `modules/times.js:82`
+zeigt entsprechend zwei PB-Abzeichen.
+
+---
+
+## K3 — `uid()`-Ausweichpfad erzeugt Nicht-UUIDs, die kein Entity-Schema annimmt
+
+**Schwere: Hoch.** `apps/web/js/db.js:104-107`:
+
+```js
+export function uid(){
+  if (crypto?.randomUUID) return crypto.randomUUID();
+  return 'id-' + Date.now() + '-' + Math.random().toString(16).slice(2);
+}
+```
+
+Jedes Entity-Schema verlangt `id: z.string().uuid()`
+(`entities.ts:86,98,120,133,166,194,…`). Der Ausweichwert `id-…` erfüllt
+das nicht — jeder so angelegte Datensatz scheitert dauerhaft an
+`validatePayload()`, mit exakt dem Verlauf aus **K1** (fünf Versuche,
+dann `failed`).
+
+**Wann greift der Ausweichpfad?** `crypto.randomUUID` ist ausschließlich in
+einem *secure context* verfügbar. `docs/deployment-raspberry-pi.md:642`
+beschreibt einen dokumentierten Zwischenzustand: „Ab jetzt ist die Seite
+unter `http://training.mein-verein.de` erreichbar (noch ohne
+Schloss-Symbol/HTTPS)". Auf einer echten Domain über `http://` existiert
+`crypto`, aber `crypto.randomUUID` ist `undefined` — der Ausweichpfad
+greift, und **jeder** in diesem Zustand angelegte Datensatz ist dauerhaft
+nicht synchronisierbar. Wird HTTPS später eingerichtet, bleiben die
+Altdatensätze kaputt.
+
+**Empfehlung.** Der Ausweichpfad ist ohnehin nur wegen der UUID-Form nötig,
+nicht wegen fehlender Entropie — `crypto.getRandomValues` ist auch im
+unsicheren Kontext verfügbar. Daraus eine formgerechte v4-UUID bauen
+(Version- und Variant-Bits setzen). Zusätzlich einen Test, der
+`uid()` gegen dieselbe UUID-Prüfung stellt, die der Server anwendet.
+
+---
+
+## K4 — `STERGEBNIS` wird nicht je Wertung dedupliziert
+
+**Schwere: Mittel.** `PNERGEBNIS` wiederholt sich in DSV7 einmal je
+Wertungsklasse für denselben Schwimmversuch; der Parser fängt das
+ausdrücklich ab (`dsv7Parser.js:189-190`):
+
+```js
+const dedupeKey = `${veranstaltungsId}|${wettkampfnr}|${wettkampfart}`;
+if (individualResultsByKey.has(dedupeKey)) break;
+```
+
+`STERGEBNIS` hat dieselbe Struktur — das Feld `WertungsID` steht an
+Position 3 (siehe `docs/dsv7-lenex-import-plan.md:106`) — bekommt aber
+keine solche Prüfung. Stattdessen (`:271`):
+
+```js
+relayResultsByKey.set(`${veranstaltungsIdStaffel}|${wettkampfnr}|${wettkampfart}`, { template, members: [] });
+```
+
+Die zweite Wertungszeile **überschreibt** die Gruppe mit einer frischen
+`template`-Instanz samt neuem, leerem `splits`-Array. Die bereits erzeugten
+Mitglieds-Results referenzieren weiter das alte Array (der Kommentar bei
+`:280-284` erklärt diese Referenzteilung als beabsichtigt — sie bricht hier).
+
+**Reproduktion** (Staffel mit zwei Wertungsklassen, sonst identisch):
+
+```
+STERGEBNIS:26;E;26001;1;;1;154;SV Test;5623;00:01:50,00;;;
+STAFFELPERSON:154;26;E;Muster, Max;404306;1;M;2009;
+STZWISCHENZEIT:154;26;E;1;50;00:00:27,50;
+STERGEBNIS:26;E;26002;1;;1;154;SV Test;5623;00:01:50,00;;;
+STAFFELPERSON:154;26;E;Muster, Max;404306;1;M;2009;
+```
+
+→ zwei `ImportedResult` für dieselbe Person in derselben Staffel; das erste
+trägt die Zwischenzeit, das zweite `splits: []`.
+
+**Wirkung.** `buildImportPlan()` reduziert Duplikate erst *nach* den
+`unmatched-athlete`/`unmatched-event`-Zweigen (`matching.js:125-141`) —
+nicht zuordenbare Personen erscheinen in der Vorschautabelle deshalb
+doppelt. Bei zuordenbaren Personen entscheidet `roundRank`; bei
+Rangleichheit gewinnt die erste, was hier zufällig die richtige ist. Die
+Korrektheit hängt damit an der Zeilenreihenfolge des Exportprogramms.
+
+**Empfehlung.** Dieselbe Dedupe-Prüfung wie bei `PNERGEBNIS`: existiert
+der Schlüssel bereits in `relayResultsByKey`, die Zeile überspringen.
+
+---
+
+## D1 — Beide Setup-Skripte scheitern beim zweiten Lauf
+
+**Schwere: Hoch** (bezogen auf das dokumentierte Versprechen).
+`scripts/setup-netcup.sh:47-52` sagt zu: „Wiederholt ausführbar: bereits
+installierte Software wird übersprungen, eine bereits vorhandene
+apps/api/.env wird NICHT überschrieben …". Genau der wiederholte Lauf ist
+der dokumentierte Weg nach einem `git pull`, der eine neue Migration
+mitbringt (Abschnitt 13).
+
+Der Ablauf bricht ihn aber:
+
+1. `:86` — `DB_MIGRATOR_PASSWORD="${DB_MIGRATOR_PASSWORD:-$(openssl rand -hex 16)}"`
+   würfelt bei **jedem** Lauf neu.
+2. `:117-118` — existiert die Rolle bereits, bleibt ihr Passwort in der
+   Datenbank bewusst unverändert („Passwort bleibt unverändert").
+3. `:333` — `prisma migrate deploy` läuft trotzdem mit dem **frisch
+   gewürfelten** Wert:
+   ```bash
+   (cd apps/api && DATABASE_URL="postgresql://${DB_MIGRATOR_USER}:${DB_MIGRATOR_PASSWORD}@localhost:5432/${DB_NAME}" npx prisma migrate deploy)
+   ```
+
+→ Authentifizierungsfehler, und wegen `set -euo pipefail` (`:56`) bricht
+das gesamte Skript ab. `scripts/setup-codespace.sh` ist an `:52`, `:85` und
+`:288` zeilengleich betroffen.
+
+Das Skript schreibt das gültige Passwort selbst nach
+`apps/api/.env.migrate` (`:160-170`) und liest es nur nie zurück.
+
+**Empfehlung.** Im `else`-Zweig (Rolle existiert bereits)
+`MIGRATE_DATABASE_URL` aus `$MIGRATOR_ENV_FILE` einlesen und für Schritt
+7.3 verwenden; existiert die Datei nicht, mit klarer Meldung abbrechen,
+**bevor** die halbe Einrichtung gelaufen ist — statt erst 200 Zeilen
+später an einem irreführenden Postgres-Fehler.
+
+---
+
+## D2 — DB-Passwörter auf der `psql`-Kommandozeile
+
+**Schwere: Mittel.** `scripts/setup-netcup.sh:114` und `:121`
+(`setup-codespace.sh:82`, `:89`):
+
+```bash
+sudo -u postgres psql -c "CREATE USER ${DB_USER} WITH ENCRYPTED PASSWORD '${DB_PASSWORD}';"
+```
+
+Argumente eines laufenden Prozesses sind unter Linux über
+`/proc/<pid>/cmdline` für **jedes** lokale Konto lesbar (`ps aux` zeigt sie
+direkt). Auf einem frisch aufgesetzten Server ist das Fenster kurz und die
+Zahl der Konten klein — aber genau diese Fehlerklasse hat das Projekt für
+das Superadmin-Passwort bereits behoben (Commit `45dc106`, „fix(scripts):
+stop passing superadmin password as a CLI argument", Befunde M1/M2). Die
+Datenbank-Rollen sind schlicht übersehen worden.
+
+Die `DATABASE_URL`-Übergabe an `prisma migrate deploy` (`:333`) ist davon
+**nicht** betroffen — `/proc/<pid>/environ` ist nur für die Eigentümerin
+lesbar.
+
+**Empfehlung.** Konsistent zu `45dc106`: Passwort über `stdin` bzw. eine
+`psql`-Variable statt über `-c` übergeben, z. B.
+
+```bash
+sudo -u postgres psql -v pw="${DB_PASSWORD}" <<'SQL'
+CREATE USER lane1_app WITH ENCRYPTED PASSWORD :'pw';
+SQL
+```
+
+Das löst nebenbei die Quoting-Schwäche mit: ein per Umgebungsvariable
+vorgegebenes Passwort mit `'` bricht heute aus dem SQL-String aus.
+
+---
+
+## R1 — Doppelte, serielle Club-Abfrage in jeder Auth-Antwort
+
+**Schwere: Mittel** (Effizienz/Redundanz).
+`apps/api/src/modules/auth/auth.service.ts:164-181` definiert zwei Helfer,
+die **dieselbe Zeile** holen:
+
+```ts
+async function resolveEnabledModules(clubs, clubId) {
+  const club = await clubs.findById(clubId);
+  return club?.enabledModules ?? [];
+}
+async function resolveClubIdentity(clubs, clubId) {
+  const club = await clubs.findById(clubId);
+  return { clubNationalID: club?.nationalID ?? null, clubNationalIDType: club?.nationalIDType ?? null };
+}
+```
+
+`PrismaClubRepository.findById()`
+(`invitations.repository.ts:142-144`) ist ein schlichtes
+`prisma.club.findUnique({ where: { id } })` — die Zeile trägt alle drei
+Felder bereits beim ersten Aufruf.
+
+Aufgerufen werden beide **nacheinander, jeweils awaitet**, an acht Stellen
+(`:299/300`, `:344/345`, `:398/399`, `:511/512`, `:560/561`, `:646/647`,
+`:654/655`, `:672/673`) — also in `acceptInvitation`, `login`, `refresh`,
+`resetPassword`, `changePassword`, `changeEmail`, `getMe` und `updateMe`.
+Jede dieser Antworten kostet damit eine überflüssige Datenbankrunde,
+seriell zur ersten.
+
+Der Refresh-Pfad ist der relevanteste: `apiClient.js` erneuert proaktiv
+(`PROACTIVE_REFRESH_MARGIN_MS`, `:40`), bei einer Access-Token-Laufzeit von
+15 Minuten also regelmäßig, für jede aktive Sitzung.
+
+Das ist dieselbe Fehlerklasse, die das Review vom 30.08.2026 unter E1/E2
+für `sync.route.ts`/`sync.service.ts` behoben hat — hier nur an einer
+Stelle, die damals nicht im Umfang lag.
+
+**Empfehlung.** Ein Helfer, ein Lookup:
+
+```ts
+async function resolveClubContext(clubs: ClubModulesLookup, clubId: string | null) {
+  const club = clubId ? await clubs.findById(clubId) : null;
+  return {
+    enabledModules: club?.enabledModules ?? [],
+    clubNationalID: club?.nationalID ?? null,
+    clubNationalIDType: club?.nationalIDType ?? null,
+  };
+}
+```
+
+Alle acht Stellen rufen ihn einmal auf. Das entfernt zugleich acht
+wortgleiche Zeilenpaare.
+
+---
+
+## R2 — `clubModulesCache` räumt nie auf
+
+**Schwere: Niedrig.** `apps/api/src/modules/sync/sync.route.ts:63-73`:
+Einträge bekommen ein `expiresAt` und werden nach Ablauf **neu
+geschrieben**, aber nie gelöscht. Die `Map` wächst dauerhaft mit der Zahl
+der Vereine, die der Prozess je gesehen hat.
+
+Bei der dokumentierten Größenordnung (ein Verein pro Installation, ein
+PM2-Prozess) ist das folgenlos, und der Kommentar begründet die
+Closure-Platzierung sauber. Für eine Mehrvereins-Installation ist es eine
+kleine, unbegrenzte Halde. Ein `clubModulesCache.delete(clubId)` im
+abgelaufenen Zweig oder ein gelegentliches Durchsehen genügt.
+
+---
+
+## P1 — Reset-Mail kann vor/ohne den Token-Schreibvorgang hinausgehen
+
+**Schwere: Mittel.** `auth.service.ts:452-471` startet zwei
+Nebenläufigkeiten **unabhängig voneinander**:
+
+```ts
+deps.passwordResetTokens.create(user.id, tokenHash, expiresAt).catch(…);
+deps.mailer.sendPasswordResetEmail({ … resetUrl: buildPasswordResetUrl(…, plainToken) … }).catch(…);
+```
+
+Das fehlende `await` ist beabsichtigt und richtig begründet (Befund S3,
+Timing-Gleichheit zwischen Treffer- und Nicht-Treffer-Pfad). Die fehlende
+**Reihenfolge** zwischen den beiden ist es nicht: Schlägt der
+Schreibvorgang fehl (DB kurz nicht erreichbar), geht die Mail trotzdem
+hinaus. Die Person bekommt einen Link, der beim Klick
+`InvalidOrExpiredResetTokenError` liefert — „ungültig, abgelaufen oder
+bereits verwendet", obwohl nichts davon zutrifft. Der einzige Hinweis ist
+eine `console.error`-Zeile.
+
+**Empfehlung.** Versand an den Schreibvorgang hängen, weiterhin ohne
+`await`:
+
+```ts
+deps.passwordResetTokens
+  .create(user.id, tokenHash, expiresAt)
+  .then(() => deps.mailer.sendPasswordResetEmail({ … }))
+  .catch((err) => console.error('[auth] Passwort-Zurücksetzen fehlgeschlagen:', err));
+```
+
+Die Timing-Eigenschaft aus S3 bleibt unverändert erhalten (der Aufrufer
+wartet weiterhin auf keines von beidem), es geht aber keine Mail mehr zu
+einem Token hinaus, das nie gespeichert wurde.
+
+---
+
+## P2 — Unescapte Attributwerte in `charts.js`
+
+**Schwere: Niedrig** (heute nicht ausnutzbar; Verteidigung in der Tiefe).
+`apps/web/js/charts.js:28-31` definiert `esc()` mit einem ausdrücklichen
+Warnhinweis: „Nur für ELEMENT-INHALTE gedacht … nicht für Attributwerte".
+Diese Warnung wird an drei Stellen nicht befolgt:
+
+* `:62` und `:86` — `stroke="${color}"` bzw. `fill="${b.color || color}"`:
+  Attributwerte ganz ohne Behandlung.
+* `:53` — `${yFormat ? yFormat(val) : val.toFixed(1)}` in den Gitterlinien
+  ist der einzige Elementinhalt der Datei, der **nicht** durch `esc()`
+  läuft (`:56`, `:60`, `:81`, `:83` tun es).
+
+Aktuell ungefährlich: alle vier Aufrufer (`stats.js:52,62,70,98`,
+`times.js:64`) übergeben feste CSS-Variablennamen, kein Aufrufer setzt
+`b.color`, und `yFormat` ist immer ein Zahlenformatierer. Es ist aber die
+einzige Stelle im Frontend, an der ein datengetriebener Wert direkt
+XSS ergäbe — überall sonst baut `dom.js: el()` per `setAttribute()`.
+
+**Empfehlung.** `color`/`b.color` gegen eine Allowlist prüfen (es sind
+ohnehin nur CSS-Custom-Properties) oder die beiden `<svg>`-Bäume über
+`el()` statt über `innerHTML` bauen. Mindestens `esc()` konsequent auch
+auf `:53` anwenden.
+
+---
+
+## P3 — `EVENTS.push()` mutiert ein exportiertes Referenzdaten-Array
+
+**Schwere: Niedrig.** `modules/resultsImportUI.js:153`:
+
+```js
+if (!EVENTS.includes(newLabel)) EVENTS.push(newLabel);
+```
+
+Der Kommentar darüber begründet die Absicht (Session-Erweiterung, kein
+eigener Store) nachvollziehbar. Die *Umsetzung* ist trotzdem ein globaler
+Seiteneffekt: `EVENTS` aus `refdata.js` speist die Auswahllisten in
+`times.js`, `competitions.js` und `stats.js`. Nach einem Import steht der
+neue Eintrag dort mit — ohne Übersetzung (`trCode(event, 'events')` findet
+keinen Schlüssel) und ohne dass die betreffenden Module davon wissen.
+
+**Empfehlung.** Wenn die Erweiterung gewollt ist, sie explizit machen:
+eine Funktion in `refdata.js` (`registerSessionEvent(label)`), die den
+Zusatz in einer getrennten Liste hält und über einen Getter
+zusammenführt. Dann steht der Seiteneffekt dort, wo die Daten wohnen,
+statt in einem UI-Modul.
+
+---
+
+## P4 — Falscher Pfad in einer Begründung
+
+**Schwere: Niedrig.** `packages/sync-protocol/src/conflictResolution.ts:67`
+verweist auf `apps/web/js/modules/resultsImport/*`. Tatsächlich liegt das
+Modul unter `apps/web/js/resultsImport/*` (`modules/` enthält nur
+`resultsImportUI.js`). In einer Codebasis, deren Kommentare durchgängig
+als Navigationshilfe dienen, ist ein toter Verweis mehr als ein Tippfehler.
+
+---
+
+## P5 — `npm test` scheitert im frischen Klon
+
+**Schwere: Niedrig.** `apps/api/src/app.ts:129-135` begründet ausführlich,
+warum `getPrisma()` verzögert aufgerufen wird: „dadurch braucht keine
+Testumgebung einen generierten Prisma Client oder eine echte Datenbank".
+`test/db/prisma.test.ts` durchbricht genau diese Eigenschaft — zwei seiner
+drei Tests rufen `getPrisma()` direkt auf und scheitern ohne vorheriges
+`prisma generate` mit „@prisma/client did not initialize yet".
+
+CI ist grün, weil `ci.yml` „Prisma Client generieren" vor „Test" ausführt.
+Betroffen ist nur, wer nach `git clone && npm install` schlicht `npm test`
+tippt — der bekommt zwei rote Tests, die nichts mit seiner Änderung zu tun
+haben.
+
+**Empfehlung.** Entweder ein `pretest`-Schritt in `apps/api/package.json`,
+der `prisma generate` mitnimmt, oder die beiden Tests überspringen, wenn
+kein generierter Client vorliegt (mit `test.skipIf`), samt Hinweis auf
+`npm run prisma:generate`.
+
+---
+
+## Geprüft und für gut befunden
+
+Der Vollständigkeit halber — folgende Bereiche wurden durchgesehen, ohne
+dass ein Befund entstanden ist:
+
+* **Guard-Kette in `sync.service.ts`** (`PUSH_GUARDS`, `:277-285`): Die
+  sicherheitsrelevante Reihenfolge ist als Array-Position kodiert und
+  stimmt; `requireOwnClub` läuft vor `requireForeignKeysWithinClub`, beide
+  vor jedem Schreibzugriff. `validatePayload()` streift `createdAt`/
+  `updatedAt` ab, bevor der Payload irgendwo verwendet wird — das
+  Mass-Assignment-Risiko ist tatsächlich geschlossen, nicht nur
+  dokumentiert.
+* **Zeilenebene über der Store-Ebene** (`:405-419`, `:433-445`): Die
+  `results`-Verengung für Rolle „athlete" prüft **sowohl** den bestehenden
+  Datensatz als auch den Payload und schließt den Delete-Fall korrekt ein.
+* **`scopeChangeForAthlete()`** (`sync.athleteScope.ts`): Allowlist statt
+  Blockliste, eigenes Profil korrekt vom fremden unterschieden.
+* **Paginierung** (`sync.pagination.ts`, `sync.service.ts: pull()`): Die
+  Behandlung gleicher Zeitstempel an der Seitengrenze inklusive des
+  Extremfalls (gesamtes Fenster gleicher Zeitstempel) ist korrekt und
+  gedeckelt.
+* **Single-Flight-Refresh** (`apiClient.js:280-292`) und die
+  429-Sonderbehandlung (`:202-204`): schlüssig, verhindert den
+  Massen-Logout durch eigene Parallelität.
+* **`escapeHtml()`** (`mailer.ts:303-305`): vollständig, inklusive
+  Anführungszeichen — die `href`-Interpolation ist sauber.
+* **Service Worker** (`sw.js:126-183`): `/api/`- und `/auth/`-Umgehung
+  greift, `res.type === 'basic'` verhindert das Zwischenspeichern
+  fremder Antworten.
+* **Rollen-/Modul-Matrix** (`sync.permissions.ts`): Whitelist,
+  `Record<EntityStoreName, …>` erzwingt Vollständigkeit zur Compile-Zeit.
+* **Import-Berechtigung**: `resultsImportButton()` hängt an
+  `modules/competitions.js` (`roles: ['trainer','admin']`, `:26`), und der
+  Server setzt unabhängig davon durch — die UI-Beschränkung ist keine
+  Fassade.
+* **`npm audit --omit=dev`**: ohne Befund; der CI-Schritt dafür ist
+  vorhanden und blockierend.
