@@ -11,7 +11,7 @@
 - [x] Kommentare bei Übungen anzeigen
 - [X] Module zubuchbar gestalten
 - [X] Kann Nutzer Sprache anfragen für Fehlermeldungen?
-- [ ] Gelöschter Autor wird auf Deutsch bezeichnet (Konstante in commentAnonymization.ts)
+- [X] Gelöschter Autor wird auf Deutsch bezeichnet (Konstante in commentAnonymization.ts)
 - [X] Super-Admin Interface als Demo
 - [ ] ~Neue Super-Admin einladen~
 
