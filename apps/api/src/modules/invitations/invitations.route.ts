@@ -3,7 +3,7 @@
 // Endpunkte für den einladungsbasierten Registrierungsprozess. Siehe
 // invitations.service.ts für die Autorisierungsmatrix.
 import type { FastifyInstance } from 'fastify';
-import { CreateClubRequestSchema, CreateInvitationRequestSchema, UpdateClubRequestSchema, InvitationPreviewRequestSchema } from '@lane1/shared-types';
+import { CreateClubRequestSchema, CreateInvitationRequestSchema, UpdateClubRequestSchema, UpdateClubIdentityRequestSchema, InvitationPreviewRequestSchema } from '@lane1/shared-types';
 import type { InvitationsService } from './invitations.service.js';
 import { InvitationNotFoundError } from './invitations.service.js';
 import { requireRole } from '../../plugins/authorize.js';
@@ -90,6 +90,24 @@ export async function invitationsRoutes(app: FastifyInstance, opts: InvitationsR
 
       // ClubNotFoundError: über die zentrale Fehler-Registry abgedeckt (404).
       const club = await invitationsService.updateClubModules(request.params.id, body.enabledModules, requesterFrom(request));
+      return reply.code(200).send({ club });
+    },
+  );
+
+  // Eigener Endpunkt statt Erweiterung von PATCH /api/clubs/:id oben, damit
+  // Admins ihre eigene Vereinskennung pflegen können, ohne die
+  // Superadmin-only-Modulverwaltung mitzubenötigen (siehe
+  // invitations.service.ts: updateClubIdentity()).
+  app.patch<{ Params: { id: string } }>(
+    '/api/clubs/:id/identity',
+    { preHandler: [app.authenticate, requireRole('admin', 'superadmin')] },
+    async (request, reply) => {
+      const body = parseInput(UpdateClubIdentityRequestSchema, request.body, reply);
+      if (!body) return;
+
+      // ClubNotFoundError/ForbiddenError: über die zentrale Fehler-Registry
+      // abgedeckt (404 bzw. 403).
+      const club = await invitationsService.updateClubIdentity(request.params.id, body, requesterFrom(request));
       return reply.code(200).send({ club });
     },
   );

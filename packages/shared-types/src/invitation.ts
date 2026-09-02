@@ -17,6 +17,12 @@ export const ClubSchema = z.object({
   // Modul-Pakete, die dieser Verein gebucht hat — siehe modules.ts:
   // MODULE_PACKAGES. Steuert Frontend-Sichtbarkeit und Sync-Zugriff.
   enabledModules: z.array(ModuleKeySchema),
+  // Externe Vereinskennung für den Ergebnisimport (DSV7/Lenex) — generisch
+  // statt DSV-spezifisch, siehe docs/dsv7-lenex-import-plan.md Abschnitt 3.1.
+  // z. B. nationalIDType = "DSV", nationalID = die 4-stellige
+  // DSV-Vereinskennzahl.
+  nationalID: z.string().max(50).nullable(),
+  nationalIDType: z.string().max(50).nullable(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
@@ -64,6 +70,19 @@ export const UpdateClubRequestSchema = z.object({
   enabledModules: z.array(ModuleKeySchema),
 });
 export type UpdateClubRequest = z.infer<typeof UpdateClubRequestSchema>;
+
+// Eigenständiger Endpunkt (statt Erweiterung von UpdateClubRequestSchema
+// oben), damit Admins ihre eigene Vereinskennung pflegen können, ohne die
+// Superadmin-only-Modulverwaltung mitzubenötigen — siehe
+// invitations.service.ts: updateClubIdentity() und
+// docs/dsv7-lenex-import-plan.md Abschnitt 3.1. Leerstring wird serverseitig
+// als "löschen" (→ null) behandelt, damit eine einmal gesetzte Kennung im
+// Formular auch wieder entfernt werden kann.
+export const UpdateClubIdentityRequestSchema = z.object({
+  nationalID: z.string().max(50).nullable(),
+  nationalIDType: z.string().max(50).nullable(),
+});
+export type UpdateClubIdentityRequest = z.infer<typeof UpdateClubIdentityRequestSchema>;
 
 // Nur diese drei Rollen lassen sich per Einladung vergeben — "superadmin"
 // wird bewusst nie über die API vergeben (siehe scripts/createSuperAdmin.ts).

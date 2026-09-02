@@ -59,11 +59,14 @@
 // Kommentar mehr entfernen), die über den Befund hinausginge.
 import type { EntityStoreName } from '@lane1/shared-types';
 
-// Die drei Stores, deren Entity-Schema irgendwo ein CommentSchema[]
+// Die vier Stores, deren Entity-Schema irgendwo ein CommentSchema[]
 // einbettet (siehe entities.ts: ExerciseSchema.comments,
 // PlanSchema.comments, PlainSetSchema.comments — Letzteres sowohl über
-// Plan.days[].sets als auch über Template.sets erreichbar).
-export const COMMENT_BEARING_STORES: ReadonlySet<EntityStoreName> = new Set(['exercises', 'plans', 'templates']);
+// Plan.days[].sets als auch über Template.sets erreichbar — sowie
+// ResultSchema.comments, seit dem DSV7/Lenex-Ergebnisimport: ein Import
+// überschreibt time/place/splits/status, muss bestehende Kommentare aber
+// unangetastet lassen, siehe docs/dsv7-lenex-import-plan.md Abschnitt 3.2).
+export const COMMENT_BEARING_STORES: ReadonlySet<EntityStoreName> = new Set(['exercises', 'plans', 'templates', 'results']);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -100,7 +103,7 @@ function collectSetEntryCommentGroups(sets: unknown): unknown[][] {
 // gespeicherten Stand (SyncGateway.findById()) angewendet.
 function collectCommentGroups(store: EntityStoreName, record: Record<string, unknown> | null): unknown[][] {
   if (!record) return [];
-  if (store === 'exercises') {
+  if (store === 'exercises' || store === 'results') {
     return [Array.isArray(record.comments) ? record.comments : []];
   }
   if (store === 'templates') {

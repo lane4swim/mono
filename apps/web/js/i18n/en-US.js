@@ -507,6 +507,8 @@ export default {
       '50 Brust': '50 Breaststroke', '100 Brust': '100 Breaststroke', '200 Brust': '200 Breaststroke',
       '50 Schmetterling': '50 Butterfly', '100 Schmetterling': '100 Butterfly', '200 Schmetterling': '200 Butterfly',
       '200 Lagen': '200 IM', '400 Lagen': '400 IM',
+      '4x50 Freistil': '4x50 Freestyle', '4x100 Freistil': '4x100 Freestyle', '4x200 Freistil': '4x200 Freestyle',
+      '4x50 Lagen': '4x50 Medley', '4x100 Lagen': '4x100 Medley',
     },
     strokes: { Freistil: 'Freestyle', Rücken: 'Backstroke', Brust: 'Breaststroke', Schmetterling: 'Butterfly', Lagen: 'IM' },
     weekdays: {
