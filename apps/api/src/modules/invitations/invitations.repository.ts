@@ -12,6 +12,10 @@ export interface ClubRecord {
   // Modul-Pakete, die dieser Verein gebucht hat — siehe
   // packages/shared-types/src/modules.ts: MODULE_PACKAGES.
   enabledModules: string[];
+  // Externe Vereinskennung für den Ergebnisimport (DSV7/Lenex) — siehe
+  // invitations.service.ts: updateClubIdentity().
+  nationalID: string | null;
+  nationalIDType: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -57,6 +61,9 @@ export interface ClubRepository {
   // Bearbeiten-Ansicht, siehe invitations.service.ts: updateClubModules()).
   // Wirft, wenn clubId nicht existiert — Aufrufer prüft das nicht separat.
   updateEnabledModules(clubId: string, enabledModules: string[]): Promise<ClubRecord>;
+  // Ändert NUR die externe Vereinskennung (siehe invitations.service.ts:
+  // updateClubIdentity()). Wirft, wenn clubId nicht existiert.
+  updateIdentity(clubId: string, identity: { nationalID: string | null; nationalIDType: string | null }): Promise<ClubRecord>;
 }
 
 export interface InvitationRecord {
@@ -141,6 +148,10 @@ export class PrismaClubRepository implements ClubRepository {
 
   async updateEnabledModules(clubId: string, enabledModules: string[]): Promise<ClubRecord> {
     return this.prisma.club.update({ where: { id: clubId }, data: { enabledModules } });
+  }
+
+  async updateIdentity(clubId: string, identity: { nationalID: string | null; nationalIDType: string | null }): Promise<ClubRecord> {
+    return this.prisma.club.update({ where: { id: clubId }, data: identity });
   }
 
   async countMembersForClubs(clubIds: string[]): Promise<Map<string, ClubMemberCounts>> {

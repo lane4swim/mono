@@ -145,6 +145,12 @@ const ACTION_ROLES = {
   createClub: new Set(['superadmin']),
   listClubs: new Set(['superadmin']),
   updateClub: new Set(['superadmin']),
+  // Anders als updateClub (Modulverwaltung, bleibt Superadmin-only): die
+  // Vereinskennung für den Ergebnisimport (siehe updateClubIdentity()
+  // unten) ist ein Betriebsstammdatum, das der Verein selbst kennt — ein
+  // Admin darf daher den EIGENEN Verein pflegen, zusätzlich zum
+  // Superadmin-Zugriff auf jeden Verein (z. B. Support-Fälle).
+  updateClubIdentity: new Set(['admin', 'superadmin']),
   issueAdminInvitation: new Set(['superadmin']),
   issueMemberInvitation: new Set(['admin', 'superadmin']),
 } as const satisfies Record<string, ReadonlySet<string>>;
@@ -345,6 +351,25 @@ export function createInvitationsService(deps: InvitationsServiceDeps) {
       const club = await deps.clubs.findById(clubId);
       if (!club) throw new ClubNotFoundError();
       return deps.clubs.updateEnabledModules(clubId, enabledModules);
+    },
+
+    // Setzt/ändert die externe Vereinskennung (DSV-Vereinskennzahl o. ä.)
+    // für den Ergebnisimport, siehe docs/dsv7-lenex-import-plan.md
+    // Abschnitt 3.1. Ein Admin darf nur den EIGENEN Verein bearbeiten
+    // (analog zur clubId-Scoping-Prüfung in assertCanIssueRole() oben),
+    // ein Superadmin jeden Verein.
+    async updateClubIdentity(
+      clubId: string,
+      identity: { nationalID: string | null; nationalIDType: string | null },
+      requester: RequesterContext,
+    ): Promise<ClubRecord> {
+      requireActionRole(requester, ACTION_ROLES.updateClubIdentity, 'Nur Admins (oder Superadministrator:innen) dürfen die Vereinskennung ändern.');
+      if (requester.role === 'admin' && requester.clubId !== clubId) {
+        throw new ForbiddenError('Admins dürfen nur die Vereinskennung des eigenen Vereins ändern.');
+      }
+      const club = await deps.clubs.findById(clubId);
+      if (!club) throw new ClubNotFoundError();
+      return deps.clubs.updateIdentity(clubId, identity);
     },
   };
 }

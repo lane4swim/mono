@@ -41,7 +41,7 @@ export class InMemoryClubRepository implements ClubRepository {
 
   async create(input: CreateClubInput): Promise<ClubRecord> {
     const now = new Date();
-    const club: ClubRecord = { id: randomUUID(), name: input.name, enabledModules: [...(input.enabledModules ?? MODULE_KEYS)], createdAt: now, updatedAt: now };
+    const club: ClubRecord = { id: randomUUID(), name: input.name, enabledModules: [...(input.enabledModules ?? MODULE_KEYS)], nationalID: null, nationalIDType: null, createdAt: now, updatedAt: now };
     this.clubsById.set(club.id, club);
     return { ...club };
   }
@@ -75,6 +75,14 @@ export class InMemoryClubRepository implements ClubRepository {
     const existing = this.clubsById.get(clubId);
     if (!existing) throw new Error(`InMemoryClubRepository.updateEnabledModules(): unbekannte clubId ${clubId}`);
     const updated: ClubRecord = { ...existing, enabledModules: [...enabledModules], updatedAt: new Date() };
+    this.clubsById.set(clubId, updated);
+    return { ...updated };
+  }
+
+  async updateIdentity(clubId: string, identity: { nationalID: string | null; nationalIDType: string | null }): Promise<ClubRecord> {
+    const existing = this.clubsById.get(clubId);
+    if (!existing) throw new Error(`InMemoryClubRepository.updateIdentity(): unbekannte clubId ${clubId}`);
+    const updated: ClubRecord = { ...existing, nationalID: identity.nationalID, nationalIDType: identity.nationalIDType, updatedAt: new Date() };
     this.clubsById.set(clubId, updated);
     return { ...updated };
   }

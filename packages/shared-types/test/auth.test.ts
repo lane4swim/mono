@@ -178,6 +178,7 @@ describe('AuthTokensResponseSchema (enabledModules)', () => {
     const response = {
       accessToken: 'a', refreshToken: 'b', expiresIn: 900,
       user: baseUser, enabledModules: ['athletes', 'competitions'],
+      clubNationalID: null, clubNationalIDType: null,
     };
     expect(AuthTokensResponseSchema.safeParse(response).success).toBe(true);
   });
@@ -186,6 +187,7 @@ describe('AuthTokensResponseSchema (enabledModules)', () => {
     const response = {
       accessToken: 'a', refreshToken: 'b', expiresIn: 900,
       user: { ...baseUser, clubId: null, role: 'superadmin' }, enabledModules: [],
+      clubNationalID: null, clubNationalIDType: null,
     };
     expect(AuthTokensResponseSchema.safeParse(response).success).toBe(true);
   });
@@ -204,7 +206,7 @@ describe('AuthTokensResponseSchema (enabledModules)', () => {
   });
 
   it('MeResponseSchema akzeptiert den Nutzer flach erweitert um enabledModules', () => {
-    expect(MeResponseSchema.safeParse({ ...baseUser, enabledModules: ['times'] }).success).toBe(true);
+    expect(MeResponseSchema.safeParse({ ...baseUser, enabledModules: ['times'], clubNationalID: null, clubNationalIDType: null }).success).toBe(true);
   });
 });
 

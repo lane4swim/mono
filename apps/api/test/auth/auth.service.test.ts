@@ -396,6 +396,35 @@ describe('authService.getMe / updateMe', () => {
     expect(updated.name).toBe('Neuer Name');
   });
 
+  // Regressionstest für den DSV7/Lenex-Ergebnisimport (siehe
+  // docs/dsv7-lenex-import-plan.md Abschnitt 3.1): getMe() muss die
+  // externe Vereinskennung mitliefern, damit
+  // apps/web/js/modules/resultsImportUI.js den eigenen Verein automatisch
+  // gegen eine Importdatei abgleichen kann.
+  it('liefert die Vereinskennung (clubNationalID/clubNationalIDType) mit, sobald hinterlegt', async () => {
+    const { service, invitations, clubs } = makeService();
+    const club = await clubs.create({ name: 'SC Beispielverein' });
+    const token = await seedInvitation(invitations, { clubId: club.id });
+    const { user } = await service.acceptInvitation({ token, name: 'Sabine Reuter', password: 'ein-sicheres-passwort', consent: true });
+
+    // Ohne hinterlegte Kennung: beide Felder null, kein Fehler.
+    const meBefore = await service.getMe(user.id);
+    expect(meBefore.clubNationalID).toBeNull();
+    expect(meBefore.clubNationalIDType).toBeNull();
+
+    await clubs.updateIdentity(club.id, { nationalID: '1234', nationalIDType: 'DSV' });
+
+    const meAfter = await service.getMe(user.id);
+    expect(meAfter.clubNationalID).toBe('1234');
+    expect(meAfter.clubNationalIDType).toBe('DSV');
+
+    // Auch über login()/acceptInvitation() (dieselbe resolveClubIdentity()-
+    // Stelle) — nicht nur getMe().
+    const loginResult = await service.login({ email: 'sabine.reuter@example.org', password: 'ein-sicheres-passwort', consent: true, consentVersion: CURRENT_CONSENT_VERSION });
+    expect(loginResult.clubNationalID).toBe('1234');
+    expect(loginResult.clubNationalIDType).toBe('DSV');
+  });
+
   // Sicherheitsreview 2026-08-27, Befund H2: `email` ist bewusst KEIN Feld
   // von updateMe() mehr — der Typ von `patch` erzwingt das bereits zur
   // Kompilierzeit für jeden Aufrufer innerhalb dieses Moduls. Die

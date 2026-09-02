@@ -105,6 +105,10 @@ export const AthleteSchema = z.object({
   joinDate: nullableIsoDate,
   active: z.boolean(),
   notes: z.string().max(10000).default(''),
+  // Externe Athletenkennung für den Ergebnisimport (DSV7/Lenex) — generisch
+  // statt DSV-spezifisch, siehe docs/dsv7-lenex-import-plan.md Abschnitt 3.1.
+  nationalID: z.string().max(50).nullable().optional(),
+  nationalIDType: z.string().max(50).nullable().optional(),
   createdAt: isoDate,
   updatedAt: isoDate,
 }).strict();
@@ -140,12 +144,32 @@ export const StartlistEntrySchema = z.object({
 }).strict();
 export type StartlistEntry = z.infer<typeof StartlistEntrySchema>;
 
+// "OK" = gewertetes Ergebnis mit echter Zeit. Die übrigen Werte sind die
+// DSV7-Codes für "Grund der Nichtwertung" (siehe
+// docs/dsv7-lenex-import-plan.md Abschnitt 3.4): DS = Disqualifikation,
+// NA = nicht angetreten, AB = abgemeldet, AU = aufgegeben,
+// ZU = Zeitüberschreitung.
+export const ResultStatusSchema = z.enum(['OK', 'DS', 'NA', 'AB', 'AU', 'ZU']);
+
+// Eine importierte Zwischenzeit (DSV7 PNZWISCHENZEIT/STZWISCHENZEIT) —
+// getrennt von `laps` (Stoppuhr-Funktion, andere Semantik). `legIndex`
+// referenziert bei Staffeln die Startnummer der/des Ablösenden innerhalb
+// der Staffel, bei Einzelstrecken ist es nicht gesetzt.
+export const ResultSplitSchema = z.object({
+  distanceM: z.number().positive(),
+  time: z.number().positive(),
+  legIndex: z.number().int().positive().optional(),
+}).strict();
+export type ResultSplit = z.infer<typeof ResultSplitSchema>;
+
 export const ResultSchema = z.object({
   id: z.string().uuid(),
   clubId: z.string().uuid(),
   athleteId: z.string().uuid(),
   event: z.string().min(1).max(200),
-  time: z.number().positive(),
+  // Bei status !== "OK" gibt es keine gewertete Zeit (siehe
+  // docs/dsv7-lenex-import-plan.md Abschnitt 3.4/5).
+  time: z.number().positive().nullable(),
   date: isoDate,
   course: CourseSchema,
   competitionId: z.string().uuid().nullable(),
@@ -153,6 +177,14 @@ export const ResultSchema = z.object({
   isPB: z.boolean(),
   // Rundenzeiten der Stoppuhr-Funktion — kumulierte Sekunden je Runde.
   laps: z.array(z.number().positive()).max(500).nullable().optional(),
+  // Aus einem Ergebnisimport übernommene Zwischenzeiten.
+  splits: z.array(ResultSplitSchema).max(200).nullable().optional(),
+  status: ResultStatusSchema.default('OK'),
+  statusNote: z.string().max(2000).nullable().optional(),
+  // Diskussions-/Hinweiskommentare zum Ergebnis — bleiben bei einem
+  // Ergebnisimport unangetastet erhalten (siehe COMMENT_BEARING_STORES in
+  // sync.commentAuthorship.ts).
+  comments: z.array(CommentSchema).max(500).default([]),
   createdAt: isoDate,
   updatedAt: isoDate,
 }).strict();

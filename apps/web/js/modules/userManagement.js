@@ -10,7 +10,7 @@ import { fmtDateShort } from '../dates.js';
 import { badge, emptyState, laneWave, toast } from '../ui.js';
 import { openModal, confirmAction } from '../modal.js';
 import { field, textInput, selectInput, formActions } from '../forms.js';
-import { isSuperAdmin } from '../state.js';
+import { isSuperAdmin, getCurrentUser, setClubIdentity } from '../state.js';
 import * as api from '../apiClient.js';
 import { describeError } from '../apiClient.js';
 import { t } from '../i18n.js';
@@ -75,6 +75,7 @@ function renderView(container, clubs, invitations, members) {
     wrap.appendChild(renderClubsSection(clubs, refresh));
   } else {
     wrap.appendChild(renderMembersSection(members));
+    wrap.appendChild(renderClubIdentitySection());
   }
 
   wrap.appendChild(renderInviteSection(clubs, refresh));
@@ -137,6 +138,44 @@ function renderMembersGroupedByRole(members) {
     wrap.appendChild(el('div', { class: 'table-wrap mb-16' }, table));
   });
   return wrap;
+}
+
+// Externe Vereinskennung für den DSV7/Lenex-Ergebnisimport (siehe
+// docs/dsv7-lenex-import-plan.md Abschnitt 3.1) — nur für Admins des
+// eigenen Vereins editierbar (siehe invitations.service.ts:
+// updateClubIdentity()), daher hier statt in renderClubsSection()
+// (Superadmin-Bearbeitung der Modul-Buchung anderer Vereine).
+function renderClubIdentitySection() {
+  const user = getCurrentUser();
+  const card = el('div', { class: 'card mb-16' }, [el('h3', { class: 'mt-0' }, t('usermgmt.clubIdentitySection'))]);
+  card.appendChild(el('p', { class: 'hint' }, t('usermgmt.clubIdentityHint')));
+  const form = el('form', { class: 'form-grid' });
+  const fType = textInput(user?.clubNationalIDType || '', { placeholder: 'z. B. DSV' });
+  const fId = textInput(user?.clubNationalID || '', { placeholder: 'z. B. 1234' });
+  form.appendChild(field(t('usermgmt.clubIdentityTypeLabel'), fType));
+  form.appendChild(field(t('usermgmt.clubIdentityIdLabel'), fId));
+  // Kein formActions()/Abbrechen-Button — es gibt hier keinen "Bearbeiten"-
+  // Modus zu verlassen, das Formular zeigt den aktuellen Stand direkt
+  // inline auf der Seite (kein Modal).
+  const submitBtn = el('button', { type: 'submit', class: 'btn btn-primary' }, t('common.save'));
+  form.appendChild(el('div', { class: 'form-actions', style: 'grid-column:1/-1' }, [submitBtn]));
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    submitBtn.disabled = true;
+    try {
+      const nationalID = fId.value.trim() || null;
+      const nationalIDType = fType.value.trim() || null;
+      await api.updateClubIdentity(user.clubId, { nationalID, nationalIDType });
+      setClubIdentity(nationalID, nationalIDType);
+      toast(t('usermgmt.clubIdentitySaved'));
+    } catch (err) {
+      toast(describeError(err), 'error');
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
+  card.appendChild(form);
+  return card;
 }
 
 function openClubMembersModal(club) {

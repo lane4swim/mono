@@ -222,13 +222,13 @@ function postJson(path, body, opts) {
 export async function login({ email, password, consent, consentVersion }) {
   const result = await postJson('/auth/login', { email, password, consent, consentVersion }, { allowRefreshRetry: false });
   setTokens(result);
-  return { ...result.user, enabledModules: result.enabledModules };
+  return { ...result.user, enabledModules: result.enabledModules, clubNationalID: result.clubNationalID, clubNationalIDType: result.clubNationalIDType };
 }
 
 export async function acceptInvitation({ token, name, password, consent }) {
   const result = await postJson('/auth/register', { token, name, password, consent }, { allowRefreshRetry: false });
   setTokens(result);
-  return { ...result.user, enabledModules: result.enabledModules };
+  return { ...result.user, enabledModules: result.enabledModules, clubNationalID: result.clubNationalID, clubNationalIDType: result.clubNationalIDType };
 }
 
 // "Passwort vergessen" (Sicherheitsreview 2026-08, Befund M5). Liefert
@@ -248,7 +248,7 @@ export function forgotPassword(email) {
 export async function resetPassword({ token, newPassword }) {
   const result = await postJson('/auth/reset-password', { token, newPassword }, { allowRefreshRetry: false });
   setTokens(result);
-  return { ...result.user, enabledModules: result.enabledModules };
+  return { ...result.user, enabledModules: result.enabledModules, clubNationalID: result.clubNationalID, clubNationalIDType: result.clubNationalIDType };
 }
 
 // Code-Review, Befund S4: refreshTokens() bündelt gleichzeitige Aufrufer
@@ -323,7 +323,7 @@ export function updateMe(patch) {
 export async function changePassword({ currentPassword, newPassword }) {
   const result = await request('/api/me/password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) });
   setTokens(result);
-  return { ...result.user, enabledModules: result.enabledModules };
+  return { ...result.user, enabledModules: result.enabledModules, clubNationalID: result.clubNationalID, clubNationalIDType: result.clubNationalIDType };
 }
 // E-Mail-Wechsel für die eigene, eingeloggte Person (Sicherheitsreview
 // 2026-08-27, Befund H2) — verlangt wie changePassword() das aktuelle
@@ -335,7 +335,7 @@ export async function changePassword({ currentPassword, newPassword }) {
 export async function changeEmail({ currentPassword, newEmail }) {
   const result = await request('/api/me/email', { method: 'POST', body: JSON.stringify({ currentPassword, newEmail }) });
   setTokens(result);
-  return { ...result.user, enabledModules: result.enabledModules };
+  return { ...result.user, enabledModules: result.enabledModules, clubNationalID: result.clubNationalID, clubNationalIDType: result.clubNationalIDType };
 }
 // Art. 15 DSGVO — Recht auf Auskunft: bündelt alle zum eigenen Konto
 // gespeicherten Daten.
@@ -360,6 +360,14 @@ export function listClubs() {
 // hat (Superadmin-Bearbeiten-Ansicht, siehe admin.js). Antwort: { club }.
 export function updateClub(clubId, { enabledModules }) {
   return request(`/api/clubs/${encodeURIComponent(clubId)}`, { method: 'PATCH', body: JSON.stringify({ enabledModules }) });
+}
+// Eigener Endpunkt statt updateClub() oben — Admins dürfen die
+// Vereinskennung des eigenen Vereins pflegen, ohne die Superadmin-only-
+// Modulverwaltung mitzubenötigen (siehe invitations.route.ts:
+// PATCH /api/clubs/:id/identity und docs/dsv7-lenex-import-plan.md
+// Abschnitt 3.1).
+export function updateClubIdentity(clubId, { nationalID, nationalIDType }) {
+  return request(`/api/clubs/${encodeURIComponent(clubId)}/identity`, { method: 'PATCH', body: JSON.stringify({ nationalID, nationalIDType }) });
 }
 export function createInvitation({ email, role, clubId, athleteId }) {
   return postJson('/api/invitations', { email, role, clubId, athleteId });

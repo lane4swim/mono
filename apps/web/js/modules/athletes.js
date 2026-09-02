@@ -171,7 +171,7 @@ function openAthleteModal(athlete, groups, onSaved) {
     return;
   }
   const isEdit = !!athlete;
-  const data = athlete ? { ...athlete } : { firstName: '', lastName: '', birthdate: '', gender: 'w', groupId: groups[0]?.id || '', joinDate: todayISO(), active: true, notes: '' };
+  const data = athlete ? { ...athlete } : { firstName: '', lastName: '', birthdate: '', gender: 'w', groupId: groups[0]?.id || '', joinDate: todayISO(), active: true, notes: '', nationalIDType: '', nationalID: '' };
   const form = el('form', { class: 'form-grid' });
   const fFirst = textInput(data.firstName, { required: true });
   const fLast = textInput(data.lastName, { required: true });
@@ -181,6 +181,8 @@ function openAthleteModal(athlete, groups, onSaved) {
   const fJoin = dateInput(data.joinDate || todayISO());
   const fActive = el('input', { type: 'checkbox' }); fActive.checked = data.active !== false;
   const fNotes = el('textarea', {}, data.notes || '');
+  const fIDType = textInput(data.nationalIDType || '', { placeholder: 'z. B. DSV' });
+  const fID = textInput(data.nationalID || '', { placeholder: 'z. B. 404306' });
 
   form.appendChild(field(t('athletes.formFirstName'), fFirst));
   form.appendChild(field(t('athletes.formLastName'), fLast));
@@ -188,6 +190,8 @@ function openAthleteModal(athlete, groups, onSaved) {
   form.appendChild(field(t('athletes.formGender'), fGender));
   form.appendChild(field(t('athletes.formGroup'), fGroup));
   form.appendChild(field(t('athletes.formJoinDate'), fJoin));
+  form.appendChild(field(t('athletes.formNationalIDType'), fIDType, { hint: t('athletes.formNationalIDHint') }));
+  form.appendChild(field(t('athletes.formNationalID'), fID));
   form.appendChild(field(t('athletes.formNotes'), fNotes, { span2: true }));
   const activeField = field(t('athletes.formStatus'), el('div', { class: 'flex items-center gap-8' }, [fActive, el('span', { class: 'text-sm' }, t('athletes.formActiveLabel'))]), { span2: true });
   form.appendChild(activeField);
@@ -200,6 +204,7 @@ function openAthleteModal(athlete, groups, onSaved) {
     const obj = {
       ...data, firstName: fFirst.value.trim(), lastName: fLast.value.trim(), birthdate: toIsoDateTime(fBirth.value),
       gender: fGender.value, groupId: fGroup.value, joinDate: toIsoDateTime(fJoin.value), active: fActive.checked, notes: fNotes.value.trim(),
+      nationalIDType: fIDType.value.trim() || null, nationalID: fID.value.trim() || null,
     };
     await put('athletes', obj);
     toast(isEdit ? t('athletes.savedEdit') : t('athletes.savedCreate'));

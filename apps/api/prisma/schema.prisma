@@ -36,6 +36,13 @@ model Club {
   // sowohl die Frontend-Sichtbarkeit (apps/web/js/router.js) als auch
   // die Sync-Durchsetzung (apps/api/src/modules/sync/sync.permissions.ts).
   enabledModules String[]  @default([])
+  // Externe Vereinskennung für den Ergebnisimport (DSV7/Lenex, siehe
+  // docs/dsv7-lenex-import-plan.md Abschnitt 3.1) — generisch statt
+  // DSV-spezifisch, damit auch andere Verbands-IDs (FINA, SwimRankings, …)
+  // erfasst werden können. nationalIDType benennt das Format, z. B. "DSV"
+  // für die 4-stellige DSV-Vereinskennzahl in nationalID.
+  nationalID     String?
+  nationalIDType String?
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
   users       User[]
@@ -242,6 +249,12 @@ model Athlete {
   joinDate  DateTime?
   active    Boolean   @default(true)
   notes     String    @default("")
+  // Externe Athletenkennung für den Ergebnisimport (DSV7/Lenex, siehe
+  // docs/dsv7-lenex-import-plan.md Abschnitt 3.1) — generisch, analog zu
+  // Club.nationalID/nationalIDType. Erlaubt robusteres Matching gegen
+  // Importzeilen als reiner Namensabgleich (z. B. bei Namensgleichheit).
+  nationalID     String?
+  nationalIDType String?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
@@ -316,7 +329,10 @@ model Result {
   athleteId     String
   athlete       Athlete      @relation(fields: [athleteId], references: [id])
   event         String
-  time          Float
+  // Nullable seit dem DSV7/Lenex-Ergebnisimport: bei status !== "OK" gibt
+  // es keine gewertete Zeit (siehe ResultStatusSchema in
+  // packages/shared-types/src/entities.ts).
+  time          Float?
   date          DateTime
   course        String       @default("LCM")
   competitionId String?
@@ -326,6 +342,23 @@ model Result {
   // Rundenzeiten aus der Stoppuhr-Funktion (kumulierte Sekunden je Runde),
   // optional — siehe apps/web js/modules/competitions.js (buildStopwatchPanel).
   laps          Json?
+  // Zwischenzeiten aus dem DSV7/Lenex-Ergebnisimport (Distanz + Zeit, ggf.
+  // Staffel-Ablöser-Bezug) — bewusst getrennt von `laps` (Stoppuhr-Funktion,
+  // andere Semantik). Siehe docs/dsv7-lenex-import-plan.md Abschnitt 3.3.
+  splits        Json?
+  // "OK" | "DS" (Disqualifikation) | "NA" (nicht angetreten) |
+  // "AB" (abgemeldet) | "AU" (aufgegeben) | "ZU" (Zeitüberschreitung) —
+  // direkte Übernahme der DSV7-Codes für "Grund der Nichtwertung", siehe
+  // docs/dsv7-lenex-import-plan.md Abschnitt 3.4. Bei status !== "OK" ist
+  // `time` bedeutungslos (Platzhalter aus der Importdatei wird nicht
+  // übernommen).
+  status        String       @default("OK")
+  statusNote    String?
+  // Diskussions-/Hinweiskommentare zum Ergebnis — Struktur siehe
+  // CommentSchema in packages/shared-types/src/entities.ts. Bleibt bei
+  // einem Ergebnisimport (Überschreiben von time/place/splits/status)
+  // unangetastet erhalten, siehe docs/dsv7-lenex-import-plan.md Abschnitt 5.
+  comments      Json         @default("[]")
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
   deletedAt     DateTime?

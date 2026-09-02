@@ -15,6 +15,8 @@ describe('ClubWithCountsSchema', () => {
       id: '11111111-1111-1111-1111-111111111111',
       name: 'SV Wasserfreunde',
       enabledModules: ['athletes', 'competitions'],
+      nationalID: null,
+      nationalIDType: null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       memberCounts: { admin: 2, trainer: 5, athlete: 42 },
