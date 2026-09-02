@@ -321,6 +321,7 @@ export default {
     exerciseCommentsTitle: 'Kommentare zur Übung',
     setCommentsTitle: 'Kommentare zu diesem Satz',
     exerciseHintButton: '📝 Übungskommentare ({count})',
+    deletedAuthor: 'Gelöschtes Konto',
   },
   sessions: {
     eyebrow: '{count} Einheiten', title: 'Trainingseinheiten & Feedback', addSession: '+ Einheit erfassen',

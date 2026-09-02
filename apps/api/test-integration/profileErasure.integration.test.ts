@@ -17,6 +17,7 @@ import { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import { PrismaProfileDataGateway, ErasureAlreadyRequestedError } from '../src/modules/profile/profile.repository.js';
 import { PrismaErasureJobGateway } from '../src/jobs/erasure.repository.js';
+import { ANONYMIZED_COMMENT_AUTHOR } from '../src/jobs/commentAnonymization.js';
 import { getTestPrisma, closeTestPrisma, truncateAll, createTestClub } from './helpers.js';
 
 const prisma = getTestPrisma();
@@ -401,17 +402,17 @@ describe('PrismaErasureJobGateway.purgeUserAndDependents() — Comment.authorNam
     await erasureGateway.purgeUserAndDependents(user.id);
 
     const updatedPlan = await prisma.plan.findUnique({ where: { id: plan.id } });
-    expect(updatedPlan?.comments).toMatchObject([{ authorName: 'Gelöschtes Konto', text: 'Guter Plan' }]);
+    expect(updatedPlan?.comments).toMatchObject([{ authorName: ANONYMIZED_COMMENT_AUTHOR, text: 'Guter Plan' }]);
     const days = updatedPlan?.days as Array<{ sets: Array<Record<string, unknown>> }>;
-    expect(days[0]!.sets[0]).toMatchObject({ comments: [{ authorName: 'Gelöschtes Konto', text: 'Harte Serie' }] });
+    expect(days[0]!.sets[0]).toMatchObject({ comments: [{ authorName: ANONYMIZED_COMMENT_AUTHOR, text: 'Harte Serie' }] });
     const block = days[0]!.sets[1] as { sets: Array<Record<string, unknown>> };
-    expect(block.sets[0]).toMatchObject({ comments: [{ authorName: 'Gelöschtes Konto', text: 'Im Block' }] });
+    expect(block.sets[0]).toMatchObject({ comments: [{ authorName: ANONYMIZED_COMMENT_AUTHOR, text: 'Im Block' }] });
 
     const updatedExercise = await prisma.exercise.findUnique({ where: { id: exercise.id } });
-    expect(updatedExercise?.comments).toMatchObject([{ authorName: 'Gelöschtes Konto', text: 'Technik-Hinweis' }]);
+    expect(updatedExercise?.comments).toMatchObject([{ authorName: ANONYMIZED_COMMENT_AUTHOR, text: 'Technik-Hinweis' }]);
 
     const updatedTemplate = await prisma.template.findUnique({ where: { id: template.id } });
-    expect((updatedTemplate?.sets as Array<Record<string, unknown>>)[0]).toMatchObject({ comments: [{ authorName: 'Gelöschtes Konto', text: 'Vorlagen-Hinweis' }] });
+    expect((updatedTemplate?.sets as Array<Record<string, unknown>>)[0]).toMatchObject({ comments: [{ authorName: ANONYMIZED_COMMENT_AUTHOR, text: 'Vorlagen-Hinweis' }] });
 
     // Nachreview zu M2: `authorId` muss VOLLSTÄNDIG verschwinden, nicht
     // nur der Anzeigename überschrieben werden — sonst überlebte den
@@ -461,7 +462,7 @@ describe('PrismaErasureJobGateway.purgeUserAndDependents() — Comment.authorNam
     await erasureGateway.purgeUserAndDependents(trainer.id);
 
     const updated = await prisma.exercise.findUnique({ where: { id: exercise.id } });
-    expect(updated?.comments).toMatchObject([{ authorName: 'Gelöschtes Konto', text: 'Trainer-Hinweis' }]);
+    expect(updated?.comments).toMatchObject([{ authorName: ANONYMIZED_COMMENT_AUTHOR, text: 'Trainer-Hinweis' }]);
   });
 });
 

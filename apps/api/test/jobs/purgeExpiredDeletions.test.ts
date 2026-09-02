@@ -2,6 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import { MODULE_KEYS } from '@lane1/shared-types';
 import { purgeExpiredDeletions } from '../../src/jobs/purgeExpiredDeletions.js';
+import { ANONYMIZED_COMMENT_AUTHOR } from '../../src/jobs/commentAnonymization.js';
 import { InMemoryErasureJobGateway, type InMemoryErasureDatabase } from '../../src/jobs/erasure.repository.memory.js';
 
 function makeDb(overrides: Partial<InMemoryErasureDatabase> = {}): InMemoryErasureDatabase {
@@ -49,15 +50,15 @@ describe('purgeExpiredDeletions — Comment.authorName-Anonymisierung (Befund N5
     await purgeExpiredDeletions(gateway, NOW);
 
     const plan = db.plans![0]!;
-    expect((plan.comments as Array<{ authorName: string; text: string }>)[0]).toMatchObject({ authorName: 'Gelöschtes Konto', text: 'Guter Plan' });
+    expect((plan.comments as Array<{ authorName: string; text: string }>)[0]).toMatchObject({ authorName: ANONYMIZED_COMMENT_AUTHOR, text: 'Guter Plan' });
     const day = (plan.days as Array<{ sets: Array<{ comments: Array<{ authorName: string; text: string }> }> }>)[0]!;
-    expect(day.sets[0]!.comments[0]).toMatchObject({ authorName: 'Gelöschtes Konto', text: 'Harte Serie' });
+    expect(day.sets[0]!.comments[0]).toMatchObject({ authorName: ANONYMIZED_COMMENT_AUTHOR, text: 'Harte Serie' });
 
     const exercise = db.exercises![0]!;
-    expect((exercise.comments as Array<{ authorName: string; text: string }>)[0]).toMatchObject({ authorName: 'Gelöschtes Konto', text: 'Technik-Hinweis' });
+    expect((exercise.comments as Array<{ authorName: string; text: string }>)[0]).toMatchObject({ authorName: ANONYMIZED_COMMENT_AUTHOR, text: 'Technik-Hinweis' });
 
     const template = db.templates![0]!;
-    expect((template.sets as Array<{ comments: Array<{ authorName: string; text: string }> }>)[0]!.comments[0]).toMatchObject({ authorName: 'Gelöschtes Konto', text: 'Vorlagen-Hinweis' });
+    expect((template.sets as Array<{ comments: Array<{ authorName: string; text: string }> }>)[0]!.comments[0]).toMatchObject({ authorName: ANONYMIZED_COMMENT_AUTHOR, text: 'Vorlagen-Hinweis' });
   });
 
   it('lässt Kommentare ANDERER Personen und eines ANDEREN Vereins unangetastet', async () => {
@@ -89,7 +90,7 @@ describe('purgeExpiredDeletions — Comment.authorName-Anonymisierung (Befund N5
     const gateway = new InMemoryErasureJobGateway(db);
     await purgeExpiredDeletions(gateway, NOW);
 
-    expect((db.exercises![0]!.comments as Array<{ authorName: string }>)[0]!.authorName).toBe('Gelöschtes Konto');
+    expect((db.exercises![0]!.comments as Array<{ authorName: string }>)[0]!.authorName).toBe(ANONYMIZED_COMMENT_AUTHOR);
   });
 });
 

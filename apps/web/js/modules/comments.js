@@ -23,6 +23,10 @@ import { openModal } from '../modal.js';
 import { getCurrentUser } from '../state.js';
 import { t } from '../i18n.js';
 
+// Muss exakt ANONYMIZED_COMMENT_AUTHOR aus
+// apps/api/src/jobs/commentAnonymization.ts entsprechen.
+const DELETED_ACCOUNT_AUTHOR_SENTINEL = '__deleted_account__';
+
 // Renders an existing list of comments plus an add-comment form into
 // `hostNode`. `persist(nextComments)` is called (and awaited) after
 // every add/delete with the FULL new array — the caller is responsible
@@ -45,7 +49,7 @@ export function renderCommentThread(hostNode, initialComments, persist) {
         .forEach((c) => {
           list.appendChild(el('div', { class: 'card', style: 'padding:10px;margin-bottom:8px' }, [
             el('div', { class: 'flex justify-between items-center' }, [
-              el('strong', {}, c.authorName),
+              el('strong', {}, c.authorName === DELETED_ACCOUNT_AUTHOR_SENTINEL ? t('comments.deletedAuthor') : c.authorName),
               el('span', { class: 'hint' }, fmtDateTime(c.createdAt)),
             ]),
             el('p', { class: 'text-sm mt-0', style: 'white-space:pre-wrap' }, c.text),
