@@ -21,3 +21,4 @@
 ## Push Nachrichten
 
 ## Import von DSV7 Dateien
+- [ ] Ergänzen um Lenex
