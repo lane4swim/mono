@@ -39,7 +39,13 @@
 // damit beide Implementierungen exakt dasselbe Anonymisierungsverhalten
 // haben, statt es zweimal (potenziell abweichend) zu duplizieren.
 
-export const ANONYMIZED_COMMENT_AUTHOR = 'Gelöschtes Konto';
+// Kein Anzeigetext mehr, sondern ein sprachneutraler, technischer Marker:
+// vormals stand hier direkt der deutsche Anzeigename ("Gelöschtes Konto"),
+// fest in die DB geschrieben und damit unabhängig von der Locale der
+// betrachtenden Person. Das Frontend (apps/web/js/modules/comments.js)
+// erkennt diesen Marker beim Rendern und übersetzt ihn zur Anzeigezeit über
+// t('comments.deletedAuthor') — wie jeden anderen UI-String auch.
+export const ANONYMIZED_COMMENT_AUTHOR = '__deleted_account__';
 
 // Die zu anonymisierende Person. `id` ist der exakte Abgleichswert für
 // alle seit Befund M2 geschriebenen Kommentare; `name` ausschließlich für

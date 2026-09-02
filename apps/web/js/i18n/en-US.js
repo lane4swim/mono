@@ -298,6 +298,7 @@ export default {
     exerciseCommentsTitle: 'Comments on this exercise',
     setCommentsTitle: 'Comments on this set',
     exerciseHintButton: '📝 Exercise comments ({count})',
+    deletedAuthor: 'Deleted account',
   },
   sessions: {
     eyebrow: '{count} sessions', title: 'Training Sessions & Feedback', addSession: '+ Record session',
