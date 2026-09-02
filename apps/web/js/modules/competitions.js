@@ -19,6 +19,7 @@ import { navigate } from '../router.js';
 import { t, trCode, trOptions, trOptionsFlat } from '../i18n.js';
 import { buildLiveGroups, renderLiveMode, buildResultIndex, findResultForEntry } from './competitionLive.js';
 import { buildStopwatchPanel } from './stopwatch.js';
+import { resultsImportButton } from './resultsImportUI.js';
 
 export const competitionsModule = {
   id: 'competitions',
@@ -109,7 +110,10 @@ async function renderDetail(container, compId) {
   const card = el('div', { class: 'card' }, [
     el('div', { class: 'flex justify-between items-center mb-16' }, [
       el('h3', { class: 'mt-0' }, t('competitions.resultsTitle')),
-      el('button', { class: 'btn btn-accent btn-sm', onclick: () => openResultModal(null, comp, athletes, refreshDetail) }, t('competitions.addResult')),
+      el('div', { class: 'flex gap-8' }, [
+        resultsImportButton(comp, refreshDetail),
+        el('button', { class: 'btn btn-accent btn-sm', onclick: () => openResultModal(null, comp, athletes, refreshDetail) }, t('competitions.addResult')),
+      ]),
     ]),
   ]);
   if (compResults.length === 0) card.appendChild(el('p', {}, t('competitions.noResults')));

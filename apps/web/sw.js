@@ -20,7 +20,7 @@
 // jeden Hinweis. app.js zeigt jetzt stattdessen einen Hinweis an, sobald
 // ein neuer Worker bereitsteht, und lässt die Person selbst entscheiden,
 // wann neu geladen wird.
-const CACHE_VERSION = 'lane1-v31';
+const CACHE_VERSION = 'lane1-v32';
 const PRECACHE_URLS = [
   './',
   './index.html',
@@ -80,6 +80,10 @@ const PRECACHE_URLS = [
   './js/modules/userManagement.js',
   './js/modules/clubForm.js',
   './js/modules/info.js',
+  './js/modules/resultsImportUI.js',
+  './js/resultsImport/dsv7Parser.js',
+  './js/resultsImport/matching.js',
+  './js/resultsImport/importRunner.js',
   './icons/icon.svg',
   './icons/icon-192.png',
   './icons/icon-512.png',
