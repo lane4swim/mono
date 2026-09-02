@@ -137,24 +137,33 @@ Beispiel (real, disqualifiziert):
    Zuordnung aber robuster gegen Abweichungen von der Elementreihenfolge (die der
    Standard als "in Ausnahmefällen zulässig" beschreibt).
 5. Nur Ergebnisse des **eigenen Vereins** interessieren uns: Filterung über den
-   `VEREIN`/`Vereinskennzahl`-Bezug in `PNERGEBNIS`/`STERGEBNIS`. Voraussetzung: Der
-   Club im lokalen System muss (mindestens optional) eine DSV-Vereinskennzahl und/oder
-   einen exakten Vereinsnamen zum Abgleich hinterlegt haben – aktuell nicht Teil des
-   Datenmodells (`Club`/`clubId`), muss ggf. ergänzt werden. Alternativ: Der Nutzer
-   wählt den passenden Verein aus der Datei interaktiv im Vorschau-Dialog aus (robuster
-   gegen Schreibweisen-Unterschiede, kein neues Pflichtfeld nötig – empfohlen als MVP).
+   `VEREIN`/`Vereinskennzahl`-Bezug in `PNERGEBNIS`/`STERGEBNIS`. **Entschieden**: `Club`
+   erhält ein generisches `nationalID`/`nationalIDType`-Feldpaar (Abschnitt 3.1). Ist
+   `nationalIDType` auf `DSV` gesetzt, wird `Vereinskennzahl` automatisch dagegen
+   gematcht; ohne Treffer (kein `nationalID` hinterlegt, abweichender Typ, oder keine
+   Übereinstimmung in der Datei) fällt der Import auf eine manuelle Vereinsauswahl im
+   Vorschau-Dialog zurück (Liste aller `VEREIN`-Einträge der Datei, robuster gegen
+   Schreibweisen-Unterschiede).
 
-### 1.5 Lenex (zum Vergleich)
+### 1.5 Lenex (zurückgestellt auf spätere Erweiterung)
 
 Lenex ist im Gegensatz zu DSV7 eine **ZIP-Datei mit einer XML-Datei** (`.lef`), mit
 international standardisiertem Schema (MEET → SESSIONS → EVENTS → HEATS,
 CLUBS → ATHLETES → RESULTS, RESULT trägt `swimtime`, `place`, `SPLIT`-Kindelemente für
-Zwischenzeiten). Da kein XML/ZIP-Parsing-Package im Projekt vorhanden ist (siehe unten),
-kann der Lenex-Import im Browser mit `DecompressionStream('deflate-raw')` (nativ,
+Zwischenzeiten). Da kein XML/ZIP-Parsing-Package im Projekt vorhanden ist, könnte ein
+künftiger Lenex-Import im Browser mit `DecompressionStream('deflate-raw')` (nativ,
 keine Bibliothek nötig) + einem kleinen selbstgeschriebenen ZIP-Local-File-Header-Reader
-+ `DOMParser` umgesetzt werden. Die Kernlogik (Matching, Overwrite, UI) wird zwischen
-DSV7- und Lenex-Import geteilt; nur die Parser unterscheiden sich, beide münden in
-dasselbe Zwischenformat (siehe Abschnitt 4).
++ `DOMParser` umgesetzt werden.
+
+**Entschieden**: Für den Lenex-Import liegt aktuell keine Testdatei vor. Er wird daher
+**nicht** in der ersten Umsetzung implementiert, sondern als zukünftige Erweiterung
+zurückgestellt. Damit der spätere Anschluss ohne Umbau möglich ist, wird die
+Parser-Schnittstelle von Anfang an formatunabhängig gehalten: Ein Parser ist eine
+Funktion `parseResultFile(fileBytes, format) → ImportedResult[]` (Abschnitt 4), DSV7 ist
+die erste (und vorerst einzige) konkrete Implementierung dieser Signatur. Matching,
+Overwrite-Logik und UI hängen nur vom gemeinsamen `ImportedResult[]`-Zwischenformat ab,
+nicht vom Quellformat – ein Lenex-Parser mit gleicher Signatur kann später ergänzt
+werden, ohne dass Matching/UI angefasst werden müssen.
 
 ## 2. Architektur-Ausgangslage im Repo
 
@@ -182,29 +191,83 @@ dasselbe Zwischenformat (siehe Abschnitt 4).
 - **Event-Referenzliste ist unvollständig**: `apps/web/js/refdata.js` (`EVENTS`, 17
   Einträge) kennt nur Einzelstrecken, keine Staffeln – DSV7-Wettkämpfe mit
   `AnzahlStarter > 1` (Staffeln) treffen aktuell auf keinen passenden `event`-String.
+- **Kein Personen-/Vereins-Identifier für externen Abgleich**: Weder `Club` noch
+  `Athlete` haben aktuell ein Feld für eine externe Kennung (DSV-Vereinskennzahl,
+  DSV-ID Schwimmer\*in, o. ä.) – nötig, um Import-Zeilen zuverlässiger als nur über
+  Namensgleichheit zuzuordnen.
 
 ## 3. Datenmodell-Erweiterungen (Voraussetzung)
 
-1. **`Result.comments`** (JSON-Array, `CommentSchema`, analog `Exercise.comments`):
-   Prisma-Migration + Zod-Feld in `entities.ts` + Erweiterung von
-   `COMMENT_BEARING_STORES` in `sync.commentAuthorship.ts` um `'results'` + Case in
-   `collectCommentGroups`.
-2. **`Result.splits`** (neues, eigenständiges JSON-Feld für importierte Zwischenzeiten,
-   getrennt von `laps`): `{ distanceM: number, time: number, legIndex?: number }[]`.
-   `legIndex` wird für Staffel-Zwischenzeiten aus `STZWISCHENZEIT.Startnummer`
-   übernommen, bei Einzelstrecken weggelassen.
-3. **Event-Referenzliste erweitern**: `EVENTS` in `refdata.js` um Staffeln ergänzen
-   (Format z. B. `"4x100 Freistil"`) und eine Mapping-Tabelle
-   `{ technik: 'F'|'R'|'B'|'S'|'L', distanz: number, isRelay: boolean } → event-String`
-   aufbauen, die von DSV7-`WETTKAMPF`- und (perspektivisch) Lenex-`SWIMSTYLE`-Daten
-   gespeist wird.
-4. **Konfliktstrategie für `results` anpassen**
-   (`packages/sync-protocol/src/conflictResolution.ts`): Entweder (a) der Import holt
-   sich vor dem Schreiben per `pull` den aktuellsten Stand, sodass kein echter Konflikt
-   entsteht, oder (b) eine feinere Strategie „Zeit/Platz/Splits überschreiben,
-   `comments` feldweise mergen" wird ergänzt. Empfehlung: (a) als Basisverhalten, (b)
-   als Absicherung für den Fall, dass zwischen Pull und Push noch jemand ein Ergebnis
-   ändert.
+### 3.1 Externe Kennungen für Verein und Athlet\*in (**entschieden**)
+
+Statt eines DSV-spezifischen Feldes wird ein generisches, wiederverwendbares Paar
+eingeführt, das auch andere nationale/internationale Verbands-IDs abdeckt
+(z. B. FINA, SwimRankings, künftige Lenex-Lizenznummern):
+
+- **`Club.nationalID: string?`**, **`Club.nationalIDType: string?`** (z. B.
+  `nationalIDType = "DSV"`, `nationalID = "1234"` für die 4-stellige
+  DSV-Vereinskennzahl). Beide optional, im Vereins-Stammdatenformular pflegbar.
+- **`Athlete.nationalID: string?`**, **`Athlete.nationalIDType: string?`** (z. B.
+  `nationalIDType = "DSV"`, `nationalID = "404306"` für die 6-stellige DSV-ID
+  Schwimmer\*in). Beide optional, im Athlet\*innen-Stammdatenformular pflegbar.
+
+Prisma-Migration (zwei nullable String-Spalten je Modell) + Zod-Felder in
+`ClubSchema`/`AthleteSchema` (`entities.ts`).
+
+Verwendung beim Import: Ist `nationalIDType === 'DSV'` und `nationalID` gesetzt, wird
+zuerst darüber gematcht (`PNERGEBNIS.DSV-ID` bzw. `VEREIN.Vereinskennzahl`) – das ist
+robuster als Namensabgleich, insbesondere bei Namensgleichheit. Ohne Treffer wird auf
+Name(+Geburtsjahr) zurückgefallen bzw. beim Verein auf manuelle Auswahl (siehe 1.4.5).
+
+### 3.2 `Result.comments`
+
+JSON-Array, `CommentSchema`, analog `Exercise.comments`: Prisma-Migration + Zod-Feld in
+`entities.ts` + Erweiterung von `COMMENT_BEARING_STORES` in
+`sync.commentAuthorship.ts` um `'results'` + Case in `collectCommentGroups`.
+
+### 3.3 `Result.splits`
+
+Neues, eigenständiges JSON-Feld für importierte Zwischenzeiten, getrennt von `laps`:
+`{ distanceM: number, time: number, legIndex?: number }[]`. `legIndex` wird für
+Staffel-Zwischenzeiten aus `STZWISCHENZEIT.Startnummer` übernommen, bei Einzelstrecken
+weggelassen.
+
+### 3.4 `Result.status` / `Result.statusNote` (**entschieden**)
+
+Neues Statusfeld statt Kommentar/Notiz für Disqualifikation & Co.:
+
+- **`Result.status: 'OK' | 'DS' | 'NA' | 'AB' | 'AU' | 'ZU'`**, Default `'OK'` – direkte
+  Übernahme der DSV7-Codes für „Grund der Nichtwertung" (`DS`=Disqualifikation,
+  `NA`=nicht angetreten, `AB`=abgemeldet, `AU`=aufgegeben, `ZU`=Zeitüberschreitung),
+  damit sowohl DSV7 als auch ein künftiger Lenex-Import (dort inhaltlich äquivalente
+  Codes) ohne Übersetzungstabelle abbildbar sind.
+- **`Result.statusNote: string?`** – für `DisqualifikationsBemerkung`.
+- Ist `status !== 'OK'`, wird `time` beim Import auf `null` gesetzt (nicht die
+  Platzhalterzeit `00:00:00,00` aus der Datei übernehmen); die UI zeigt entsprechend
+  ein Status-Badge statt einer Zeit.
+- Prisma-Migration + Zod-Feld in `entities.ts`.
+
+### 3.5 Event-Referenzliste erweitern + interaktive Zuordnung (**entschieden**)
+
+- `EVENTS` in `refdata.js` um Staffeln ergänzen (Format z. B. `"4x100 Freistil"`) und
+  eine Mapping-Tabelle `{ technik: 'F'|'R'|'B'|'S'|'L', distanz: number, isRelay: boolean }
+  → event-String` aufbauen, die von DSV7-`WETTKAMPF`-Daten gespeist wird.
+- Für Wettkämpfe aus der Importdatei, die auf **kein** bestehendes Event gemappt werden
+  können, entscheidet die Nutzerin/der Nutzer pro Wettkampf im Vorschau-Dialog
+  zwischen drei Optionen: **(a)** einem bestehenden Event manuell zuordnen (Dropdown
+  über `EVENTS`), **(b)** ein neues Event anlegen (wird der `EVENTS`-Liste
+  hinzugefügt), oder **(c)** den Wettkampf/die zugehörigen Ergebniszeilen beim Import
+  ignorieren. Diese Zuordnung wird für die Dauer des Imports zwischengespeichert, damit
+  sie nicht pro Ergebniszeile wiederholt werden muss (Gruppierung nach
+  `WETTKAMPF`-Nummer).
+
+### 3.6 Konfliktstrategie für `results` anpassen
+
+`packages/sync-protocol/src/conflictResolution.ts`: Entweder (a) der Import holt sich
+vor dem Schreiben per `pull` den aktuellsten Stand, sodass kein echter Konflikt
+entsteht, oder (b) eine feinere Strategie „Zeit/Platz/Splits/Status überschreiben,
+`comments` feldweise mergen" wird ergänzt. Empfehlung: (a) als Basisverhalten, (b) als
+Absicherung für den Fall, dass zwischen Pull und Push noch jemand ein Ergebnis ändert.
 
 ## 4. Gemeinsames Zwischenformat (Parser-Output)
 
@@ -214,41 +277,56 @@ UI formatunabhängig bleiben:
 ```ts
 interface ImportedResult {
   athleteMatchHint: {
-    name: string;        // "Nachname, Vorname"
-    dsvId?: string;       // DSV7: PNERGEBNIS.DSV-ID / Lenex: ATHLETE license/id
+    name: string;               // "Nachname, Vorname"
+    nationalIDType?: string;     // z. B. "DSV" — DSV7: konstant "DSV"
+    nationalID?: string;         // DSV7: PNERGEBNIS.DSV-ID (0 → undefined)
     birthYear?: number;
     gender?: 'M' | 'W' | 'D';
   };
   eventCode: { distanceM: number; stroke: 'F'|'R'|'B'|'S'|'L'|'X'; isRelay: boolean; relaySize?: number };
   round: 'V'|'Z'|'F'|'E'|'A'|'N';  // Wettkampfart / heat-round
-  time: number | null;              // Sekunden, null bei DNS/DQ/AB/AU
+  time: number | null;              // Sekunden, null wenn status !== 'OK'
   place: number | null;
-  disqualified: { reason: string; note?: string } | null;
+  status: 'OK' | 'DS' | 'NA' | 'AB' | 'AU' | 'ZU';   // Result.status, s. Abschnitt 3.4
+  statusNote?: string;                                // Result.statusNote
   splits: { distanceM: number; time: number; legIndex?: number }[];
   clubName: string;
-  clubDsvId?: string;
+  clubNationalIDType?: string;  // z. B. "DSV"
+  clubNationalID?: string;      // DSV7: VEREIN.Vereinskennzahl (0 → undefined)
 }
+
+// Format-agnostischer Parser-Vertrag, s. Abschnitt 1.5:
+type ResultFileFormat = 'dsv7' | 'lenex';
+declare function parseResultFile(fileBytes: ArrayBuffer, format: ResultFileFormat): ImportedResult[];
+// Erste Implementierung: nur 'dsv7'. 'lenex' wirft vorerst "not implemented".
 ```
 
 ## 5. Matching- und Overwrite-Logik
 
-1. **Verein filtern**: Nur `ImportedResult`s des eigenen Vereins verarbeiten (Auswahl im
-   Vorschau-Dialog, siehe 1.4 Punkt 5).
-2. **Athlet matchen**: gegen lokale `Athlete`-Liste über Name (+ Geburtsjahr zur
-   Disambiguierung bei Namensgleichheit). Kein Treffer → Zeile als „nicht zuordenbar"
-   markieren, kein automatisches Anlegen neuer Athlet\*innen.
-3. **Event matchen**: über die Mapping-Tabelle aus Abschnitt 3.3. Kein Treffer → Zeile
-   markieren, nicht importieren.
+1. **Verein filtern**: Automatisch über `Club.nationalID`/`nationalIDType` gegen
+   `clubNationalID`/`clubNationalIDType` (Abschnitt 3.1); ohne Treffer manuelle Auswahl
+   im Vorschau-Dialog (Abschnitt 1.4.5). Nur `ImportedResult`s des so bestimmten
+   Vereins werden weiterverarbeitet.
+2. **Athlet matchen**: zuerst über `Athlete.nationalID`/`nationalIDType` gegen
+   `athleteMatchHint.nationalID`/`nationalIDType`, falls beide gepflegt sind. Kein
+   Treffer darüber → Fallback auf Name (+ Geburtsjahr zur Disambiguierung bei
+   Namensgleichheit). Weiterhin kein Treffer → Zeile als „nicht zuordenbar" markieren,
+   kein automatisches Anlegen neuer Athlet\*innen.
+3. **Event matchen**: über die Mapping-Tabelle aus Abschnitt 3.5. Kein automatischer
+   Treffer → interaktive Auflösung durch die Nutzerin/den Nutzer im Vorschau-Dialog:
+   bestehendem Event zuordnen, neues Event anlegen, oder Wettkampf ignorieren
+   (Abschnitt 3.5).
 4. **Bestehendes `Result` finden**: Match über `(clubId, athleteId, competitionId, event)`.
    Treffer → Update-Kandidat. Kein Treffer → Neuanlage.
-5. **Felder überschreiben**: `time`, `place`, `splits`, `date`/`course` (falls von der
-   Veranstaltung abweichend).
+5. **Felder überschreiben**: `time`, `place` (**immer** aus der Datei übernehmen, auch
+   bei Abweichung von einer lokal berechneten Platzierung), `status`, `statusNote`,
+   `splits`, `date`/`course` (falls von der Veranstaltung abweichend). Bei
+   `status !== 'OK'` wird `time` auf `null` gesetzt statt der Platzhalterzeit
+   `00:00:00,00` aus der Datei.
 6. **Felder erhalten**: `comments`, `id`, `createdAt`.
-7. **Zu klären**: `isPB` wird lokal aus der Ergebnis-Historie berechnet – nach Import
-   neu berechnen statt aus der Datei übernehmen (die Datei kennt kein „PB"-Konzept).
-   Bei `disqualified` (Grund `DS`/`NA`/`AB`/`AU`/`ZU`): `time` auf `null`/leer setzen
-   statt `00:00:00,00` zu übernehmen, Grund ggf. in einem neuen `Result.dnsReason`-Feld
-   oder als System-Kommentar ablegen (Entscheidung siehe offene Fragen).
+7. **`isPB`**: wird lokal aus der Ergebnis-Historie berechnet – nach Import neu
+   berechnen statt aus der Datei zu übernehmen (die Datei kennt kein „PB"-Konzept); bei
+   `status !== 'OK'` ist `isPB` immer `false`.
 
 Technisch: kein `bulkPut` (sync-still, siehe `db.js`), sondern gezielte `put()`-Aufrufe
 bzw. Sync-Events mit `action: 'update'` für Treffer und `action: 'create'` für neue
@@ -259,56 +337,61 @@ Ergebnisse, damit Konfliktauflösung/History korrekt greifen.
 Einstiegspunkt: `apps/web/js/modules/competitions.js`, `renderDetail()`
 (Ergebnisse-Card, neben „Ergebnis hinzufügen").
 
-1. Button „Ergebnisse importieren (DSV7/Lenex)" → verstecktes
-   `<input type="file" accept=".dsv7,.lef,.lxf,.zip">`.
-2. Datei einlesen (`arrayBuffer()`), Format anhand Endung/Inhalt erkennen (DSV7: Text
-   beginnt i. d. R. mit `(*` oder `FORMAT:`; Lenex: ZIP-Magic-Bytes `PK`), passenden
-   Parser aufrufen.
-3. Bei DSV7: Vereinsauswahl anzeigen (Liste aller `VEREIN`-Einträge aus der Datei),
-   Nutzer wählt den eigenen Verein.
-4. **Vorschau-Modal**: Liste aller erkannten Ergebnisse mit Status
-   („neu" / „wird überschrieben: alte Zeit X → neue Zeit Y" / „nicht zuordenbar –
-   wird übersprungen"), Anzahl betroffener Kommentare, die erhalten bleiben.
-5. Bestätigung → Import ausführen, Fehler-/Konfliktzeilen am Ende zusammengefasst
+1. Button „Ergebnisse importieren (DSV7)" → verstecktes `<input type="file"
+   accept=".dsv7">` (Lenex ist zurückgestellt, siehe 1.5 – Button/Dateiauswahl daher
+   vorerst nur für `.dsv7`, aber Wortlaut/UI so gestaltet, dass ein zweiter Dateityp
+   später ergänzbar ist, ohne den Flow umzubauen).
+2. Datei einlesen (`file.text()`, UTF-8) und mit `parseResultFile(bytes, 'dsv7')`
+   parsen (Abschnitt 4).
+3. **Vereinserkennung**: automatisch über `Club.nationalID`/`nationalIDType` (Abschnitt
+   3.1/5.1); bei Treffer direkt übernehmen und im Dialog nur zur Bestätigung anzeigen,
+   sonst Dropdown mit allen `VEREIN`-Einträgen aus der Datei zur manuellen Auswahl.
+4. **Event-Auflösung**: für jeden Wettkampf aus der Datei, der nicht automatisch auf
+   ein bestehendes Event gemappt werden kann, eine Zeile mit den drei Optionen aus
+   Abschnitt 3.5 (bestehendem Event zuordnen / neues Event anlegen / ignorieren)
+   anzeigen, bevor die Ergebnis-Vorschau gerendert wird.
+5. **Vorschau-Modal**: Liste aller erkannten Ergebnisse mit Status
+   („neu" / „wird überschrieben: alte Zeit X → neue Zeit Y" / „disqualifiziert/nicht
+   angetreten (Status-Badge)" / „nicht zuordenbar – wird übersprungen"), Anzahl
+   betroffener Kommentare, die erhalten bleiben.
+6. Bestätigung → Import ausführen, Fehler-/Konfliktzeilen am Ende zusammengefasst
    anzeigen.
-6. Kein automatisches Löschen von Ergebnissen, die in der Datei fehlen (nur
+7. Kein automatisches Löschen von Ergebnissen, die in der Datei fehlen (nur
    Update/Insert, kein Sync-Delete).
 
 ## 7. Implementierungsreihenfolge
 
-1. Datenmodell (Abschnitt 3): Migration, Zod, Comment-Authorship-Erweiterung,
-   Splits-Feld, Event-Mapping-Tabelle.
-2. Konfliktstrategie-Anpassung in `sync-protocol`.
-3. DSV7-Parser (Zeilenparser wie in Abschnitt 1 beschrieben) + Unit-Tests gegen die
-   reale Beispieldatei.
-4. Lenex-Parser (ZIP+XML).
+1. Datenmodell (Abschnitt 3): Migration + Zod für `Club.nationalID`/`nationalIDType`,
+   `Athlete.nationalID`/`nationalIDType`, `Result.comments`, `Result.splits`,
+   `Result.status`/`statusNote`; Comment-Authorship-Erweiterung um `'results'`;
+   Event-Mapping-Tabelle inkl. Staffeln in `refdata.js`.
+2. Konfliktstrategie-Anpassung in `sync-protocol` für `results`.
+3. Stammdaten-UI: Felder für `nationalID`/`nationalIDType` in Vereins- und
+   Athlet\*innen-Formularen ergänzen (Voraussetzung, damit die automatische
+   Zuordnung beim Import überhaupt greifen kann).
+4. DSV7-Parser (Zeilenparser wie in Abschnitt 1 beschrieben, Signatur
+   `parseResultFile(bytes, 'dsv7')` aus Abschnitt 4) + Unit-Tests gegen die reale
+   Beispieldatei.
 5. Matching- und Overwrite-Logik als eigenständiges, testbares Modul (unabhängig von
-   der UI).
-6. UI: Button, Datei-Handling, Vereinsauswahl, Vorschau-Modal, Bestätigung,
-   Fehleranzeige.
-7. Manuelle Tests mit echten Beispieldateien beider Formate.
+   der UI): Vereins-/Athlet-Matching über `nationalID` mit Fallback, Event-Auflösung,
+   Overwrite-Regeln aus Abschnitt 5.
+6. UI: Button, Datei-Handling, Vereinserkennung/-auswahl, Event-Auflösungsschritt,
+   Vorschau-Modal, Bestätigung, Fehleranzeige (Abschnitt 6).
+7. Manuelle Tests mit der echten DSV7-Beispieldatei.
+8. **Zurückgestellt**: Lenex-Parser (`parseResultFile(bytes, 'lenex')`) als spätere
+   Erweiterung, sobald Testdateien vorliegen (Abschnitt 1.5) – Matching/Overwrite/UI
+   sind bereits jetzt formatunabhängig gehalten und müssen dafür nicht geändert werden.
 
-## 8. Offene Fragen
+## 8. Entscheidungen
 
-1. Soll die DSV-Vereinskennzahl im lokalen `Club`-Modell hinterlegt werden (für
-   automatische Vereinsfilterung), oder reicht die manuelle Auswahl im Vorschau-Dialog
-   (empfohlen als MVP, kein Datenmodell-Zusatz nötig)?
-   Entscheidung: Füge eine Vereinskennzahl (`nationalID`) ergänzt um einen Formathinweis (`nationalIDType`).
-   Damit können auch andere nationale oder internationale IDs erfasst werden.
-2. Sollen unbekannte/nicht zuordenbare Events automatisch der `EVENTS`-Liste hinzugefügt
-   werden dürfen, oder ausschließlich manuell gepflegt werden?
-   Entscheidung: Unbekannte/nicht zuordenbare Events sollen nach Nutzerentscheid entweder einem
-   bestehenden Event zugeordnet werden, ein neues Event angelegt werden, oder ignoriert werden.
-3. Was passiert mit DSV-ID-Feldern (`PNERGEBNIS.DSV-ID`)? Soll `Athlete` künftig eine
-   DSV-ID-Spalte erhalten, um Namens-Mehrdeutigkeiten robuster aufzulösen?
-   Entscheidung: Füge eine Athletenkennzahl (`nationalID`) ergänzt um einen Formathinweis (`nationalIDType`).
-4. Wie soll ein disqualifiziertes/nicht angetretenes Ergebnis (`Grund der Nichtwertung`)
-   im lokalen Modell abgebildet werden – neues Statusfeld auf `Result`, oder Kommentar/
-   Notiz?
-   Entscheidung: Neues Statusfeld
-5. Soll `place` immer aus der Datei übernommen werden, auch wenn er von der lokal
-   berechneten Platzierung abweicht?
-   Entscheidung: Immer aus der Datei übernehmen.
-6. Woher kommen Testdateien für den Lenex-Import (bisher nur eine DSV7-Beispieldatei
-   verfügbar)?
-   Entscheidung: Lenex-Import als zukünftige Erweiterung (Schnittstelle bzw. Funktion mit gleicher Signatur) betrachten.
+Alle ursprünglich offenen Fragen wurden geklärt und sind oben in den jeweiligen
+Abschnitten eingearbeitet; hier zur Übersicht:
+
+| # | Frage | Entscheidung | Umgesetzt in |
+|---|---|---|---|
+| 1 | Automatische Vereinsfilterung? | `Club.nationalID`/`nationalIDType` ergänzen | 3.1, 1.4.5, 5.1 |
+| 2 | Umgang mit unbekannten Events? | Interaktiv: zuordnen, neu anlegen, oder ignorieren | 3.5, 5.3, 6.4 |
+| 3 | Athlet-Matching über DSV-ID? | `Athlete.nationalID`/`nationalIDType` ergänzen | 3.1, 5.2 |
+| 4 | Abbildung von DQ/NA/AB/AU/ZU? | Neues Statusfeld `Result.status`/`statusNote` | 3.4, 4, 5.5 |
+| 5 | `place` immer aus Datei übernehmen? | Ja, immer | 5.5 |
+| 6 | Lenex-Testdaten? | Lenex als spätere Erweiterung zurückgestellt, Parser-Schnittstelle bereits formatunabhängig | 1.5, 4, 7 |
