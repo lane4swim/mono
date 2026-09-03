@@ -2,9 +2,10 @@
 // app-demo.js — bootstraps demo.html.
 //
 // Same feature modules and router as the real app (js/app.js), but:
-//   - no login screen — instead a fixed choice of two demo accounts
-//     (Sabine Reuter/trainer, Maya Vogel/athlete, see demoMode.js),
-//     switched via a dropdown next to the language selector;
+//   - no login screen — instead a fixed choice of three demo accounts
+//     (Sabine Reuter/trainer, Maya Vogel/athlete, Katrin Berger/admin,
+//     see demoMode.js), switched via a dropdown next to the language
+//     selector;
 //   - no background/real sync — the "Sync-Warteschlange" module still
 //     shows the local outbox, but "Jetzt synchronisieren" is disabled
 //     (see modules/syncQueue.js: IS_DEMO check) since there is no

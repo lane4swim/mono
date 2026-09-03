@@ -94,9 +94,9 @@ Wer die App ausprobieren möchte, ohne `apps/api` zu betreiben, kann
 stattdessen `demo.html` öffnen — nutzt dieselben Fachmodule wie `index.html`,
 aber ganz ohne Backend:
 
-- Zwei feste Konten statt Login — **Sabine Reuter** (Trainerin) und **Maya
-  Vogel** (Athletin) — umschaltbar über ein Dropdown neben der
-  Sprachauswahl in der Kopfzeile.
+- Drei feste Konten statt Login — **Sabine Reuter** (Trainerin), **Maya
+  Vogel** (Athletin) und **Katrin Berger** (Administratorin) — umschaltbar
+  über ein Dropdown neben der Sprachauswahl in der Kopfzeile.
 - Eigene, von `index.html` vollständig getrennte IndexedDB-Datenbank (siehe
   `js/db.js`) — Demo-Daten können nie mit einem echten, synchronisierten
   Konto in Berührung kommen, in keiner Richtung.
