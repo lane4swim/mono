@@ -260,17 +260,25 @@ Auskunfts-/Löschmechanismen (`docs/backend-plan.md`, Abschnitt 14):
 
 1. **Werteliste der Qualifikationsarten** (Abschnitt 2.2) — mit tatsächlichem
    Vereinsbedarf abgleichen (DSV-/DLRG-Bezeichnungen variieren je Landesverband).
-2. **Darf eine Person eigene Qualifikationen selbst erfassen**, oder ausschließlich
+   Entscheidung: Aktuell nur folgende Liste vorsehen. Diese wie vorgeschlagen konfigurierbar
+   gestalten.
+3. **Darf eine Person eigene Qualifikationen selbst erfassen**, oder ausschließlich
    Admins (Nachweispflicht/Vertrauenswürdigkeit)? Aktueller Vorschlag in Abschnitt 3:
    nur Admins schreiben, jede Person sieht nur lesend die eigenen.
-3. **Nachweis-Upload** (Foto/PDF des Zertifikats) — nicht Teil dieses Plans, da kein
+   Entscheidung: Nur Admins schreiben.
+5. **Nachweis-Upload** (Foto/PDF des Zertifikats) — nicht Teil dieses Plans, da kein
    bestehender Datei-Upload-Mechanismus im Repo vorhanden ist; separates Feature,
    falls gewünscht.
-4. **Erinnerungs-Schwellen** (30/7 Tage, Abschnitt 5) und ob Admins die Schwellen pro
+   Entscheidung: Aktuell Datensparsamkeit. Bei Bedarf ist zukünftig eine eigene Tabelle in der Datenbank
+   ergänzt, die für jede Qualifikation auf die Nachweisdokumente verweist.
+7. **Erinnerungs-Schwellen** (30/7 Tage, Abschnitt 5) und ob Admins die Schwellen pro
    Verein konfigurieren können sollen, oder ein fester Wert für alle reicht.
-5. **Sichtbarkeit für `superadmin`**: reine Systemadministration ohne Vereinszugehörigkeit
+   Entscheidung: Konfiguration je Verein und Qualifikation (Trainerscheine haben längere
+   Schwellen als z.B. Erste-Hilfe-Nachweise)
+9. **Sichtbarkeit für `superadmin`**: reine Systemadministration ohne Vereinszugehörigkeit
    (siehe `User.clubId` Kommentar in `schema.prisma`) — vermutlich keine Notwendigkeit,
    vereinsübergreifend Qualifikationen einzusehen; zu bestätigen.
+   Entscheidung: Super-Admins benötigen *keinen* Zugriff auf Qualifikationen. 
 
 ## 9. Umsetzungsschritte
 
