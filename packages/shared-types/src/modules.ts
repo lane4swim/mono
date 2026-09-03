@@ -49,6 +49,15 @@ export const MODULE_PACKAGES = {
   sessions: { routeIds: ['sessions'], stores: ['sessions'] },
   actionitems: { routeIds: ['actionitems'], stores: ['actionItems'] },
   stats: { routeIds: ['stats'], stores: [] },
+  // Qualifikationsmanagement (docs/nutzer-qualifikationen-plan.md, Abschnitt
+  // 1.2): `stores: []` wie bei times/stats — kein Sync-Store, da
+  // UserQualification über eigene REST-Endpunkte verwaltet wird (User ist
+  // selbst kein Sync-Store, siehe entities.ts). Dieses Paket steuert
+  // ausschließlich die Sichtbarkeit der Frontend-Route 'qualifications'
+  // sowie — über eine eigene enabledModules-Prüfung im
+  // qualifications-Modul, da dessen Endpunkte NICHT über die generische
+  // Sync-API laufen — den Zugriff auf dessen REST-Endpunkte.
+  qualifications: { routeIds: ['qualifications'], stores: [] },
 } as const satisfies Record<string, ModulePackage>;
 
 export type ModuleKey = keyof typeof MODULE_PACKAGES;

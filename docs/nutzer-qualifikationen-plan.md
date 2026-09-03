@@ -252,7 +252,7 @@ ausgeschlossen — siehe Entscheidung zu Frage 5, Abschnitt 8.
 | `POST /api/users/:userId/qualifications` | Anlegen | `admin` |
 | `PATCH /api/users/:userId/qualifications/:id` | Bearbeiten (Datum korrigieren, `renewalCourseOrganizedOn` setzen, …) | `admin` |
 | `DELETE /api/users/:userId/qualifications/:id` | Soft-Delete (`deletedAt`) | `admin` |
-| `GET /api/qualification-settings` | Erinnerungs-Schwellen des eigenen Vereins lesen (siehe Abschnitt 2.4) | `admin` |
+| `GET /api/qualification-settings` | Erinnerungs-Schwellen des eigenen Vereins lesen (siehe Abschnitt 2.4) | `trainer`/`admin`/`athlete` |
 | `PUT /api/qualification-settings/:type` | Schwellen für einen Qualifikationstyp setzen/überschreiben | `admin` |
 
 Kein Schreibzugriff für die betroffene Person selbst (Entscheidung zu Frage 2, Abschnitt
@@ -260,6 +260,14 @@ Kein Schreibzugriff für die betroffene Person selbst (Entscheidung zu Frage 2, 
 `admin` Qualifikationen an/bearbeitet/löscht sie; jede Person sieht über
 `GET /api/me/qualifications` nur lesend die eigenen. `clubId`-Prüfung wie gehabt: der
 Ziel-`User` von `:userId`-Routen muss im selben Verein wie die anfragende Person sein.
+
+**Korrektur bei der Umsetzung:** `GET /api/qualification-settings` ist — anders als in
+einer früheren Fassung dieses Plans vorgesehen — bewusst für **jede** Rolle lesbar, nicht
+nur `admin`. Grund: Abschnitt 4.2 berechnet den Status-Badge einer Qualifikation (u. a.
+„läuft bald ab") anhand dieser Schwellen — mit einem admin-only-Lesezugriff hätten
+trainer/athlete beim Betrachten der EIGENEN Qualifikationen stets ein leeres Ergebnis
+bekommen und jede Qualifikation fälschlich als „gültig" gesehen, sobald ein Verein von den
+Standardwerten abweicht. Nur das Ändern (`PUT`) bleibt `admin`-only.
 
 ## 4. Frontend
 

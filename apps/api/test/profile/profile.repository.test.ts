@@ -74,6 +74,24 @@ describe('InMemoryProfileDataGateway.exportUserData', () => {
     expect(result.athlete).toBeNull();
     expect(result.results).toEqual([]);
     expect(result.attendance).toEqual([]);
+    expect(result.qualifications).toEqual([]);
+  });
+
+  // docs/nutzer-qualifikationen-plan.md, Abschnitt 6: Qualifikationsdaten
+  // gehören in die DSGVO-Auskunft — an userId gehängt, nicht an athleteId
+  // (gilt auch für eine Trainer:in ohne Athletenprofil).
+  it('bündelt eigene Qualifikationen, gescopt auf userId (nicht die einer anderen Person)', async () => {
+    const db = makeDb({
+      users: [{ id: 'trainer-1', clubId: CLUB_ID, athleteId: null, deletedAt: null, name: 'Sabine', email: 's@x.de', role: 'trainer', passwordHash: 'h' }],
+      qualifications: [
+        { id: 'q1', userId: 'trainer-1', type: 'trainer_c', acquiredOn: '2024-01-01' },
+        { id: 'q2', userId: 'other-user', type: 'erste_hilfe', acquiredOn: '2024-01-01' },
+      ],
+    });
+    const gateway = new InMemoryProfileDataGateway(db);
+    const result = await gateway.exportUserData('trainer-1');
+    expect(result.qualifications).toHaveLength(1);
+    expect(result.qualifications[0]).toMatchObject({ id: 'q1', type: 'trainer_c' });
   });
 });
 

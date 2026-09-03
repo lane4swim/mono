@@ -5,3 +5,4 @@ export * from './auth.js';
 export * from './invitation.js';
 export * from './entities.js';
 export * from './modules.js';
+export * from './qualification.js';

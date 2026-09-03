@@ -36,6 +36,11 @@ import {
   InvitationAlreadyUsedError,
   InvitationRevokedError,
 } from '../modules/invitations/invitations.service.js';
+import {
+  QualificationNotFoundError,
+  QualificationForbiddenError,
+  QualificationInvalidDateRangeError,
+} from '../modules/qualifications/qualifications.service.js';
 
 interface HttpErrorMapping {
   status: number;
@@ -83,6 +88,9 @@ const HTTP_ERROR_REGISTRY = new Map<abstract new (...args: never[]) => Error, Ht
   [InvitationExpiredError, { status: 410, code: 'invalid_invitation' }],
   [InvitationAlreadyUsedError, { status: 410, code: 'invalid_invitation' }],
   [InvitationRevokedError, { status: 410, code: 'invalid_invitation' }],
+  [QualificationNotFoundError, { status: 404, code: 'not_found' }],
+  [QualificationForbiddenError, { status: 403, code: 'forbidden' }],
+  [QualificationInvalidDateRangeError, { status: 400, code: 'qualification_invalid_date_range' }],
 ]);
 
 function sendMappedError(err: Error, mapping: HttpErrorMapping, reply: FastifyReply) {

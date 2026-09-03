@@ -118,3 +118,19 @@ export const ACTION_STATUS = [
   { value: 'progress', label: 'In Bearbeitung' },
   { value: 'done', label: 'Erledigt' },
 ];
+
+// Qualifikationsmanagement (docs/nutzer-qualifikationen-plan.md, Abschnitt
+// 2.2) — MUSS mit QualificationTypeSchema in
+// packages/shared-types/src/qualification.ts übereinstimmen (apps/web läuft
+// ohne Build-Schritt und kann dieses Backend-Paket nicht importieren, siehe
+// entsprechender Kommentar bei ROUTE_TO_PACKAGE in router.js).
+export const QUALIFICATION_TYPES = [
+  { value: 'trainer_c', label: 'Trainer-C-Lizenz' },
+  { value: 'trainer_b', label: 'Trainer-B-Lizenz' },
+  { value: 'trainer_a', label: 'Trainer-A-Lizenz' },
+  { value: 'rettungsschwimmer_silber', label: 'Rettungsschwimmschein Silber' },
+  { value: 'rettungsschwimmer_gold', label: 'Rettungsschwimmschein Gold' },
+  { value: 'erste_hilfe', label: 'Erste-Hilfe-Kurs' },
+  { value: 'kinderschutz', label: 'Kinderschutz-Schulung' },
+  { value: 'sonstige', label: 'Sonstige' },
+];

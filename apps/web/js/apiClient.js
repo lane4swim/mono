@@ -393,6 +393,43 @@ export function listAssignableTrainers() {
   return request('/api/users/trainers');
 }
 
+// ---- Qualifikationsmanagement (docs/nutzer-qualifikationen-plan.md) ---
+// Läuft NICHT über die generische Sync-API (siehe dortiger Abschnitt 1.1)
+// — eigene REST-Endpunkte, analog Einladungen/Vereinen oben. Antwort:
+// { qualifications }.
+export function listMyQualifications() {
+  return request('/api/me/qualifications');
+}
+export function listMemberQualifications(userId) {
+  return request(`/api/users/${encodeURIComponent(userId)}/qualifications`);
+}
+export function createQualification(userId, { type, note, acquiredOn, expiresOn, renewalCourseOrganizedOn }) {
+  return request(`/api/users/${encodeURIComponent(userId)}/qualifications`, {
+    method: 'POST',
+    body: JSON.stringify({ type, note, acquiredOn, expiresOn, renewalCourseOrganizedOn }),
+  });
+}
+export function updateQualification(userId, id, patch) {
+  return request(`/api/users/${encodeURIComponent(userId)}/qualifications/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  });
+}
+export function deleteQualification(userId, id) {
+  return request(`/api/users/${encodeURIComponent(userId)}/qualifications/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+// Erinnerungs-Schwellen des eigenen Vereins (Plan, Abschnitt 2.4/4.4).
+// Antwort: { settings, defaultThresholdsDays }.
+export function listQualificationSettings() {
+  return request('/api/qualification-settings');
+}
+export function setQualificationSetting(type, thresholdsDays) {
+  return request(`/api/qualification-settings/${encodeURIComponent(type)}`, {
+    method: 'PUT',
+    body: JSON.stringify({ thresholdsDays }),
+  });
+}
+
 // ---- Sync (Push/Pull) --------------------------------------------------
 export function syncPush(events) {
   return postJson('/api/sync/push', { events });

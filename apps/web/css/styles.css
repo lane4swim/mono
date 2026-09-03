@@ -220,6 +220,10 @@ tr:hover td{ background: var(--c-foam-2); }
 .badge-done{ background:#E3F5EF; color: var(--c-chlorine-d); }
 .badge-neutral{ background: var(--c-foam-2); color: var(--c-slate); }
 .badge-pb{ background: var(--c-chlorine); color: var(--c-deep-2); }
+/* Qualifikationsmanagement (docs/nutzer-qualifikationen-plan.md, Abschnitt
+   4.2) — eigener Zustand "Verlängerung bereits organisiert", bewusst von
+   badge-progress (gelb, "läuft bald ab, nichts unternommen") unterschieden. */
+.badge-scheduled{ background:#DCEEF2; color: var(--c-petrol); }
 
 .pill-group{ display:flex; gap:6px; flex-wrap:wrap; }
 .pill{ font-size: var(--fs-xs); padding: 4px 10px; border-radius:999px; background: var(--c-foam-2); color: var(--c-slate); border:1px solid var(--c-line); cursor:pointer; }

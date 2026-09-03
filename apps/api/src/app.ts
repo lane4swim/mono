@@ -24,6 +24,9 @@ import { PrismaClubRepository, PrismaInvitationRepository, PrismaAthleteReposito
 import { createSyncService, type SyncService } from './modules/sync/sync.service.js';
 import { PrismaSyncGateway } from './modules/sync/sync.gateway.js';
 import { PrismaProfileDataGateway } from './modules/profile/profile.repository.js';
+import { qualificationsRoutes } from './modules/qualifications/qualifications.route.js';
+import { createQualificationsService, type QualificationsService } from './modules/qualifications/qualifications.service.js';
+import { PrismaUserQualificationRepository, PrismaQualificationReminderSettingRepository } from './modules/qualifications/qualifications.repository.js';
 import { SmtpMailSender, ConsoleMailSender, type MailSender } from './mail/mailer.js';
 import { resolveKeyPair } from './auth/keys.js';
 import { getPrisma } from './db/prisma.js';
@@ -37,6 +40,7 @@ export interface BuildAppOverrides {
   // damit ein Test mit In-Memory-syncService trotzdem eine In-Memory-
   // Club-Lookup mitgeben kann, ohne eine echte Datenbank zu brauchen.
   clubs?: ClubModulesLookup;
+  qualificationsService?: QualificationsService;
   mailer?: MailSender;
   keyPair?: ReturnType<typeof resolveKeyPair>;
 }
@@ -64,7 +68,10 @@ function resolveTrustProxy(env: Env): boolean | string[] {
   return trustedProxies.length > 0 ? trustedProxies : false;
 }
 
-function resolveMailer(env: Env): MailSender {
+// Exportiert (statt modulintern), damit scripts/notifyExpiringQualifications.ts
+// dieselbe SMTP-vs.-Konsole-Entscheidung trifft wie die eigentliche App
+// (buildApp() unten), ohne sie zu duplizieren.
+export function resolveMailer(env: Env): MailSender {
   if (!env.SMTP_HOST) return new ConsoleMailSender();
   return new SmtpMailSender({
     host: env.SMTP_HOST,
@@ -177,10 +184,26 @@ export async function buildApp(env: Env, overrides: BuildAppOverrides = {}): Pro
     overrides.syncService ??
     createSyncService({ gateway: new PrismaSyncGateway(getPrisma()) });
 
+  // Eine gemeinsame Club-Lookup-Instanz für syncRoutes UND
+  // qualificationsRoutes unten — beide brauchen ausschließlich
+  // `findById(clubId): { enabledModules }` (siehe jeweils eigene, schlanke
+  // ClubModulesLookup-Interfaces), ein Override ersetzt dadurch beide auf
+  // einmal.
+  const clubModulesLookup = overrides.clubs ?? new PrismaClubRepository(getPrisma());
+
+  const qualificationsService =
+    overrides.qualificationsService ??
+    createQualificationsService({
+      qualifications: new PrismaUserQualificationRepository(getPrisma()),
+      reminderSettings: new PrismaQualificationReminderSettingRepository(getPrisma()),
+      users: new PrismaUserRepository(getPrisma()),
+    });
+
   await app.register(healthRoutes);
   await app.register(authRoutes, { authService });
-  await app.register(syncRoutes, { syncService, clubs: overrides.clubs ?? new PrismaClubRepository(getPrisma()) });
+  await app.register(syncRoutes, { syncService, clubs: clubModulesLookup });
   await app.register(invitationsRoutes, { invitationsService });
+  await app.register(qualificationsRoutes, { qualificationsService, clubs: clubModulesLookup });
 
   return app;
 }

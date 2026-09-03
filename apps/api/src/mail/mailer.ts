@@ -53,10 +53,33 @@ export interface AccountSecurityChangeMailPayload {
   locale?: string;
 }
 
+// Ablauf-Erinnerung für eine Qualifikation (docs/nutzer-qualifikationen-
+// plan.md, Abschnitt 5) — geht sowohl an die betroffene Person als auch an
+// die Admins des Vereins (jeweils EIN Aufruf pro Empfänger:in, analog zu
+// mehreren Empfänger:innen einer Einladung). Bewusst OHNE Link (analog
+// AccountSecurityChangeMailPayload oben) — rein informativ, die konkrete
+// Bearbeitung erfolgt in der Nutzerverwaltung/dem eigenen Profil.
+export interface QualificationReminderMailPayload {
+  to: string;
+  recipientName?: string | null;
+  // Name der Person, deren Qualifikation betroffen ist — bei der
+  // Erinnerung an die Admins abweichend vom Empfänger, bei der Erinnerung
+  // an die betroffene Person selbst identisch zu recipientName.
+  qualifiedPersonName: string;
+  type: string; // QualificationTypeSchema-Wert, siehe packages/shared-types/src/qualification.ts
+  expiresOn: Date;
+  // true: expiresOn liegt bereits in der Vergangenheit (EXPIRED_MARKER in
+  // jobs/notifyExpiringQualifications.ts) — abweichender Betreff/Text
+  // ("ist abgelaufen" statt "läuft bald ab").
+  isExpired: boolean;
+  locale?: string;
+}
+
 export interface MailSender {
   sendInvitationEmail(payload: InvitationMailPayload): Promise<void>;
   sendPasswordResetEmail(payload: PasswordResetMailPayload): Promise<void>;
   sendAccountSecurityChangeNotice(payload: AccountSecurityChangeMailPayload): Promise<void>;
+  sendQualificationReminderEmail(payload: QualificationReminderMailPayload): Promise<void>;
 }
 
 type SupportedLocale = 'de-DE' | 'en-US';
@@ -288,6 +311,104 @@ export function buildAccountSecurityChangeHtmlBody(payload: AccountSecurityChang
   `.trim();
 }
 
+// Qualifikations-Ablauf-Erinnerung (docs/nutzer-qualifikationen-plan.md,
+// Abschnitt 5) — dieselbe Struktur (exportierte, einzeln testbare
+// Subject/Text/HTML-Builder) wie bei den übrigen E-Mail-Typen oben.
+// `& { sonstige: string }` zusätzlich zum Index-Signatur-Typ: unter
+// `noUncheckedIndexedAccess` (siehe tsconfig.base.json) wäre auch der
+// Zugriff auf den bekannten Schlüssel `sonstige` sonst `string | undefined`
+// — hier aber als GARANTIERTER Fallback gebraucht (siehe
+// resolveQualificationTypeLabel() unten).
+const QUALIFICATION_TYPE_LABEL: Record<SupportedLocale, Record<string, string> & { sonstige: string }> = {
+  'de-DE': {
+    trainer_c: 'Trainer-C-Lizenz',
+    trainer_b: 'Trainer-B-Lizenz',
+    trainer_a: 'Trainer-A-Lizenz',
+    rettungsschwimmer_silber: 'Rettungsschwimmschein Silber',
+    rettungsschwimmer_gold: 'Rettungsschwimmschein Gold',
+    erste_hilfe: 'Erste-Hilfe-Kurs',
+    kinderschutz: 'Kinderschutz-Schulung',
+    sonstige: 'Qualifikation',
+  },
+  'en-US': {
+    trainer_c: 'Coach License C',
+    trainer_b: 'Coach License B',
+    trainer_a: 'Coach License A',
+    rettungsschwimmer_silber: 'Lifeguard Certificate (Silver)',
+    rettungsschwimmer_gold: 'Lifeguard Certificate (Gold)',
+    erste_hilfe: 'First Aid Course',
+    kinderschutz: 'Child Protection Training',
+    sonstige: 'Qualification',
+  },
+};
+
+function resolveQualificationTypeLabel(locale: SupportedLocale, type: string): string {
+  return QUALIFICATION_TYPE_LABEL[locale][type] ?? QUALIFICATION_TYPE_LABEL[locale].sonstige;
+}
+
+export function buildQualificationReminderSubject(payload: QualificationReminderMailPayload): string {
+  const locale = resolveLocale(payload.locale);
+  const typeLabel = resolveQualificationTypeLabel(locale, payload.type);
+  if (locale === 'en-US') {
+    return payload.isExpired ? `${typeLabel} has expired` : `${typeLabel} is expiring soon`;
+  }
+  return payload.isExpired ? `${typeLabel} ist abgelaufen` : `${typeLabel} läuft bald ab`;
+}
+
+export function buildQualificationReminderTextBody(payload: QualificationReminderMailPayload): string {
+  const locale = resolveLocale(payload.locale);
+  const typeLabel = resolveQualificationTypeLabel(locale, payload.type);
+  const expires = payload.expiresOn.toLocaleDateString(locale, { year: 'numeric', month: 'long', day: 'numeric' });
+  if (locale === 'en-US') {
+    return [
+      payload.recipientName ? `Hi ${payload.recipientName},` : 'Hi,',
+      '',
+      payload.isExpired
+        ? `The ${typeLabel} of ${payload.qualifiedPersonName} expired on ${expires}.`
+        : `The ${typeLabel} of ${payload.qualifiedPersonName} expires on ${expires}.`,
+      '',
+      'Please check whether a renewal/refresher course needs to be organized.',
+      '',
+      'Best regards,',
+      'The Lane 1 team',
+    ].join('\n');
+  }
+  return [
+    payload.recipientName ? `Hallo ${payload.recipientName},` : 'Hallo,',
+    '',
+    payload.isExpired
+      ? `${typeLabel} von ${payload.qualifiedPersonName} ist am ${expires} abgelaufen.`
+      : `${typeLabel} von ${payload.qualifiedPersonName} läuft am ${expires} ab.`,
+    '',
+    'Bitte prüfen Sie, ob ein Verlängerungs-/Auffrischungslehrgang organisiert werden muss.',
+    '',
+    'Sportliche Grüße,',
+    'Ihr Lane-1-Team',
+  ].join('\n');
+}
+
+export function buildQualificationReminderHtmlBody(payload: QualificationReminderMailPayload): string {
+  const locale = resolveLocale(payload.locale);
+  const typeLabel = resolveQualificationTypeLabel(locale, payload.type);
+  const expires = payload.expiresOn.toLocaleDateString(locale, { year: 'numeric', month: 'long', day: 'numeric' });
+  if (locale === 'en-US') {
+    return `
+      <p>${payload.recipientName ? `Hi ${escapeHtml(payload.recipientName)},` : 'Hi,'}</p>
+      <p>The <strong>${escapeHtml(typeLabel)}</strong> of ${escapeHtml(payload.qualifiedPersonName)}
+         ${payload.isExpired ? `expired on ${expires}.` : `expires on ${expires}.`}</p>
+      <p>Please check whether a renewal/refresher course needs to be organized.</p>
+      <p>Best regards,<br>The Lane 1 team</p>
+    `.trim();
+  }
+  return `
+    <p>${payload.recipientName ? `Hallo ${escapeHtml(payload.recipientName)},` : 'Hallo,'}</p>
+    <p><strong>${escapeHtml(typeLabel)}</strong> von ${escapeHtml(payload.qualifiedPersonName)}
+       ${payload.isExpired ? `ist am ${expires} abgelaufen.` : `läuft am ${expires} ab.`}</p>
+    <p>Bitte prüfen Sie, ob ein Verlängerungs-/Auffrischungslehrgang organisiert werden muss.</p>
+    <p>Sportliche Grüße,<br>Ihr Lane-1-Team</p>
+  `.trim();
+}
+
 // Sicherheitskorrektur (Code-Review, Befund S8): escapte bislang keine
 // einfachen Anführungszeichen. Heute folgenlos, da jedes Attribut in
 // buildHtmlBody() doppelt gequotet ist (ein `'` bricht ein `"`-delimitiertes
@@ -390,6 +511,17 @@ export class SmtpMailSender implements MailSender {
       html: buildAccountSecurityChangeHtmlBody(payload),
     });
   }
+
+  async sendQualificationReminderEmail(payload: QualificationReminderMailPayload): Promise<void> {
+    const transport = await this.getTransport();
+    await transport.sendMail({
+      from: `"${this.config.fromName}" <${this.config.fromEmail}>`,
+      to: payload.to,
+      subject: buildQualificationReminderSubject(payload),
+      text: buildQualificationReminderTextBody(payload),
+      html: buildQualificationReminderHtmlBody(payload),
+    });
+  }
 }
 
 // Ausweichlösung, wenn kein SMTP konfiguriert ist (z. B. lokale
@@ -439,6 +571,17 @@ export class ConsoleMailSender implements MailSender {
   async sendAccountSecurityChangeNotice(payload: AccountSecurityChangeMailPayload): Promise<void> {
     console.warn(
       `[mail] Kein SMTP konfiguriert — Sicherheitshinweis (${payload.changeType}) an ${payload.to} konnte nicht versendet werden.`,
+    );
+  }
+
+  // Trägt wie sendAccountSecurityChangeNotice() kein Geheimnis — unbedenklich
+  // zu loggen, dient hier ausschließlich als sichtbarer Hinweis, dass die
+  // Erinnerung ohne SMTP-Konfiguration niemanden erreicht (die betroffene
+  // Person/Admins sehen den Status weiterhin direkt in der App, siehe
+  // Statusbadge in apps/web/js/modules/qualifications.js).
+  async sendQualificationReminderEmail(payload: QualificationReminderMailPayload): Promise<void> {
+    console.warn(
+      `[mail] Kein SMTP konfiguriert — Qualifikations-Erinnerung (${payload.type}, ${payload.isExpired ? 'abgelaufen' : 'läuft bald ab'}) an ${payload.to} konnte nicht versendet werden.`,
     );
   }
 }

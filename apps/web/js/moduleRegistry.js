@@ -22,11 +22,12 @@ import { syncQueueModule } from './modules/syncQueue.js';
 import { profileModule } from './modules/profile.js';
 import { userManagementModule } from './modules/userManagement.js';
 import { infoModule } from './modules/info.js';
+import { qualificationsModule } from './modules/qualifications.js';
 
 const ALL_MODULES = [
   dashboardModule, athletesModule, competitionsModule, timesModule, plansModule,
   templatesModule, catalogModule, sessionsModule, actionItemsModule, statsModule,
-  syncQueueModule, profileModule, userManagementModule, infoModule,
+  syncQueueModule, profileModule, userManagementModule, infoModule, qualificationsModule,
 ];
 
 export function registerAllModules() {

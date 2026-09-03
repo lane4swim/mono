@@ -26,7 +26,8 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "prisma db seed",
     "create-superadmin": "tsx --env-file-if-exists=.env scripts/createSuperAdmin.ts",
-    "purge-deleted-data": "tsx --env-file-if-exists=.env scripts/purgeDeletedData.ts"
+    "purge-deleted-data": "tsx --env-file-if-exists=.env scripts/purgeDeletedData.ts",
+    "notify-expiring-qualifications": "tsx --env-file-if-exists=.env scripts/notifyExpiringQualifications.ts"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.1",
