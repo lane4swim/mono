@@ -31,6 +31,11 @@ export interface InMemorySessionRow {
   date: Date;
   attendance: Array<Record<string, unknown>>;
 }
+export interface InMemoryQualificationRow {
+  id: string;
+  userId: string;
+  [key: string]: unknown;
+}
 
 export interface InMemoryProfileDatabase {
   users: InMemoryUserRow[];
@@ -39,6 +44,11 @@ export interface InMemoryProfileDatabase {
   entries: InMemoryLinkedRow[];
   actionItems: InMemoryLinkedRow[];
   sessions: InMemorySessionRow[];
+  // Optional (statt Pflichtfeld): vermeidet, dass jeder bestehende
+  // Testaufrufer dieses Konstruktors (buildTestApp() in mehreren
+  // *.route.test.ts-Dateien) ein leeres Array ergänzen muss, nur weil ein
+  // neues Feld hinzukam — siehe Default `?? []` in exportUserData() unten.
+  qualifications?: InMemoryQualificationRow[];
 }
 
 // Test-Double für ProfileDataGateway — hält eine kleine, injizierbare
@@ -73,6 +83,8 @@ export class InMemoryProfileDataGateway implements ProfileDataGateway {
         .filter((x): x is Record<string, unknown> => x !== null);
     }
 
+    const qualifications = (this.db.qualifications ?? []).filter((q) => q.userId === userId);
+
     const { passwordHash: _passwordHash, ...publicUser } = user;
     return {
       exportedAt: new Date().toISOString(),
@@ -83,6 +95,7 @@ export class InMemoryProfileDataGateway implements ProfileDataGateway {
       entries,
       actionItems,
       attendance,
+      qualifications,
     };
   }
 

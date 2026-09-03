@@ -28,14 +28,14 @@ datasource db {
 }
 
 model Club {
-  id          String       @id @default(uuid())
-  name        String
+  id             String       @id @default(uuid())
+  name           String
   // Modul-Pakete (z. B. "competitions" fürs Wettkampfmodul), die dieser
   // Verein gebucht hat — siehe packages/shared-types/src/modules.ts:
   // MODULE_PACKAGES für die gültigen Keys und deren Bedeutung. Steuert
   // sowohl die Frontend-Sichtbarkeit (apps/web/js/router.js) als auch
   // die Sync-Durchsetzung (apps/api/src/modules/sync/sync.permissions.ts).
-  enabledModules String[]  @default([])
+  enabledModules String[]     @default([])
   // Externe Vereinskennung für den Ergebnisimport (DSV7/Lenex, siehe
   // docs/dsv7-lenex-import-plan.md Abschnitt 3.1) — generisch statt
   // DSV-spezifisch, damit auch andere Verbands-IDs (FINA, SwimRankings, …)
@@ -43,34 +43,35 @@ model Club {
   // für die 4-stellige DSV-Vereinskennzahl in nationalID.
   nationalID     String?
   nationalIDType String?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  users       User[]
-  invitations Invitation[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  users          User[]
+  invitations    Invitation[]
 
-  groups       Group[]
-  athletes     Athlete[]
-  competitions Competition[]
-  entries      StartlistEntry[]
-  results      Result[]
-  exercises    Exercise[]
-  templates    Template[]
-  plans        Plan[]
-  sessions     TrainingSession[]
-  actionItems  ActionItem[]
+  groups                        Group[]
+  athletes                      Athlete[]
+  competitions                  Competition[]
+  entries                       StartlistEntry[]
+  results                       Result[]
+  exercises                     Exercise[]
+  templates                     Template[]
+  plans                         Plan[]
+  sessions                      TrainingSession[]
+  actionItems                   ActionItem[]
+  qualificationReminderSettings ClubQualificationReminderSetting[]
 
   @@map("clubs")
 }
 
 model User {
-  id                String    @id @default(uuid())
+  id                  String               @id @default(uuid())
   // null nur für role === "superadmin".
-  clubId            String?
-  club              Club?     @relation(fields: [clubId], references: [id])
-  name              String
-  email             String    @unique
-  passwordHash      String
-  role              String
+  clubId              String?
+  club                Club?                @relation(fields: [clubId], references: [id])
+  name                String
+  email               String               @unique
+  passwordHash        String
+  role                String
   // Aufräumarbeit (Code-Review): vormals ein nackter String ohne
   // Fremdschlüssel/Unique-Constraint, obwohl jede andere Referenz in
   // diesem Schema sauber modelliert ist — zwei Konten hätten unbemerkt auf
@@ -84,26 +85,27 @@ model User {
   // in der direkt danach auch dieser User-Datensatz gelöscht wird; SetNull
   // verhindert, dass die Fremdschlüssel-Constraint diese Reihenfolge
   // blockiert, ohne den Purge-Ablauf selbst ändern zu müssen.
-  athleteId         String?   @unique
-  athlete           Athlete?  @relation(fields: [athleteId], references: [id], onDelete: SetNull)
-  locale            String    @default("de-DE")
+  athleteId           String?              @unique
+  athlete             Athlete?             @relation(fields: [athleteId], references: [id], onDelete: SetNull)
+  locale              String               @default("de-DE")
   // DSGVO: Zeitpunkt/Version der zuletzt bestätigten Einwilligung zur
   // Datenverarbeitung — wird bei jedem Login/jeder Registrierung erneut
   // gesetzt (siehe auth.service.ts: CURRENT_CONSENT_VERSION).
-  consentGivenAt    DateTime?
-  consentVersion    String?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  consentGivenAt      DateTime?
+  consentVersion      String?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
   // Sofort gesetzt, sobald eine Löschung beantragt wird (Recht auf
   // Löschung, Art. 17 DSGVO) — der Account ist ab dann funktionslos
   // (Login wird verweigert), der endgültige Hard-Purge aus der Datenbank
   // erfolgt zeitversetzt über DataDeletionRequest.purgeAfter.
-  deletedAt         DateTime?
-  refreshTokens     RefreshToken[]
-  sentInvitations   Invitation[] @relation("InvitationSender")
-  deletionRequest   DataDeletionRequest?
-  assignedActionItems ActionItem[] @relation("ActionItemAssignedTrainer")
+  deletedAt           DateTime?
+  refreshTokens       RefreshToken[]
+  sentInvitations     Invitation[]         @relation("InvitationSender")
+  deletionRequest     DataDeletionRequest?
+  assignedActionItems ActionItem[]         @relation("ActionItemAssignedTrainer")
   passwordResetTokens PasswordResetToken[]
+  qualifications      UserQualification[]
 
   // Ineffizienz-Korrektur: `clubId` ist zwar ein Fremdschlüssel, Postgres
   // legt darauf aber — anders als für UNIQUE-Spalten — KEINEN Index an.
@@ -143,13 +145,13 @@ model DataDeletionRequest {
 }
 
 model RefreshToken {
-  id         String    @id @default(uuid())
-  userId     String
-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tokenHash  String    @unique
-  expiresAt  DateTime
-  revokedAt  DateTime?
-  createdAt  DateTime  @default(now())
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
 
   @@index([userId])
   @@map("refresh_tokens")
@@ -178,26 +180,26 @@ model PasswordResetToken {
 }
 
 model Invitation {
-  id           String    @id @default(uuid())
-  tokenHash    String    @unique
-  email        String
+  id          String    @id @default(uuid())
+  tokenHash   String    @unique
+  email       String
   // "admin" | "trainer" | "athlete" — "superadmin" wird nie per Einladung
   // vergeben (siehe scripts/createSuperAdmin.ts).
-  role         String
-  clubId       String?
-  club         Club?     @relation(fields: [clubId], references: [id])
-  athleteId    String?
+  role        String
+  clubId      String?
+  club        Club?     @relation(fields: [clubId], references: [id])
+  athleteId   String?
   // Nullable + SetNull: eine Einladung soll als historischer Datensatz
   // bestehen bleiben, auch wenn das einladende Konto später selbst
   // gelöscht wird (z. B. ein ausscheidender Admin, der zuvor Trainer:innen
   // eingeladen hat) — die Löschung DIESES Kontos darf nicht an den von
   // ihm ausgestellten Einladungen scheitern.
-  invitedById  String?
-  invitedBy    User?     @relation("InvitationSender", fields: [invitedById], references: [id], onDelete: SetNull)
-  expiresAt    DateTime
-  usedAt       DateTime?
-  revokedAt    DateTime?
-  createdAt    DateTime  @default(now())
+  invitedById String?
+  invitedBy   User?     @relation("InvitationSender", fields: [invitedById], references: [id], onDelete: SetNull)
+  expiresAt   DateTime
+  usedAt      DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
 
   @@index([clubId])
   @@map("invitations")
@@ -237,27 +239,27 @@ model Group {
 }
 
 model Athlete {
-  id        String    @id @default(uuid())
-  clubId    String
-  club      Club      @relation(fields: [clubId], references: [id])
-  firstName String
-  lastName  String
-  birthdate DateTime?
-  gender    String    @default("d") // "w" | "m" | "d"
-  groupId   String?
-  group     Group?    @relation(fields: [groupId], references: [id])
-  joinDate  DateTime?
-  active    Boolean   @default(true)
-  notes     String    @default("")
+  id             String    @id @default(uuid())
+  clubId         String
+  club           Club      @relation(fields: [clubId], references: [id])
+  firstName      String
+  lastName       String
+  birthdate      DateTime?
+  gender         String    @default("d") // "w" | "m" | "d"
+  groupId        String?
+  group          Group?    @relation(fields: [groupId], references: [id])
+  joinDate       DateTime?
+  active         Boolean   @default(true)
+  notes          String    @default("")
   // Externe Athletenkennung für den Ergebnisimport (DSV7/Lenex, siehe
   // docs/dsv7-lenex-import-plan.md Abschnitt 3.1) — generisch, analog zu
   // Club.nationalID/nationalIDType. Erlaubt robusteres Matching gegen
   // Importzeilen als reiner Namensabgleich (z. B. bei Namensgleichheit).
   nationalID     String?
   nationalIDType String?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
 
   entries     StartlistEntry[]
   results     Result[]
@@ -298,20 +300,20 @@ model Competition {
 // Startlisten-Einträge (Wettkampfnummer/Lauf/Bahn/Meldezeit) — entspricht
 // dem "entries"-Store im Frontend.
 model StartlistEntry {
-  id            String       @id @default(uuid())
+  id            String      @id @default(uuid())
   clubId        String
-  club          Club         @relation(fields: [clubId], references: [id])
+  club          Club        @relation(fields: [clubId], references: [id])
   competitionId String
-  competition   Competition  @relation(fields: [competitionId], references: [id])
+  competition   Competition @relation(fields: [competitionId], references: [id])
   athleteId     String
-  athlete       Athlete      @relation(fields: [athleteId], references: [id])
+  athlete       Athlete     @relation(fields: [athleteId], references: [id])
   event         String
-  eventNumber   String       @default("")
+  eventNumber   String      @default("")
   heat          Int?
   lane          Int?
   seedTime      Float?
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
   deletedAt     DateTime?
 
   // [clubId, updatedAt] statt [clubId] — siehe Begründung bei Group oben
@@ -475,15 +477,15 @@ model TrainingSession {
 }
 
 model ActionItem {
-  id          String    @id @default(uuid())
-  clubId      String
-  club        Club      @relation(fields: [clubId], references: [id])
-  athleteId   String
-  athlete     Athlete   @relation(fields: [athleteId], references: [id])
-  title       String
-  description String    @default("")
-  category    String
-  status      String    @default("offen") // "offen" | "progress" | "done"
+  id                String    @id @default(uuid())
+  clubId            String
+  club              Club      @relation(fields: [clubId], references: [id])
+  athleteId         String
+  athlete           Athlete   @relation(fields: [athleteId], references: [id])
+  title             String
+  description       String    @default("")
+  category          String
+  status            String    @default("offen") // "offen" | "progress" | "done"
   // Zuständige Person (Trainer:in oder Admin). Nullable + SetNull statt
   // Pflichtfeld mit Cascade — analog zu Invitation.invitedById (siehe dort):
   // ein späteres DSGVO-Hard-Purge des zuständigen Kontos soll das
@@ -493,11 +495,11 @@ model ActionItem {
   // apps/web/js/modules/actionItems.js: openItemModal).
   assignedTrainerId String?
   assignedTrainer   User?     @relation("ActionItemAssignedTrainer", fields: [assignedTrainerId], references: [id], onDelete: SetNull)
-  createdDate DateTime
-  dueDate     DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  deletedAt   DateTime?
+  createdDate       DateTime
+  dueDate           DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  deletedAt         DateTime?
 
   // [clubId, updatedAt] statt [clubId] — siehe Begründung bei Group oben
   // (Sync-Pull-Zugriffsmuster).
@@ -521,7 +523,7 @@ model SyncedEvent {
   id        String   @id // = SyncEvent.id vom Client, keine eigene UUID
   clubId    String
   store     String
-  action    String   // "create" | "update" | "delete"
+  action    String // "create" | "update" | "delete"
   appliedAt DateTime @default(now())
 
   @@index([clubId])
@@ -544,4 +546,84 @@ model SyncTombstone {
   @@unique([clubId, store, entityId])
   @@index([clubId, deletedAt])
   @@map("sync_tombstones")
+}
+
+// ============================================================
+// Qualifikationsmanagement (docs/nutzer-qualifikationen-plan.md).
+// Bewusst KEIN Sync-Store (siehe Plan, Abschnitt 1.1): User ist selbst
+// kein Sync-Store, Qualifikationen sind Metadaten dazu und werden über
+// eigene REST-Endpunkte im qualifications-Modul verwaltet, nicht über
+// POST /api/sync/push.
+// ============================================================
+
+// Erfasste Qualifikation einer Person (Trainerlizenz, Rettungsschwimmschein,
+// Erste-Hilfe-Kurs, …). onDelete: Cascade — analog RefreshToken/PasswordResetToken:
+// ein gelöschtes Konto braucht keine eigenständig fortbestehenden Nachweise mehr.
+model UserQualification {
+  id                       String    @id @default(uuid())
+  userId                   String
+  user                     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Feste Werteliste (siehe QualificationTypeSchema, packages/shared-types/
+  // src/qualification.ts) — kein Fremdschlüssel, da (noch) kein Enum als
+  // eigene Tabelle (siehe Plan, Entscheidung zu Frage 1).
+  type                     String
+  // Freitext-Zusatz, z. B. Kursanbieter/Zertifikatsnummer.
+  note                     String    @default("")
+  acquiredOn               DateTime
+  // Nullable: nicht jede Qualifikation läuft ab.
+  expiresOn                DateTime?
+  // Datum eines bereits organisierten Verlängerungs-/Auffrischungslehrgangs
+  // — dient zugleich als Flag ("ist etwas organisiert?", != null) und als
+  // Datumsangabe (siehe Plan, Abschnitt 2.1).
+  renewalCourseOrganizedOn DateTime?
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+  deletedAt                DateTime?
+
+  reminderLogs QualificationReminderLog[]
+
+  // Zugriffsmuster: "alle Qualifikationen einer Person" (eigene Ansicht/
+  // Nutzerverwaltung) und "alle bald ablaufenden Qualifikationen"
+  // (Erinnerungsjob) — letzteres geht über User.clubId, kein direkter
+  // clubId-Fremdschlüssel hier nötig.
+  @@index([userId, deletedAt])
+  @@index([expiresOn])
+  @@map("user_qualifications")
+}
+
+// Verhindert Doppelversand bei mehrfachem Cron-Lauf des Erinnerungsjobs
+// (jobs/notifyExpiringQualifications.ts) — je erreichter Schwelle
+// (thresholdDays; 0 steht für "bereits abgelaufen", siehe dortiger
+// EXPIRED_MARKER-Kommentar) wird höchstens EINMAL erinnert. onDelete:
+// Cascade — eine gelöschte Qualifikation braucht keine eigene
+// Versandhistorie mehr.
+model QualificationReminderLog {
+  id              String            @id @default(uuid())
+  qualificationId String
+  qualification   UserQualification @relation(fields: [qualificationId], references: [id], onDelete: Cascade)
+  thresholdDays   Int
+  sentAt          DateTime          @default(now())
+
+  @@unique([qualificationId, thresholdDays])
+  @@map("qualification_reminder_logs")
+}
+
+// Je Verein und Qualifikationstyp konfigurierbare Vorlaufzeiten (in Tagen
+// vor expiresOn) für Ablauf-Erinnerungen (siehe Plan, Abschnitt 2.4 und
+// Entscheidung zu Frage 4). Fehlt eine Zeile für eine (clubId, type)-
+// Kombination, gilt der Fallback DEFAULT_QUALIFICATION_REMINDER_THRESHOLDS_DAYS
+// (packages/shared-types/src/qualification.ts) — ein Verein muss also
+// nichts konfigurieren, um sinnvolle Erinnerungen zu bekommen.
+model ClubQualificationReminderSetting {
+  id             String   @id @default(uuid())
+  clubId         String
+  club           Club     @relation(fields: [clubId], references: [id])
+  type           String
+  // Tage vor expiresOn, an denen je einmalig erinnert wird, z. B. [60, 14].
+  thresholdsDays Int[]
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([clubId, type])
+  @@map("club_qualification_reminder_settings")
 }

@@ -17,6 +17,13 @@
 
 # Zukünftige Entwicklungen
 - [ ] CD-fähig je Verein (Logo, Farben)
+- [x] Nutzer-Qualifikationen (Erwerbsdatum, Art, Ablaufdatum) — siehe
+  `docs/nutzer-qualifikationen-plan.md`; umgesetzt als zubuchbares Modul
+  inkl. Ablauf-Erinnerungsjob. Offen: `npx prisma migrate dev` gegen eine
+  echte Datenbank ausführen (Migration liegt vor, aber ungeprüft gegen
+  Postgres — in dieser Sandbox ohne Docker-Zugriff nicht testbar), sowie
+  ein Cron-Eintrag für `npm run notify-expiring-qualifications` gemäß
+  Skript-Kommentar.
 
 ## Push Nachrichten
 

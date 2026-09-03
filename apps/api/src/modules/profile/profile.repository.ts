@@ -18,6 +18,11 @@ export interface PersonalDataExport {
   entries: Array<Record<string, unknown>>;
   actionItems: Array<Record<string, unknown>>;
   attendance: Array<Record<string, unknown>>;
+  // Qualifikationsmanagement (docs/nutzer-qualifikationen-plan.md,
+  // Abschnitt 6) — an `userId` gehängt, nicht an `athleteId`: anders als
+  // athlete/results/entries/actionItems gilt das für JEDE Person mit
+  // Konto, nicht nur für mit einem Athletenprofil verknüpfte.
+  qualifications: Array<Record<string, unknown>>;
 }
 
 // Code-Review, Befund R8: `purgedAt`/`status` gestrichen — siehe
@@ -59,6 +64,13 @@ export class PrismaProfileDataGateway implements ProfileDataGateway {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new UserNotFoundForExportError();
     const { passwordHash: _passwordHash, ...publicUser } = user;
+
+    // An userId (nicht athleteId) gehängt — gilt für jede Person mit Konto,
+    // unabhängig von einer Athletenverknüpfung (siehe PersonalDataExport-
+    // Kommentar oben).
+    const qualifications = await this.prisma.userQualification.findMany({
+      where: { userId, deletedAt: null },
+    });
 
     let athlete: Record<string, unknown> | null = null;
     let results: Array<Record<string, unknown>> = [];
@@ -122,6 +134,7 @@ export class PrismaProfileDataGateway implements ProfileDataGateway {
       entries,
       actionItems,
       attendance,
+      qualifications,
     };
   }
 
