@@ -62,6 +62,17 @@ model UserQualification {
   // Nullable: nicht jede Qualifikation läuft ab (z. B. ein einmaliger
   // Grundlehrgang ohne Auffrischungspflicht).
   expiresOn     DateTime?
+  // Datum des bereits organisierten Verlängerungs-/Auffrischungslehrgangs
+  // (z. B. Trainer-C-Fortbildung, Rettungsschwimmer-Wiederholungskurs).
+  // Nullable: gesetzt, sobald ein Termin feststeht — dient zugleich als
+  // Flag ("ist etwas organisiert?", `!= null`) UND als Datumsangabe, ohne
+  // ein separates Boolean-Feld zu benötigen. Kann VOR oder NACH `expiresOn`
+  // liegen (ein Lehrgang wird oft schon Monate vor Ablauf gebucht) — anders
+  // als bei `expiresOn`/`acquiredOn` gibt es hier keine Reihenfolge-
+  // Validierung. Nach erfolgreichem Lehrgang entsteht daraus ein neuer,
+  // eigener `UserQualification`-Datensatz (neues `acquiredOn`); dieses Feld
+  // wird nicht rückwirkend zum neuen Datensatz "umgehängt".
+  renewalCourseOrganizedOn DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   deletedAt     DateTime?
@@ -113,6 +124,7 @@ export const UserQualificationSchema = z.object({
   note: z.string().max(500).default(''),
   acquiredOn: isoDate,
   expiresOn: nullableIsoDate,
+  renewalCourseOrganizedOn: nullableIsoDate,
   createdAt: isoDate,
   updatedAt: isoDate,
 }).strict()
@@ -158,7 +170,8 @@ Zwei Einstiegspunkte, kein eigener Router-Eintrag (kein Modul-Paket in
 
 - **Eigenes Profil** (`apps/web/js/modules/profile.js`): neuer Abschnitt „Meine
   Qualifikationen" mit Liste + „Hinzufügen"-Formular (Typ-Auswahl, Erwerbsdatum,
-  optionales Ablaufdatum, Notiz).
+  optionales Ablaufdatum, Notiz, optionales Datum „Verlängerungslehrgang
+  organisiert am").
 - **Nutzerverwaltung** (`apps/web/js/modules/userManagement.js`): pro Mitglied in der
   Mitgliederliste ein Detail-/Ausklapp-Bereich mit derselben Liste, für Admins
   bearbeitbar.
@@ -174,8 +187,16 @@ Farbcodierter Badge (vorhandene `badge()`-Helper aus `ui.js`, siehe Nutzung in
 
 - kein `expiresOn` → neutral, „unbefristet"
 - `expiresOn` > 60 Tage entfernt → `done` (grün), „gültig"
-- `expiresOn` ≤ 60 Tage entfernt → `progress` (gelb), „läuft bald ab"
-- `expiresOn` in der Vergangenheit → `open` (rot), „abgelaufen"
+- `expiresOn` ≤ 60 Tage entfernt **und kein** `renewalCourseOrganizedOn` → `progress`
+  (gelb), „läuft bald ab"
+- `expiresOn` ≤ 60 Tage entfernt **und** `renewalCourseOrganizedOn` gesetzt → eigener
+  Badge-Zustand (blau, kein bestehender `badge()`-Variant-Name passt — neue Variante
+  `scheduled` in `ui.js` ergänzen), „Verlängerung am {renewalCourseOrganizedOn} geplant"
+- `expiresOn` in der Vergangenheit und kein `renewalCourseOrganizedOn` → `open` (rot),
+  „abgelaufen"
+- `expiresOn` in der Vergangenheit, aber `renewalCourseOrganizedOn` in der Zukunft →
+  wie „Verlängerung geplant" oben, nicht als hartes „abgelaufen" einfärben (Lehrgang
+  liegt terminlich nur noch nicht in der Vergangenheit)
 
 Schwellenwert 60 Tage vorläufig — abzustimmen (siehe Abschnitt 8).
 
@@ -193,6 +214,13 @@ Job `apps/api/src/jobs/notifyExpiringQualifications.ts`:
 
 - läuft täglich, sucht `UserQualification`-Zeilen mit `expiresOn` in z. B. 30/7 Tagen
   (zwei Schwellen, jeweils einmalig, kein Spam) sowie bereits abgelaufene,
+- **überspringt Zeilen mit gesetztem `renewalCourseOrganizedOn`**: ist der
+  Verlängerungslehrgang bereits organisiert, besteht kein Handlungsbedarf mehr — die
+  Erinnerung würde nur unnötig Rauschen erzeugen. Liegt `renewalCourseOrganizedOn`
+  seinerseits in der Vergangenheit, ohne dass eine neue `UserQualification` mit
+  aktuellerem `acquiredOn` nachgetragen wurde (Lehrgang fand vermutlich statt, wurde
+  aber nicht nachgepflegt), erneut erinnern — sonst bleibt eine vergessene Nachpflege
+  dauerhaft unsichtbar,
 - verschickt E-Mail über den bestehenden `apps/api/src/mail/mailer.ts` an die betroffene
   Person **und** an die Admins des Vereins,
 - markiert je Schwelle den Versand (neues Feld `remindersSentAt: Json?` oder eigene
@@ -224,7 +252,9 @@ Auskunfts-/Löschmechanismen (`docs/backend-plan.md`, Abschnitt 14):
 - Route: Autorisierung (fremder Verein → 403, eigenes Konto lesbar, Admin kann fremde
   Konten im eigenen Verein verwalten, `superadmin` je nach Entscheidung aus Abschnitt 8).
 - Job: `notifyExpiringQualifications` — kein Doppelversand bei zweimaligem Lauf am
-  selben Tag, korrekte Schwellenauswahl.
+  selben Tag, korrekte Schwellenauswahl, Zeilen mit gesetztem und zukünftigem
+  `renewalCourseOrganizedOn` werden übersprungen, ein in der Vergangenheit liegendes
+  `renewalCourseOrganizedOn` ohne neue Qualifikation löst wieder eine Erinnerung aus.
 
 ## 8. Offene Fragen (vor Umsetzung zu klären)
 
