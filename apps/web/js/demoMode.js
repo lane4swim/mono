@@ -1,6 +1,6 @@
 // ============================================================
 // demoMode.js — shared "am I running as demo.html?" signal plus the
-// fixed demo fixtures (two accounts, one clubId). Every other infra
+// fixed demo fixtures (three accounts, one clubId). Every other infra
 // module that needs to behave differently in the demo (db.js: separate
 // IndexedDB so demo data can never mix with a real, synced account;
 // state.js: local-only "login"; syncClient.js's only caller,
@@ -32,12 +32,12 @@ export const DEMO_CLUB_ID = '0';
 // Einheiten, Handlungsfelder, …) für ihr Konto die richtigen Daten finden.
 export const DEMO_ATHLETE_ID_MAYA = 'demo-athlete-maya';
 
-// Die beiden Demo-Konten, zwischen denen im Dropdown neben der
+// Die drei Demo-Konten, zwischen denen im Dropdown neben der
 // Sprachauswahl umgeschaltet werden kann. Kein Passwort, keine
 // Backend-Anbindung — state.js: loginDemo() übernimmt eines dieser
 // Objekte 1:1 als "aktuellen Nutzer", genau wie ein echtes Login das vom
 // Server gelieferte Nutzerobjekt übernimmt.
-// Beide Demo-Konten haben ALLE Module aktiv (MODULE_KEYS) — die Demo soll
+// Alle Demo-Konten haben ALLE Module aktiv (MODULE_KEYS) — die Demo soll
 // den vollen Funktionsumfang zeigen, inkl. des Wettkampfmoduls, auch wenn
 // echte Vereine künftig einzelne Module abgewählt haben könnten (siehe
 // router.js: visibleModules()).
@@ -59,6 +59,16 @@ export const DEMO_USERS = [
     role: 'athlete',
     clubId: DEMO_CLUB_ID,
     athleteId: DEMO_ATHLETE_ID_MAYA,
+    locale: null,
+    enabledModules: MODULE_KEYS,
+  },
+  {
+    id: 'demo-user-katrin',
+    name: 'Katrin Berger',
+    email: 'katrin.berger@demo.lane1.app',
+    role: 'admin',
+    clubId: DEMO_CLUB_ID,
+    athleteId: null,
     locale: null,
     enabledModules: MODULE_KEYS,
   },

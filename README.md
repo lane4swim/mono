@@ -427,11 +427,12 @@ siehe `.env.example`.
 **gleichen Fachmodule** (`js/modules/*.js`) über denselben Router nutzt,
 aber **ganz ohne** `apps/api` läuft:
 
-- **Zwei feste Konten** statt Login: Sabine Reuter (Trainerin) und Maya
-  Vogel (Athletin), umschaltbar über ein Dropdown direkt neben der
-  Sprachauswahl in der Kopfzeile (`js/demoMode.js`: `DEMO_USERS`,
-  `js/state.js`: `loginDemo()` — übernimmt eines der beiden Objekte 1:1
-  als "aktuellen Nutzer", ganz ohne HTTP-Aufruf).
+- **Drei feste Konten** statt Login: Sabine Reuter (Trainerin), Maya
+  Vogel (Athletin) und Katrin Berger (Administratorin), umschaltbar über
+  ein Dropdown direkt neben der Sprachauswahl in der Kopfzeile
+  (`js/demoMode.js`: `DEMO_USERS`, `js/state.js`: `loginDemo()` —
+  übernimmt eines der drei Objekte 1:1 als "aktuellen Nutzer", ganz ohne
+  HTTP-Aufruf).
 - **Vollständig isolierte Datenhaltung:** `js/db.js` öffnet für `demo.html`
   eine eigene IndexedDB-Datenbank (`lane1-demo-db` statt `lane1-db`) —
   erkannt über `js/demoMode.js`: `IS_DEMO` (Pfadprüfung auf `demo.html`).
