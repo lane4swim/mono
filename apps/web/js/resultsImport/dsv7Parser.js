@@ -70,6 +70,30 @@ function toInt(value) {
   return Number.isNaN(n) ? undefined : n;
 }
 
+// ResultSchema.time (packages/shared-types/src/entities.ts) ist
+// `z.number().positive().nullable()` — weder `NaN`/`undefined` noch `0`
+// sind gültig. DSV7 trägt für nicht gewertete Versuche (DS/NA/AB/AU/ZU)
+// ohnehin den Platzhalter "00:00:00,00" als Endzeit; ohne diese Prüfung
+// würde eine ansonsten korrekt als "OK" markierte Zeile mit genau dieser
+// Platzhalterzeit (Datenfehler der Exportquelle) eine `time: 0` erzeugen,
+// die das Schema ablehnt — der Datensatz wäre dann dauerhaft nicht mehr
+// synchronisierbar (siehe Code-Review 2026-09-02, Befund K1), statt hier
+// bereits sauber auf `null` abgebildet zu werden.
+function positiveTimeOrNull(sec) {
+  return Number.isFinite(sec) && sec > 0 ? sec : null;
+}
+
+// ResultSplitSchema.distanceM (packages/shared-types/src/entities.ts) ist
+// `z.number().positive()` — ein Pflichtfeld. `toInt()` liefert `undefined`
+// für ein leeres/nicht-numerisches Distanz-Feld; eine Zwischenzeit ohne
+// bekannte Distanz ist ohnehin nicht sinnvoll darstellbar und wird daher
+// hier verworfen statt an `splits` angehängt (Code-Review 2026-09-02,
+// Befund K1) — ein Datensatz mit einem schema-verletzenden Split-Eintrag
+// wäre sonst dauerhaft nicht mehr synchronisierbar.
+function isValidSplit(distanceM, time) {
+  return Number.isFinite(distanceM) && distanceM > 0 && Number.isFinite(time) && time > 0;
+}
+
 const GENDER_MAP = { M: 'm', W: 'w', D: 'd' };
 
 // ---- Hauptparser -------------------------------------------------------
@@ -195,7 +219,7 @@ export function parseDsv7WettkampfergebnisListe(text) {
 
         const status = grund || 'OK';
         const place = grund ? null : (toInt(platzRaw) > 0 ? toInt(platzRaw) : null);
-        const time = status === 'OK' ? timeToSec(endzeit) : null;
+        const time = status === 'OK' ? positiveTimeOrNull(timeToSec(endzeit)) : null;
 
         const result = {
           athleteMatchHint: {
@@ -209,7 +233,7 @@ export function parseDsv7WettkampfergebnisListe(text) {
             ? { distanceM: wk.distanzM, stroke: wk.technik, isRelay: false, relaySize: 1, label: eventLabel }
             : { distanceM: undefined, stroke: undefined, isRelay: false, relaySize: 1, label: null },
           round: wettkampfart,
-          time: Number.isFinite(time) ? time : null,
+          time,
           place,
           status,
           statusNote: dqBemerkung || undefined,
@@ -225,9 +249,10 @@ export function parseDsv7WettkampfergebnisListe(text) {
       case 'PNZWISCHENZEIT': {
         const [veranstaltungsId, wettkampfnr, wettkampfart, distanzRaw, zwischenzeit] = fields;
         const target = individualResultsByKey.get(`${veranstaltungsId}|${wettkampfnr}|${wettkampfart}`);
+        const distanceM = toInt(distanzRaw);
         const splitTime = timeToSec(zwischenzeit);
-        if (target && Number.isFinite(splitTime)) {
-          target.splits.push({ distanceM: toInt(distanzRaw), time: splitTime });
+        if (target && isValidSplit(distanceM, splitTime)) {
+          target.splits.push({ distanceM, time: splitTime });
         }
         break;
       }
@@ -236,13 +261,33 @@ export function parseDsv7WettkampfergebnisListe(text) {
           wettkampfnr, wettkampfart, , platzRaw, grund, , veranstaltungsIdStaffel,
           verein, vereinskennzahl, endzeit, , dqBemerkung,
         ] = fields;
+
+        // Wie PNERGEBNIS (siehe dortiger Kommentar) wiederholt sich die
+        // GESAMTE Gruppe STERGEBNIS+STAFFELPERSON*n+STZWISCHENZEIT*m einmal
+        // je Wertungsklasse — mit identischer Teambesetzung und identischen
+        // Zwischenzeiten, nur der WertungsID (hier verworfen) und ggf. Platz/
+        // Wertungsklasse unterscheiden sich. Ohne diese Prüfung überschriebe
+        // eine zweite Wertungszeile die bereits angelegte Gruppe samt ihrem
+        // `template` (inkl. dessen `splits`-Array, auf das bereits erzeugte
+        // STAFFELPERSON-Mitglieder per Referenz zeigen) mit einer frischen,
+        // leeren Instanz — UND die nachfolgenden STAFFELPERSON-/
+        // STZWISCHENZEIT-Zeilen dieser zweiten Wertung würden, da sie sich
+        // per Schlüssel weiterhin auf dieselbe Staffel beziehen, erneut
+        // dieselben Teammitglieder/Zwischenzeiten anlegen. Die erste
+        // Wertungszeile gewinnt (analog zu PNERGEBNIS); `seenLegIndexes`/
+        // `seenSplitKeys` unten verhindern zusätzlich, dass die
+        // NACHFOLGENDEN Zeilen derselben (deduplizierten) Wertung echte
+        // Duplikate erzeugen (Code-Review 2026-09-02, Befund K4).
+        const dedupeKey = `${veranstaltungsIdStaffel}|${wettkampfnr}|${wettkampfart}`;
+        if (relayResultsByKey.has(dedupeKey)) break;
+
         const wk = wettkampfByNr.get(wettkampfnr);
         const eventLabel = wk ? dsv7EventLabel({ technik: wk.technik, distanzM: wk.distanzM, isRelay: true, relaySize: wk.relaySize }) : null;
         if (wk && !eventLabel) recordUnmappedEvent({ technik: wk.technik, distanzM: wk.distanzM, isRelay: true, relaySize: wk.relaySize });
 
         const status = grund || 'OK';
         const place = grund ? null : (toInt(platzRaw) > 0 ? toInt(platzRaw) : null);
-        const time = status === 'OK' ? timeToSec(endzeit) : null;
+        const time = status === 'OK' ? positiveTimeOrNull(timeToSec(endzeit)) : null;
 
         // Ergebnis-Vorlage für das Team — pro STAFFELPERSON (unten) wird
         // daraus ein eigenes ImportedResult mit individuellem
@@ -259,7 +304,7 @@ export function parseDsv7WettkampfergebnisListe(text) {
             ? { distanceM: wk.distanzM, stroke: wk.technik, isRelay: true, relaySize: wk.relaySize, label: eventLabel }
             : { distanceM: undefined, stroke: undefined, isRelay: true, relaySize: undefined, label: null },
           round: wettkampfart,
-          time: Number.isFinite(time) ? time : null,
+          time,
           place,
           status,
           statusNote: dqBemerkung || undefined,
@@ -268,13 +313,26 @@ export function parseDsv7WettkampfergebnisListe(text) {
           clubNationalIDType: nonZero(vereinskennzahl) ? 'DSV' : undefined,
           clubNationalID: nonZero(vereinskennzahl),
         };
-        relayResultsByKey.set(`${veranstaltungsIdStaffel}|${wettkampfnr}|${wettkampfart}`, { template, members: [] });
+        // `seenLegIndexes`/`seenSplitKeys` (siehe Kommentar oben und
+        // STAFFELPERSON/STZWISCHENZEIT unten): je EINMAL pro Staffel
+        // erzeugt, unabhängig davon, wie oft sich die gesamte
+        // Wertungs-Gruppe in der Datei wiederholt — bleiben dadurch auch
+        // über eine deduplizierte (übersprungene) Wiederholung hinweg
+        // gültig, um GENAU DIESE Wiederholung erkennen zu können.
+        relayResultsByKey.set(dedupeKey, { template, members: [], seenLegIndexes: new Set(), seenSplitKeys: new Set() });
         break;
       }
       case 'STAFFELPERSON': {
         const [veranstaltungsIdStaffel, wettkampfnr, wettkampfart, name, dsvId, startnummerRaw, geschlecht, jahrgangRaw] = fields;
         const group = relayResultsByKey.get(`${veranstaltungsIdStaffel}|${wettkampfnr}|${wettkampfart}`);
         if (!group) break; // STERGEBNIS fehlt/wurde nicht erkannt — Zeile kann nicht zugeordnet werden
+        const legIndex = toInt(startnummerRaw);
+        // Siehe STERGEBNIS-Kommentar oben (Befund K4): eine wiederholte
+        // Wertungsklasse listet dieselbe Teambesetzung erneut — dieselbe
+        // Startnummer für diese Staffel ein zweites Mal bedeutet "bereits
+        // erfasstes Mitglied", nicht ein zweites, unabhängiges Ergebnis.
+        if (group.seenLegIndexes.has(legIndex)) break;
+        group.seenLegIndexes.add(legIndex);
         const result = {
           ...group.template,
           // splits bleibt hier bewusst als Referenz auf group.template.splits
@@ -289,7 +347,7 @@ export function parseDsv7WettkampfergebnisListe(text) {
             birthYear: toInt(jahrgangRaw),
             gender: GENDER_MAP[geschlecht],
           },
-          relay: { legIndex: toInt(startnummerRaw), teamSize: group.template.eventCode.relaySize },
+          relay: { legIndex, teamSize: group.template.eventCode.relaySize },
         };
         group.members.push(result);
         results.push(result);
@@ -298,8 +356,17 @@ export function parseDsv7WettkampfergebnisListe(text) {
       case 'STZWISCHENZEIT': {
         const [veranstaltungsIdStaffel, wettkampfnr, wettkampfart, startnummerRaw, distanzRaw, zwischenzeit] = fields;
         const group = relayResultsByKey.get(`${veranstaltungsIdStaffel}|${wettkampfnr}|${wettkampfart}`);
+        const distanceM = toInt(distanzRaw);
+        const legIndex = toInt(startnummerRaw);
         const splitTime = timeToSec(zwischenzeit);
-        if (group && Number.isFinite(splitTime)) {
+        // Siehe STERGEBNIS-Kommentar oben (Befund K4): dieselbe
+        // (Distanz, Startnummer)-Kombination taucht bei einer wiederholten
+        // Wertungsklasse ein zweites Mal mit identischem Wert auf — ohne
+        // diese Prüfung erschiene dieselbe Zwischenzeit doppelt im
+        // gemeinsamen `splits`-Array jedes Teammitglieds.
+        const splitKey = `${distanceM}|${legIndex}`;
+        if (group && isValidSplit(distanceM, splitTime) && !group.seenSplitKeys.has(splitKey)) {
+          group.seenSplitKeys.add(splitKey);
           // Dieselbe Array-Instanz wird von group.template UND jedem
           // bereits erzeugten Mitglieds-Result referenziert (siehe
           // STAFFELPERSON oben) — ein push() hier macht die Zwischenzeit
@@ -307,7 +374,7 @@ export function parseDsv7WettkampfergebnisListe(text) {
           // STAFFELPERSON/STZWISCHENZEIT in der Datei. `legIndex` = die
           // Startnummer des/der Ablösenden, zu dessen/deren Bein diese
           // (kumulierte) Zwischenzeit gehört.
-          group.template.splits.push({ distanceM: toInt(distanzRaw), time: splitTime, legIndex: toInt(startnummerRaw) });
+          group.template.splits.push({ distanceM, time: splitTime, legIndex });
         }
         break;
       }

@@ -101,9 +101,45 @@ function reqPromise(req, map = (r) => r){
   });
 }
 
+// Code-Review 2026-09-02, Befund K3: JEDES Entity-Schema (siehe
+// packages/shared-types/src/entities.ts) verlangt `id: z.string().uuid()`
+// als Pflichtfeld — der frühere Ausweichwert ("id-<timestamp>-<random>")
+// erfüllt das nicht und macht jeden so angelegten Datensatz dauerhaft nicht
+// synchronisierbar (validatePayload() in sync.service.ts lehnt ihn
+// permanent als "invalid_payload" ab, syncClient.js gibt nach
+// MAX_SYNC_ATTEMPTS auf). `crypto.randomUUID` braucht einen secure context
+// (HTTPS) — genau der bei einer frisch eingerichteten Installation
+// dokumentierte Zwischenzustand (siehe docs/deployment-raspberry-pi.md:
+// "noch ohne Schloss-Symbol/HTTPS") lässt ihn fehlen, obwohl `crypto`
+// selbst (und `crypto.getRandomValues`, das KEINEN secure context braucht)
+// bereits vorhanden ist. Baut daraus eine formgerechte Version-4-UUID von
+// Hand, statt auf eine eigene, schemainkompatible ID-Form auszuweichen.
 export function uid(){
   if (crypto?.randomUUID) return crypto.randomUUID();
-  return 'id-' + Date.now() + '-' + Math.random().toString(16).slice(2);
+  if (crypto?.getRandomValues) {
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    // Setzt die Version-4-/RFC-4122-Variante-Bits rein arithmetisch statt
+    // per Bitoperator (`eslint-preset.cjs` verbietet `no-bitwise` projektweit
+    // — siehe dortiger Kommentar). `bytes[6] % 16` entspricht `& 0x0f`
+    // (unterste 4 Bit eines Bytes), `+ 0x40` entspricht `| 0x40`, da 0x40
+    // (0b0100_0000) mit keinem der möglichen Werte 0-15 überlappt — Addition
+    // und Bit-Oder sind für disjunkte Bitmuster identisch. Analog für Byte 8
+    // (`% 64` statt `& 0x3f`, `+ 0x80` statt `| 0x80`).
+    bytes[6] = (bytes[6] % 16) + 0x40; // Version 4
+    bytes[8] = (bytes[8] % 64) + 0x80; // Variante RFC 4122
+    const hex = [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  }
+  // Letzter Ausweichpfad, falls überhaupt kein `crypto`-Objekt existiert
+  // (z. B. ein isolierter Testkontext ohne DOM-Globals) — schwächere
+  // Entropie als die beiden Zweige oben, aber weiterhin eine für
+  // `z.string().uuid()` gültige v4-Form. Wie oben rein arithmetisch statt
+  // per Bitoperator: `r % 4` statt `r & 0x3`, `+ 8` statt `| 0x8`.
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = Math.floor(Math.random() * 16);
+    const v = c === 'x' ? r : (r % 4) + 8;
+    return v.toString(16);
+  });
 }
 
 export async function getAll(store){

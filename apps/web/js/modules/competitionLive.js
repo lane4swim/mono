@@ -20,7 +20,7 @@
 // ============================================================
 import { getAll, put } from '../db.js';
 import { el, clear } from '../dom.js';
-import { secToTime } from '../swimTime.js';
+import { secToTime, isPersonalBest } from '../swimTime.js';
 import { fullName, badge, emptyState, laneWave, toast } from '../ui.js';
 import { navigate } from '../router.js';
 import { t, trCode } from '../i18n.js';
@@ -155,7 +155,7 @@ export async function renderLiveMode(container, compId, groupIndex) {
 // Karte (wird dann aktualisiert statt dupliziert).
 async function saveHeatResult(entry, comp, allResults, savedResult, laps, finalTime) {
   const others = allResults.filter(r => r.athleteId === entry.athleteId && r.event === entry.event && r.id !== savedResult?.id);
-  const isPB = others.length === 0 || others.every(r => finalTime < r.time);
+  const isPB = isPersonalBest(finalTime, others);
   const saved = await put('results', {
     ...(savedResult || {}), athleteId: entry.athleteId, event: entry.event, time: finalTime,
     date: comp.date, course: comp.course, competitionId: comp.id, isPB,

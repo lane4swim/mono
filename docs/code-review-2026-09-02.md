@@ -34,32 +34,44 @@ einer Warteschlange, die niemand ansieht. **K2** entwertet die
 PB-Erkennung dauerhaft, und zwar ausgelöst durch genau das Feature, das
 gerade dazugekommen ist.
 
+**Update (2. September 2026, im Anschluss an dieses Review).** Alle vier
+Befunde der Kategorie **K** (**K1**–**K4**) sind behoben — siehe die
+jeweiligen **Fix**-Abschnitte. Jeder Fix trägt einen eigenen, neuen
+Regressionstest; **K1**, **K2** und **K4** wurden zusätzlich vor UND nach
+dem Fix per Ausführen verifiziert (siehe **Prüfstand** unten). **D1**,
+**D2**, **R1**, **R2** und **P1**–**P5** bleiben offen.
+
 **Prüfstand.** `npm install` sauber, `npm audit --omit=dev` ohne Befund.
-Tests: `apps/web` 195, `packages/shared-types` 148, `packages/sync-protocol`
+Tests nach den K1–K4-Fixes: `apps/web` 211 (vormals 195, +16 neue
+Regressionstests), `packages/shared-types` 148, `packages/sync-protocol`
 9, `apps/api` 475 von 477 grün — die beiden roten in
 `test/db/prisma.test.ts` sind ein Umgebungsartefakt (siehe **P5**), CI
-ist davon nicht betroffen. `eslint` über alle Workspaces sauber. **K1**,
-**K2** und **K4** sind zusätzlich durch Ausführen reproduziert, nicht nur
-statisch belegt.
+ist davon nicht betroffen. `eslint` über alle Workspaces sauber
+(`db.js`s neuer UUID-Ausweichpfad musste dafür bitweise Operatoren durch
+arithmetisch äquivalente Ausdrücke ersetzen — das Projekt verbietet
+`no-bitwise` projektweit, siehe `packages/shared-config/eslint-preset.cjs`;
+die Äquivalenz ist per erschöpfender Prüfung über alle 256 Bytewerte
+verifiziert). **K1**, **K2** und **K4** sind zusätzlich durch Ausführen
+reproduziert, nicht nur statisch belegt.
 
 Schweregrade: **Hoch** = vor dem nächsten Produktivbetrieb beheben,
 **Mittel** = einplanen, **Niedrig** = bei nächster Berührung mitnehmen.
 
-| Nr. | Kurz | Schwere | Ort |
-|-----|------|---------|-----|
-| K1 | Importierte Zwischenzeiten ohne Distanz sind dauerhaft nicht synchronisierbar | **Hoch** | `dsv7Parser.js:230,310` |
-| K2 | `isPB` bleibt dauerhaft `false`, sobald ein Ergebnis ohne Zeit existiert | **Hoch** | `competitions.js:212`, `competitionLive.js:158`, `importRunner.js:45` |
-| K3 | `uid()`-Ausweichpfad erzeugt Nicht-UUIDs, die kein Entity-Schema annimmt | **Hoch** | `db.js:104-107` |
-| K4 | `STERGEBNIS` wird nicht je Wertung dedupliziert (anders als `PNERGEBNIS`) | Mittel | `dsv7Parser.js:271` |
-| D1 | Beide Setup-Skripte scheitern beim zweiten Lauf | **Hoch** | `setup-netcup.sh:333`, `setup-codespace.sh:288` |
-| D2 | DB-Passwörter auf der `psql`-Kommandozeile | Mittel | `setup-netcup.sh:114,121`, `setup-codespace.sh:82,89` |
-| R1 | Doppelte, serielle Club-Abfrage in jeder Auth-Antwort (8 Stellen) | Mittel | `auth.service.ts:299,344,398,511,560,646,654,672` |
-| R2 | `clubModulesCache` räumt nie auf | Niedrig | `sync.route.ts:63` |
-| P1 | Reset-Mail kann vor/ohne den Token-Schreibvorgang hinausgehen | Mittel | `auth.service.ts:452-471` |
-| P2 | Unescapte Attributwerte in `charts.js` | Niedrig | `charts.js:62,86` |
-| P3 | `EVENTS.push()` mutiert ein exportiertes Referenzdaten-Array | Niedrig | `resultsImportUI.js:153` |
-| P4 | Falscher Pfad in einer Begründung | Niedrig | `conflictResolution.ts:67` |
-| P5 | `npm test` scheitert im frischen Klon | Niedrig | `test/db/prisma.test.ts` |
+| Nr. | Kurz | Schwere | Ort | Status |
+|-----|------|---------|-----|--------|
+| K1 | Importierte Zwischenzeiten ohne Distanz sind dauerhaft nicht synchronisierbar | **Hoch** | `dsv7Parser.js:230,310` | ✅ Behoben |
+| K2 | `isPB` bleibt dauerhaft `false`, sobald ein Ergebnis ohne Zeit existiert | **Hoch** | `competitions.js:212`, `competitionLive.js:158`, `importRunner.js:45` | ✅ Behoben |
+| K3 | `uid()`-Ausweichpfad erzeugt Nicht-UUIDs, die kein Entity-Schema annimmt | **Hoch** | `db.js:104-107` | ✅ Behoben |
+| K4 | `STERGEBNIS` wird nicht je Wertung dedupliziert (anders als `PNERGEBNIS`) | Mittel | `dsv7Parser.js:271` | ✅ Behoben |
+| D1 | Beide Setup-Skripte scheitern beim zweiten Lauf | **Hoch** | `setup-netcup.sh:333`, `setup-codespace.sh:288` | Offen |
+| D2 | DB-Passwörter auf der `psql`-Kommandozeile | Mittel | `setup-netcup.sh:114,121`, `setup-codespace.sh:82,89` | Offen |
+| R1 | Doppelte, serielle Club-Abfrage in jeder Auth-Antwort (8 Stellen) | Mittel | `auth.service.ts:299,344,398,511,560,646,654,672` | Offen |
+| R2 | `clubModulesCache` räumt nie auf | Niedrig | `sync.route.ts:63` | Offen |
+| P1 | Reset-Mail kann vor/ohne den Token-Schreibvorgang hinausgehen | Mittel | `auth.service.ts:452-471` | Offen |
+| P2 | Unescapte Attributwerte in `charts.js` | Niedrig | `charts.js:62,86` | Offen |
+| P3 | `EVENTS.push()` mutiert ein exportiertes Referenzdaten-Array | Niedrig | `resultsImportUI.js:153` | Offen |
+| P4 | Falscher Pfad in einer Begründung | Niedrig | `conflictResolution.ts:67` | Offen |
+| P5 | `npm test` scheitert im frischen Klon | Niedrig | `test/db/prisma.test.ts` | Offen |
 
 ---
 
@@ -112,6 +124,30 @@ abbilden, wenn `timeToSec()` nicht positiv ist. Ein Test je Fall in
 `apps/web/test/dsv7Parser.test.js`, plus — als Netz gegen die ganze
 Fehlerklasse — ein Test, der einen `buildImportPlan()`-Entwurf gegen
 `ResultSchema` parst.
+
+**Fix (2. September 2026).** Umgesetzt wie empfohlen, im Parser statt im
+Schema.
+
+* `apps/web/js/resultsImport/dsv7Parser.js`: zwei neue Helfer,
+  `positiveTimeOrNull(sec)` und `isValidSplit(distanceM, time)`. Beide
+  `PNERGEBNIS`- und `STERGEBNIS`-Zweige bilden `time` jetzt über
+  `positiveTimeOrNull(timeToSec(endzeit))` ab statt über das bisherige
+  `Number.isFinite(time) ? time : null` (das `0` unverändert durchließ).
+  `PNZWISCHENZEIT` und `STZWISCHENZEIT` verwerfen eine Zeile jetzt, wenn
+  `isValidSplit()` `false` liefert, statt sie mit fehlendem/nicht-positivem
+  `distanceM` an `splits` anzuhängen.
+* Neue Regressionstests in `apps/web/test/dsv7Parser.test.js`
+  (`describe('… — Befund K1 …')`): leere Distanz, Distanz `0`, Platzhalter-
+  Endzeit `00:00:00,00` bei `status: "OK"`, sowie derselbe Fall für
+  `STZWISCHENZEIT`. Alle vier reproduzieren vor dem Fix eine
+  schema-verletzende Zeile und bestätigen danach deren Ausbleiben.
+* Der zweite Halbsatz der Empfehlung (ein Test, der einen
+  `buildImportPlan()`-Entwurf gegen `ResultSchema` parst, als Netz gegen
+  die ganze Fehlerklasse über den Parser hinaus) bleibt bewusst offen —
+  das wäre ein modulübergreifender Vertragstest zwischen `apps/web` und
+  `packages/shared-types`, den es in dieser Form noch nirgends gibt, und
+  eine eigene kleine Entscheidung wert statt eine Nebenwirkung dieses
+  Fixes.
 
 ---
 
@@ -167,6 +203,30 @@ leeren Liste ist bereits `true`.)
 Bestzeit tragen beide Datensätze `isPB: true`, und `modules/times.js:82`
 zeigt entsprechend zwei PB-Abzeichen.
 
+**Fix (2. September 2026).** Umgesetzt wie empfohlen — der Nebenbefund
+(altes `isPB` nicht zurückgesetzt) bleibt bewusst offen, siehe unten.
+
+* `apps/web/js/swimTime.js`: neue Funktion `isPersonalBest(time, others)`,
+  exakt wie in der Empfehlung skizziert (ergebnislose Datensätze werden
+  vor dem Vergleich herausgefiltert, kein Sonderfall für `others.length
+  === 0` mehr nötig).
+* `modules/competitions.js`, `modules/competitionLive.js`,
+  `resultsImport/importRunner.js`: alle drei Inline-Berechnungen durch
+  einen Aufruf von `isPersonalBest()` ersetzt.
+* Neue Regressionstests: `apps/web/test/swimTime.test.js`
+  (`describe('isPersonalBest()')`, fünf Fälle inkl. des vormals falschen
+  „ergebnisloses Geschwister-Ergebnis" und eines eigenen ergebnislosen
+  Datensatzes) sowie ein neuer Fall in
+  `apps/web/test/resultsImport.importRunner.test.js`, der eine echte
+  Bestzeit trotz eines bestehenden DS-Ergebnisses derselben Person/desselben
+  Events erwartet — schlug vor dem Fix fehl (`isPB: false` statt `true`).
+* Der Nebenbefund (das bisherige Bestzeit-Ergebnis behält `isPB: true`
+  nach einer neuen Bestzeit) ist NICHT Teil dieses Fixes — er betrifft
+  denselben Datenfluss, aber eine eigene, im ursprünglichen Befund nur am
+  Rande vermerkte Fragestellung (wer setzt das alte `isPB` zurück, und
+  wann: beim Speichern des neuen Ergebnisses, oder per Hintergrundjob?).
+  Bleibt offen für eine eigene Betrachtung.
+
 ---
 
 ## K3 — `uid()`-Ausweichpfad erzeugt Nicht-UUIDs, die kein Entity-Schema annimmt
@@ -201,6 +261,33 @@ nicht wegen fehlender Entropie — `crypto.getRandomValues` ist auch im
 unsicheren Kontext verfügbar. Daraus eine formgerechte v4-UUID bauen
 (Version- und Variant-Bits setzen). Zusätzlich einen Test, der
 `uid()` gegen dieselbe UUID-Prüfung stellt, die der Server anwendet.
+
+**Fix (2. September 2026) — mit einer Korrektur an der eigenen Empfehlung
+oben.** Die Empfehlung ging von Bitoperatoren aus (`& 0x0f`, `| 0x40`
+usw.), um die Version-/Varianten-Bits einer v4-UUID zu setzen — das
+Projekt verbietet `no-bitwise` aber ausdrücklich projektweit (siehe
+`packages/shared-config/eslint-preset.cjs`, Begründung: Verwechslung mit
+`&&`/`||`). Umgesetzt daher rein arithmetisch statt bitweise:
+
+* `apps/web/js/db.js: uid()`: **drei** Zweige statt der bisherigen zwei.
+  1. `crypto.randomUUID()`, wenn verfügbar (unverändert).
+  2. NEU: `crypto.getRandomValues()`, falls `randomUUID` fehlt (kein
+     secure context) — baut daraus von Hand eine v4-UUID. Die Version-
+     /Varianten-Bits werden über Modulo/Addition gesetzt (`byte % 16 +
+     0x40` statt `(byte & 0x0f) | 0x40` usw.) — für die betroffenen,
+     disjunkten Bitmuster ist das arithmetisch exakt identisch zur
+     ursprünglich skizzierten Bit-Variante, nur ohne verbotenen Operator.
+     Per Skript über alle 256 Bytewerte gegen die verbotene Bit-Variante
+     verifiziert (siehe **Prüfstand**), nicht nur an Beispielen.
+  3. Letzter Ausweichpfad, falls überhaupt kein `crypto`-Objekt existiert
+     (schwächere Entropie über `Math.random()`, aber weiterhin eine
+     gültige v4-Form) — für einen isolierten Testkontext ohne DOM-Globals,
+     der in der ausgelieferten App nicht vorkommt.
+* Neue Regressionstests in `apps/web/test/db.test.js`
+  (`describe('uid()')`): alle drei Zweige (per `vi.stubGlobal('crypto',
+  …)` gezielt erzwungen) gegen dieselbe `z.string().uuid()`-Form geprüft,
+  die der Server anwendet, plus ein Eindeutigkeits-Test über 50 ids aus
+  dem zweiten Zweig.
 
 ---
 
@@ -250,6 +337,38 @@ Korrektheit hängt damit an der Zeilenreihenfolge des Exportprogramms.
 
 **Empfehlung.** Dieselbe Dedupe-Prüfung wie bei `PNERGEBNIS`: existiert
 der Schlüssel bereits in `relayResultsByKey`, die Zeile überspringen.
+
+**Fix (2. September 2026) — geht über die eigene Empfehlung oben hinaus.**
+Die Empfehlung (Dedupe nur auf der `STERGEBNIS`-Zeile selbst) reicht
+NICHT aus, um die tatsächliche Duplizierung zu beheben — beim Umsetzen
+gegen den Reproduktionsfall aus diesem Befund entstand weiterhin ein
+zweites `ImportedResult` pro Teammitglied: `STAFFELPERSON`/
+`STZWISCHENZEIT` verweisen über denselben (WertungsID-losen) Schlüssel auf
+dieselbe, jetzt nicht mehr überschriebene Gruppe und legen für die WEITERE
+Wertungsklasse trotzdem erneut ein Mitglied bzw. eine Zwischenzeit an.
+Behoben wurde daher der vollständige Mechanismus, nicht nur der im Befund
+beschriebene Ausschnitt:
+
+* `apps/web/js/resultsImport/dsv7Parser.js`: `STERGEBNIS` überspringt eine
+  Zeile jetzt wie `PNERGEBNIS`, wenn ihr Schlüssel bereits in
+  `relayResultsByKey` existiert. Die Gruppe trägt zusätzlich zwei neue,
+  je Staffel einmal angelegte Mengen: `seenLegIndexes` (welche Startnummer
+  bereits ein `ImportedResult` bekommen hat) und `seenSplitKeys` (welche
+  `(Distanz, Startnummer)`-Zwischenzeit bereits im gemeinsamen
+  `splits`-Array steht). `STAFFELPERSON` überspringt eine Zeile, deren
+  Startnummer bereits in `seenLegIndexes` steht; `STZWISCHENZEIT`
+  überspringt eine Zeile, deren `(distanceM, legIndex)`-Paar bereits in
+  `seenSplitKeys` steht. Beide Mengen überleben eine übersprungene
+  `STERGEBNIS`-Wiederholung (sie hängen an der Gruppe, nicht an der
+  einzelnen Wertungszeile) — genau das verhindert die verbliebene
+  Duplizierung.
+* Neue Regressionstests in `apps/web/test/dsv7Parser.test.js`
+  (`describe('… — Befund K4 …')`) mit der Zwei-Wertungsklassen-Datei aus
+  diesem Befund: genau ein `ImportedResult` je Teammitglied, und die
+  Zwischenzeit der ersten Wertungsklasse bleibt erhalten statt durch die
+  zweite (leere) überschrieben zu werden. Beide Assertions schlugen mit
+  der ursprünglichen, im Befund vorgeschlagenen (unvollständigen) Fassung
+  des Fixes noch fehl — erst mit `seenLegIndexes`/`seenSplitKeys` grün.
 
 ---
 

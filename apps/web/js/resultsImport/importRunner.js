@@ -5,6 +5,7 @@
 // docs/dsv7-lenex-import-plan.md Abschnitt 5/6.
 import { getAll, put } from '../db.js';
 import { pull, push } from '../syncClient.js';
+import { isPersonalBest } from '../swimTime.js';
 
 // Lädt den für buildImportPlan() (matching.js) nötigen lokalen Stand.
 // Pullt VORHER explizit den aktuellsten Server-Stand (statt auf den
@@ -40,12 +41,8 @@ export async function executeImportPlan(rows, allResults) {
 
   for (const row of writable) {
     const proposed = row.proposed;
-    if (proposed.time != null) {
-      const others = working.filter((r) => r.athleteId === proposed.athleteId && r.event === proposed.event && r.id !== proposed.id);
-      proposed.isPB = others.length === 0 || others.every((r) => r.time != null && proposed.time < r.time);
-    } else {
-      proposed.isPB = false;
-    }
+    const others = working.filter((r) => r.athleteId === proposed.athleteId && r.event === proposed.event && r.id !== proposed.id);
+    proposed.isPB = isPersonalBest(proposed.time, others);
 
     const result = await put('results', proposed);
     saved.push(result);
