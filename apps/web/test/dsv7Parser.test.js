@@ -199,3 +199,113 @@ DATEIENDE`;
     expect(() => parseDsv7WettkampfergebnisListe('DATEIENDE')).toThrow(Dsv7ParseError);
   });
 });
+
+// Code-Review 2026-09-02, Befund K1: ResultSplitSchema.distanceM
+// (packages/shared-types/src/entities.ts) ist `z.number().positive()` —
+// ein Pflichtfeld. Eine Zwischenzeit ohne bekannte Distanz erzeugte vormals
+// `{ distanceM: undefined, time: ... }`, das dieses Schema dauerhaft
+// ablehnt (der Import meldet Erfolg, jeder Sync-Push scheitert). Ergebnis
+// ohne Distanz-Angabe muss verworfen werden, nicht mit einer
+// schema-verletzenden Lücke weitergereicht.
+describe('parseDsv7WettkampfergebnisListe() — Befund K1 (Zwischenzeiten/Zeit ohne gültigen Wert)', () => {
+  it('verwirft eine PNZWISCHENZEIT ohne Distanz-Angabe statt eine ungültige Split-Zeile zu erzeugen', () => {
+    const text = `FORMAT:Wettkampfergebnisliste;7;
+VERANSTALTUNG:Test;Ort;25;HANDZEIT;
+VERANSTALTER:Test;
+AUSRICHTER:Test;Test;;;;;;;;
+ABSCHNITT:1;01.01.2026;10:00;;
+WETTKAMPF:1;E;1;1;100;F;GL;M;SW;;;
+WERTUNG:1;E;1;JG;0;9999;;OFFENE WERTUNG;
+VEREIN:SC Test;9999;1;GER;
+PNERGEBNIS:1;E;1;1;;Muster, Max;404306;149;M;2009;;SC Test;9999;00:01:04,30;;;;;;
+PNZWISCHENZEIT:149;1;E;;00:00:30,10;
+DATEIENDE`;
+    const parsed = parseDsv7WettkampfergebnisListe(text);
+    expect(parsed.results[0].splits).toEqual([]);
+  });
+
+  it('verwirft eine PNZWISCHENZEIT mit Distanz 0 ebenso (ResultSplitSchema verlangt .positive())', () => {
+    const text = `FORMAT:Wettkampfergebnisliste;7;
+VERANSTALTUNG:Test;Ort;25;HANDZEIT;
+VERANSTALTER:Test;
+AUSRICHTER:Test;Test;;;;;;;;
+ABSCHNITT:1;01.01.2026;10:00;;
+WETTKAMPF:1;E;1;1;100;F;GL;M;SW;;;
+WERTUNG:1;E;1;JG;0;9999;;OFFENE WERTUNG;
+VEREIN:SC Test;9999;1;GER;
+PNERGEBNIS:1;E;1;1;;Muster, Max;404306;149;M;2009;;SC Test;9999;00:01:04,30;;;;;;
+PNZWISCHENZEIT:149;1;E;0;00:00:30,10;
+DATEIENDE`;
+    const parsed = parseDsv7WettkampfergebnisListe(text);
+    expect(parsed.results[0].splits).toEqual([]);
+  });
+
+  it('bildet eine als "OK" markierte Zeile mit Platzhalter-Endzeit (00:00:00,00) auf time: null statt 0 ab', () => {
+    // ResultSchema.time ist `z.number().positive().nullable()` — `0` ist
+    // ungültig. Ein solcher Datenfehler der Exportquelle (status "OK" ohne
+    // echte Zeit) darf nicht als schema-verletzendes `time: 0` weitergereicht
+    // werden.
+    const text = `FORMAT:Wettkampfergebnisliste;7;
+VERANSTALTUNG:Test;Ort;25;HANDZEIT;
+VERANSTALTER:Test;
+AUSRICHTER:Test;Test;;;;;;;;
+ABSCHNITT:1;01.01.2026;10:00;;
+WETTKAMPF:1;E;1;1;100;F;GL;M;SW;;;
+WERTUNG:1;E;1;JG;0;9999;;OFFENE WERTUNG;
+VEREIN:SC Test;9999;1;GER;
+PNERGEBNIS:1;E;1;1;;Muster, Max;404306;149;M;2009;;SC Test;9999;00:00:00,00;;;;;;
+DATEIENDE`;
+    const parsed = parseDsv7WettkampfergebnisListe(text);
+    expect(parsed.results[0].time).toBeNull();
+  });
+
+  it('verwirft eine STZWISCHENZEIT ohne gültige Distanz ebenso', () => {
+    const text = `FORMAT:Wettkampfergebnisliste;7;
+VERANSTALTUNG:Test;Ort;25;HANDZEIT;
+VERANSTALTER:Test;
+AUSRICHTER:Test;Test;;;;;;;;
+ABSCHNITT:1;01.01.2026;10:00;;
+WETTKAMPF:1;E;1;4;100;F;GL;M;SW;;;
+WERTUNG:1;E;1;JG;0;9999;;OFFENE WERTUNG;
+VEREIN:SC Test;9999;1;GER;
+STERGEBNIS:1;E;1;1;;1;154;SC Test;9999;00:04:00,00;;;;
+STAFFELPERSON:154;1;E;Muster, Max;404306;1;M;2009;;;;;
+STZWISCHENZEIT:154;1;E;1;;00:01:00,00;
+DATEIENDE`;
+    const parsed = parseDsv7WettkampfergebnisListe(text);
+    expect(parsed.results[0].splits).toEqual([]);
+  });
+});
+
+// Code-Review 2026-09-02, Befund K4: STERGEBNIS wiederholt sich — wie
+// PNERGEBNIS — einmal je Wertungsklasse für dieselbe Staffel, mit
+// identischer Teambesetzung und identischen Zwischenzeiten. Ohne Dedupe
+// entstand pro Teammitglied EIN ImportedResult je Wertungsklasse
+// (Duplikate in der Importvorschau), und die zweite Wertungszeile
+// überschrieb außerdem die geteilte `splits`-Array-Referenz der Gruppe,
+// sodass ältere Mitglieds-Ergebnisse ihre Zwischenzeiten verloren.
+describe('parseDsv7WettkampfergebnisListe() — Befund K4 (STERGEBNIS über mehrere Wertungsklassen)', () => {
+  const text = `FORMAT:Wettkampfergebnisliste;7;
+VERANSTALTUNG:Test;Ort;25;HANDZEIT;
+VERANSTALTER:Test;
+AUSRICHTER:Test;Test;;;;;;;;
+ABSCHNITT:1;01.01.2026;10:00;;
+WETTKAMPF:26;E;1;4;50;F;GL;M;SW;;;
+WERTUNG:26;E;1;JG;0;9999;;OFFENE WERTUNG;
+VEREIN:SV Test;5623;1;GER;
+STERGEBNIS:26;E;26001;1;;1;154;SV Test;5623;00:01:50,00;;;;
+STAFFELPERSON:154;26;E;Muster, Max;404306;1;M;2009;;;;;
+STZWISCHENZEIT:154;26;E;1;50;00:00:27,50;
+STERGEBNIS:26;E;26002;1;;1;154;SV Test;5623;00:01:50,00;;;;
+STAFFELPERSON:154;26;E;Muster, Max;404306;1;M;2009;;;;;
+DATEIENDE`;
+  const parsed = parseDsv7WettkampfergebnisListe(text);
+
+  it('erzeugt genau ein ImportedResult je Teammitglied, nicht eines je Wertungsklasse', () => {
+    expect(parsed.results).toHaveLength(1);
+  });
+
+  it('behält die Zwischenzeit der ersten Wertungsklasse (wird nicht durch die zweite überschrieben)', () => {
+    expect(parsed.results[0].splits).toEqual([{ distanceM: 50, time: expect.closeTo(27.5, 2), legIndex: 1 }]);
+  });
+});

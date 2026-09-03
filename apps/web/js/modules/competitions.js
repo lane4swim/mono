@@ -10,7 +10,7 @@
 import { getAll, put, remove } from '../db.js';
 import { el, clear, beginRender } from '../dom.js';
 import { fmtDateLong, todayISO, toIsoDateTime } from '../dates.js';
-import { secToTime, timeToSec } from '../swimTime.js';
+import { secToTime, timeToSec, isPersonalBest } from '../swimTime.js';
 import { fullName, toast, badge, emptyState, laneWave } from '../ui.js';
 import { openModal, confirmAction } from '../modal.js';
 import { field, textInput, selectInput, dateInput, formActions } from '../forms.js';
@@ -209,7 +209,7 @@ function appendEntryRows(tbody, entry, comp, athletes, athleteById, results, res
     const sec = timeToSec(timeInput.value);
     if (!sec || isNaN(sec)) { toast(t('competitions.validationTime'), 'error'); return; }
     const others = results.filter(r => r.athleteId === entry.athleteId && r.event === entry.event && r.id !== existingResult?.id);
-    const isPB = others.length === 0 || others.every(r => sec < r.time);
+    const isPB = isPersonalBest(sec, others);
     await put('results', {
       ...(existingResult || {}), athleteId: entry.athleteId, event: entry.event, time: sec,
       date: comp.date, course: comp.course, competitionId: comp.id, isPB,

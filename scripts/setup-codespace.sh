@@ -37,6 +37,19 @@ cd "$REPO_ROOT"
 
 log() { printf '\n\033[1;34m==> %s\033[0m\n' "$1"; }
 
+# Sicherheitskorrektur (Code-Review 2026-09-02, Befund D2): Escapt einen
+# Wert für die sichere Einbettung in ein einfach gequotetes SQL-Zeichenketten-
+# Literal (verdoppelt eingebettete `'`, die Standard-SQL-Escapierung) — NUR
+# für Werte gedacht, die per Heredoc auf STDIN von `psql` gereicht werden
+# (siehe die beiden CREATE-USER-Aufrufe unten), NIEMALS für ein `-c`-
+# Kommandozeilenargument. Letzteres wäre über `ps aux`/`/proc/<pid>/cmdline`
+# für JEDES lokale Konto lesbar — dieselbe Fehlerklasse, die bereits für das
+# Superadmin-Passwort behoben wurde (Commit 45dc106, „fix(scripts): stop
+# passing superadmin password as a CLI argument"), hier aber übersehen
+# blieb. Ein Heredoc auf STDIN erscheint dagegen nicht in der Prozess-
+# Argumentliste.
+sql_quote() { printf '%s' "$1" | sed "s/'/''/g"; }
+
 DB_NAME="lane1"
 DB_USER="lane1_app"
 # Nur relevant, falls die Rolle in diesem Lauf NEU angelegt wird (siehe
@@ -79,14 +92,21 @@ sudo service postgresql start
 # anlegen, ändern oder löschen.
 MIGRATOR_ROLE_CREATED=0
 if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='${DB_MIGRATOR_USER}'" | grep -q 1; then
-  sudo -u postgres psql -c "CREATE USER ${DB_MIGRATOR_USER} WITH ENCRYPTED PASSWORD '${DB_MIGRATOR_PASSWORD}';"
+  # Sicherheitskorrektur (Befund D2, siehe sql_quote()-Kommentar oben):
+  # Passwort per Heredoc auf STDIN statt per `-c "..."` — Letzteres wäre als
+  # Kommandozeilenargument des psql-Prozesses für jedes lokale Konto sichtbar.
+  sudo -u postgres psql <<SQL
+CREATE USER ${DB_MIGRATOR_USER} WITH ENCRYPTED PASSWORD '$(sql_quote "${DB_MIGRATOR_PASSWORD}")';
+SQL
   MIGRATOR_ROLE_CREATED=1
 else
   echo "  Rolle ${DB_MIGRATOR_USER} existiert bereits — Passwort bleibt unverändert."
 fi
 
 if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='${DB_USER}'" | grep -q 1; then
-  sudo -u postgres psql -c "CREATE USER ${DB_USER} WITH ENCRYPTED PASSWORD '${DB_PASSWORD}';"
+  sudo -u postgres psql <<SQL
+CREATE USER ${DB_USER} WITH ENCRYPTED PASSWORD '$(sql_quote "${DB_PASSWORD}")';
+SQL
 else
   echo "  Rolle ${DB_USER} existiert bereits — Passwort bleibt unverändert."
 fi
@@ -127,13 +147,14 @@ sudo -u postgres psql -d "${DB_NAME}" -c "ALTER DEFAULT PRIVILEGES FOR ROLE ${DB
 # apps/api/.env ausdrücklich vermeidet (siehe Kopfkommentar oben).
 MIGRATOR_ENV_FILE="apps/api/.env.migrate"
 if [[ "$MIGRATOR_ROLE_CREATED" == "1" ]]; then
+  MIGRATE_DATABASE_URL="postgresql://${DB_MIGRATOR_USER}:${DB_MIGRATOR_PASSWORD}@localhost:5432/${DB_NAME}"
   cat >"$MIGRATOR_ENV_FILE" <<EOF
 # apps/api/.env.migrate — NICHT von der Anwendung oder von Prisma
 # automatisch gelesen (nur "apps/api/.env" wird automatisch geladen).
 # Ausschließlich zum manuellen Nachschlagen für ein künftiges
 # "prisma migrate deploy" gedacht, siehe scripts/setup-codespace.sh
 # Schritt 7 bzw. docs/deployment-github-codespaces.md, Abschnitt 7.
-MIGRATE_DATABASE_URL="postgresql://${DB_MIGRATOR_USER}:${DB_MIGRATOR_PASSWORD}@localhost:5432/${DB_NAME}"
+MIGRATE_DATABASE_URL="${MIGRATE_DATABASE_URL}"
 EOF
   chmod 600 "$MIGRATOR_ENV_FILE"
 elif [[ -f "$MIGRATOR_ENV_FILE" ]]; then
@@ -143,12 +164,40 @@ elif [[ -f "$MIGRATOR_ENV_FILE" ]]; then
   # falls die Datei aus einer Version vor dieser Korrektur stammt.
   chmod 600 "$MIGRATOR_ENV_FILE"
   echo "  $MIGRATOR_ENV_FILE existiert bereits — wird nicht überschrieben."
+  # Sicherheitskorrektur (Code-Review 2026-09-02, Befund D1): das hier
+  # hinterlegte, TATSÄCHLICH gültige Passwort zurücklesen — DB_MIGRATOR_PASSWORD
+  # oben ist in diesem Zweig ein frisch gewürfelter Wert, der NIE in die
+  # Datenbank geschrieben wurde (der else-Zweig bei der Rollenanlage oben
+  # lässt das bestehende Passwort bewusst unverändert). Schritt 7 unten
+  # verwendet ab hier ausschließlich diese zurückgelesene
+  # MIGRATE_DATABASE_URL, nie mehr DB_MIGRATOR_PASSWORD direkt — sonst
+  # scheiterte `prisma migrate deploy` bei JEDEM Wiederholungslauf
+  # (Authentifizierungsfehler gegen die Datenbank), obwohl das Skript für
+  # sich selbst "wiederholt ausführbar" in Anspruch nimmt (siehe
+  # Kopfkommentar).
+  # shellcheck source=/dev/null
+  source "$MIGRATOR_ENV_FILE"
+  if [[ -z "${MIGRATE_DATABASE_URL:-}" ]]; then
+    echo "Fehler: $MIGRATOR_ENV_FILE existiert, enthält aber keine MIGRATE_DATABASE_URL." >&2
+    echo "Bitte die Datei prüfen oder löschen und das Passwort der Rolle ${DB_MIGRATOR_USER} neu setzen:" >&2
+    echo "  sudo -u postgres psql -c \"ALTER USER ${DB_MIGRATOR_USER} WITH ENCRYPTED PASSWORD '<neues-passwort>';\"" >&2
+    echo "und danach $MIGRATOR_ENV_FILE von Hand mit der passenden MIGRATE_DATABASE_URL anlegen." >&2
+    exit 1
+  fi
 else
-  echo "  Hinweis: Rolle ${DB_MIGRATOR_USER} existiert bereits, aber $MIGRATOR_ENV_FILE fehlt —" >&2
-  echo "  das gültige Passwort ist diesem Lauf nicht bekannt und wird daher NICHT geraten." >&2
-  echo "  Für ein künftiges 'prisma migrate deploy' entweder das alte Passwort verwenden oder" >&2
-  echo "  ein neues setzen:" >&2
-  echo "    sudo -u postgres psql -c \"ALTER USER ${DB_MIGRATOR_USER} WITH ENCRYPTED PASSWORD '<neues-passwort>';\"" >&2
+  # Sicherheitskorrektur (Befund D1): vormals nur ein Hinweis (der Lauf
+  # ging munter weiter und scheiterte erst gut 150 Zeilen später, in
+  # Schritt 7, an einem irreführenden Postgres-Authentifizierungsfehler) —
+  # jetzt ein Abbruch HIER, an der Stelle, an der das eigentliche Problem
+  # entsteht.
+  echo "Fehler: Rolle ${DB_MIGRATOR_USER} existiert bereits, aber $MIGRATOR_ENV_FILE fehlt —" >&2
+  echo "das gültige Passwort ist diesem Lauf nicht bekannt und wird daher NICHT geraten." >&2
+  echo "Für 'prisma migrate deploy' (Schritt 7 unten) entweder das alte Passwort in" >&2
+  echo "$MIGRATOR_ENV_FILE nachtragen oder ein neues setzen:" >&2
+  echo "  sudo -u postgres psql -c \"ALTER USER ${DB_MIGRATOR_USER} WITH ENCRYPTED PASSWORD '<neues-passwort>';\"" >&2
+  echo "und danach $MIGRATOR_ENV_FILE von Hand mit der passenden MIGRATE_DATABASE_URL anlegen," >&2
+  echo "bevor dieses Skript erneut ausgeführt wird." >&2
+  exit 1
 fi
 
 # --- Schritt 4.3: Nginx ------------------------------------------------------
@@ -284,8 +333,16 @@ chmod 600 "$ENV_FILE"
 # diesen einen Befehl, nicht für apps/api/.env selbst (das weiterhin die
 # DML-only-Rolle ${DB_USER} trägt, siehe Schritt 6). Prismas eigenes
 # .env-Laden überschreibt eine bereits gesetzte Umgebungsvariable nicht.
+#
+# Sicherheitskorrektur (Code-Review 2026-09-02, Befund D1): verwendet
+# ausschließlich die oben aufgelöste ${MIGRATE_DATABASE_URL} — NICHT mehr
+# ${DB_MIGRATOR_PASSWORD} direkt. Bei einem Wiederholungslauf (Rolle
+# existierte bereits) ist DB_MIGRATOR_PASSWORD ein frisch gewürfelter Wert,
+# der nie in die Datenbank geschrieben wurde; MIGRATE_DATABASE_URL trägt
+# stattdessen das aus apps/api/.env.migrate zurückgelesene, tatsächlich
+# gültige Passwort.
 log "Schritt 7: Datenbank-Schema anlegen (prisma migrate deploy)"
-(cd apps/api && DATABASE_URL="postgresql://${DB_MIGRATOR_USER}:${DB_MIGRATOR_PASSWORD}@localhost:5432/${DB_NAME}" npx prisma migrate deploy)
+(cd apps/api && DATABASE_URL="${MIGRATE_DATABASE_URL}" npx prisma migrate deploy)
 
 # --- Schritt 8: Backend bauen -------------------------------------------------
 log "Schritt 8: Backend bauen (inkl. packages/shared-types, packages/sync-protocol über prebuild-Skripte)"

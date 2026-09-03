@@ -7,7 +7,7 @@
 // Datensätze trotzdem die clubId der aktuell eingeloggten Person; dafür
 // injiziert dieser Test sie direkt über setClubIdProvider(), ohne
 // state.js oder dessen Abhängigkeiten (apiClient.js, Netzwerk) zu mocken.
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 vi.mock('../js/demoMode.js', () => ({ IS_DEMO: false }));
 
@@ -278,5 +278,43 @@ describe('bulkPut()/exportAll()/importAll()/wipeAll()', () => {
 describe('CLUB_SCOPED_STORES', () => {
   it('deckt sich exakt mit den fachlichen Stores der generischen Sync-API (ENTITY_STORE_NAMES)', () => {
     expect([...db.CLUB_SCOPED_STORES].sort()).toEqual([...ENTITY_STORE_NAMES].sort());
+  });
+});
+
+// Code-Review 2026-09-02, Befund K3: jedes Entity-Schema verlangt
+// `id: z.string().uuid()` — der frühere Ausweichwert ("id-<timestamp>-
+// <random>") ohne `crypto.randomUUID` (kein secure context, z. B. ein
+// dokumentierter Zwischenzustand vor der HTTPS-Einrichtung, siehe
+// docs/deployment-raspberry-pi.md) erfüllte das nicht und machte jeden so
+// angelegten Datensatz dauerhaft nicht synchronisierbar. Beide
+// Ausweichzweige (mit und ohne `crypto.getRandomValues`) müssen daher
+// selbst eine gültige v4-UUID liefern.
+const UUID_V4_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+describe('uid()', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('nutzt crypto.randomUUID(), wenn verfügbar', () => {
+    expect(UUID_V4_RE.test(db.uid())).toBe(true);
+  });
+
+  it('liefert weiterhin eine gültige v4-UUID über crypto.getRandomValues(), falls randomUUID fehlt (kein secure context)', () => {
+    vi.stubGlobal('crypto', { getRandomValues: globalThis.crypto.getRandomValues.bind(globalThis.crypto) });
+    const id = db.uid();
+    expect(UUID_V4_RE.test(id)).toBe(true);
+  });
+
+  it('liefert weiterhin eine gültige v4-UUID, falls überhaupt kein crypto-Objekt existiert', () => {
+    vi.stubGlobal('crypto', undefined);
+    const id = db.uid();
+    expect(UUID_V4_RE.test(id)).toBe(true);
+  });
+
+  it('erzeugt keine zwei gleichen ids über beide Ausweichzweige hinweg', () => {
+    vi.stubGlobal('crypto', { getRandomValues: globalThis.crypto.getRandomValues.bind(globalThis.crypto) });
+    const ids = new Set(Array.from({ length: 50 }, () => db.uid()));
+    expect(ids.size).toBe(50);
   });
 });

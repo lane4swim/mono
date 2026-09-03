@@ -7,7 +7,7 @@
 // liefern statt eines erfundenen Strings, damit die Importvorschau es
 // zuverlässig als "nicht zuordenbar" erkennt.
 import { describe, it, expect } from 'vitest';
-import { EVENTS, dsv7EventLabel } from '../js/refdata.js';
+import { EVENTS, dsv7EventLabel, registerSessionEvent } from '../js/refdata.js';
 
 describe('dsv7EventLabel()', () => {
   it('bildet eine Einzelstrecke auf den passenden EVENTS-String ab', () => {
@@ -35,5 +35,27 @@ describe('dsv7EventLabel()', () => {
 
   it('jedes zurückgegebene Label ist tatsächlich in EVENTS enthalten', () => {
     expect(EVENTS).toContain(dsv7EventLabel({ technik: 'S', distanzM: 200, isRelay: false, relaySize: 1 }));
+  });
+});
+
+// Code-Review 2026-09-02, Befund P3: der Seiteneffekt auf das exportierte
+// EVENTS-Array (Session-Erweiterung beim DSV7-Import, "neues Event
+// anlegen") stand vormals direkt als `EVENTS.push(...)` in
+// modules/resultsImportUI.js — verstreut in einem UI-Modul statt dort, wo
+// die Daten wohnen. registerSessionEvent() bündelt ihn hier, mit
+// identischem Verhalten (siehe dortiger Kommentar).
+describe('registerSessionEvent()', () => {
+  it('fügt ein neues Label zu EVENTS hinzu', () => {
+    const label = '999 Teststrecke (P3, neu)';
+    expect(EVENTS).not.toContain(label);
+    registerSessionEvent(label);
+    expect(EVENTS).toContain(label);
+  });
+
+  it('fügt ein bereits vorhandenes Label kein zweites Mal hinzu', () => {
+    const label = '999 Teststrecke (P3, dedupliziert)';
+    registerSessionEvent(label);
+    registerSessionEvent(label);
+    expect(EVENTS.filter((e) => e === label)).toHaveLength(1);
   });
 });

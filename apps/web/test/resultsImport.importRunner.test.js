@@ -83,6 +83,25 @@ describe('executeImportPlan()', () => {
     expect(saved.isPB).toBe(false);
   });
 
+  // Code-Review 2026-09-02, Befund K2: der vormalige Vergleich
+  // `others.every((r) => r.time != null && proposed.time < r.time)`
+  // brach für ein ergebnisloses Geschwister-Ergebnis (time: null, z. B.
+  // DS/NA/AB/AU/ZU) NICHT etwa nur für DIESES Ergebnis ab — `every()`
+  // liefert für den `r.time != null`-Zweig `false`, wodurch `others.every`
+  // insgesamt `false` wurde und die betroffene Person auf diesem Event NIE
+  // wieder eine Bestzeit bekam, unabhängig davon, wie schnell sie
+  // tatsächlich schwamm.
+  it('erkennt eine echte Bestzeit trotz eines ergebnislosen (disqualifizierten) Geschwister-Ergebnisses', async () => {
+    const dsq = await db.put('results', {
+      athleteId: 'a1', event: '100 Freistil', time: null, place: null, status: 'DS', date: '2026-01-01T00:00:00.000Z', course: 'LCM', competitionId: 'comp1', comments: [],
+    });
+    const rows = [
+      { kind: 'new', proposed: { athleteId: 'a1', event: '100 Freistil', time: 60, place: 1, status: 'OK', date: '2026-01-02T00:00:00.000Z', course: 'LCM', competitionId: 'comp2', comments: [] } },
+    ];
+    const [saved] = await executeImportPlan(rows, [dsq]);
+    expect(saved.isPB).toBe(true);
+  });
+
   it('behält id/comments eines bestehenden Ergebnisses beim Überschreiben bei', async () => {
     const existing = await db.put('results', {
       athleteId: 'a1', event: '100 Freistil', time: 70, place: 5, status: 'OK', date: '2026-01-01T00:00:00.000Z', course: 'LCM', competitionId: 'comp1',

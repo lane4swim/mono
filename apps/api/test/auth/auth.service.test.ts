@@ -418,11 +418,42 @@ describe('authService.getMe / updateMe', () => {
     expect(meAfter.clubNationalID).toBe('1234');
     expect(meAfter.clubNationalIDType).toBe('DSV');
 
-    // Auch über login()/acceptInvitation() (dieselbe resolveClubIdentity()-
+    // Auch über login()/acceptInvitation() (dieselbe resolveClubContext()-
     // Stelle) — nicht nur getMe().
     const loginResult = await service.login({ email: 'sabine.reuter@example.org', password: 'ein-sicheres-passwort', consent: true, consentVersion: CURRENT_CONSENT_VERSION });
     expect(loginResult.clubNationalID).toBe('1234');
     expect(loginResult.clubNationalIDType).toBe('DSV');
+  });
+
+  // Code-Review 2026-09-02, Befund R1: getMe()/login() luden vormals über
+  // zwei getrennte Funktionen (resolveEnabledModules()/resolveClubIdentity())
+  // JEDE für sich denselben Club-Datensatz — zwei sequentiell awaitete
+  // clubs.findById()-Aufrufe pro Antwort statt eines einzigen. Dieser Test
+  // hält die Behebung (resolveClubContext(), EIN gemeinsamer Lookup) über
+  // einen Spy auf clubs.findById() fest, statt sich nur auf die
+  // zurückgegebenen Werte zu verlassen (die wären mit zwei Aufrufen
+  // identisch geblieben — der Regressionstest oben hätte diesen Befund
+  // nicht erkannt).
+  it('lädt den Club-Datensatz für enabledModules UND die Vereinskennung nur EINMAL je Antwort', async () => {
+    const { service, invitations, clubs } = makeService();
+    const club = await clubs.create({ name: 'SC Beispielverein', enabledModules: ['athletes'] });
+    await clubs.updateIdentity(club.id, { nationalID: '1234', nationalIDType: 'DSV' });
+    const token = await seedInvitation(invitations, { clubId: club.id });
+    const { user } = await service.acceptInvitation({ token, name: 'Sabine Reuter', password: 'ein-sicheres-passwort', consent: true });
+
+    const findByIdSpy = vi.spyOn(clubs, 'findById');
+
+    findByIdSpy.mockClear();
+    const me = await service.getMe(user.id);
+    expect(me.enabledModules).toEqual(['athletes']);
+    expect(me.clubNationalID).toBe('1234');
+    expect(findByIdSpy).toHaveBeenCalledTimes(1);
+
+    findByIdSpy.mockClear();
+    const loginResult = await service.login({ email: 'sabine.reuter@example.org', password: 'ein-sicheres-passwort', consent: true, consentVersion: CURRENT_CONSENT_VERSION });
+    expect(loginResult.enabledModules).toEqual(['athletes']);
+    expect(loginResult.clubNationalID).toBe('1234');
+    expect(findByIdSpy).toHaveBeenCalledTimes(1);
   });
 
   // Sicherheitsreview 2026-08-27, Befund H2: `email` ist bewusst KEIN Feld
@@ -563,6 +594,35 @@ describe('authService.requestPasswordReset', () => {
     // Aufräumen: das ausstehende Promise nicht offen lassen.
     releaseCreate!({ id: 'x', userId: 'x', tokenHash: 'x', expiresAt: new Date(), usedAt: null, createdAt: new Date() });
     await pendingCreate;
+  });
+
+  // Code-Review 2026-09-02, Befund P1: Mailversand und Token-Schreibvorgang
+  // liefen vormals PARALLEL und unabhängig voneinander (zwei getrennte
+  // fire-and-forget-Ketten) — schlug NUR der Schreibvorgang fehl, ging die
+  // Mail mit einem Link trotzdem hinaus, dessen Token nie gespeichert
+  // wurde. Diese Person hätte beim Klick InvalidOrExpiredResetTokenError
+  // gesehen, obwohl nichts davon zutraf.
+  it('versendet KEINE E-Mail, wenn das Speichern des Reset-Tokens fehlschlägt', async () => {
+    const { service, invitations, passwordResetTokens, mailer } = makeService();
+    await registerViaInvitation(service, invitations, { email: 'schreibfehler@example.org' });
+
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(passwordResetTokens, 'create').mockRejectedValue(new Error('DB kurzzeitig nicht erreichbar'));
+
+    // Der Fehlschlag darf weder nach außen geworfen werden (siehe Befund
+    // S3: die generische Antwort bleibt für Treffer/Nicht-Treffer/Fehler
+    // identisch) ...
+    await expect(service.requestPasswordReset('schreibfehler@example.org')).resolves.toBeUndefined();
+    // ... noch die Zeitangleichung verzögern (fire-and-forget, siehe Test
+    // oben) — das await oben genügt hier bereits als Beleg.
+
+    // Kurz auf den (bewusst nicht awaiteten) Rejection-Handler warten,
+    // bevor die Abwesenheit der Mail geprüft wird.
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(mailer.sentPasswordResetEmails).toHaveLength(0);
+    expect(consoleErrorSpy).toHaveBeenCalled();
+    consoleErrorSpy.mockRestore();
   });
 });
 

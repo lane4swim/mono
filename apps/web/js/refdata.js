@@ -26,6 +26,27 @@ export const EVENTS = [
   '4x50 Lagen', '4x100 Lagen',
 ];
 
+// Code-Review 2026-09-02, Befund P3: Session-Erweiterung der
+// Event-Referenzliste für den DSV7-Ergebnisimport (siehe
+// modules/resultsImportUI.js: "neues Event anlegen" bei einem nicht
+// zuordenbaren Wettkampf-Profil) — EVENTS ist reine, ungespeicherte
+// Vorschlagsliste ohne eigenen Backend-Store, Result.event selbst ist ein
+// freies Textfeld ohne Enum-Zwang, das neue Label ist also sofort gültig.
+// Ein Neuladen der Seite setzt die Erweiterung zurück; wer das Event
+// dauerhaft in den Auswahllisten sehen will, ergänzt es regulär oben.
+//
+// Bewusst als benannte Funktion HIER (statt eines direkten
+// `EVENTS.push(...)` im aufrufenden UI-Modul, wie es vor dieser
+// Korrektur der Fall war): der Seiteneffekt auf ein exportiertes
+// Referenzdaten-Array steht damit dort, wo die Daten wohnen, statt
+// verstreut in einem UI-Modul, das die Existenz/den Zweck von EVENTS
+// sonst nirgends dokumentiert. Verhalten unverändert — `EVENTS` bleibt
+// dieselbe, von allen Modulen (times.js/competitions.js/stats.js) als
+// lebendiges Array gelesene Referenz, kein Wechsel auf einen Getter.
+export function registerSessionEvent(label) {
+  if (!EVENTS.includes(label)) EVENTS.push(label);
+}
+
 // DSV7-Technik-Code -> Name in EVENTS/STROKES, siehe "DSV Standard"
 // (Format 7), Element WETTKAMPF, Attribut "Technik". 'X' (beliebige
 // Sonderform) hat bewusst keine Entsprechung — ein Sonderform-Wettkampf

@@ -27,3 +27,23 @@ export function timeToSec(str) {
   if (parts.some((p) => isNaN(p))) return NaN;
   return parts.reduce((total, part) => total * 60 + part, 0);
 }
+
+// Code-Review 2026-09-02, Befund K2: `time` in `Result` kann `null` sein
+// (DS/NA/AB/AU/ZU — Ergebnisse ohne gewertete Zeit, siehe
+// docs/dsv7-lenex-import-plan.md Abschnitt 3.4). Ein direkter Vergleich
+// `neueZeit < r.time` wertet `neueZeit < null` als `neueZeit < 0` aus
+// (JavaScript wandelt `null` dafür in `0` um) — praktisch immer `false`,
+// wodurch `others.every(...)` bei JEDEM ergebnislosen Datensatz in der
+// Vergleichsmenge abbricht und die Person auf dieser Strecke NIE wieder
+// als persönliche Bestzeit erkannt wird, unabhängig davon, wie schnell sie
+// tatsächlich schwimmt. Diese eine Funktion ersetzt die zuvor an drei
+// Stellen unabhängig wiederholte (und an zwei davon fehlerhafte)
+// Inline-Berechnung (modules/competitions.js, modules/competitionLive.js,
+// resultsImport/importRunner.js) — ergebnislose Datensätze werden hier
+// aus dem Vergleich entfernt, statt sie fälschlich als "unschlagbar
+// langsam" zu behandeln.
+export function isPersonalBest(time, otherResults) {
+  if (time == null) return false;
+  const timed = otherResults.filter((r) => r.time != null);
+  return timed.every((r) => time < r.time);
+}

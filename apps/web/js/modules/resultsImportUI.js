@@ -10,7 +10,7 @@ import { el } from '../dom.js';
 import { toast, badge, fullName } from '../ui.js';
 import { openModal } from '../modal.js';
 import { field, selectInput, formActions } from '../forms.js';
-import { EVENTS, DSV7_STROKE_TO_NAME } from '../refdata.js';
+import { EVENTS, DSV7_STROKE_TO_NAME, registerSessionEvent } from '../refdata.js';
 import { t, trCode } from '../i18n.js';
 import { secToTime } from '../swimTime.js';
 import { parseDsv7WettkampfergebnisListe, Dsv7ParseError, unmappedEventKey } from '../resultsImport/dsv7Parser.js';
@@ -143,14 +143,11 @@ function openEventResolutionStep(parsed, selectedClub, comp, onImported) {
       if (value === 'ignore') eventResolutions.set(key, { action: 'ignore' });
       else if (value === 'create') {
         const newLabel = suggestEventLabel(unmapped.get(key));
-        // Session-Erweiterung der Event-Referenzliste: EVENTS ist reine,
-        // ungespeicherte Vorschlagsliste ohne eigenen Backend-Store (siehe
-        // refdata.js) — Result.event selbst ist ein freies Textfeld ohne
-        // Enum-Zwang, das neue Label ist also sofort gültig. Ein Neuladen
-        // der Seite setzt die Erweiterung zurück; wer das Event dauerhaft
-        // in den Auswahllisten sehen will, ergänzt es regulär in
-        // refdata.js.
-        if (!EVENTS.includes(newLabel)) EVENTS.push(newLabel);
+        // Session-Erweiterung der Event-Referenzliste (siehe
+        // refdata.js: registerSessionEvent() für die volle Begründung —
+        // Code-Review 2026-09-02, Befund P3: der Seiteneffekt auf EVENTS
+        // gehört dorthin, wo die Daten wohnen, nicht in dieses UI-Modul).
+        registerSessionEvent(newLabel);
         eventResolutions.set(key, { action: 'create', event: newLabel });
       } else {
         eventResolutions.set(key, { action: 'map', event: value.slice('map:'.length) });

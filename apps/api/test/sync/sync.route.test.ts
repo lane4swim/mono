@@ -2,6 +2,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { MODULE_KEYS } from '@lane1/shared-types';
 import { buildApp } from '../../src/app.js';
+import { sweepExpiredClubModules, type CachedClubModules } from '../../src/modules/sync/sync.route.js';
 import { loadEnv } from '../../src/config/env.js';
 import { createAuthService } from '../../src/modules/auth/auth.service.js';
 import { InMemoryUserRepository, InMemoryRefreshTokenRepository, InMemoryPasswordResetTokenRepository } from '../../src/modules/auth/auth.repository.memory.js';
@@ -150,6 +151,46 @@ describe('Vereins-Modul-Lookup je Sync-Anfrage (Review 30.08.2026, Befund E1)', 
     }
 
     await app.close();
+  });
+});
+
+// Code-Review 2026-09-02, Befund R2: ein abgelaufener Eintrag wurde
+// bislang nur bei erneutem Zugriff überschrieben, nie proaktiv entfernt —
+// ein Verein, der nie wieder abgefragt wird (z. B. nach einem harten
+// DSGVO-Purge), hinterließe seinen Eintrag dauerhaft in der Map. Testet
+// die reine Sweep-Funktion direkt (kein Timer, keine Fastify-Instanz
+// nötig) — die Instanz, die syncRoutes() tatsächlich per setInterval()
+// aufruft, ist von außen nicht beobachtbar (siehe dortiger Kommentar).
+describe('sweepExpiredClubModules()', () => {
+  it('entfernt abgelaufene Einträge', () => {
+    const cache = new Map<string, CachedClubModules>([
+      ['expired', { enabledModules: [], expiresAt: 1000 }],
+      ['stillValid', { enabledModules: ['athletes'], expiresAt: 5000 }],
+    ]);
+    sweepExpiredClubModules(cache, 2000);
+    expect(cache.has('expired')).toBe(false);
+    expect(cache.has('stillValid')).toBe(true);
+  });
+
+  it('lässt einen Eintrag stehen, dessen expiresAt exakt "now" entspricht (Grenzfall < vs. <=)', () => {
+    // Dieselbe Grenzbedingung wie in resolveEnabledModules() oben
+    // (`cached.expiresAt > now` gilt noch als frisch) — der Sweep muss
+    // konsistent dazu genau diesen Grenzfall noch als abgelaufen werten
+    // (`entry.expiresAt <= now`), sonst könnten beide Prüfungen für
+    // denselben Zeitpunkt unterschiedliche Ergebnisse liefern.
+    const cache = new Map<string, CachedClubModules>([['borderline', { enabledModules: [], expiresAt: 1000 }]]);
+    sweepExpiredClubModules(cache, 1000);
+    expect(cache.has('borderline')).toBe(false);
+  });
+
+  it('ist ein No-Op auf einer leeren oder vollständig frischen Map', () => {
+    const empty = new Map<string, CachedClubModules>();
+    sweepExpiredClubModules(empty, Date.now());
+    expect(empty.size).toBe(0);
+
+    const allFresh = new Map<string, CachedClubModules>([['a', { enabledModules: [], expiresAt: 9_999_999_999_999 }]]);
+    sweepExpiredClubModules(allFresh, Date.now());
+    expect(allFresh.size).toBe(1);
   });
 });
 

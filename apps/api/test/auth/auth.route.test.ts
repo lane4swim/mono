@@ -166,7 +166,7 @@ describe('POST /auth/login', () => {
 
 // Regressionstest für "Module pro Verein aktivierbar": login/register/
 // refresh/me müssen dem Frontend mitteilen, welche Modul-Pakete der eigene
-// Verein gebucht hat (siehe auth.service.ts: resolveEnabledModules()) —
+// Verein gebucht hat (siehe auth.service.ts: resolveClubContext()) —
 // ohne dieses Feld könnte apps/web/js/router.js: visibleModules() die
 // Navigation nicht korrekt aufbauen.
 describe('Session-Antworten enthalten enabledModules', () => {
@@ -191,7 +191,7 @@ describe('Session-Antworten enthalten enabledModules', () => {
     await app.close();
   });
 
-  // resolveEnabledModules() (auth.service.ts) fällt defensiv auf [] zurück,
+  // resolveClubContext() (auth.service.ts) fällt defensiv auf [] zurück,
   // wenn clubs.findById() nichts liefert — hier über einen Nutzer geprüft,
   // dessen Einladung eine clubId referenziert, für die (wie in vielen
   // anderen Tests dieser Datei) NIE tatsächlich ein Club-Datensatz angelegt
