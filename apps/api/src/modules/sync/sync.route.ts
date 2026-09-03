@@ -46,9 +46,28 @@ export interface SyncRoutesOptions {
 // Mehrprozess-Konsistenzproblem).
 const CLUB_MODULES_CACHE_TTL_MS = 45_000;
 
-interface CachedClubModules {
+export interface CachedClubModules {
   enabledModules: string[];
   expiresAt: number;
+}
+
+// Code-Review 2026-09-02, Befund R2: ein Eintrag bekam bislang nur ein
+// `expiresAt` und wurde bei Ablauf per erneutem set() überschrieben, NIE
+// aber entfernt — ein Verein, der nach seinem letzten Zugriff aus der
+// Datenbank verschwindet (z. B. per hartem DSGVO-Purge, siehe
+// scripts/purgeDeletedData.ts), hinterließe seinen Cache-Eintrag dadurch
+// dauerhaft in dieser Map, für die gesamte Lebensdauer des Prozesses. Bei
+// der dokumentierten Größenordnung (ein Verein je Installation, siehe
+// CLUB_MODULES_CACHE_TTL_MS-Kommentar oben) folgenlos; für eine künftige
+// Mehrvereins-Installation eine kleine, unbegrenzte Halde.
+//
+// Als reine, exportierte Funktion (statt Inline-Code im setInterval()-Callback
+// unten) — analog zu splitAtSafeTimestampBoundary() in sync.pagination.ts —
+// damit die Sweep-Logik selbst ohne Timer/Fastify-Instanz testbar ist.
+export function sweepExpiredClubModules(cache: Map<string, CachedClubModules>, now: number): void {
+  for (const [clubId, entry] of cache) {
+    if (entry.expiresAt <= now) cache.delete(clubId);
+  }
 }
 
 // Sicherheitsreview 2026-08, Befund N4: push()/pull() vertrauen vollständig
@@ -61,6 +80,21 @@ export async function syncRoutes(app: FastifyInstance, opts: SyncRoutesOptions) 
   const syncGuard = [app.authenticate, requireRole('trainer', 'admin', 'athlete')];
 
   const clubModulesCache = new Map<string, CachedClubModules>();
+
+  // Periodischer Sweep entfernt abgelaufene Einträge (siehe
+  // sweepExpiredClubModules()-Kommentar oben), unabhängig davon, ob der
+  // jeweilige Verein je wieder abgefragt wird.
+  //
+  // `.unref()`: dieser Timer allein soll den Node-Prozess nicht am Beenden
+  // hindern (relevant u. a. für Tests, die buildTestApp() ohne
+  // anschließendes app.close() verwenden). Zusätzlich an `onClose`
+  // gehängt, damit ein tatsächlich geschlossener/neu gebauter Test-App
+  // (siehe Closure-Kommentar oben: jeder buildApp()-Aufruf bekommt seine
+  // eigene Cache-Instanz) den eigenen Timer nicht über das Testende hinaus
+  // weiterlaufen lässt.
+  const sweepInterval = setInterval(() => sweepExpiredClubModules(clubModulesCache, Date.now()), CLUB_MODULES_CACHE_TTL_MS);
+  sweepInterval.unref?.();
+  app.addHook('onClose', () => clearInterval(sweepInterval));
 
   async function resolveEnabledModules(clubId: string): Promise<string[]> {
     const now = Date.now();

@@ -64,8 +64,8 @@ export function resolveConflict(
       // Ergebnisimport (DSV7/Lenex, siehe docs/dsv7-lenex-import-plan.md
       // Abschnitt 3.6): bewusst KEINE eigene Konfliktstrategie für den
       // Import eingeführt. Der Import-Client pullt unmittelbar vor dem
-      // Schreiben den aktuellsten Stand (siehe apps/web/js/modules/
-      // resultsImport/*), sodass `clientUpdatedAt` im Regelfall mit
+      // Schreiben den aktuellsten Stand (siehe apps/web/js/resultsImport/*),
+      // sodass `clientUpdatedAt` im Regelfall mit
       // `existing.updatedAt` übereinstimmt und hier gar kein Konflikt
       // entsteht. Trifft der seltene Fall doch ein (jemand ändert das
       // Ergebnis zwischen Pull und Bestätigung des Imports), greift

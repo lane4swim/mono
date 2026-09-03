@@ -124,7 +124,7 @@ export interface InvitationValidator {
 // ClubRepository aus modules/invitations — dieser Service braucht nur
 // findById(), um die gebuchten Module des Vereins in die Session-Antwort
 // (login/refresh/acceptInvitation/getMe) einzubetten (siehe
-// resolveEnabledModules() unten).
+// resolveClubContext() unten).
 export interface ClubModulesLookup {
   findById(clubId: string): Promise<{ enabledModules: string[]; nationalID: string | null; nationalIDType: string | null } | null>;
 }
@@ -157,27 +157,37 @@ export function toPublicUser(user: UserRecord) {
   return publicUser;
 }
 
-// null nur für "superadmin" (gehört zu keinem Verein, siehe
-// UserRecord.clubId-Kommentar) — liefert dafür konsequent ein leeres
-// Array statt eines Fehlers, die Superadmin-Oberfläche ("/admin") nutzt
-// den normalen Router mit Modul-Gating ohnehin nicht.
-async function resolveEnabledModules(clubs: ClubModulesLookup, clubId: string | null): Promise<string[]> {
-  if (!clubId) return [];
-  const club = await clubs.findById(clubId);
-  return club?.enabledModules ?? [];
-}
-
-// Analog zu resolveEnabledModules() oben, für die externe Vereinskennung
+// Code-Review 2026-09-02, Befund R1: vormals zwei getrennte Funktionen
+// (resolveEnabledModules()/resolveClubIdentity()), die JEDE für sich
+// dieselbe Zeile per clubs.findById() luden — an allen acht Aufrufstellen
+// unten (acceptInvitation/login/refresh/resetPassword/changePassword/
+// changeEmail/getMe/updateMe) also zwei sequentiell awaitete
+// Datenbankzugriffe für denselben Club-Datensatz, statt eines einzigen.
+// `PrismaClubRepository.findById()` (invitations.repository.ts) liefert
+// alle drei benötigten Felder (enabledModules/nationalID/nationalIDType)
+// ohnehin in einem `findUnique()`. `null` nur für "superadmin" (gehört zu
+// keinem Verein, siehe UserRecord.clubId-Kommentar) — liefert dafür
+// konsequent leere/null-Werte statt eines Fehlers, die Superadmin-
+// Oberfläche ("/admin") nutzt den normalen Router mit Modul-Gating und den
+// Ergebnisimport (siehe unten) ohnehin nicht.
+//
+// `clubNationalID`/`clubNationalIDType` dienen der externen Vereinskennung
 // des Ergebnisimports (DSV7/Lenex, siehe
-// docs/dsv7-lenex-import-plan.md Abschnitt 3.1) — wird zusätzlich in
-// dieselben Session-/Profil-Antworten eingebettet, damit das Frontend den
-// eigenen Verein beim Import automatisch gegen die Datei abgleichen kann
+// docs/dsv7-lenex-import-plan.md Abschnitt 3.1) — eingebettet in dieselben
+// Session-/Profil-Antworten, damit das Frontend den eigenen Verein beim
+// Import automatisch gegen die Datei abgleichen kann
 // (apps/web/js/modules/resultsImportUI.js), ohne einen eigenen Endpunkt
 // dafür aufrufen zu müssen.
-async function resolveClubIdentity(clubs: ClubModulesLookup, clubId: string | null): Promise<{ clubNationalID: string | null; clubNationalIDType: string | null }> {
-  if (!clubId) return { clubNationalID: null, clubNationalIDType: null };
-  const club = await clubs.findById(clubId);
-  return { clubNationalID: club?.nationalID ?? null, clubNationalIDType: club?.nationalIDType ?? null };
+async function resolveClubContext(
+  clubs: ClubModulesLookup,
+  clubId: string | null,
+): Promise<{ enabledModules: string[]; clubNationalID: string | null; clubNationalIDType: string | null }> {
+  const club = clubId ? await clubs.findById(clubId) : null;
+  return {
+    enabledModules: club?.enabledModules ?? [],
+    clubNationalID: club?.nationalID ?? null,
+    clubNationalIDType: club?.nationalIDType ?? null,
+  };
 }
 
 export function createAuthService(deps: AuthServiceDeps) {
@@ -296,9 +306,8 @@ export function createAuthService(deps: AuthServiceDeps) {
       await deps.invitations.markUsed(invitation.id);
 
       const tokens = await issueTokens(user);
-      const enabledModules = await resolveEnabledModules(deps.clubs, user.clubId);
-      const clubIdentity = await resolveClubIdentity(deps.clubs, user.clubId);
-      return { ...tokens, user: toPublicUser(user), enabledModules, ...clubIdentity };
+      const clubContext = await resolveClubContext(deps.clubs, user.clubId);
+      return { ...tokens, user: toPublicUser(user), ...clubContext };
     },
 
     async login(input: LoginRequest) {
@@ -341,9 +350,8 @@ export function createAuthService(deps: AuthServiceDeps) {
             });
 
       const tokens = await issueTokens(updated);
-      const enabledModules = await resolveEnabledModules(deps.clubs, updated.clubId);
-      const clubIdentity = await resolveClubIdentity(deps.clubs, updated.clubId);
-      return { ...tokens, user: toPublicUser(updated), enabledModules, ...clubIdentity };
+      const clubContext = await resolveClubContext(deps.clubs, updated.clubId);
+      return { ...tokens, user: toPublicUser(updated), ...clubContext };
     },
 
     async refresh(plainRefreshToken: string) {
@@ -395,9 +403,8 @@ export function createAuthService(deps: AuthServiceDeps) {
       // genau DIESEN Fall abfängt).
       await deps.refreshTokens.revoke(existing.id);
       const tokens = await issueTokens(user);
-      const enabledModules = await resolveEnabledModules(deps.clubs, user.clubId);
-      const clubIdentity = await resolveClubIdentity(deps.clubs, user.clubId);
-      return { ...tokens, user: toPublicUser(user), enabledModules, ...clubIdentity };
+      const clubContext = await resolveClubContext(deps.clubs, user.clubId);
+      return { ...tokens, user: toPublicUser(user), ...clubContext };
     },
 
     async logout(plainRefreshToken: string) {
@@ -444,30 +451,36 @@ export function createAuthService(deps: AuthServiceDeps) {
       const { plainToken, tokenHash, expiresAt } = generatePasswordResetToken(deps.passwordResetTtlMinutes);
       if (!user) return;
 
-      // Bewusst ohne await (Befund S3, siehe Kommentar oben). Ein
-      // Fehlschlag (z. B. DB kurzzeitig nicht erreichbar) darf die
-      // generische Antwort an die aufrufende Person nicht verändern —
-      // wird daher nur serverseitig geloggt, nie an den Client
-      // durchgereicht.
-      deps.passwordResetTokens.create(user.id, tokenHash, expiresAt).catch((err) => {
-        console.error('[auth] Fehler beim Speichern des Passwort-Zurücksetzen-Tokens:', err);
-      });
-
-      // Bewusst ohne await: siehe Kommentar oben. Ein Fehlschlag (z. B.
-      // SMTP kurzzeitig nicht erreichbar) darf die generische Antwort an
-      // die aufrufende Person nicht verändern (die längst verschickt ist,
-      // wenn dieser Promise sich auflöst) — wird daher nur serverseitig
-      // geloggt, nie an den Client durchgereicht.
-      deps.mailer
-        .sendPasswordResetEmail({
-          to: user.email,
-          recipientName: user.name,
-          resetUrl: buildPasswordResetUrl(deps.frontendBaseUrl, plainToken),
-          expiresAt,
-          locale: user.locale,
-        })
+      // Bewusst ohne await (Befund S3, siehe Kommentar oben) — der
+      // Aufrufer wartet auf keines von beidem, die generische Antwort geht
+      // unabhängig vom Ausgang sofort zurück.
+      //
+      // Sicherheitskorrektur (Code-Review 2026-09-02, Befund P1): der
+      // Mailversand hängt jetzt AN das Schreiben des Tokens (`.then()`
+      // statt eines zweiten, unabhängigen `deps.mailer...`-Aufrufs
+      // darunter). Vormals liefen beide Zweige parallel und unabhängig
+      // voneinander — schlug NUR der Schreibvorgang fehl (z. B. DB
+      // kurzzeitig nicht erreichbar), ging die Mail mit einem Link
+      // trotzdem hinaus, dessen Token nie gespeichert wurde. Diese Person
+      // bekäme beim Klick InvalidOrExpiredResetTokenError ("ungültig,
+      // abgelaufen oder bereits verwendet") angezeigt, obwohl nichts davon
+      // zutrifft — der einzige Hinweis auf die eigentliche Ursache wäre
+      // die untenstehende, rein serverseitige Log-Zeile gewesen. Ein
+      // Fehlschlag AN JEDER Stelle dieser Kette (Schreiben ODER Versand)
+      // wird weiterhin nur geloggt, nie an den Client durchgereicht.
+      deps.passwordResetTokens
+        .create(user.id, tokenHash, expiresAt)
+        .then(() =>
+          deps.mailer.sendPasswordResetEmail({
+            to: user.email,
+            recipientName: user.name,
+            resetUrl: buildPasswordResetUrl(deps.frontendBaseUrl, plainToken),
+            expiresAt,
+            locale: user.locale,
+          }),
+        )
         .catch((err) => {
-          console.error('[auth] Fehler beim Versand der Passwort-Zurücksetzen-E-Mail:', err);
+          console.error('[auth] Fehler beim Zurücksetzen-Passwort-Ablauf (Token speichern/E-Mail versenden):', err);
         });
     },
 
@@ -508,9 +521,8 @@ export function createAuthService(deps: AuthServiceDeps) {
       await deps.refreshTokens.revokeAllForUser(user.id);
 
       const tokens = await issueTokens(updated);
-      const enabledModules = await resolveEnabledModules(deps.clubs, updated.clubId);
-      const clubIdentity = await resolveClubIdentity(deps.clubs, updated.clubId);
-      return { ...tokens, user: toPublicUser(updated), enabledModules, ...clubIdentity };
+      const clubContext = await resolveClubContext(deps.clubs, updated.clubId);
+      return { ...tokens, user: toPublicUser(updated), ...clubContext };
     },
 
     // Passwortwechsel für die AKTUELL eingeloggte Person (Sicherheitsreview
@@ -557,9 +569,8 @@ export function createAuthService(deps: AuthServiceDeps) {
         });
 
       const tokens = await issueTokens(updated);
-      const enabledModules = await resolveEnabledModules(deps.clubs, updated.clubId);
-      const clubIdentity = await resolveClubIdentity(deps.clubs, updated.clubId);
-      return { ...tokens, user: toPublicUser(updated), enabledModules, ...clubIdentity };
+      const clubContext = await resolveClubContext(deps.clubs, updated.clubId);
+      return { ...tokens, user: toPublicUser(updated), ...clubContext };
     },
 
     // E-Mail-Wechsel für die AKTUELL eingeloggte Person (Sicherheitsreview
@@ -643,17 +654,15 @@ export function createAuthService(deps: AuthServiceDeps) {
         });
 
       const tokens = await issueTokens(updated);
-      const enabledModules = await resolveEnabledModules(deps.clubs, updated.clubId);
-      const clubIdentity = await resolveClubIdentity(deps.clubs, updated.clubId);
-      return { ...tokens, user: toPublicUser(updated), enabledModules, ...clubIdentity };
+      const clubContext = await resolveClubContext(deps.clubs, updated.clubId);
+      return { ...tokens, user: toPublicUser(updated), ...clubContext };
     },
 
     async getMe(userId: string) {
       const user = await deps.users.findById(userId);
       if (!user) throw new UserNotFoundError();
-      const enabledModules = await resolveEnabledModules(deps.clubs, user.clubId);
-      const clubIdentity = await resolveClubIdentity(deps.clubs, user.clubId);
-      return { ...toPublicUser(user), enabledModules, ...clubIdentity };
+      const clubContext = await resolveClubContext(deps.clubs, user.clubId);
+      return { ...toPublicUser(user), ...clubContext };
     },
 
     // Sicherheitsreview 2026-08-27, Befund H2: `email` ist bewusst KEIN
@@ -669,9 +678,8 @@ export function createAuthService(deps: AuthServiceDeps) {
       // nach einem Profil-Update komplett durch diese Antwort (siehe
       // updateProfile()) — ohne dieses Feld ginge die zuvor bei
       // Login/Refresh geladene Modul-Information dabei verloren.
-      const enabledModules = await resolveEnabledModules(deps.clubs, updated.clubId);
-      const clubIdentity = await resolveClubIdentity(deps.clubs, updated.clubId);
-      return { ...toPublicUser(updated), enabledModules, ...clubIdentity };
+      const clubContext = await resolveClubContext(deps.clubs, updated.clubId);
+      return { ...toPublicUser(updated), ...clubContext };
     },
 
     // Art. 15 DSGVO (Recht auf Auskunft): bündelt den eigenen Nutzer-

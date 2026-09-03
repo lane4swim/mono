@@ -34,25 +34,28 @@ einer Warteschlange, die niemand ansieht. **K2** entwertet die
 PB-Erkennung dauerhaft, und zwar ausgelöst durch genau das Feature, das
 gerade dazugekommen ist.
 
-**Update (2. September 2026, im Anschluss an dieses Review).** Alle vier
-Befunde der Kategorie **K** (**K1**–**K4**) sind behoben — siehe die
-jeweiligen **Fix**-Abschnitte. Jeder Fix trägt einen eigenen, neuen
-Regressionstest; **K1**, **K2** und **K4** wurden zusätzlich vor UND nach
-dem Fix per Ausführen verifiziert (siehe **Prüfstand** unten). **D1**,
-**D2**, **R1**, **R2** und **P1**–**P5** bleiben offen.
+**Update (2. September 2026, im Anschluss an dieses Review).** **Alle 13
+Befunde sind behoben** — siehe die jeweiligen **Fix**-Abschnitte. Jeder
+Fix trägt einen eigenen, neuen Regressionstest; **K1**, **K2**, **K4**,
+**D1**, **D2** und **P5** wurden zusätzlich vor UND nach dem jeweiligen
+Fix per tatsächlichem Ausführen verifiziert (siehe **Prüfstand** unten),
+nicht nur über die neuen Tests.
 
-**Prüfstand.** `npm install` sauber, `npm audit --omit=dev` ohne Befund.
-Tests nach den K1–K4-Fixes: `apps/web` 211 (vormals 195, +16 neue
-Regressionstests), `packages/shared-types` 148, `packages/sync-protocol`
-9, `apps/api` 475 von 477 grün — die beiden roten in
-`test/db/prisma.test.ts` sind ein Umgebungsartefakt (siehe **P5**), CI
-ist davon nicht betroffen. `eslint` über alle Workspaces sauber
-(`db.js`s neuer UUID-Ausweichpfad musste dafür bitweise Operatoren durch
-arithmetisch äquivalente Ausdrücke ersetzen — das Projekt verbietet
-`no-bitwise` projektweit, siehe `packages/shared-config/eslint-preset.cjs`;
-die Äquivalenz ist per erschöpfender Prüfung über alle 256 Bytewerte
-verifiziert). **K1**, **K2** und **K4** sind zusätzlich durch Ausführen
-reproduziert, nicht nur statisch belegt.
+**Prüfstand (nach allen Fixes).** `npm install` sauber, `npm audit
+--omit=dev` ohne Befund. Tests: `apps/web` 219 (vormals 195 vor jedem
+Fix, +24 neue Regressionstests über beide Fix-Runden), `packages/
+shared-types` 148, `packages/sync-protocol` 9, `apps/api` 482 von 482
+grün (vormals 475 von 477 — die zuvor roten zwei sind **P5**, jetzt
+mitbehoben, siehe dortiger Fix-Abschnitt) — alle vier Workspaces
+vollständig grün, keine übrig gebliebenen Umgebungsartefakte. `eslint`
+über alle Workspaces sauber (`db.js`s UUID-Ausweichpfad aus dem
+K1–K4-Durchgang musste dafür bitweise Operatoren durch arithmetisch
+äquivalente Ausdrücke ersetzen — das Projekt verbietet `no-bitwise`
+projektweit, siehe `packages/shared-config/eslint-preset.cjs`; die
+Äquivalenz ist per erschöpfender Prüfung über alle 256 Bytewerte
+verifiziert). `bash -n` für beide Setup-Skripte sauber; **D1**/**D2**
+zusätzlich gegen eine echte lokale PostgreSQL-Instanz verifiziert (siehe
+dortiger Fix-Abschnitt) — kein reiner Lesetest des Diffs.
 
 Schweregrade: **Hoch** = vor dem nächsten Produktivbetrieb beheben,
 **Mittel** = einplanen, **Niedrig** = bei nächster Berührung mitnehmen.
@@ -63,15 +66,15 @@ Schweregrade: **Hoch** = vor dem nächsten Produktivbetrieb beheben,
 | K2 | `isPB` bleibt dauerhaft `false`, sobald ein Ergebnis ohne Zeit existiert | **Hoch** | `competitions.js:212`, `competitionLive.js:158`, `importRunner.js:45` | ✅ Behoben |
 | K3 | `uid()`-Ausweichpfad erzeugt Nicht-UUIDs, die kein Entity-Schema annimmt | **Hoch** | `db.js:104-107` | ✅ Behoben |
 | K4 | `STERGEBNIS` wird nicht je Wertung dedupliziert (anders als `PNERGEBNIS`) | Mittel | `dsv7Parser.js:271` | ✅ Behoben |
-| D1 | Beide Setup-Skripte scheitern beim zweiten Lauf | **Hoch** | `setup-netcup.sh:333`, `setup-codespace.sh:288` | Offen |
-| D2 | DB-Passwörter auf der `psql`-Kommandozeile | Mittel | `setup-netcup.sh:114,121`, `setup-codespace.sh:82,89` | Offen |
-| R1 | Doppelte, serielle Club-Abfrage in jeder Auth-Antwort (8 Stellen) | Mittel | `auth.service.ts:299,344,398,511,560,646,654,672` | Offen |
-| R2 | `clubModulesCache` räumt nie auf | Niedrig | `sync.route.ts:63` | Offen |
-| P1 | Reset-Mail kann vor/ohne den Token-Schreibvorgang hinausgehen | Mittel | `auth.service.ts:452-471` | Offen |
-| P2 | Unescapte Attributwerte in `charts.js` | Niedrig | `charts.js:62,86` | Offen |
-| P3 | `EVENTS.push()` mutiert ein exportiertes Referenzdaten-Array | Niedrig | `resultsImportUI.js:153` | Offen |
-| P4 | Falscher Pfad in einer Begründung | Niedrig | `conflictResolution.ts:67` | Offen |
-| P5 | `npm test` scheitert im frischen Klon | Niedrig | `test/db/prisma.test.ts` | Offen |
+| D1 | Beide Setup-Skripte scheitern beim zweiten Lauf | **Hoch** | `setup-netcup.sh:333`, `setup-codespace.sh:288` | ✅ Behoben |
+| D2 | DB-Passwörter auf der `psql`-Kommandozeile | Mittel | `setup-netcup.sh:114,121`, `setup-codespace.sh:82,89` | ✅ Behoben |
+| R1 | Doppelte, serielle Club-Abfrage in jeder Auth-Antwort (8 Stellen) | Mittel | `auth.service.ts:299,344,398,511,560,646,654,672` | ✅ Behoben |
+| R2 | `clubModulesCache` räumt nie auf | Niedrig | `sync.route.ts:63` | ✅ Behoben |
+| P1 | Reset-Mail kann vor/ohne den Token-Schreibvorgang hinausgehen | Mittel | `auth.service.ts:452-471` | ✅ Behoben |
+| P2 | Unescapte Attributwerte in `charts.js` | Niedrig | `charts.js:62,86` | ✅ Behoben |
+| P3 | `EVENTS.push()` mutiert ein exportiertes Referenzdaten-Array | Niedrig | `resultsImportUI.js:153` | ✅ Behoben |
+| P4 | Falscher Pfad in einer Begründung | Niedrig | `conflictResolution.ts:67` | ✅ Behoben |
+| P5 | `npm test` scheitert im frischen Klon | Niedrig | `test/db/prisma.test.ts` | ✅ Behoben |
 
 ---
 
@@ -406,6 +409,37 @@ Das Skript schreibt das gültige Passwort selbst nach
 **bevor** die halbe Einrichtung gelaufen ist — statt erst 200 Zeilen
 später an einem irreführenden Postgres-Fehler.
 
+**Fix (2. September 2026).** Umgesetzt wie empfohlen, in beiden Skripten.
+
+* `scripts/setup-netcup.sh`, `scripts/setup-codespace.sh`: der
+  `MIGRATOR_ENV_FILE`-Zweig setzt jetzt in allen drei Fällen eine
+  `MIGRATE_DATABASE_URL`-Variable, die Schritt 7.3/7 danach exklusiv
+  verwendet (`DATABASE_URL="${MIGRATE_DATABASE_URL}"` statt der bisherigen
+  Neuzusammensetzung aus `${DB_MIGRATOR_USER}:${DB_MIGRATOR_PASSWORD}`):
+  1. Rolle neu angelegt → `MIGRATE_DATABASE_URL` aus dem frisch
+     gewürfelten `DB_MIGRATOR_PASSWORD` gebaut (unverändert) und in die
+     Datei geschrieben.
+  2. Rolle bestand bereits UND die Datei existiert → `source
+     "$MIGRATOR_ENV_FILE"` liest die dort hinterlegte, tatsächlich
+     gültige `MIGRATE_DATABASE_URL` zurück, **statt** weiterhin mit dem
+     oben frisch gewürfelten (und nie gespeicherten) `DB_MIGRATOR_PASSWORD`
+     zu arbeiten. Fehlt `MIGRATE_DATABASE_URL` in der Datei trotzdem
+     (z. B. eine von Hand verstümmelte Datei), bricht das Skript hier ab,
+     statt mit einem leeren Wert weiterzulaufen.
+  3. Rolle bestand bereits, Datei fehlt → Abbruch **an dieser Stelle**
+     (Schritt 6.2/4.2), mit derselben Anleitung wie zuvor (Passwort per
+     `ALTER USER` neu setzen), statt eines bloßen Hinweises, der das
+     Skript ungebremst bis zu Schritt 7.3/7 weiterlaufen ließ.
+* Verifiziert gegen eine echte lokale PostgreSQL-Instanz (nicht nur durch
+  Lesen des Diffs): ein Testlauf, der Rolle+Datenbank anlegt, gefolgt von
+  einem zweiten Lauf mit einem bewusst NEU gewürfelten
+  `DB_MIGRATOR_PASSWORD` (genau der Zustand nach einem `git pull`, der
+  eine neue Migration mitbringt — die Umgebungsvariable ist dann nicht
+  mehr gesetzt, das Skript würfelt neu), verbindet sich in BEIDEN Läufen
+  erfolgreich mit derselben, korrekten `MIGRATE_DATABASE_URL`. Vor diesem
+  Fix scheiterte die Verbindung im zweiten Lauf mit einem
+  Authentifizierungsfehler.
+
 ---
 
 ## D2 — DB-Passwörter auf der `psql`-Kommandozeile
@@ -440,6 +474,46 @@ SQL
 
 Das löst nebenbei die Quoting-Schwäche mit: ein per Umgebungsvariable
 vorgegebenes Passwort mit `'` bricht heute aus dem SQL-String aus.
+
+**Fix (2. September 2026) — die eigene Empfehlung oben ist so NICHT
+tragfähig.** `-v pw="${DB_PASSWORD}"` löst das eigentliche Problem nicht:
+`-v name=wert` ist selbst ein Kommandozeilenargument von `psql` — genau
+der Wert, der über `ps aux`/`/proc/<pid>/cmdline` sichtbar sein soll,
+stünde damit weiterhin dort, nur unter einem anderen Flag. Empirisch
+gegen eine echte lokale PostgreSQL-Instanz geprüft: `psql -v
+pass="$PW" -c "CREATE USER … PASSWORD :'pass';"` scheitert außerdem mit
+„syntax error at or near ':'" — `-c` interpoliert psql-Variablen
+grundsätzlich NICHT (nur `-f`/interaktive Sitzungen/STDIN tun das),
+unabhängig vom `-v`-Flag.
+
+Tatsächlich umgesetzt: das SQL-Statement wandert komplett auf `psql`s
+STDIN (Heredoc), das Passwort wird darin per Shell-Interpolation
+eingebettet, aber vorher gegen Einzelquotes escapt:
+
+* Neuer Helfer `sql_quote()` in beiden Skripten (verdoppelt eingebettete
+  `'`, die Standard-SQL-Escapierung), NUR für Werte gedacht, die per
+  Heredoc auf STDIN gereicht werden.
+* Beide `CREATE USER`-Aufrufe (`DB_MIGRATOR_USER`, `DB_USER`) in
+  `scripts/setup-netcup.sh` und `scripts/setup-codespace.sh`:
+  ```bash
+  sudo -u postgres psql <<SQL
+  CREATE USER ${DB_USER} WITH ENCRYPTED PASSWORD '$(sql_quote "${DB_PASSWORD}")';
+  SQL
+  ```
+  Ein Heredoc auf STDIN erscheint nicht in der Prozess-Argumentliste —
+  `ps aux` während eines laufenden Aufrufs zeigt nur noch `psql` selbst,
+  kein Passwort.
+* Empirisch verifiziert (echte lokale PostgreSQL-Instanz, nicht nur
+  gelesen): ein absichtlich schwieriges Test-Passwort mit eingebettetem
+  `'` sowie `;`/`--`/`$` legt über diesen Weg erfolgreich eine Rolle an,
+  meldet sich mit exakt diesem (unescapten) Passwort erfolgreich an, UND
+  taucht während der Ausführung nicht in `ps aux` auf — anders als zuvor
+  mit `-c "..."`, wo derselbe Prozess das Passwort im Klartext als
+  Kommandozeilenargument zeigte.
+
+Die im Befund erwähnte Quoting-Schwäche ist damit ebenfalls behoben, aber
+über `sql_quote()`, nicht über die (nicht tragfähige) `-v`/`:'var'`-Form
+aus der ursprünglichen Empfehlung.
 
 ---
 
@@ -496,6 +570,30 @@ async function resolveClubContext(clubs: ClubModulesLookup, clubId: string | nul
 Alle acht Stellen rufen ihn einmal auf. Das entfernt zugleich acht
 wortgleiche Zeilenpaare.
 
+**Fix (2. September 2026).** Umgesetzt praktisch wortgleich zur
+Empfehlung — `resolveClubContext()` ersetzt beide vormaligen Helfer
+(`resolveEnabledModules()`/`resolveClubIdentity()`) und wird an allen
+acht Stellen (`acceptInvitation`, `login`, `refresh`, `resetPassword`,
+`changePassword`, `changeEmail`, `getMe`, `updateMe`) per
+`return { …, ...clubContext }` bzw. `return { ...tokens, user: …,
+...clubContext }` eingebunden.
+
+* `apps/api/src/modules/auth/auth.service.ts`: zwei stale Kommentar-
+  Verweise auf die alten Funktionsnamen (`ClubModulesLookup`-
+  Dokumentation, ein Testkommentar) auf `resolveClubContext()`
+  aktualisiert.
+* Neuer Regressionstest in `apps/api/test/auth/auth.service.test.ts`
+  (`'lädt den Club-Datensatz für enabledModules UND die Vereinskennung
+  nur EINMAL je Antwort'`): ein Spy auf `clubs.findById()` prüft
+  `toHaveBeenCalledTimes(1)` für sowohl `getMe()` als auch `login()`.
+  Zurückgegebene Werte allein hätten diesen Befund NICHT erkannt (beide
+  Aufrufzahlen liefern identische Werte) — deshalb der Spy statt einer
+  reinen Werteprüfung.
+* Verifiziert: der neue Test schlägt (`toHaveBeenCalledTimes(2)` statt
+  `1`) fehl, wenn man ihn gegen den vorherigen Zwei-Helfer-Stand laufen
+  lässt (per `git stash` empirisch geprüft, nicht nur angenommen) —
+  echter Regressionstest, keine Tautologie.
+
 ---
 
 ## R2 — `clubModulesCache` räumt nie auf
@@ -510,6 +608,31 @@ PM2-Prozess) ist das folgenlos, und der Kommentar begründet die
 Closure-Platzierung sauber. Für eine Mehrvereins-Installation ist es eine
 kleine, unbegrenzte Halde. Ein `clubModulesCache.delete(clubId)` im
 abgelaufenen Zweig oder ein gelegentliches Durchsehen genügt.
+
+**Fix (2. September 2026).** Periodischer Sweep statt Löschen im
+Lese-Zweig (letzteres würde einen nie wieder abgefragten Verein weiterhin
+für immer in der Map halten — genau der im Befund beschriebene Fall).
+
+* `apps/api/src/modules/sync/sync.route.ts`: die Sweep-Logik ist als
+  reine, exportierte Funktion `sweepExpiredClubModules(cache, now)`
+  ausgelagert (analog zu `splitAtSafeTimestampBoundary()` in
+  `sync.pagination.ts`), statt Inline-Code in einem `setInterval()`-
+  Callback — dadurch ohne Timer/Fastify-Instanz testbar. `syncRoutes()`
+  ruft sie über `setInterval(() => sweepExpiredClubModules(clubModulesCache,
+  Date.now()), CLUB_MODULES_CACHE_TTL_MS)` auf; der Timer ist `.unref()`t
+  (hält den Node-Prozess nicht allein am Leben) und zusätzlich an
+  `app`s `onClose`-Hook gehängt (räumt sich bei einem tatsächlich
+  geschlossenen/neu gebauten Test-App auf, statt über das Testende hinaus
+  weiterzulaufen).
+* `CachedClubModules` ist jetzt exportiert (vormals modul-intern), damit
+  der neue Test unten eigene Cache-Instanzen bauen kann.
+* Neue Tests in `apps/api/test/sync/sync.route.test.ts`
+  (`describe('sweepExpiredClubModules()')`): entfernt abgelaufene
+  Einträge, behält frische, und ein Grenzfall-Test hält fest, dass
+  `expiresAt === now` als abgelaufen zählt — konsistent zur Bedingung in
+  `resolveEnabledModules()` (`cached.expiresAt > now` gilt noch als
+  frisch), sonst könnten Sweep und Lesezugriff für denselben Zeitpunkt
+  unterschiedlich entscheiden.
 
 ---
 
@@ -546,6 +669,26 @@ Die Timing-Eigenschaft aus S3 bleibt unverändert erhalten (der Aufrufer
 wartet weiterhin auf keines von beidem), es geht aber keine Mail mehr zu
 einem Token hinaus, das nie gespeichert wurde.
 
+**Fix (2. September 2026).** Umgesetzt wie empfohlen, mit einer
+gemeinsamen `.catch()`-Zeile für beide Fehlerquellen (Schreiben ODER
+Versand) statt zwei getrennter Log-Zeilen — für die aufrufende Person
+ist ohnehin nur relevant, dass die generische Antwort unverändert bleibt,
+nicht an welcher der beiden Stellen ein Fehlschlag saß.
+
+* `apps/api/src/modules/auth/auth.service.ts: requestPasswordReset()`:
+  `deps.passwordResetTokens.create(...).then(() =>
+  deps.mailer.sendPasswordResetEmail({...})).catch(...)` — weiterhin ohne
+  `await` auf der äußeren Kette (Befund S3 bleibt unverändert erhalten).
+* Neuer Regressionstest in `apps/api/test/auth/auth.service.test.ts`
+  (`'versendet KEINE E-Mail, wenn das Speichern des Reset-Tokens
+  fehlschlägt'`): `passwordResetTokens.create()` per Spy auf eine
+  Ablehnung gestellt, danach `mailer.sentPasswordResetEmails` auf Länge 0
+  geprüft.
+* Verifiziert: derselbe Test schlägt (Länge 1 statt 0) fehl, wenn man ihn
+  gegen den vorherigen Zwei-Ketten-Stand laufen lässt (per `git stash`
+  empirisch geprüft) — die Mail ging dort tatsächlich unabhängig vom
+  Schreibfehler hinaus.
+
 ---
 
 ## P2 — Unescapte Attributwerte in `charts.js`
@@ -572,6 +715,33 @@ ohnehin nur CSS-Custom-Properties) oder die beiden `<svg>`-Bäume über
 `el()` statt über `innerHTML` bauen. Mindestens `esc()` konsequent auch
 auf `:53` anwenden.
 
+**Fix (2. September 2026).** Die Allowlist-Variante umgesetzt (kein
+Wechsel auf `el()`-Aufbau — das wäre eine deutlich größere Änderung an
+beiden Diagramm-Buildern gewesen, für einen Befund, den eine
+Formvalidierung bereits vollständig schließt).
+
+* `apps/web/js/charts.js`: neue Funktion `safeColor(value, fallback)`
+  gegen `SAFE_COLOR_RE` (`var(--…)`, Hex-Farbe, oder ein einfacher
+  CSS-Farbname) — jeder abweichende Wert fällt auf den übergebenen
+  Standardfarbwert zurück. Angewendet auf `color` in BEIDEN Funktionen
+  (direkt nach der Parameter-Destrukturierung, greift dadurch auch bei
+  einem explizit übergebenen bösartigen Wert, nicht nur beim
+  Default-Fall) sowie auf `b.color` je Balken in `svgBarChart()`
+  (Rückfall auf die bereits validierte Diagrammfarbe). `:53`
+  (Gitterlinien-Beschriftung) läuft jetzt ebenfalls durch `esc()`, wie
+  vom zweiten Empfehlungsteil verlangt.
+* Neue Testdatei `apps/web/test/charts.test.js` (mit `@vitest-environment
+  jsdom`, wie `test/modal.test.js`): prüft sowohl den Normalfall (eine
+  gültige `var(--…)`-Referenz landet unverändert im Attribut) als auch
+  einen bösartigen `color`-/`b.color`-Wert (`x" onload="alert(1)`) auf
+  Diagramm- UND Einzelbalken-Ebene, sowie die `esc()`-Anwendung auf einen
+  HTML-tragenden `yFormat`-Rückgabewert.
+* Die Regex ist gegen die tatsächlich im Frontend verwendeten Werte
+  (`var(--c-petrol)`, `var(--c-lane-d)`, `var(--c-chlorine-d)`, siehe
+  `modules/stats.js`/`modules/times.js`) sowie gegen mehrere
+  Injektionsversuche geprüft (siehe Testdatei) — alle legitimen Werte
+  bestehen, alle bösartigen fallen auf den Standardwert zurück.
+
 ---
 
 ## P3 — `EVENTS.push()` mutiert ein exportiertes Referenzdaten-Array
@@ -595,6 +765,30 @@ Zusatz in einer getrennten Liste hält und über einen Getter
 zusammenführt. Dann steht der Seiteneffekt dort, wo die Daten wohnen,
 statt in einem UI-Modul.
 
+**Fix (2. September 2026) — mit einer bewussten Vereinfachung gegenüber
+der eigenen Empfehlung oben.** `EVENTS` wird von sechs Stellen in vier
+Modulen (`times.js`, `competitions.js`, `stats.js`,
+`resultsImportUI.js`) direkt als lebendiges Array gelesen (`.map()`,
+`.includes()`, `EVENTS[0]`) — eine getrennte Zusatzliste mit
+Getter-Zusammenführung hätte bedeutet, entweder alle sechs Lesestellen
+auf den Getter umzustellen (deutlich größerer, hier nicht gerechtfertigter
+Diff für einen Niedrig-Befund) oder zwei parallele Wahrheiten (`EVENTS`
+und der Getter) nebeneinander zu pflegen. Stattdessen bleibt `EVENTS`
+dieselbe, weiterhin von allen Modulen gelesene Array-Referenz — behoben
+ist nur, DASS und WO der Seiteneffekt passiert:
+
+* `apps/web/js/refdata.js`: neue, exportierte Funktion
+  `registerSessionEvent(label)` — identisches Verhalten
+  (`if (!EVENTS.includes(label)) EVENTS.push(label)`), jetzt aber in der
+  Datei, die `EVENTS` besitzt und dokumentiert, statt in einem
+  UI-Modul.
+* `modules/resultsImportUI.js`: ruft `registerSessionEvent(newLabel)`
+  auf, statt `EVENTS` direkt zu mutieren.
+* Neue Tests in `apps/web/test/refdata.dsv7EventLabel.test.js`
+  (`describe('registerSessionEvent()')`): fügt ein neues Label hinzu,
+  und fügt ein bereits vorhandenes Label kein zweites Mal hinzu
+  (Dedupe-Verhalten erhalten).
+
 ---
 
 ## P4 — Falscher Pfad in einer Begründung
@@ -604,6 +798,12 @@ verweist auf `apps/web/js/modules/resultsImport/*`. Tatsächlich liegt das
 Modul unter `apps/web/js/resultsImport/*` (`modules/` enthält nur
 `resultsImportUI.js`). In einer Codebasis, deren Kommentare durchgängig
 als Navigationshilfe dienen, ist ein toter Verweis mehr als ein Tippfehler.
+
+**Fix (2. September 2026).** Pfad korrigiert. Zusätzlich das gesamte
+Repository nach demselben Verwechslungsmuster durchsucht
+(`js/modules/resultsImport` ohne `UI`) — kein weiterer Treffer; alle
+übrigen Vorkommen von `js/modules/resultsImportUI.js` verweisen korrekt
+auf die tatsächlich unter `modules/` liegende Datei.
 
 ---
 
@@ -625,6 +825,33 @@ haben.
 der `prisma generate` mitnimmt, oder die beiden Tests überspringen, wenn
 kein generierter Client vorliegt (mit `test.skipIf`), samt Hinweis auf
 `npm run prisma:generate`.
+
+**Fix (2. September 2026).** Die erste Variante umgesetzt — `prisma
+generate` braucht weder eine erreichbare Datenbank noch eine gesetzte
+`DATABASE_URL` (empirisch geprüft: läuft auch ganz ohne diese Variable
+sauber durch), ein `test.skipIf` hätte den frischen Klon dagegen mit zwei
+grün ÜBERSPRUNGENEN statt tatsächlich laufenden Tests zurückgelassen.
+
+* `apps/api/package.json`: `pretest` und `pretest:integration` hängen
+  jetzt zusätzlich `&& cd ../../apps/api && prisma generate` an (nach dem
+  bereits bestehenden `packages/sync-protocol`-Build) — dieselbe
+  Reihenfolge wie in `.github/workflows/ci.yml` (Prisma Client generieren
+  vor Test), jetzt aber auch für einen lokalen, direkten `npm test`-Aufruf
+  ohne CI.
+* Verifiziert am tatsächlichen Symptom: `node_modules/.prisma`
+  (generierter Client) gelöscht, `.prisma`-Paket-Verzeichnis selbst aber
+  UNVERÄNDERT gelassen (reine Simulation von „nie generiert", nicht von
+  „nie installiert") — `npm test` vom Repo-Root aus generiert den Client
+  automatisch über den neuen `pretest`-Schritt und alle vier Workspaces
+  laufen grün durch, ohne einen manuellen `npm run prisma:generate`-Schritt
+  dazwischen.
+* Nebenbei aufgeräumt: ein erster Verifikationslauf hatte versehentlich
+  das installierte `@prisma/client`-Paket selbst gelöscht (nicht nur den
+  generierten Client) — `npm install` installierte es beim nächsten Lauf
+  automatisch in einer neueren, ebenfalls zu `^5.20.0` passenden Version
+  nach und schrieb diese in `package.json`/`package-lock.json`. Dieser
+  unbeabsichtigte Versions-Bump wurde vor dem Commit zurückgenommen; die
+  einzige tatsächliche Änderung ist die `pretest`/`pretest:integration`-Zeile.
 
 ---
 
