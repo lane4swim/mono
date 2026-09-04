@@ -20,7 +20,7 @@
 // jeden Hinweis. app.js zeigt jetzt stattdessen einen Hinweis an, sobald
 // ein neuer Worker bereitsteht, und lässt die Person selbst entscheiden,
 // wann neu geladen wird.
-const CACHE_VERSION = 'lane1-v35';
+const CACHE_VERSION = 'lane1-v36';
 const PRECACHE_URLS = [
   './',
   './index.html',
