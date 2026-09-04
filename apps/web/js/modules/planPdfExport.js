@@ -80,12 +80,18 @@ function printSheet(sheet) {
     sheet.style.width = `${SHEET_WIDTH_MM / scale}mm`;
     sheet.style.transformOrigin = 'top left';
     sheet.style.transform = `scale(${scale})`;
-    // .page bekommt die Ziel-Layout-Höhe + Überlauf-Clip: der Browser sieht
-    // dadurch für die Seitenaufteilung nur noch diese eine-Seite-hohe Box,
-    // unabhängig von der (nur optisch verkleinerten) tatsächlichen Höhe von
-    // .sheet.
+    // .page bekommt die Ziel-Layout-Höhe + vertikalen Überlauf-Clip: der
+    // Browser sieht dadurch für die Seitenaufteilung nur noch diese
+    // eine-Seite-hohe Box, unabhängig von der (nur optisch verkleinerten)
+    // tatsächlichen Höhe von .sheet. Nur overflow-y wird geclippt, nicht
+    // overflow-x: .page hat selbst keine explizite Breite (füllt seinen
+    // Container, ~186mm Druckbereich), während .sheet nach dem Skalieren
+    // bewusst auf die volle Blattbreite (190mm, SHEET_WIDTH_MM) gerendert
+    // wird — mit `overflow: hidden` auf beiden Achsen würde das die rechte
+    // Kante jedes skalierten Ausdrucks abschneiden.
     page.style.height = `${targetHeight}px`;
-    page.style.overflow = 'hidden';
+    page.style.overflowY = 'hidden';
+    page.style.overflowX = 'visible';
   }
 
   // Safari nimmt den Druck-Snapshot manchmal auf, bevor die obigen

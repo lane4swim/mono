@@ -511,8 +511,10 @@ tr:hover td{ background: var(--c-foam-2); }
      (see rules near the top of this file) — left in place, that forced
      full-viewport-height, colored box becomes part of the page's normal
      flow and can push our (already single-page) content onto a second,
-     near-empty page. Reset both for print so only .plan-print-sheet
-     determines page height. */
+     near-empty page. Reset both for print so only .plan-print-page (its
+     JS-set inline height when content had to be scaled down, see
+     printSheet() in planPdfExport.js) / .plan-print-sheet determine page
+     height. */
   html, body{ height: auto !important; background: #fff !important; }
   /* Isolate .plan-print-root for printing via the classic visibility-swap
      (not display:none + a position:absolute→static flip): Safari has
