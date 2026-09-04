@@ -478,3 +478,5 @@ Für die Veröffentlichung auf einem Hetzner-Server siehe die separat
 erstellte `docs/deployment.md` (sowie die Varianten für andere Umgebungen:
 `docs/deployment-netcup.md`, `docs/deployment-raspberry-pi.md`,
 `docs/deployment-macos.md`, `docs/deployment-github-codespaces.md`).
+Noch unentschlossen, welcher Hoster es werden soll? `docs/hosting-optionen.md`
+vergleicht günstige EU-Hoster für die geplante Größenordnung.
