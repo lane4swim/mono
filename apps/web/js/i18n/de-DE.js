@@ -536,7 +536,7 @@ export default {
     moveUp: 'Eine Position nach oben', moveDown: 'Eine Position nach unten',
     insertHere: 'Hier einfügen', insertHereHint: 'Hier einfügen:',
     equipmentSummary: 'Benötigte Ausrüstung:', equipmentNone: 'Keine Ausrüstung nötig',
-    editEquipment: 'Ausrüstung bearbeiten', equipmentSaved: 'Ausrüstung gespeichert',
+    editEquipment: 'Ausrüstung bearbeiten',
   },
   qualifications: {
     eyebrow: 'Qualifikationsmanagement', title: 'Qualifikationen',

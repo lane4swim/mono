@@ -513,7 +513,7 @@ export default {
     moveUp: 'Move one position up', moveDown: 'Move one position down',
     insertHere: 'Insert here', insertHereHint: 'Insert here:',
     equipmentSummary: 'Equipment needed:', equipmentNone: 'No equipment needed',
-    editEquipment: 'Edit equipment', equipmentSaved: 'Equipment saved',
+    editEquipment: 'Edit equipment',
   },
   qualifications: {
     eyebrow: 'Qualification management', title: 'Qualifications',

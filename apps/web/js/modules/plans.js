@@ -8,7 +8,7 @@ import { badge, emptyState, laneWave, toast } from '../ui.js';
 import { openModal, confirmAction } from '../modal.js';
 import { field, textInput, selectInput, dateInput, formActions } from '../forms.js';
 import { EQUIPMENT_ITEMS } from '../refdata.js';
-import { renderSetEditor, totalDistance, cloneItems, collectEquipment, exerciseById } from './setEditor.js';
+import { renderSetEditor, totalDistance, cloneItems, collectEquipment, equipmentForEntry, exerciseById } from './setEditor.js';
 import { renderCommentThread, commentsButton } from './comments.js';
 import { exportPlanToPdf, exportDayToPdf } from './planPdfExport.js';
 import { navigate } from '../router.js';
@@ -177,22 +177,24 @@ function setCommentsButton(entry, plan) {
 }
 
 // Builds the "Beschreibung" cell content: the set's text, plus a small
-// equipment badge row underneath if it's linked to a catalog exercise
-// that needs equipment — this is what was missing from the read-only
-// plan view (equipment was only ever shown inside the edit dialog).
-// Same story for comments on the linked catalog exercise (Exercise.comments,
+// equipment badge row underneath whenever this set needs material (its
+// own equipment, or — for older sets without one — the linked catalog
+// exercise's, see equipmentForEntry()) — this is what was missing from
+// the read-only plan view (equipment was only ever shown inside the edit
+// dialog). Same story for comments on the linked catalog exercise (Exercise.comments,
 // not the set's own comments — see setCommentsButton): so far those were
 // only visible inside the Übungskatalog's edit modal, never here where the
 // exercise is actually used inside a plan.
 function equipmentDescCell(entry, exercises) {
   const wrap = el('div');
   wrap.appendChild(el('div', {}, entry.description || '—'));
+  const equipment = equipmentForEntry(entry, exercises);
+  if (equipment.length > 0) {
+    wrap.appendChild(el('div', { class: 'pill-group', style: 'margin-top:3px' },
+      equipment.map(eq => badge(trLabel(EQUIPMENT_ITEMS, eq, 'equipment'), 'pb'))));
+  }
   if (entry.exerciseId) {
     const ex = exerciseById(exercises).get(entry.exerciseId);
-    if (ex && (ex.equipment || []).length > 0) {
-      wrap.appendChild(el('div', { class: 'pill-group', style: 'margin-top:3px' },
-        ex.equipment.map(eq => badge(trLabel(EQUIPMENT_ITEMS, eq, 'equipment'), 'pb'))));
-    }
     if (ex) wrap.appendChild(el('div', { style: 'margin-top:3px' }, exerciseCommentsHint(ex)));
   }
   return wrap;

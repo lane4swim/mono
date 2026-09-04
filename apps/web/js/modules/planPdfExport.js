@@ -20,8 +20,9 @@
 // ============================================================
 import { el, clear } from '../dom.js';
 import { fmtDateLong } from '../dates.js';
-import { totalDistance, exerciseById } from './setEditor.js';
-import { t } from '../i18n.js';
+import { totalDistance, exerciseById, equipmentForEntry } from './setEditor.js';
+import { EQUIPMENT_ITEMS, SET_INTENSITIES } from '../refdata.js';
+import { t, trLabel } from '../i18n.js';
 
 const MM_TO_PX = 96 / 25.4;
 const PAGE_HEIGHT_MM = 297;
@@ -173,6 +174,7 @@ function buildSetRow(entrySet, exercises) {
   const name = entrySet.description || exerciseName(entrySet, exercises) || '—';
   const row = el('div', { class: 'print-entry' }, [
     el('span', { class: 'print-entry-qty' }, `${entrySet.reps || 1}×${entrySet.distance ?? '—'} m`),
+    el('span', { class: 'print-entry-intensity' }, trLabel(SET_INTENSITIES, entrySet.intensity || 'ga1', 'setIntensities')),
     el('span', { class: 'print-entry-name' }, name),
   ]);
   // Pause nur anzeigen, wenn tatsächlich eine geplant ist — bei 0s (z. B.
@@ -180,6 +182,16 @@ function buildSetRow(entrySet, exercises) {
   // erzeugen, ohne den Trainer:innen etwas Neues zu sagen.
   if (entrySet.restSec > 0) {
     row.appendChild(el('span', { class: 'print-entry-rest' }, `${t('plans.colRest')}: ${entrySet.restSec}s`));
+  }
+  // Material nur anzeigen, wenn tatsächlich welches gebraucht wird — eigener,
+  // volle Zeilenbreite beanspruchender Eintrag (siehe .print-entry-equipment
+  // in styles.css: flex-basis 100% erzwingt den Zeilenumbruch innerhalb des
+  // sonst einzeiligen .print-entry), damit eine womöglich lange Materialliste
+  // die kompakte erste Zeile (Menge/Intensität/Name/Pause) nicht sprengt.
+  const equipment = equipmentForEntry(entrySet, exercises);
+  if (equipment.length > 0) {
+    row.appendChild(el('span', { class: 'print-entry-equipment' },
+      `${t('setEditor.equipmentSummary')} ${equipment.map(eq => trLabel(EQUIPMENT_ITEMS, eq, 'equipment')).join(', ')}`));
   }
   return row;
 }

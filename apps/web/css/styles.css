@@ -455,11 +455,19 @@ tr:hover td{ background: var(--c-foam-2); }
 .print-entry-qty{
   font-family: var(--f-mono); font-weight: 800; font-size: 4.4mm; white-space: nowrap; color: #000;
 }
+.print-entry-intensity{
+  font-weight: 600; font-size: 3.2mm; text-transform: uppercase; letter-spacing: 0.1mm;
+  white-space: nowrap; color: #000;
+}
 .print-entry-name{ font-weight: 600; font-size: 4mm; color: #000; }
 .print-entry-rest{
   font-family: var(--f-mono); font-weight: 700; font-size: 3.6mm; color: #000;
   white-space: nowrap; margin-left: auto;
 }
+/* flex-basis:100% erzwingt den Umbruch auf eine eigene Zeile innerhalb des
+   sonst einzeiligen (flex-wrap) .print-entry — siehe buildSetRow() in
+   planPdfExport.js. */
+.print-entry-equipment{ flex-basis: 100%; font-size: 3.2mm; font-style: italic; color: #000; }
 .print-block{
   border: 0.7mm solid #000; border-radius: 1.5mm; padding: 2mm 3mm; margin: 1.5mm 0 3mm;
 }
@@ -487,8 +495,10 @@ tr:hover td{ background: var(--c-foam-2); }
 .print-days-solo .print-day-total{ font-size: 5.5mm; }
 .print-days-solo .print-entry{ padding: 3mm 0; gap: 4mm; }
 .print-days-solo .print-entry-qty{ font-size: 7mm; min-width: 38mm; }
+.print-days-solo .print-entry-intensity{ font-size: 4.6mm; }
 .print-days-solo .print-entry-name{ font-size: 6.4mm; }
 .print-days-solo .print-entry-rest{ font-size: 5mm; }
+.print-days-solo .print-entry-equipment{ font-size: 4.4mm; }
 .print-days-solo .print-block{ padding: 4mm 5mm; margin: 3mm 0 5mm; }
 .print-days-solo .print-block-head{ font-size: 6mm; margin-bottom: 2mm; }
 .print-days-solo .print-section-head{ padding-bottom: 2mm; margin-bottom: 2.5mm; }
