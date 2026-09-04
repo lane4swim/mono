@@ -1,5 +1,5 @@
 // ============================================================
-// modules/planPdfExport.js — "Als PDF exportieren" für Trainingspläne.
+// modules/planPdfExport.js — "Plan drucken" für Trainingspläne.
 //
 // Kein PDF-Vendor-Code nötig: baut eine eigene, druckoptimierte Ansicht
 // des Plans auf (großer, kontrastreicher Text, Wiederholungsblöcke als
@@ -10,7 +10,7 @@
 // "Einseitig" wird durch Messen + notfalls Herunterskalieren erzwungen:
 // der Inhalt wird zunächst in natürlicher Größe aufgebaut, dann gegen
 // die verfügbare A4-Druckhöhe geprüft; passt er nicht, wird er per
-// CSS-zoom so weit verkleinert, dass er auf eine Seite passt.
+// CSS-transform so weit verkleinert, dass er auf eine Seite passt.
 //
 // Neben dem ganzen Wochenplan (exportPlanToPdf) lässt sich auch ein
 // einzelner Trainingstag drucken (exportDayToPdf) — z. B. um nur den
@@ -50,36 +50,50 @@ export function exportDayToPdf(plan, day, group, exercises) {
 function printSheet(sheet) {
   const root = getPrintRoot();
   clear(root);
-  root.appendChild(sheet);
+  // .plan-print-page ist der eigentliche Seiten-Container: seine (ggf.
+  // explizit gesetzte) Layout-Höhe bestimmt die Druck-Paginierung. .sheet
+  // selbst wird bei Bedarf per `transform: scale()` verkleinert — transform
+  // ist reines Paint-Scaling und ändert die Layout-Box von .sheet nicht,
+  // aber .page bekommt in dem Fall unten eine explizite Pixelhöhe, wodurch
+  // die Paginierung ausschließlich mit dieser (dann bereits verkleinerten)
+  // Höhe rechnet, unabhängig davon, ob der Browser Paint-Scaling während
+  // des Drucks überhaupt berücksichtigt. Frühere Versuche mit CSS `zoom`
+  // scheiterten daran, dass Safari `zoom` beim tatsächlichen Druck (im
+  // Gegensatz zur Bildschirmdarstellung) nicht zuverlässig anwendet, wodurch
+  // einzelne Trainingstage trotz Skalierung auf zwei Seiten liefen.
+  const page = el('div', { class: 'plan-print-page' });
+  page.appendChild(sheet);
+  root.appendChild(page);
 
   // Erst ungeskaliert messen, dann nur bei Bedarf verkleinern — so bleibt
   // der Text für kurze Pläne/Tage maximal groß. Kein unterer Anschlag für
   // den Skalierungsfaktor: "einseitig" ist eine harte Anforderung, ein
   // sehr umfangreicher Plan mit kleinerer Schrift ist besser als eine
-  // zweite Seite. Bewusst `zoom` statt `transform: scale()`: transform
-  // ist reines Paint-scaling und ändert die Layout-Box nicht, wodurch
-  // Chromiums Druck-Paginierung weiterhin mit der ungeskalierten Höhe
-  // rechnet und trotzdem eine zweite Seite anlegt — zoom verkleinert die
-  // Box auch für die Seitenumbruch-Berechnung. Der 3%-Sicherheitsabschlag
-  // fängt ab, dass die gemessene Breite (190mm) minimal von der
-  // tatsächlichen Druckbreite abweichen kann.
+  // zweite Seite. Der 3%-Sicherheitsabschlag fängt ab, dass die gemessene
+  // Breite (190mm) minimal von der tatsächlichen Druckbreite abweichen kann.
   const naturalHeight = sheet.scrollHeight;
   const targetHeight = (PAGE_HEIGHT_MM - PAGE_MARGIN_MM * 2) * MM_TO_PX;
   if (naturalHeight > targetHeight) {
     const scale = (targetHeight / naturalHeight) * 0.97;
-    // Breite vor dem Zoomen gegenläufig vergrößern, damit der Inhalt
-    // danach wieder die volle Seitenbreite ausfüllt statt zu schrumpfen.
+    // Breite vor dem Skalieren gegenläufig vergrößern, damit der Inhalt
+    // nach dem Herunterskalieren wieder die volle Seitenbreite ausfüllt.
     sheet.style.width = `${SHEET_WIDTH_MM / scale}mm`;
-    sheet.style.zoom = String(scale);
+    sheet.style.transformOrigin = 'top left';
+    sheet.style.transform = `scale(${scale})`;
+    // .page bekommt die Ziel-Layout-Höhe + Überlauf-Clip: der Browser sieht
+    // dadurch für die Seitenaufteilung nur noch diese eine-Seite-hohe Box,
+    // unabhängig von der (nur optisch verkleinerten) tatsächlichen Höhe von
+    // .sheet.
+    page.style.height = `${targetHeight}px`;
+    page.style.overflow = 'hidden';
   }
 
-  // Safari nimmt den Druck-Snapshot manchmal auf, bevor die obige
-  // Style-Änderung (Breite/zoom) tatsächlich in ein neues Layout
-  // eingeflossen ist, und druckt dann noch die ungeskalierte Fassung —
-  // dadurch laufen gerade lange Trainingstage (die überhaupt erst
-  // herunterskaliert werden müssen) auf eine zweite Seite über. Chrome/
-  // Firefox layouten vor dem Druck synchron neu, Safari braucht dafür
-  // einen Tick Verzögerung.
+  // Safari nimmt den Druck-Snapshot manchmal auf, bevor die obigen
+  // Style-Änderungen tatsächlich in ein neues Layout eingeflossen sind, und
+  // druckt dann noch die ungeskalierte Fassung — dadurch laufen gerade lange
+  // Trainingstage (die überhaupt erst herunterskaliert werden müssen) auf
+  // eine zweite Seite über. Chrome/Firefox layouten vor dem Druck synchron
+  // neu, Safari braucht dafür einen Tick Verzögerung.
   setTimeout(() => window.print(), 50);
 }
 

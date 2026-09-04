@@ -430,6 +430,7 @@ tr:hover td{ background: var(--c-foam-2); }
    Schwarz auf Weiß statt der App-Markenfarben, für maximalen Kontrast
    auf Papier/Ausdruck. */
 .plan-print-root{ height: 0; overflow: hidden; }
+.plan-print-page{ width: 190mm; }
 .plan-print-sheet{
   width: 190mm; background: #fff; color: #000; font-family: var(--f-body);
 }
@@ -527,6 +528,7 @@ tr:hover td{ background: var(--c-foam-2); }
   .plan-print-root{
     position: absolute; top: 0; left: 0; width: 100%; height: auto; overflow: visible;
   }
+  .plan-print-page{ width: auto; }
   .plan-print-sheet{ width: auto; }
   @page{ size: A4; margin: 12mm; }
 }
