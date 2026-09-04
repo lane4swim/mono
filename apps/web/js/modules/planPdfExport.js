@@ -85,6 +85,13 @@ function printSheet(sheet) {
 
 function buildSheet(plan, group, exercises) {
   const days = (plan.days || []).slice().sort((a, b) => a.date.localeCompare(b.date));
+  // Ein Plan mit genau einem Tag bekommt dieselbe Einzeltag-Ansicht wie der
+  // explizite "Diesen Tag drucken"-Button (buildDaySheet) statt des
+  // Mehrspalten-Rasters unten — sonst reserviert grid-auto-fill weiterhin
+  // Platz für nicht vorhandene weitere Spalten, und derselbe Trainingstag
+  // sieht je nachdem, über welchen Button er gedruckt wurde, unterschiedlich
+  // aus (schmaler/kleiner hier vs. volle Breite/große Schrift dort).
+  if (days.length === 1) return buildDaySheet(plan, days[0], group, exercises);
   const total = days.reduce((sum, d) => sum + totalDistance(d.sets || []), 0);
 
   const sheet = el('div', { class: 'plan-print-sheet' });
