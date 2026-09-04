@@ -28,11 +28,10 @@
 // hinweg strukturell ausgeschlossen (nicht extra zu sperren).
 // ============================================================
 import { el, clear, localId } from '../dom.js';
-import { badge, toast } from '../ui.js';
+import { badge } from '../ui.js';
 import { selectInput } from '../forms.js';
 import { SET_INTENSITIES, EXERCISE_CATEGORIES, EQUIPMENT_ITEMS } from '../refdata.js';
 import { t, trLabel, trOptions } from '../i18n.js';
-import { put } from '../db.js';
 
 // Sensible defaults when a set is created from a catalog exercise,
 // since exercises don't carry pool-intensity/rest data themselves.
@@ -48,7 +47,7 @@ const CATEGORY_DEFAULTS = {
 };
 
 function newBlankSet() {
-  return { kind: 'set', id: localId('set'), description: '', distance: 100, reps: 1, intensity: 'ga1', restSec: 20, comments: [] };
+  return { kind: 'set', id: localId('set'), description: '', distance: 100, reps: 1, intensity: 'ga1', restSec: 20, equipment: [], comments: [] };
 }
 
 function newBlock() {
@@ -70,6 +69,10 @@ function setFromExercise(exercise) {
     intensity: defaults.intensity,
     restSec: defaults.restSec,
     exerciseId: exercise.id,
+    // Startwert = Katalog-Standard der Übung, ab hier aber unabhängig
+    // editierbar (siehe equipmentForEntry() unten) — Ändern hier wirkt
+    // sich NICHT auf den Katalogeintrag aus.
+    equipment: [...(exercise.equipment || [])],
     comments: [],
   };
 }
@@ -136,22 +139,33 @@ export function exerciseById(exercises) {
   return index;
 }
 
+// Material für GENAU EINEN Satz: `entry.equipment` (eigener, im Plan/in
+// der Vorlage editierbarer Wert) hat Vorrang, wenn gesetzt — auch als
+// bewusst geleertes Array (Material entfernt). Fehlt das Feld ganz
+// (Altbestand vor Einführung dieses Felds), fällt die Anzeige auf das
+// Material der verknüpften Katalogübung zurück, damit vor dieser Änderung
+// gespeicherte Pläne/Vorlagen nicht plötzlich "kein Material" zeigen.
+// Sets ohne Katalogverknüpfung und ohne eigenen Wert liefern `[]`.
+export function equipmentForEntry(entry, exercises) {
+  if (Array.isArray(entry.equipment)) return entry.equipment;
+  if (entry.exerciseId) {
+    const ex = exerciseById(exercises).get(entry.exerciseId);
+    return ex?.equipment || [];
+  }
+  return [];
+}
+
 // Collects the de-duplicated set of equipment codes needed across a
-// (possibly nested, block-containing) list of entries, by looking up
-// each set's linked catalog exercise (if any) and its `equipment` list.
-// Sets not created from a catalog exercise simply contribute nothing —
-// there's no equipment info to draw on for freely-typed sets.
+// (possibly nested, block-containing) list of entries — see
+// equipmentForEntry() above for how one entry's own equipment is
+// determined.
 export function collectEquipment(items, exercises) {
-  const byId = exerciseById(exercises);
   const codes = new Set();
   const walk = (list) => {
     (list || []).forEach(entry => {
       if (entry.kind === 'block') { walk(entry.sets || []); return; }
       if (entry.kind === 'section') { walk(entry.entries || []); return; }
-      if (entry.exerciseId) {
-        const ex = byId.get(entry.exerciseId);
-        (ex?.equipment || []).forEach(eq => codes.add(eq));
-      }
+      equipmentForEntry(entry, exercises).forEach(eq => codes.add(eq));
     });
   };
   walk(items);
@@ -243,72 +257,71 @@ function orderButtons(controls) {
 
 // Code-Review, Befund L6: buildSetRow() mischte den Aufbau der fünf
 // Basisfelder mit dem eigenständigen Katalog-Hinweis+Ausrüstungs-Editor
-// (eigener editorOpen-Zustand, eigene Persistenz über put('exercises', …))
-// als ein einziger, 87-Zeilen-Block. appendCatalogInfo() unten trägt jetzt
-// genau dieses in sich geschlossene Widget separat, sodass buildSetRow()
-// nur noch orchestriert (Basisfelder bauen, bei Bedarf das Widget
-// anhängen).
+// als ein einziger, 87-Zeilen-Block. appendCatalogHint()/
+// appendEquipmentEditor() unten tragen jetzt jeweils ihr eigenes,
+// in sich geschlossenes Widget, sodass buildSetRow() nur noch
+// orchestriert (Basisfelder bauen, beide Widgets anhängen).
 //
-// Read-only equipment badges + an inline, persistent editor toggle,
-// appended into `container` when `s` links to a catalog exercise.
-// Equipment lives on the *exercise* (catalog entry), not the set —
-// editing it here updates the same 'exercises' record used by the
-// Übungskatalog module, it's just a faster path while building a
-// plan/template so you don't have to leave the editor. `onEquipmentChange`
-// (optional) is called after a save, so the caller can refresh any
-// aggregate summary that depends on it.
-function appendCatalogInfo(container, s, exercises, onEquipmentChange) {
+// Reiner Hinweistext, appended into `container` when `s` links to a
+// catalog exercise — "this set was created from exercise X". Read-only;
+// the exercise's own catalog record (name, category, its default
+// equipment, …) is only ever edited in the Übungskatalog module itself.
+function appendCatalogHint(container, s, exercises) {
   if (!s.exerciseId) return;
   const ex = exerciseById(exercises).get(s.exerciseId);
   if (!ex) return;
-
   container.appendChild(el('span', { class: 'hint' }, t('setEditor.fromCatalogHint', { name: ex.name })));
+}
 
-  const eqDisplay = el('div');
-  const eqEditorHost = el('div');
-  container.appendChild(eqDisplay);
-  container.appendChild(eqEditorHost);
+// Material FÜR DIESEN SATZ (nicht den Katalogeintrag) — Anzeige als
+// Badges plus Klapp-Editor mit denselben Toggle-Pills wie im
+// Übungskatalog (catalog.js). Anders als der frühere, katalogschreibende
+// Editor mutiert dies nur `s.equipment` im Speicher: wie Distanz/
+// Beschreibung/etc. wird der neue Wert erst beim Absenden des
+// Plan-/Vorlagenformulars mitgespeichert, kein eigener put() nötig.
+// `onChange` (optional) lässt den Aufrufer eine übergeordnete
+// Materialübersicht (z. B. die Tagessumme) sofort nachziehen.
+function appendEquipmentEditor(container, s, onChange) {
+  s.equipment = s.equipment || [];
+  const display = el('div');
+  const editorHost = el('div');
+  container.appendChild(display);
+  container.appendChild(editorHost);
   let editorOpen = false;
 
-  // Als Funktionsausdrücke statt Funktionsdeklarationen: eine
-  // Funktionsdeklaration innerhalb eines Blocks (hier `if (ex) { … }`)
-  // ist historisch uneinheitlich zwischen JS-Engines spezifiziert —
-  // als Ausdruck zugewiesen ist das Verhalten eindeutig. Gegenseitiger
-  // Aufruf bleibt unproblematisch: `drawDisplay` ruft `drawEditor` nur
-  // aus einem später ausgelösten onclick-Handler auf (nicht bei der
-  // Definition), und `drawEditor` wird selbst erst aufgerufen, nachdem
-  // beide bereits zugewiesen sind.
+  // Als Funktionsausdrücke statt Funktionsdeklarationen, siehe Begründung
+  // weiter oben in dieser Datei (gegenseitiger Aufruf zwischen drawDisplay
+  // und drawEditor ist unproblematisch, da beide erst aus später
+  // ausgelösten onclick-Handlern aufgerufen werden).
   const drawDisplay = () => {
-    clear(eqDisplay);
-    const badges = (ex.equipment || []).map(eq => badge(trLabel(EQUIPMENT_ITEMS, eq, 'equipment'), 'pb'));
+    clear(display);
+    const badges = s.equipment.map(eq => badge(trLabel(EQUIPMENT_ITEMS, eq, 'equipment'), 'pb'));
     const editBtn = el('button', {
       type: 'button', class: 'btn btn-ghost btn-sm',
       onclick: () => { editorOpen = !editorOpen; drawEditor(); },
     }, editorOpen ? t('common.close') : t('setEditor.editEquipment'));
-    eqDisplay.appendChild(el('div', { class: 'pill-group', style: 'margin-top:4px' }, [...badges, editBtn]));
+    display.appendChild(el('div', { class: 'pill-group', style: 'margin-top:4px' }, [...badges, editBtn]));
   };
 
   const drawEditor = () => {
-    clear(eqEditorHost);
+    clear(editorHost);
     if (!editorOpen) { drawDisplay(); return; }
-    const selected = new Set(ex.equipment || []);
+    const selected = new Set(s.equipment);
     const pills = el('div', { class: 'pill-group', style: 'margin-top:4px' });
     EQUIPMENT_ITEMS.forEach(eq => {
       const pill = el('button', {
         type: 'button', class: `pill ${selected.has(eq.value) ? 'active' : ''}`,
-        onclick: async () => {
+        onclick: () => {
           if (selected.has(eq.value)) selected.delete(eq.value); else selected.add(eq.value);
           pill.classList.toggle('active');
-          ex.equipment = [...selected];
-          await put('exercises', { ...ex });
-          toast(t('setEditor.equipmentSaved'));
+          s.equipment = [...selected];
           drawDisplay();
-          onEquipmentChange?.();
+          onChange?.();
         },
       }, trLabel(EQUIPMENT_ITEMS, eq.value, 'equipment'));
       pills.appendChild(pill);
     });
-    eqEditorHost.appendChild(pills);
+    editorHost.appendChild(pills);
     drawDisplay();
   };
   drawDisplay();
@@ -316,9 +329,9 @@ function appendCatalogInfo(container, s, exercises, onEquipmentChange) {
 
 // Renders one plain-set row. `controls` (see entryControls()) supplies the
 // row's ×/↑/↓ actions; the caller owns the array and re-draws itself
-// afterwards. `onEquipmentChange` (optional) is called after the linked
-// exercise's equipment is edited inline, so the caller can refresh any
-// aggregate summary that depends on it.
+// afterwards. `onEquipmentChange` (optional) is called after this set's
+// own material is edited, so the caller can refresh any aggregate
+// summary (e.g. the day's equipment list) that depends on it.
 function buildSetRow(s, exercises, controls, onEquipmentChange) {
   const row = el('div', { class: 'set-row' }, [
     el('input', { type: 'number', min: '0', value: s.distance ?? '', oninput: (e) => s.distance = e.target.value ? parseInt(e.target.value) : null }),
@@ -344,7 +357,8 @@ function buildSetRow(s, exercises, controls, onEquipmentChange) {
   });
   extra.appendChild(intensitySel);
 
-  appendCatalogInfo(extra, s, exercises, onEquipmentChange);
+  appendCatalogHint(extra, s, exercises);
+  appendEquipmentEditor(extra, s, onEquipmentChange);
 
   row.appendChild(extra);
   return row;

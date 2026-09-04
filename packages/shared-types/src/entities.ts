@@ -221,6 +221,13 @@ export const PlainSetSchema = z.object({
   intensity: z.string().max(200),
   restSec: z.number().int().nonnegative(),
   exerciseId: z.string().uuid().nullable().optional(),
+  // Material für GENAU diesen Satz — unabhängig von Exercise.equipment
+  // (dem Katalog-Standard einer verknüpften Übung). `.optional()` statt
+  // `.default([])`: ein fehlendes Feld (Altbestand vor dieser Änderung)
+  // bedeutet "kein eigener Wert, Anzeige fällt auf die verknüpfte Übung
+  // zurück" (siehe equipmentForEntry() in js/modules/setEditor.js) — das
+  // ist etwas anderes als ein bewusst geleertes Array (Material entfernt).
+  equipment: z.array(z.string().max(100)).max(50).optional(),
   // Kommentare zu genau diesem Satz/dieser Übung innerhalb eines
   // Trainingsplans (bzw. einer Vorlage, da Templates dieselbe Struktur
   // verwenden) — z. B. Rückfragen oder Feedback zu einer konkreten Serie.
