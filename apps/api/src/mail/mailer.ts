@@ -8,7 +8,7 @@
 export interface InvitationMailPayload {
   to: string;
   recipientName?: string | null;
-  role: 'admin' | 'trainer' | 'athlete';
+  role: 'admin' | 'trainer' | 'athlete' | 'referee';
   clubName: string;
   inviteUrl: string;
   expiresAt: Date;
@@ -94,11 +94,13 @@ const ROLE_LABEL: Record<SupportedLocale, Record<InvitationMailPayload['role'], 
     admin: 'Administrator:in',
     trainer: 'Trainer:in',
     athlete: 'Athlet:in',
+    referee: 'Kampfrichter:in',
   },
   'en-US': {
     admin: 'administrator',
     trainer: 'coach',
     athlete: 'athlete',
+    referee: 'referee',
   },
 };
 

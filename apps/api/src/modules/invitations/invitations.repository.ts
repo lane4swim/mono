@@ -34,6 +34,7 @@ export interface ClubMemberCounts {
   admin: number;
   trainer: number;
   athlete: number;
+  referee: number;
 }
 
 export interface ClubRepository {
@@ -154,25 +155,37 @@ export class PrismaClubRepository implements ClubRepository {
     return this.prisma.club.update({ where: { id: clubId }, data: identity });
   }
 
+  // docs/kampfrichter-modul-plan.md, Abschnitt 2: `roles` ist eine
+  // Array-Spalte — ein einzelnes `groupBy(['clubId', 'role'])` (frühere
+  // Fassung, gegen die inzwischen nur noch transitionell mitgepflegte
+  // Einzelrollen-Spalte) zählt eine Person NUR unter ihrer "primären"
+  // Rolle und würde z. B. eine Person mit `roles: ['trainer','referee']`
+  // fälschlich nicht als Kampfrichter:in mitzählen. Stattdessen EIN
+  // `findMany()` über alle angefragten Vereine (kein N+1 über
+  // Rolle×Verein), Zählung je Rolle in JS — ein Konto mit mehreren Rollen
+  // erhöht dadurch bewusst JEDEN passenden Zähler (die Rollen sind seit
+  // Phase A nicht mehr gegenseitig ausschließend, siehe UserRolesSchema).
   async countMembersForClubs(clubIds: string[]): Promise<Map<string, ClubMemberCounts>> {
     const result = new Map<string, ClubMemberCounts>();
-    for (const clubId of clubIds) result.set(clubId, { admin: 0, trainer: 0, athlete: 0 });
+    for (const clubId of clubIds) result.set(clubId, { admin: 0, trainer: 0, athlete: 0, referee: 0 });
     if (clubIds.length === 0) return result;
 
-    const rows = await this.prisma.user.groupBy({
-      by: ['clubId', 'role'],
+    const users = await this.prisma.user.findMany({
       where: { clubId: { in: clubIds }, deletedAt: null },
-      _count: { _all: true },
+      select: { clubId: true, roles: true },
     });
-    for (const row of rows) {
-      if (!row.clubId) continue;
-      const counts = result.get(row.clubId);
+    for (const user of users) {
+      if (!user.clubId) continue;
+      const counts = result.get(user.clubId);
       if (!counts) continue;
-      switch (row.role) {
-        case 'admin': counts.admin = row._count._all; break;
-        case 'trainer': counts.trainer = row._count._all; break;
-        case 'athlete': counts.athlete = row._count._all; break;
-        default: break; // unbekannte/zukünftige Rolle (z. B. "superadmin") wird nicht gezählt
+      for (const role of user.roles) {
+        switch (role) {
+          case 'admin': counts.admin += 1; break;
+          case 'trainer': counts.trainer += 1; break;
+          case 'athlete': counts.athlete += 1; break;
+          case 'referee': counts.referee += 1; break;
+          default: break; // "superadmin" gehört zu keinem Verein, wird hier nie gezählt
+        }
       }
     }
     return result;

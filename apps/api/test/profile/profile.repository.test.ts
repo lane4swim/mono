@@ -93,6 +93,30 @@ describe('InMemoryProfileDataGateway.exportUserData', () => {
     expect(result.qualifications).toHaveLength(1);
     expect(result.qualifications[0]).toMatchObject({ id: 'q1', type: 'trainer_c' });
   });
+
+  // docs/kampfrichter-modul-plan.md, Abschnitt 5.7: Wettkampfeinsätze
+  // gehören ebenfalls in die DSGVO-Auskunft — an userId gehängt, analog
+  // Qualifikationen oben.
+  it('bündelt eigene Wettkampfeinsätze, gescopt auf userId (nicht die einer anderen Person)', async () => {
+    const db = makeDb({
+      users: [{ id: 'referee-1', clubId: CLUB_ID, athleteId: null, deletedAt: null, name: 'Ronja', email: 'r@x.de', role: 'referee', passwordHash: 'h' }],
+      refereeAssignments: [
+        { id: 'ra1', userId: 'referee-1', competitionName: 'Kreismeisterschaft', function: 'zeitnehmer' },
+        { id: 'ra2', userId: 'other-user', competitionName: 'Landesmeisterschaft', function: 'kampfrichter' },
+      ],
+    });
+    const gateway = new InMemoryProfileDataGateway(db);
+    const result = await gateway.exportUserData('referee-1');
+    expect(result.refereeAssignments).toHaveLength(1);
+    expect(result.refereeAssignments[0]).toMatchObject({ id: 'ra1', competitionName: 'Kreismeisterschaft' });
+  });
+
+  it('liefert ein leeres Array für refereeAssignments, wenn keine erfasst sind', async () => {
+    const db = makeDb({ users: [{ id: 'trainer-1', clubId: CLUB_ID, athleteId: null, deletedAt: null, name: 'Sabine', email: 's@x.de', role: 'trainer', passwordHash: 'h' }] });
+    const gateway = new InMemoryProfileDataGateway(db);
+    const result = await gateway.exportUserData('trainer-1');
+    expect(result.refereeAssignments).toEqual([]);
+  });
 });
 
 describe('InMemoryProfileDataGateway.requestErasure', () => {

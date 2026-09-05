@@ -12,7 +12,7 @@
 // geänderte Datenschutzerklärung erkennbar eine erneute Zustimmung
 // erfordern kann.
 import { z } from 'zod';
-import { RoleSchema, LocaleSchema, UserSchema, NormalizedEmailSchema } from './user.js';
+import { UserRolesSchema, LocaleSchema, UserSchema, NormalizedEmailSchema } from './user.js';
 import { ModuleKeySchema } from './modules.js';
 
 export const CURRENT_CONSENT_VERSION = '2026-07-15';
@@ -190,9 +190,11 @@ export const ChangeEmailRequestSchema = z.object({
 export type ChangeEmailRequest = z.infer<typeof ChangeEmailRequestSchema>;
 
 // Claims im Access Token (siehe Abschnitt 5.3 des Backend-Entwicklungsplans).
+// docs/kampfrichter-modul-plan.md, Abschnitt 1.4: "roles" statt "role" —
+// ein Konto kann mehrere Rollen gleichzeitig haben.
 export const AccessTokenClaimsSchema = z.object({
   sub: z.string().uuid(),
-  role: RoleSchema,
+  roles: UserRolesSchema,
   clubId: z.string().uuid().nullable(),
   athleteId: z.string().uuid().nullable(),
 });
@@ -213,6 +215,16 @@ export const MyDataExportSchema = z.object({
   entries: z.array(z.record(z.unknown())),
   actionItems: z.array(z.record(z.unknown())),
   attendance: z.array(z.record(z.unknown())),
+  // An userId gehängt, nicht athleteId — gilt für jede Person mit Konto
+  // (docs/nutzer-qualifikationen-plan.md, Abschnitt 6). Nachträglich hier
+  // ergänzt (dieses Schema war bislang unabhängig von der tatsächlichen
+  // Export-Antwort auseinandergelaufen, siehe profile.repository.ts:
+  // PersonalDataExport, das dieses Feld schon lange liefert).
+  qualifications: z.array(z.record(z.unknown())),
+  // docs/kampfrichter-modul-plan.md, Abschnitt 5.7 — ebenfalls an userId
+  // gehängt: gilt für jede Person mit Konto und der Rolle "referee",
+  // unabhängig von einer Athletenverknüpfung.
+  refereeAssignments: z.array(z.record(z.unknown())),
 });
 export type MyDataExport = z.infer<typeof MyDataExportSchema>;
 

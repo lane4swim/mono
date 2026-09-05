@@ -27,6 +27,9 @@ import { PrismaProfileDataGateway } from './modules/profile/profile.repository.j
 import { qualificationsRoutes } from './modules/qualifications/qualifications.route.js';
 import { createQualificationsService, type QualificationsService } from './modules/qualifications/qualifications.service.js';
 import { PrismaUserQualificationRepository, PrismaQualificationReminderSettingRepository } from './modules/qualifications/qualifications.repository.js';
+import { refereesRoutes } from './modules/referees/referees.route.js';
+import { createRefereesService, type RefereesService } from './modules/referees/referees.service.js';
+import { PrismaRefereeAssignmentRepository, PrismaCompetitionRepository } from './modules/referees/referees.repository.js';
 import { SmtpMailSender, ConsoleMailSender, type MailSender } from './mail/mailer.js';
 import { resolveKeyPair } from './auth/keys.js';
 import { getPrisma } from './db/prisma.js';
@@ -41,6 +44,7 @@ export interface BuildAppOverrides {
   // Club-Lookup mitgeben kann, ohne eine echte Datenbank zu brauchen.
   clubs?: ClubModulesLookup;
   qualificationsService?: QualificationsService;
+  refereesService?: RefereesService;
   mailer?: MailSender;
   keyPair?: ReturnType<typeof resolveKeyPair>;
 }
@@ -199,11 +203,20 @@ export async function buildApp(env: Env, overrides: BuildAppOverrides = {}): Pro
       users: new PrismaUserRepository(getPrisma()),
     });
 
+  const refereesService =
+    overrides.refereesService ??
+    createRefereesService({
+      assignments: new PrismaRefereeAssignmentRepository(getPrisma()),
+      users: new PrismaUserRepository(getPrisma()),
+      competitions: new PrismaCompetitionRepository(getPrisma()),
+    });
+
   await app.register(healthRoutes);
   await app.register(authRoutes, { authService });
   await app.register(syncRoutes, { syncService, clubs: clubModulesLookup });
   await app.register(invitationsRoutes, { invitationsService });
   await app.register(qualificationsRoutes, { qualificationsService, clubs: clubModulesLookup });
+  await app.register(refereesRoutes, { refereesService, clubs: clubModulesLookup });
 
   return app;
 }

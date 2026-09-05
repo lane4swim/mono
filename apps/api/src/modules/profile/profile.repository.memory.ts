@@ -36,6 +36,11 @@ export interface InMemoryQualificationRow {
   userId: string;
   [key: string]: unknown;
 }
+export interface InMemoryRefereeAssignmentRow {
+  id: string;
+  userId: string;
+  [key: string]: unknown;
+}
 
 export interface InMemoryProfileDatabase {
   users: InMemoryUserRow[];
@@ -49,6 +54,7 @@ export interface InMemoryProfileDatabase {
   // *.route.test.ts-Dateien) ein leeres Array ergänzen muss, nur weil ein
   // neues Feld hinzukam — siehe Default `?? []` in exportUserData() unten.
   qualifications?: InMemoryQualificationRow[];
+  refereeAssignments?: InMemoryRefereeAssignmentRow[];
 }
 
 // Test-Double für ProfileDataGateway — hält eine kleine, injizierbare
@@ -84,6 +90,7 @@ export class InMemoryProfileDataGateway implements ProfileDataGateway {
     }
 
     const qualifications = (this.db.qualifications ?? []).filter((q) => q.userId === userId);
+    const refereeAssignments = (this.db.refereeAssignments ?? []).filter((r) => r.userId === userId);
 
     const { passwordHash: _passwordHash, ...publicUser } = user;
     return {
@@ -96,6 +103,7 @@ export class InMemoryProfileDataGateway implements ProfileDataGateway {
       actionItems,
       attendance,
       qualifications,
+      refereeAssignments,
     };
   }
 

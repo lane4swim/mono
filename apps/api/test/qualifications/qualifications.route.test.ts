@@ -22,8 +22,8 @@ async function buildTestApp({ enabledModules = ['qualifications'] }: { enabledMo
   const clubs = new InMemoryClubRepository();
   const club = await clubs.create({ name: 'SV Wasserfreunde', enabledModules });
 
-  const admin = await users.create({ clubId: club.id, name: 'Admina Musterfrau', email: 'admin@sv.de', passwordHash: 'x', role: 'admin', consentGivenAt: new Date(), consentVersion: 'v1' });
-  const trainer = await users.create({ clubId: club.id, name: 'Trainer Eins', email: 'trainer@sv.de', passwordHash: 'x', role: 'trainer', consentGivenAt: new Date(), consentVersion: 'v1' });
+  const admin = await users.create({ clubId: club.id, name: 'Admina Musterfrau', email: 'admin@sv.de', passwordHash: 'x', roles: ['admin'], consentGivenAt: new Date(), consentVersion: 'v1' });
+  const trainer = await users.create({ clubId: club.id, name: 'Trainer Eins', email: 'trainer@sv.de', passwordHash: 'x', roles: ['trainer'], consentGivenAt: new Date(), consentVersion: 'v1' });
 
   const qualifications = new InMemoryUserQualificationRepository();
   const reminderSettings = new InMemoryQualificationReminderSettingRepository();
@@ -34,7 +34,7 @@ async function buildTestApp({ enabledModules = ['qualifications'] }: { enabledMo
 }
 
 async function tokenFor(keyPair: KeyPair, sub: string, role: string, clubId: string | null) {
-  return signAccessToken({ sub, role: role as never, clubId, athleteId: null }, keyPair, 900);
+  return signAccessToken({ sub, roles: [role] as never, clubId, athleteId: null }, keyPair, 900);
 }
 
 describe('Qualifikationsmanagement — Modul-Gate', () => {

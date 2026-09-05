@@ -41,6 +41,10 @@ const ROUTE_TO_PACKAGE = {
   // 1.2) — MUSS mit packages/shared-types/src/modules.ts: MODULE_PACKAGES.
   // qualifications übereinstimmen.
   qualifications: 'qualifications',
+  // Kampfrichter-Modul (docs/kampfrichter-modul-plan.md, Abschnitt 4.1) —
+  // MUSS mit packages/shared-types/src/modules.ts: MODULE_PACKAGES.
+  // kampfrichter übereinstimmen.
+  kampfrichter: 'kampfrichter',
 };
 
 // Alle togglebaren Paket-Keys — Default für `enabledModules`, wenn ein
@@ -52,13 +56,27 @@ export const MODULE_KEYS = Object.keys(ROUTE_TO_PACKAGE);
 // Einzelmodul-Prüfung — von visibleModules() UND von shell.js (renderRoute()'s
 // Fallback bei direktem Hash-Aufruf einer gesperrten Route, defaultModuleFor())
 // genutzt, damit beide Stellen exakt dieselbe Sichtbarkeitsregel anwenden.
-export function isModuleVisible(mod, role, enabledModules = MODULE_KEYS) {
-  return (!mod.roles || mod.roles.includes(role)) &&
+//
+// `roles` ist die Menge der Rollen der aktuell angemeldeten Person (docs/
+// kampfrichter-modul-plan.md, Abschnitt 1) — ein Konto kann mehrere Rollen
+// gleichzeitig haben. `mod.roles` (die Rollen, die ein Modul zulässt)
+// bleibt unverändert ein einfaches Array; sichtbar ist ein Modul, sobald
+// IRGENDEINE der eigenen Rollen darin vorkommt. Das ist bereits der
+// gesamte Mechanismus für "mehrere Rollen gleichzeitig wahrnehmen": die
+// Navigation zeigt automatisch die Vereinigung aller Module, für die
+// mindestens eine eigene Rolle berechtigt ist — ohne Rollen-Umschalter.
+//
+// Rückwärtskompatibel zu einem einzelnen Rollen-String als `roles`
+// (Aufrufer, die noch nicht umgestellt sind) — wird intern in ein
+// Einzelelement-Array gehoben.
+export function isModuleVisible(mod, roles, enabledModules = MODULE_KEYS) {
+  const roleList = Array.isArray(roles) ? roles : [roles];
+  return (!mod.roles || mod.roles.some((r) => roleList.includes(r))) &&
     (CORE_MODULE_IDS.includes(mod.id) || enabledModules.includes(ROUTE_TO_PACKAGE[mod.id]));
 }
 
-export function visibleModules(role, enabledModules = MODULE_KEYS) {
-  return MODULES.filter(m => isModuleVisible(m, role, enabledModules));
+export function visibleModules(roles, enabledModules = MODULE_KEYS) {
+  return MODULES.filter(m => isModuleVisible(m, roles, enabledModules));
 }
 
 export function currentRoute() {

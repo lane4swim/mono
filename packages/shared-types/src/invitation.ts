@@ -36,6 +36,11 @@ export const ClubMemberCountsSchema = z.object({
   admin: z.number().int().nonnegative(),
   trainer: z.number().int().nonnegative(),
   athlete: z.number().int().nonnegative(),
+  // docs/kampfrichter-modul-plan.md, Abschnitt 2 — eine Person mit
+  // mehreren Rollen (z. B. trainer + referee) zählt seit Phase A in
+  // JEDEM passenden Zähler mit, die Summe kann also die Zahl der
+  // tatsächlichen Konten übersteigen.
+  referee: z.number().int().nonnegative(),
 });
 export type ClubMemberCounts = z.infer<typeof ClubMemberCountsSchema>;
 
@@ -84,9 +89,15 @@ export const UpdateClubIdentityRequestSchema = z.object({
 });
 export type UpdateClubIdentityRequest = z.infer<typeof UpdateClubIdentityRequestSchema>;
 
-// Nur diese drei Rollen lassen sich per Einladung vergeben — "superadmin"
+// Nur diese vier Rollen lassen sich per Einladung vergeben — "superadmin"
 // wird bewusst nie über die API vergeben (siehe scripts/createSuperAdmin.ts).
-export const InvitationRoleSchema = z.enum(['admin', 'trainer', 'athlete']);
+// "referee" (Kampfrichter:in, docs/kampfrichter-modul-plan.md, Abschnitt 2)
+// kann wie jede andere Rolle direkt per Einladung vergeben werden — z. B.
+// für eine Person, die im Verein ausschließlich als Kampfrichter:in aktiv
+// ist, ohne selbst zu trainieren/zu schwimmen. Weitere Rollen kommen
+// nachträglich ausschließlich über PATCH /api/users/:userId/roles hinzu
+// (Abschnitt 1.4), nie direkt bei der Registrierung.
+export const InvitationRoleSchema = z.enum(['admin', 'trainer', 'athlete', 'referee']);
 export type InvitationRole = z.infer<typeof InvitationRoleSchema>;
 
 export const CreateInvitationRequestSchema = z.object({

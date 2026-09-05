@@ -28,7 +28,7 @@ import {
 } from '@lane1/shared-types';
 import { resolveConflict } from '@lane1/sync-protocol';
 import type { SyncGateway, SyncRecord } from './sync.gateway.js';
-import { isKnownStore, canRead, canWrite } from './sync.permissions.js';
+import { isKnownStore, canRead, canWrite, isAthleteScoped } from './sync.permissions.js';
 import { assertForeignKeysWithinClub, FOREIGN_ENTITY_ERROR_CODE } from './sync.foreignKeys.js';
 import { scopeChangeForAthlete } from './sync.athleteScope.js';
 import { assertCommentAuthorship, COMMENT_AUTHORSHIP_ERROR_CODE } from './sync.commentAuthorship.js';
@@ -42,12 +42,15 @@ export interface SyncRequester {
   // eingebetteter Kommentare gebraucht (siehe sync.commentAuthorship.ts:
   // ein neuer Kommentar muss userId === requester.userId tragen).
   userId: string;
-  clubId: string; // Superadmin (clubId: null) darf nicht synchronisieren — siehe sync.route.ts (requireRole).
+  clubId: string; // Superadmin (clubId: null) darf nicht synchronisieren — siehe sync.route.ts (requireAnyRole).
   // Für die Rollen-Scopierung unten — clubId allein reicht nicht: ein
   // Athlet:innen-Konto darf zwar denselben Verein sehen wie
   // Trainer:innen/Admins, aber nicht dieselbe Datentiefe (siehe
-  // sync.permissions.ts: STORE_PERMISSIONS-Kommentar).
-  role: Role;
+  // sync.permissions.ts: STORE_PERMISSIONS-Kommentar). Ein Konto kann
+  // mehrere Rollen gleichzeitig haben (docs/kampfrichter-modul-plan.md,
+  // Abschnitt 1) — canRead()/canWrite()/isAthleteScoped() werten die
+  // gesamte Menge aus, nicht nur einen Einzelwert.
+  roles: readonly Role[];
   athleteId: string | null;
   // Modul-Pakete des Vereins (packages/shared-types/src/modules.ts:
   // MODULE_PACKAGES) — von sync.route.ts EINMAL pro Request per Club-
@@ -146,8 +149,8 @@ function requireKnownStore(ctx: PushCtx): SyncEventResult | null {
 function requireWritePermission(ctx: PushCtx): SyncEventResult | null {
   const event = ctx.event!;
   const store = ctx.store!;
-  if (!canWrite(store, ctx.requester.role, ctx.requester.enabledModules)) {
-    return { eventId: event.id, status: 'error', message: `Die Rolle "${ctx.requester.role}" darf den Store "${store}" nicht verändern.`, code: 'write_not_permitted' };
+  if (!canWrite(store, ctx.requester.roles, ctx.requester.enabledModules)) {
+    return { eventId: event.id, status: 'error', message: `Keine der Rollen [${ctx.requester.roles.join(', ')}] darf den Store "${store}" verändern.`, code: 'write_not_permitted' };
   }
   return null;
 }
@@ -402,7 +405,7 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
         // Trainingsplan ist konzeptionell ein Team-/Gruppendokument, kein
         // individueller Datensatz, dem sich "eigene athleteId" sinnvoll
         // zuordnen ließe.
-        if (store === 'results' && requester.role === 'athlete') {
+        if (store === 'results' && isAthleteScoped(requester.roles)) {
           const ownAthleteId = requester.athleteId;
           const existingAthleteId = (existing as { athleteId?: unknown } | null)?.athleteId;
           if (existing && existingAthleteId !== ownAthleteId) {
@@ -556,7 +559,7 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
       // Datenbankarbeit als auch die Zahl benötigter Seiten mit dem
       // GESAMTEN Vereinsbestand, unabhängig davon, wie viel davon die
       // anfragende Rolle/das gebuchte Modul-Set überhaupt sehen darf.
-      const readableStores = ENTITY_STORE_NAMES.filter((store) => canRead(store, requester.role, requester.enabledModules));
+      const readableStores = ENTITY_STORE_NAMES.filter((store) => canRead(store, requester.roles, requester.enabledModules));
 
       const rows = await deps.gateway.listChangedSince(requester.clubId, since, PULL_PAGE_SIZE + 1, readableStores);
       // Bleibt für den Rest der Funktion unverändert — auch im
@@ -609,14 +612,14 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
       // Gateway-Implementierung `stores` einmal nicht korrekt respektiert).
       // Er ist jetzt im Normalfall ein No-Op auf einer bereits vorgefilterten
       // Menge, nicht mehr die einzige Instanz dieser Prüfung.
-      changes = changes.filter((change) => canRead(change.store, requester.role, requester.enabledModules));
+      changes = changes.filter((change) => canRead(change.store, requester.roles, requester.enabledModules));
 
       // Rollen-Scopierung beim Lesen, Zeilen-/Feld-Ebene (siehe
       // sync.athleteScope.ts): WICHTIG — die Filterung erfolgt NACH der
       // Pagination (auf `page`, nicht auf `rows`) — `hasMore`/`nextCursor`
       // bleiben dadurch unverändert korrekt, auch wenn dem Client dadurch
       // weniger als PULL_PAGE_SIZE sichtbare Changes in dieser Seite ankommen.
-      if (requester.role === 'athlete') {
+      if (isAthleteScoped(requester.roles)) {
         changes = changes
           .map((change) => scopeChangeForAthlete(change, requester.athleteId))
           .filter((change): change is SyncChange => change !== null);

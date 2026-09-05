@@ -29,6 +29,7 @@ async function seedUser(clubId: string, overrides: Partial<{ email: string; dele
       email: overrides.email ?? `mara-${randomUUID()}@example.org`,
       passwordHash: 'hash',
       role: overrides.role ?? 'trainer',
+      roles: [overrides.role ?? 'trainer'],
       athleteId: null,
       deletedAt: overrides.deletedAt ?? null,
     },
@@ -96,7 +97,7 @@ describe('PrismaUserRepository.create()/update()', () => {
       name: 'Neu Angelegt',
       email: `neu-${randomUUID()}@example.org`,
       passwordHash: 'hash',
-      role: 'athlete',
+      roles: ['athlete'],
       athleteId: null,
       consentGivenAt: new Date(),
       consentVersion: '2026-01-01',
@@ -142,14 +143,14 @@ describe('User.athleteId — Unique-Constraint (Schema-Integrität)', () => {
 
     await repo.create({
       clubId: club.id, name: 'Erstes Konto', email: `erste-${randomUUID()}@example.org`,
-      passwordHash: 'hash', role: 'athlete', athleteId: athlete.id,
+      passwordHash: 'hash', roles: ['athlete'], athleteId: athlete.id,
       consentGivenAt: new Date(), consentVersion: '2026-01-01',
     });
 
     await expect(
       repo.create({
         clubId: club.id, name: 'Zweites Konto', email: `zweite-${randomUUID()}@example.org`,
-        passwordHash: 'hash', role: 'athlete', athleteId: athlete.id,
+        passwordHash: 'hash', roles: ['athlete'], athleteId: athlete.id,
         consentGivenAt: new Date(), consentVersion: '2026-01-01',
       }),
     ).rejects.toMatchObject({ code: 'P2002' });
@@ -160,7 +161,7 @@ describe('User.athleteId — Unique-Constraint (Schema-Integrität)', () => {
     const athlete = await prisma.athlete.create({ data: { clubId: club.id, firstName: 'Mara', lastName: 'Vogel' } });
     const user = await repo.create({
       clubId: club.id, name: 'Konto', email: `konto-${randomUUID()}@example.org`,
-      passwordHash: 'hash', role: 'athlete', athleteId: athlete.id,
+      passwordHash: 'hash', roles: ['athlete'], athleteId: athlete.id,
       consentGivenAt: new Date(), consentVersion: '2026-01-01',
     });
 

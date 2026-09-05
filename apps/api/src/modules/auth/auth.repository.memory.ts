@@ -50,7 +50,7 @@ export class InMemoryUserRepository implements UserRepository {
       name: input.name,
       email: input.email,
       passwordHash: input.passwordHash,
-      role: input.role,
+      roles: input.roles,
       athleteId: input.athleteId ?? null,
       locale: 'de-DE',
       consentGivenAt: input.consentGivenAt,

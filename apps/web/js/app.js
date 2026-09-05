@@ -192,7 +192,7 @@ function updateNetStatus() {
 function populateCurrentUserLabel() {
   const user = getCurrentUser();
   if (!user) return;
-  const roleLabel = t(`settings.role_${user.role}`);
+  const roleLabel = user.roles.map((r) => t(`settings.role_${r}`)).join(', ');
   currentUserLabel.textContent = `${user.name} (${roleLabel})`;
   btnLogout.textContent = t('topbar.logout');
   document.getElementById('link-help').textContent = t('topbar.help');

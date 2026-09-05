@@ -59,6 +59,7 @@ model Club {
   sessions                      TrainingSession[]
   actionItems                   ActionItem[]
   qualificationReminderSettings ClubQualificationReminderSetting[]
+  refereeAssignments            RefereeAssignment[]
 
   @@map("clubs")
 }
@@ -87,6 +88,15 @@ model User {
   // blockiert, ohne den Purge-Ablauf selbst ändern zu müssen.
   athleteId           String?              @unique
   athlete             Athlete?             @relation(fields: [athleteId], references: [id], onDelete: SetNull)
+  // docs/kampfrichter-modul-plan.md, Abschnitt 1: ein Konto kann mehrere
+  // Rollen gleichzeitig haben (z. B. Trainer:in UND Athlet:in). Löst
+  // schrittweise "role" oben ab (expand -> migrate -> contract, siehe
+  // Plan Abschnitt 1.3) — Anwendungscode liest/schreibt ab sofort
+  // AUSSCHLIESSLICH "roles"; "role" bleibt vorerst als Sicherheitsnetz
+  // bestehen (rein informativ, wird von PrismaUserRepository weiterhin
+  // als roles[0] mitgepflegt, siehe auth.repository.ts), bis eine
+  // spätere, eigene Migration die Spalte entfernt.
+  roles               String[]             @default([])
   locale              String               @default("de-DE")
   // DSGVO: Zeitpunkt/Version der zuletzt bestätigten Einwilligung zur
   // Datenverarbeitung — wird bei jedem Login/jeder Registrierung erneut
@@ -106,6 +116,14 @@ model User {
   assignedActionItems ActionItem[]         @relation("ActionItemAssignedTrainer")
   passwordResetTokens PasswordResetToken[]
   qualifications      UserQualification[]
+  // docs/kampfrichter-modul-plan.md, Abschnitt 5.2: eigene Wettkampfeinsätze
+  // dieser Person (Rolle "referee").
+  refereeAssignments  RefereeAssignment[]
+  // Gegenstück zu RefereeAssignment.createdByAdminId — Einsätze, die diese
+  // Person als admin im Namen einer anderen Kampfrichter:in erfasst hat.
+  // Eigener Relationsname nötig, da User hier zweimal auf RefereeAssignment
+  // verweist (Zielperson UND erfassende Admin-Person).
+  refereeAssignmentsCreatedAsAdmin RefereeAssignment[] @relation("RefereeAssignmentCreatedByAdmin")
 
   // Ineffizienz-Korrektur: `clubId` ist zwar ein Fremdschlüssel, Postgres
   // legt darauf aber — anders als für UNIQUE-Spalten — KEINEN Index an.
@@ -290,6 +308,9 @@ model Competition {
 
   entries StartlistEntry[]
   results Result[]
+  // docs/kampfrichter-modul-plan.md, Abschnitt 5.2: optionaler Verweis von
+  // Wettkampfeinsätzen auf einen vereinseigenen Wettkampf-Datensatz.
+  refereeAssignments RefereeAssignment[]
 
   // [clubId, updatedAt] statt [clubId] — siehe Begründung bei Group oben
   // (Sync-Pull-Zugriffsmuster).
@@ -626,4 +647,58 @@ model ClubQualificationReminderSetting {
 
   @@unique([clubId, type])
   @@map("club_qualification_reminder_settings")
+}
+
+// ============================================================
+// Kampfrichter-Modul (docs/kampfrichter-modul-plan.md, Abschnitt 5) —
+// Wettkampfeinsätze einer Kampfrichter:in.
+// ============================================================
+
+// Erfasster Einsatz einer Kampfrichter:in bei einem Wettkampf (eigenem
+// oder fremdem, siehe Plan Abschnitt 5.1). onDelete: Cascade analog
+// UserQualification — ein gelöschtes Konto braucht keine eigenständig
+// fortbestehende Einsatzhistorie mehr.
+model RefereeAssignment {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Verein, dem die Kampfrichter:in zum Erfassungszeitpunkt angehört —
+  // Scoping für die Admin-Übersicht, NICHT zwingend der ausrichtende
+  // Verein des Wettkampfs (siehe Freitextfelder unten).
+  clubId String
+  club   Club   @relation(fields: [clubId], references: [id])
+  // Freitext, da der Wettkampf oft nicht als eigener Competition-Datensatz
+  // existiert (Plan Abschnitt 5.1 — Kampfrichter:innen amtieren häufig bei
+  // Wettkämpfen anderer, ggf. vereinsfremder Ausrichter).
+  competitionName  String
+  competitionPlace String  @default("")
+  // Optionaler Verweis auf einen vereinseigenen Wettkampf-Datensatz —
+  // onDelete: SetNull, damit ein gelöschter Competition-Datensatz nicht
+  // die Einsatzhistorie mitreißt (sie bleibt dann als reiner
+  // Freitext-Eintrag bestehen).
+  competitionId String?
+  competition   Competition? @relation(fields: [competitionId], references: [id], onDelete: SetNull)
+  date          DateTime
+  // RefereeFunctionSchema-Wert (packages/shared-types/src/referee.ts) —
+  // kein Fremdschlüssel, analog UserQualification.type.
+  function String
+  note     String @default("")
+  // Gesetzt, wenn der Eintrag über den admin-Schreibpfad (statt von der
+  // Kampfrichter:in selbst) angelegt/zuletzt geändert wurde — reines
+  // Audit-Feld für die Anzeige ("von {name} erfasst"), keine
+  // Berechtigungsprüfung hängt daran. onDelete: SetNull, damit ein
+  // gelöschtes Admin-Konto nicht die Einsatzhistorie der Kampfrichter:in
+  // mitreißt (der Eintrag bleibt bestehen, nur die Zuordnung "von wem"
+  // geht verloren — analog Invitation.invitedById).
+  createdByAdminId String?
+  createdByAdmin   User?   @relation("RefereeAssignmentCreatedByAdmin", fields: [createdByAdminId], references: [id], onDelete: SetNull)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  // Zugriffsmuster: "alle Einsätze einer Person" (eigene Ansicht) und
+  // "alle Einsätze eines Vereins nach Datum" (Admin-Übersicht/Reporting).
+  @@index([userId, deletedAt])
+  @@index([clubId, date])
+  @@map("referee_assignments")
 }

@@ -40,7 +40,7 @@ export class QualificationInvalidDateRangeError extends Error {
 
 export interface RequesterContext {
   id: string;
-  role: string; // 'admin' | 'trainer' | 'athlete' (superadmin erreicht diesen Service nie)
+  roles: string[]; // Teilmenge von 'admin' | 'trainer' | 'athlete' (superadmin erreicht diesen Service nie)
   clubId: string | null;
 }
 
@@ -78,7 +78,7 @@ function toPublic(row: UserQualificationRecord): Omit<UserQualificationRecord, '
 }
 
 async function requireAdminOfSameClub(deps: QualificationsServiceDeps, requester: RequesterContext, targetUserId: string) {
-  if (requester.role !== 'admin' || !requester.clubId) {
+  if (!requester.roles.includes('admin') || !requester.clubId) {
     throw new QualificationForbiddenError('Nur Admins dürfen Qualifikationen von Vereinsmitgliedern verwalten.');
   }
   const targetUser = await deps.users.findById(targetUserId);
@@ -156,7 +156,7 @@ export function createQualificationsService(deps: QualificationsServiceDeps) {
     // PUT /api/qualification-settings/:type — nur admin, immer für den
     // eigenen Verein (keine clubId im Request — analog /api/me/*).
     async setReminderSetting(type: string, thresholdsDays: number[], requester: RequesterContext) {
-      if (requester.role !== 'admin' || !requester.clubId) {
+      if (!requester.roles.includes('admin') || !requester.clubId) {
         throw new QualificationForbiddenError('Nur Admins dürfen die Erinnerungs-Schwellen ändern.');
       }
       const row = await deps.reminderSettings.upsert(requester.clubId, type, thresholdsDays);

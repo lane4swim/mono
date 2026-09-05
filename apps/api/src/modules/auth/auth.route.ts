@@ -14,9 +14,10 @@ import {
   ResetPasswordRequestSchema,
   ChangePasswordRequestSchema,
   ChangeEmailRequestSchema,
+  UpdateUserRolesRequestSchema,
 } from '@lane1/shared-types';
 import type { AuthService } from './auth.service.js';
-import { requireRole } from '../../plugins/authorize.js';
+import { requireAnyRole } from '../../plugins/authorize.js';
 import { parseInput } from '../../plugins/parseInput.js';
 
 // Review 30.08.2026, Befund S2: Rate-Limits für /api/me/password und
@@ -241,13 +242,30 @@ export async function authRoutes(app: FastifyInstance, opts: { authService: Auth
   // immer den eigenen Verein, superadmin muss ?clubId=<uuid> angeben.
   app.get<{ Querystring: { clubId?: string } }>(
     '/api/users',
-    { preHandler: [app.authenticate, requireRole('admin', 'superadmin')] },
+    { preHandler: [app.authenticate, requireAnyRole('admin', 'superadmin')] },
     async (request, reply) => {
       const users = await authService.listClubMembers(
-        { role: request.user!.role, clubId: request.user!.clubId },
+        { roles: request.user!.roles, clubId: request.user!.clubId },
         request.query.clubId,
       );
       return reply.code(200).send({ users });
+    },
+  );
+
+  // Rollen einer Person im eigenen Verein ändern (docs/kampfrichter-modul-
+  // plan.md, Abschnitt 1.4) — nur admin, nie superadmin (der zu keinem
+  // Verein gehört und daher auch niemandes Rollen im Verein ändern kann).
+  // ForeignClubUserError/CannotAssignSuperadminError/LastAdminError: über
+  // die zentrale Fehler-Registry abgedeckt (siehe plugins/httpErrorHandler.ts).
+  app.patch<{ Params: { userId: string } }>(
+    '/api/users/:userId/roles',
+    { preHandler: [app.authenticate, requireAnyRole('admin')] },
+    async (request, reply) => {
+      const body = parseInput(UpdateUserRolesRequestSchema, request.body, reply);
+      if (!body) return;
+
+      const user = await authService.updateUserRoles(request.params.userId, body.roles, { clubId: request.user!.clubId });
+      return reply.code(200).send(user);
     },
   );
 
@@ -258,7 +276,7 @@ export async function authRoutes(app: FastifyInstance, opts: { authService: Auth
   // und müssen sie ggf. an eine Kollegin/einen Kollegen zuweisen können.
   app.get(
     '/api/users/trainers',
-    { preHandler: [app.authenticate, requireRole('trainer', 'admin')] },
+    { preHandler: [app.authenticate, requireAnyRole('trainer', 'admin')] },
     async (request, reply) => {
       const users = await authService.listAssignableTrainers({ clubId: request.user!.clubId });
       return reply.code(200).send({ users });

@@ -27,7 +27,7 @@ import type { AccessTokenClaims } from '@lane1/shared-types';
 
 const claims: AccessTokenClaims = {
   sub: '11111111-1111-1111-1111-111111111111',
-  role: 'trainer',
+  roles: ['trainer'],
   clubId: '22222222-2222-2222-2222-222222222222',
   athleteId: null,
 };
@@ -62,7 +62,7 @@ describe('signAccessToken / verifyAccessToken', () => {
 
   it('überträgt athleteId korrekt, wenn gesetzt (nicht null)', async () => {
     const keyPair = generateFreshKeyPair();
-    const athleteClaims: AccessTokenClaims = { ...claims, role: 'athlete', athleteId: '33333333-3333-3333-3333-333333333333' };
+    const athleteClaims: AccessTokenClaims = { ...claims, roles: ['athlete'], athleteId: '33333333-3333-3333-3333-333333333333' };
     const token = await signAccessToken(athleteClaims, keyPair, 900);
     const verified = await verifyAccessToken(token, keyPair);
     expect(verified.athleteId).toBe('33333333-3333-3333-3333-333333333333');

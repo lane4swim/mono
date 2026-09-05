@@ -6,16 +6,16 @@ import type { FastifyInstance } from 'fastify';
 import { CreateClubRequestSchema, CreateInvitationRequestSchema, UpdateClubRequestSchema, UpdateClubIdentityRequestSchema, InvitationPreviewRequestSchema } from '@lane1/shared-types';
 import type { InvitationsService } from './invitations.service.js';
 import { InvitationNotFoundError } from './invitations.service.js';
-import { requireRole } from '../../plugins/authorize.js';
+import { requireAnyRole } from '../../plugins/authorize.js';
 import { parseInput } from '../../plugins/parseInput.js';
 
 export interface InvitationsRoutesOptions {
   invitationsService: InvitationsService;
 }
 
-function requesterFrom(request: { user?: { sub: string; role: string; clubId: string | null } }) {
+function requesterFrom(request: { user?: { sub: string; roles: string[]; clubId: string | null } }) {
   const user = request.user!;
-  return { id: user.sub, role: user.role, clubId: user.clubId };
+  return { id: user.sub, roles: user.roles, clubId: user.clubId };
 }
 
 export async function invitationsRoutes(app: FastifyInstance, opts: InvitationsRoutesOptions) {
@@ -66,7 +66,7 @@ export async function invitationsRoutes(app: FastifyInstance, opts: InvitationsR
 
   app.post(
     '/api/clubs',
-    { preHandler: [app.authenticate, requireRole('superadmin')] },
+    { preHandler: [app.authenticate, requireAnyRole('superadmin')] },
     async (request, reply) => {
       const body = parseInput(CreateClubRequestSchema, request.body, reply);
       if (!body) return;
@@ -76,14 +76,14 @@ export async function invitationsRoutes(app: FastifyInstance, opts: InvitationsR
     },
   );
 
-  app.get('/api/clubs', { preHandler: [app.authenticate, requireRole('superadmin')] }, async (request, reply) => {
+  app.get('/api/clubs', { preHandler: [app.authenticate, requireAnyRole('superadmin')] }, async (request, reply) => {
     const clubs = await invitationsService.listClubs(requesterFrom(request));
     return reply.code(200).send({ clubs });
   });
 
   app.patch<{ Params: { id: string } }>(
     '/api/clubs/:id',
-    { preHandler: [app.authenticate, requireRole('superadmin')] },
+    { preHandler: [app.authenticate, requireAnyRole('superadmin')] },
     async (request, reply) => {
       const body = parseInput(UpdateClubRequestSchema, request.body, reply);
       if (!body) return;
@@ -100,7 +100,7 @@ export async function invitationsRoutes(app: FastifyInstance, opts: InvitationsR
   // invitations.service.ts: updateClubIdentity()).
   app.patch<{ Params: { id: string } }>(
     '/api/clubs/:id/identity',
-    { preHandler: [app.authenticate, requireRole('admin', 'superadmin')] },
+    { preHandler: [app.authenticate, requireAnyRole('admin', 'superadmin')] },
     async (request, reply) => {
       const body = parseInput(UpdateClubIdentityRequestSchema, request.body, reply);
       if (!body) return;
@@ -114,7 +114,7 @@ export async function invitationsRoutes(app: FastifyInstance, opts: InvitationsR
 
   app.post(
     '/api/invitations',
-    { preHandler: [app.authenticate, requireRole('superadmin', 'admin')] },
+    { preHandler: [app.authenticate, requireAnyRole('superadmin', 'admin')] },
     async (request, reply) => {
       const body = parseInput(CreateInvitationRequestSchema, request.body, reply);
       if (!body) return;
@@ -129,7 +129,7 @@ export async function invitationsRoutes(app: FastifyInstance, opts: InvitationsR
 
   app.get(
     '/api/invitations',
-    { preHandler: [app.authenticate, requireRole('superadmin', 'admin')] },
+    { preHandler: [app.authenticate, requireAnyRole('superadmin', 'admin')] },
     async (request, reply) => {
       const invitations = await invitationsService.list(requesterFrom(request));
       return reply.code(200).send({ invitations });
@@ -138,7 +138,7 @@ export async function invitationsRoutes(app: FastifyInstance, opts: InvitationsR
 
   app.delete<{ Params: { id: string } }>(
     '/api/invitations/:id',
-    { preHandler: [app.authenticate, requireRole('superadmin', 'admin')] },
+    { preHandler: [app.authenticate, requireAnyRole('superadmin', 'admin')] },
     async (request, reply) => {
       // ForbiddenError/InvitationNotFoundError: beide über die zentrale
       // Fehler-Registry abgedeckt — InvitationNotFoundError landet hier

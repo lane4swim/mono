@@ -58,7 +58,7 @@ async function buildTestApp() {
 // (siehe invitations.service.ts: ClubNotFoundError).
 async function tokenFor(keyPair: KeyPair, role: string, clubId: string | null) {
   return signAccessToken(
-    { sub: '00000000-0000-0000-0000-000000000001', role: role as never, clubId, athleteId: null },
+    { sub: '00000000-0000-0000-0000-000000000001', roles: [role] as never, clubId, athleteId: null },
     keyPair,
     900,
   );
@@ -165,7 +165,7 @@ describe('GET /api/clubs (nur superadmin, mit Mitgliederzahlen)', () => {
     expect(response.statusCode).toBe(200);
     const { clubs } = response.json();
     expect(clubs).toHaveLength(1);
-    expect(clubs[0].memberCounts).toEqual({ admin: 0, trainer: 0, athlete: 0 }); // Admin hat die Einladung noch nicht angenommen
+    expect(clubs[0].memberCounts).toEqual({ admin: 0, trainer: 0, athlete: 0, referee: 0 }); // Admin hat die Einladung noch nicht angenommen
     await app.close();
   });
 
@@ -192,6 +192,24 @@ describe('POST /api/invitations (admin/superadmin)', () => {
     });
     expect(response.statusCode).toBe(201);
     expect(response.json().clubId).toBe(club.id);
+    await app.close();
+  });
+
+  // docs/kampfrichter-modul-plan.md, Abschnitt 2: "referee" lässt sich wie
+  // trainer/athlete direkt per Einladung vergeben.
+  it('admin kann eine referee-Einladung für den eigenen Verein ausstellen (201)', async () => {
+    const { app, keyPair, clubs } = await buildTestApp();
+    const club = await clubs.create({ name: 'Club A' });
+    const token = await tokenFor(keyPair, 'admin', club.id);
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/invitations',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { email: 'kampfrichter@example.org', role: 'referee' },
+    });
+    expect(response.statusCode).toBe(201);
+    expect(response.json().clubId).toBe(club.id);
+    expect(response.json().role).toBe('referee');
     await app.close();
   });
 

@@ -75,9 +75,14 @@ export class PrismaNotifyExpiringQualificationsGateway implements NotifyExpiring
     return new Map(rows.map((row) => [`${row.clubId}:${row.type}`, row.thresholdsDays]));
   }
 
+  // docs/kampfrichter-modul-plan.md, Abschnitt 1: prüft die tatsächliche
+  // Mehrfachrollen-Spalte ("has: 'admin'"), nicht mehr die transitionelle
+  // Einzelrollen-Spalte — eine Person mit z. B. roles: ['athlete','admin']
+  // bekäme über die alte Spalte (dort nur roles[0], hier 'athlete')
+  // fälschlich KEINE Erinnerungs-Mail, obwohl sie admin ist.
   async findAdminsForClub(clubId: string): Promise<AdminContact[]> {
     return this.prisma.user.findMany({
-      where: { clubId, role: 'admin', deletedAt: null },
+      where: { clubId, roles: { has: 'admin' }, deletedAt: null },
       select: { email: true, name: true, locale: true },
     });
   }

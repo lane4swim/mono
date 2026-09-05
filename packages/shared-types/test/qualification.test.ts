@@ -8,6 +8,7 @@ import {
   QualificationReminderSettingSchema,
   UpdateQualificationReminderSettingRequestSchema,
   DEFAULT_QUALIFICATION_REMINDER_THRESHOLDS_DAYS,
+  REFEREE_QUALIFICATION_TYPES,
 } from '../src/qualification.js';
 
 const validQualification = {
@@ -23,12 +24,33 @@ const validQualification = {
 };
 
 describe('QualificationTypeSchema', () => {
-  it('akzeptiert alle acht dokumentierten Qualifikationsarten', () => {
-    const types = ['trainer_c', 'trainer_b', 'trainer_a', 'rettungsschwimmer_silber', 'rettungsschwimmer_gold', 'erste_hilfe', 'kinderschutz', 'sonstige'];
+  it('akzeptiert alle 14 dokumentierten Qualifikationsarten', () => {
+    const types = [
+      'trainer_c', 'trainer_b', 'trainer_a',
+      'rettungsschwimmer_silber', 'rettungsschwimmer_gold',
+      'erste_hilfe', 'kinderschutz',
+      'kampfrichter', 'schiedsrichter', 'startrichter', 'zeitnehmer', 'bahnrichter', 'wettkampfsekretaer',
+      'sonstige',
+    ];
     for (const type of types) expect(QualificationTypeSchema.safeParse(type).success).toBe(true);
   });
   it('lehnt einen unbekannten Wert ab', () => {
     expect(QualificationTypeSchema.safeParse('irgendwas').success).toBe(false);
+  });
+});
+
+// docs/kampfrichter-modul-plan.md, Abschnitt 3.2: die Teilmenge, die das
+// künftige Kampfrichter-Modul (Phase C) nutzt, um die allgemeine
+// Qualifikationsliste einer Person auf die Kampfrichter-relevanten Typen
+// zu filtern.
+describe('REFEREE_QUALIFICATION_TYPES', () => {
+  it('enthält genau die sechs Kampfrichter-Ämter, keine Trainer-/Sonstige-Typen', () => {
+    expect([...REFEREE_QUALIFICATION_TYPES].sort()).toEqual(
+      ['bahnrichter', 'kampfrichter', 'schiedsrichter', 'startrichter', 'wettkampfsekretaer', 'zeitnehmer'].sort(),
+    );
+  });
+  it('jeder Wert ist ein gültiger QualificationTypeSchema-Wert', () => {
+    for (const type of REFEREE_QUALIFICATION_TYPES) expect(QualificationTypeSchema.safeParse(type).success).toBe(true);
   });
 });
 

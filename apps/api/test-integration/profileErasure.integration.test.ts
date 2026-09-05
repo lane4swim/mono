@@ -42,6 +42,7 @@ async function seedAthleteUser(clubId: string | null) {
       email: `mara-${randomUUID()}@example.org`,
       passwordHash: 'hash',
       role: 'athlete',
+      roles: ['athlete'],
       athleteId: athlete?.id ?? null,
     },
   });
@@ -253,6 +254,68 @@ describe('PrismaErasureJobGateway.purgeUserAndDependents()', () => {
     expect(updatedInvitationSentByDeletedPerson?.invitedById).toBeNull();
   });
 
+  // Verifikation (2026-09-05): löscht ein Hard-Purge auch die
+  // Kampfrichter-Daten des Kontos — UserQualification.user und
+  // RefereeAssignment.user tragen in schema.prisma beide
+  // `onDelete: Cascade` (siehe referee_assignments_userId_fkey /
+  // user_qualifications_userId_fkey in den jeweiligen migration.sql-
+  // Dateien) —, purgeUserAndDependents() muss dafür KEINEN eigenen Code
+  // enthalten: `tx.user.delete()` am Ende der Funktion löst die Kaskade
+  // direkt in Postgres aus. Läuft bewusst gegen eine ECHTE Datenbank,
+  // damit tatsächlich die FK-Constraints geprüft werden, nicht nur die
+  // (dafür gar nicht ausgelegte) InMemory-Testdouble.
+  describe('PrismaErasureJobGateway.purgeUserAndDependents() — Kampfrichter-Modul (Qualifikationen & Wettkampfeinsätze)', () => {
+    it('löscht eigene Qualifikationen UND Wettkampfeinsätze der Kampfrichter:in unwiderruflich', async () => {
+      const club = await createTestClub();
+      const referee = await prisma.user.create({
+        data: { clubId: club.id, name: 'Ronja Kampfrichter', email: `ronja-${randomUUID()}@example.org`, passwordHash: 'hash', role: 'referee', roles: ['referee'] },
+      });
+      const qualification = await prisma.userQualification.create({
+        data: { userId: referee.id, type: 'kampfrichter', acquiredOn: new Date('2024-01-01') },
+      });
+      const assignment = await prisma.refereeAssignment.create({
+        data: { userId: referee.id, clubId: club.id, competitionName: 'Kreismeisterschaft', date: new Date('2026-03-01'), function: 'zeitnehmer' },
+      });
+
+      await erasureGateway.purgeUserAndDependents(referee.id);
+
+      expect(await prisma.user.findUnique({ where: { id: referee.id } })).toBeNull();
+      expect(await prisma.userQualification.findUnique({ where: { id: qualification.id } })).toBeNull();
+      expect(await prisma.refereeAssignment.findUnique({ where: { id: assignment.id } })).toBeNull();
+      expect(await prisma.userQualification.findMany({ where: { userId: referee.id } })).toEqual([]);
+      expect(await prisma.refereeAssignment.findMany({ where: { userId: referee.id } })).toEqual([]);
+    });
+
+    // RefereeAssignment.createdByAdminId trägt `onDelete: SetNull` statt
+    // Cascade (anders als .user oben) — ein admin-seitig "im Namen von"
+    // angelegter Einsatz gehört fachlich weiter der Kampfrichter:in, nicht
+    // dem Admin, der ihn erfasst hat. Wird der ADMIN später selbst
+    // gelöscht, darf das NICHT die Einsatzhistorie einer noch aktiven
+    // Kampfrichter:in mitreißen — nur die Zuordnung "von wem erfasst"
+    // geht verloren.
+    it('behält Wettkampfeinsätze einer weiterhin bestehenden Kampfrichter:in, wenn der admin-seitige Ersteller gepurgt wird — nur createdByAdminId wird null', async () => {
+      const club = await createTestClub();
+      const admin = await prisma.user.create({
+        data: { clubId: club.id, name: 'Admina Musterfrau', email: `admin-${randomUUID()}@example.org`, passwordHash: 'hash', role: 'admin', roles: ['admin'] },
+      });
+      const referee = await prisma.user.create({
+        data: { clubId: club.id, name: 'Ronja Kampfrichter', email: `ronja2-${randomUUID()}@example.org`, passwordHash: 'hash', role: 'referee', roles: ['referee'] },
+      });
+      const assignment = await prisma.refereeAssignment.create({
+        data: { userId: referee.id, clubId: club.id, competitionName: 'Bezirksmeisterschaft', date: new Date('2026-04-01'), function: 'bahnrichter', createdByAdminId: admin.id },
+      });
+
+      await erasureGateway.purgeUserAndDependents(admin.id);
+
+      expect(await prisma.user.findUnique({ where: { id: admin.id } })).toBeNull();
+      expect(await prisma.user.findUnique({ where: { id: referee.id } })).not.toBeNull();
+      const updatedAssignment = await prisma.refereeAssignment.findUnique({ where: { id: assignment.id } });
+      expect(updatedAssignment).not.toBeNull();
+      expect(updatedAssignment?.userId).toBe(referee.id);
+      expect(updatedAssignment?.createdByAdminId).toBeNull();
+    });
+  });
+
   // Code-Review, Befund C4: die Anwesenheits-Bereinigung lief vormals über
   // eine JS-Schleife, die ALLE Trainingseinheiten des Vereins lud und
   // einzeln per update() zurückschrieb — bei einer mehrjährigen
@@ -453,7 +516,7 @@ describe('PrismaErasureJobGateway.purgeUserAndDependents() — Comment.authorNam
     const club = await createTestClub();
     const now = new Date();
     const trainer = await prisma.user.create({
-      data: { clubId: club.id, name: 'Coach Nina', email: `nina-${randomUUID()}@example.org`, passwordHash: 'hash', role: 'trainer', athleteId: null },
+      data: { clubId: club.id, name: 'Coach Nina', email: `nina-${randomUUID()}@example.org`, passwordHash: 'hash', role: 'trainer', roles: ['trainer'], athleteId: null },
     });
     const exercise = await prisma.exercise.create({
       data: { clubId: club.id, name: 'Beinschlag', category: 'kick', comments: [{ id: 'c1', authorId: trainer.id, authorName: 'Coach Nina', text: 'Trainer-Hinweis', createdAt: now.toISOString() }] },

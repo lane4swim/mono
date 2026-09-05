@@ -133,7 +133,7 @@ describe('AccessTokenClaimsSchema', () => {
   it('akzeptiert vollständige Claims inkl. athleteId: null', () => {
     const claims = {
       sub: '11111111-1111-1111-1111-111111111111',
-      role: 'athlete',
+      roles: ['athlete'],
       clubId: '22222222-2222-2222-2222-222222222222',
       athleteId: null,
     };
@@ -143,19 +143,19 @@ describe('AccessTokenClaimsSchema', () => {
   it('akzeptiert clubId: null (Rolle superadmin)', () => {
     const claims = {
       sub: '11111111-1111-1111-1111-111111111111',
-      role: 'superadmin',
+      roles: ['superadmin'],
       clubId: null,
       athleteId: null,
     };
     expect(AccessTokenClaimsSchema.safeParse(claims).success).toBe(true);
   });
 
-  it('akzeptiert die neue Rolle "superadmin"', () => {
+  it('akzeptiert mehrere gleichzeitige Rollen (docs/kampfrichter-modul-plan.md, Abschnitt 1)', () => {
     const claims = {
       sub: '11111111-1111-1111-1111-111111111111',
-      role: 'superadmin',
-      clubId: null,
-      athleteId: null,
+      roles: ['trainer', 'athlete'],
+      clubId: '22222222-2222-2222-2222-222222222222',
+      athleteId: '33333333-3333-3333-3333-333333333333',
     };
     expect(AccessTokenClaimsSchema.safeParse(claims).success).toBe(true);
   });
@@ -167,7 +167,7 @@ describe('AuthTokensResponseSchema (enabledModules)', () => {
     clubId: '22222222-2222-2222-2222-222222222222',
     name: 'Sabine Reuter',
     email: 'sabine@example.org',
-    role: 'trainer',
+    roles: ['trainer'],
     athleteId: null,
     locale: 'de-DE',
     createdAt: new Date().toISOString(),
@@ -186,7 +186,7 @@ describe('AuthTokensResponseSchema (enabledModules)', () => {
   it('akzeptiert ein leeres Array (z. B. superadmin ohne eigenen Verein)', () => {
     const response = {
       accessToken: 'a', refreshToken: 'b', expiresIn: 900,
-      user: { ...baseUser, clubId: null, role: 'superadmin' }, enabledModules: [],
+      user: { ...baseUser, clubId: null, roles: ['superadmin'] }, enabledModules: [],
       clubNationalID: null, clubNationalIDType: null,
     };
     expect(AuthTokensResponseSchema.safeParse(response).success).toBe(true);

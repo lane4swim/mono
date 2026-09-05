@@ -198,6 +198,7 @@ async function renderClubsView() {
         el('th', { class: 'data' }, t('admin.colAdmins')),
         el('th', { class: 'data' }, t('admin.colTrainers')),
         el('th', { class: 'data' }, t('admin.colAthletes')),
+        el('th', { class: 'data' }, t('admin.colReferees')),
         el('th', {}, t('admin.colCreatedAt')),
         el('th', {}, ''),
       ])));
@@ -208,6 +209,7 @@ async function renderClubsView() {
           el('td', { class: 'data' }, String(club.memberCounts.admin)),
           el('td', { class: 'data' }, String(club.memberCounts.trainer)),
           el('td', { class: 'data' }, String(club.memberCounts.athlete)),
+          el('td', { class: 'data' }, String(club.memberCounts.referee)),
           el('td', {}, new Date(club.createdAt).toLocaleDateString(getLocale())),
           el('td', {}, el('button', { class: 'btn btn-ghost', onclick: () => openEditClubModulesModal({
             club,

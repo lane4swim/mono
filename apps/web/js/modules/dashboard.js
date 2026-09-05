@@ -6,7 +6,7 @@ import { el, clear, beginRender } from '../dom.js';
 import { fmtDateLong, todayISO } from '../dates.js';
 import { secToTime } from '../swimTime.js';
 import { fullName, statCard, badge, laneWave, groupBy, average } from '../ui.js';
-import { getRole, getCurrentUser } from '../state.js';
+import { isAthleteScoped, getCurrentUser } from '../state.js';
 import { navigate } from '../router.js';
 import { totalDistance } from './setEditor.js';
 import { t, trCode } from '../i18n.js';
@@ -22,8 +22,7 @@ export const dashboardModule = {
   async render(container) {
     const isCurrent = beginRender(container);
     clear(container);
-    const role = getRole();
-    if (role === 'athlete') return renderAthleteDashboard(container, isCurrent);
+    if (isAthleteScoped()) return renderAthleteDashboard(container, isCurrent);
     return renderTrainerDashboard(container, isCurrent);
   }
 };

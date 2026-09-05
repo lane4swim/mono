@@ -61,7 +61,7 @@ function populateDemoAccountSelect() {
   clear(demoAccountSelect);
   const user = getCurrentUser();
   DEMO_USERS.forEach(u => {
-    demoAccountSelect.appendChild(el('option', { value: u.id }, `${u.name} (${t(`settings.role_${u.role}`)})`));
+    demoAccountSelect.appendChild(el('option', { value: u.id }, `${u.name} (${u.roles.map((r) => t(`settings.role_${r}`)).join(', ')})`));
   });
   demoAccountSelect.value = user?.id || DEMO_USERS[0].id;
   demoAccountSelect.title = t('topbar.demoAccountLabel');

@@ -57,6 +57,10 @@ function renderError(container, err) {
 }
 
 // ---- Statusermittlung (Plan, Abschnitt 4.2) ----------------------------
+// Exportiert — wird auch von modules/kampfrichter.js wiederverwendet, um
+// den Status der (dort auf Kampfrichter-Typen gefilterten) eigenen
+// Qualifikationen identisch zu berechnen, statt dieselbe Schwellen-/
+// Status-Logik ein zweites Mal zu pflegen.
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 function daysUntil(dateStr, now) {
@@ -65,7 +69,7 @@ function daysUntil(dateStr, now) {
 
 // `thresholds`: aufsteigend sortierte Tage-Werte (z. B. [14, 60]) — die
 // GRÖSSTE davon markiert den Übergang von "gültig" zu "läuft bald ab".
-function statusOf(qualification, thresholds, now = new Date()) {
+export function statusOf(qualification, thresholds, now = new Date()) {
   if (!qualification.expiresOn) return { key: 'unlimited', variant: 'neutral' };
   const remaining = daysUntil(qualification.expiresOn, now);
   const renewalScheduled = qualification.renewalCourseOrganizedOn && daysUntil(qualification.renewalCourseOrganizedOn, now) >= 0;
@@ -79,7 +83,7 @@ function statusOf(qualification, thresholds, now = new Date()) {
   return { key: 'valid', variant: 'done' };
 }
 
-function statusBadge(qualification, thresholds) {
+export function statusBadge(qualification, thresholds) {
   const status = statusOf(qualification, thresholds);
   if (status.key === 'scheduled') {
     return badge(t('qualifications.statusScheduled', { date: fmtDateShort(qualification.renewalCourseOrganizedOn) }), status.variant);
@@ -87,12 +91,12 @@ function statusBadge(qualification, thresholds) {
   return badge(t(`qualifications.status_${status.key}`), status.variant);
 }
 
-function thresholdsFor(type, settings) {
+export function thresholdsFor(type, settings) {
   const row = settings.settings.find((s) => s.type === type);
   return row ? row.thresholdsDays : settings.defaultThresholdsDays;
 }
 
-function typeLabel(type) {
+export function typeLabel(type) {
   return trLabel(QUALIFICATION_TYPES, type, 'qualificationTypes');
 }
 
@@ -188,7 +192,7 @@ function renderMembersSection(members, settings, onChanged) {
   members.forEach((member) => {
     tbody.appendChild(el('tr', {}, [
       el('td', {}, member.name),
-      el('td', {}, badge(t(`settings.role_${member.role}`), 'neutral')),
+      el('td', {}, el('div', { class: 'flex gap-8' }, member.roles.map((r) => badge(t(`settings.role_${r}`), 'neutral')))),
       el('td', {}, el('button', {
         class: 'btn btn-ghost btn-sm',
         onclick: () => openMemberQualificationsModal(member, settings, onChanged),

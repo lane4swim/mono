@@ -11,10 +11,19 @@ const isoDate = z.string().datetime();
 const nullableIsoDate = z.string().datetime().nullable();
 
 // Feste Werteliste (Plan, Abschnitt 2.2 / Entscheidung zu Frage 1) — ein
-// geschlossenes Enum statt Freitext, damit Anzeige-Labels über
-// `t('qualification.type.*')` lokalisiert werden können und Filterung/
+// geschlossenes Enum statt Freitext, damit Anzeige-Labels über die
+// refdata-Sprachdateien (`t('refdata.qualificationTypes.*')`,
+// apps/web/js/i18n/*.js) lokalisiert werden können und Filterung/
 // Reporting möglich bleibt. Eine je Verein frei konfigurierbare Werteliste
 // ist bewusst nicht Teil dieses ersten Umsetzungsschritts.
+//
+// Kampfrichter-Typen (docs/kampfrichter-modul-plan.md, Abschnitt 3.1,
+// Entscheidung 2026-09-05): DSV-Standardbegriffe, bewusst OHNE C/B/A-
+// Stufung wie bei den Trainerscheinen oben — im DSV-Kampfrichterwesen
+// gibt es je Amt genau eine Lizenz. Dieselbe Wiederverwendung bestehender
+// Infrastruktur (kein zweites Qualifikationssystem) wie bei den übrigen
+// Typen — Schreibrecht bleibt unverändert admin-only (siehe
+// qualifications.service.ts).
 export const QualificationTypeSchema = z.enum([
   'trainer_c',
   'trainer_b',
@@ -23,10 +32,31 @@ export const QualificationTypeSchema = z.enum([
   'rettungsschwimmer_gold',
   'erste_hilfe',
   'kinderschutz',
+  'kampfrichter',
+  'schiedsrichter',
+  'startrichter',
+  'zeitnehmer',
+  'bahnrichter',
+  'wettkampfsekretaer',
   'sonstige',
 ]);
 export type QualificationType = z.infer<typeof QualificationTypeSchema>;
 export const QUALIFICATION_TYPES = QualificationTypeSchema.options;
+
+// Teilmenge von QualificationTypeSchema, die fachlich zu einer
+// Kampfrichter:in gehört (docs/kampfrichter-modul-plan.md, Abschnitt 3.2)
+// — wird vom künftigen Kampfrichter-Modul (Phase C) verwendet, um die
+// allgemeine Qualifikationsliste einer Person auf die für Kampfrichter:innen
+// relevanten Typen zu filtern, ohne diese Liste ein zweites Mal an anderer
+// Stelle pflegen zu müssen.
+export const REFEREE_QUALIFICATION_TYPES = [
+  'kampfrichter',
+  'schiedsrichter',
+  'startrichter',
+  'zeitnehmer',
+  'bahnrichter',
+  'wettkampfsekretaer',
+] as const satisfies readonly QualificationType[];
 
 // Fallback-Vorlaufzeiten (Tage vor expiresOn), wenn ein Verein für einen
 // Qualifikationstyp keine eigene ClubQualificationReminderSetting-Zeile

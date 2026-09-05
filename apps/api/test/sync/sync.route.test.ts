@@ -67,7 +67,7 @@ async function buildTestApp() {
 
 async function tokenFor(keyPair: KeyPair, role: string, clubId: string | null, athleteId: string | null = null) {
   return signAccessToken(
-    { sub: '00000000-0000-0000-0000-000000000001', role: role as never, clubId, athleteId },
+    { sub: '00000000-0000-0000-0000-000000000001', roles: [role] as never, clubId, athleteId },
     keyPair,
     900,
   );

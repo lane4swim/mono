@@ -10,10 +10,29 @@
 //   - admin:      verwaltet genau einen Verein, lädt Trainer:innen und
 //                 Athlet:innen dieses Vereins ein.
 //   - trainer / athlete: wie bisher, jeweils genau einem Verein zugehörig.
+//   - referee:    Kampfrichter:in (docs/kampfrichter-modul-plan.md,
+//                 Abschnitt 2) — einem Verein zugehörig, wie trainer/
+//                 athlete kombinierbar mit jeder anderen Nicht-superadmin-
+//                 Rolle (siehe UserRolesSchema unten).
 import { z } from 'zod';
 
-export const RoleSchema = z.enum(['superadmin', 'admin', 'trainer', 'athlete']);
+export const RoleSchema = z.enum(['superadmin', 'admin', 'trainer', 'athlete', 'referee']);
 export type Role = z.infer<typeof RoleSchema>;
+
+// docs/kampfrichter-modul-plan.md, Abschnitt 1.2: ein Konto kann künftig
+// mehrere Rollen GLEICHZEITIG haben (z. B. Trainer:in UND Athlet:in),
+// nicht nur genau eine. "superadmin" bleibt Sonderfall — exklusiv, nie mit
+// einer anderen Rolle kombiniert (kein eigener Verein, siehe
+// UserSchema.clubId-Kommentar unten) — und wird weiterhin nie per API
+// vergeben (nur scripts/createSuperAdmin.ts).
+export const UserRolesSchema = z
+  .array(RoleSchema)
+  .min(1, 'Mindestens eine Rolle ist erforderlich.')
+  .refine((roles) => new Set(roles).size === roles.length, { message: 'Rollen dürfen nicht doppelt vorkommen.' })
+  .refine((roles) => !(roles.includes('superadmin') && roles.length > 1), {
+    message: '"superadmin" kann nicht mit einer anderen Rolle kombiniert werden.',
+  });
+export type UserRoles = z.infer<typeof UserRolesSchema>;
 
 export const LocaleSchema = z.enum(['de-DE', 'en-US']);
 export type Locale = z.infer<typeof LocaleSchema>;
@@ -57,18 +76,28 @@ export const NormalizedEmailSchema = z.string().trim().toLowerCase().email();
 
 export const UserSchema = z.object({
   id: z.string().uuid(),
-  // null nur für role === 'superadmin' — jede andere Rolle gehört genau
-  // einem Verein an.
+  // null nur, wenn roles === ['superadmin'] — jede andere Rolle gehört
+  // genau einem Verein an.
   clubId: z.string().uuid().nullable(),
   name: z.string().min(1),
   email: z.string().email(),
-  role: RoleSchema,
+  roles: UserRolesSchema,
   athleteId: z.string().uuid().nullable(),
   locale: LocaleSchema,
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
 export type User = z.infer<typeof UserSchema>;
+
+// PATCH /api/users/:userId/roles (admin, eigener Verein) — ersetzt die
+// vollständige Rollenmenge einer Person, siehe
+// docs/kampfrichter-modul-plan.md Abschnitt 1.4. Bewusst kein Add/Remove-
+// Diff-Endpunkt (Race-Condition-Vermeidung bei zwei gleichzeitigen
+// Änderungen) — der Client schickt immer die vollständige Zielmenge.
+export const UpdateUserRolesRequestSchema = z.object({
+  roles: UserRolesSchema,
+});
+export type UpdateUserRolesRequest = z.infer<typeof UpdateUserRolesRequestSchema>;
 
 // Antwort von GET /api/users (Nutzerverwaltung: bestehende
 // Vereinsmitglieder anzeigen) — dieselbe öffentliche Nutzer-Form wie

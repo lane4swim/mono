@@ -8,6 +8,10 @@ import {
   InvalidInvitationError,
   InvalidCurrentPasswordError,
   InvalidOrExpiredResetTokenError,
+  UserNotFoundError,
+  ForeignClubUserError,
+  CannotAssignSuperadminError,
+  LastAdminError,
 } from '../../src/modules/auth/auth.service.js';
 import { InMemoryUserRepository, InMemoryRefreshTokenRepository, InMemoryPasswordResetTokenRepository } from '../../src/modules/auth/auth.repository.memory.js';
 import type { PasswordResetTokenRecord } from '../../src/modules/auth/auth.repository.js';
@@ -17,7 +21,7 @@ import { InMemoryMailSender } from '../../src/mail/mailer.memory.js';
 import { InMemoryProfileDataGateway } from '../../src/modules/profile/profile.repository.memory.js';
 import { generateFreshKeyPair } from '../../src/auth/keys.js';
 import { verifyAccessToken } from '../../src/auth/tokens.js';
-import { generateInvitationToken } from '../../src/auth/tokens.js';
+import { generateInvitationToken, hashRefreshToken } from '../../src/auth/tokens.js';
 import { CURRENT_CONSENT_VERSION, LoginRequestSchema } from '@lane1/shared-types';
 
 const CLUB_ID = '11111111-1111-1111-1111-111111111111';
@@ -94,12 +98,12 @@ describe('authService.acceptInvitation', () => {
     const result = await service.acceptInvitation({ token, name: 'Sabine Reuter', password: 'ein-sicheres-passwort', consent: true });
 
     expect(result.user.email).toBe('sabine.reuter@example.org');
-    expect(result.user.role).toBe('trainer');
+    expect(result.user.roles).toEqual(['trainer']);
     expect(result.user.clubId).toBe(CLUB_ID);
     expect(result.user).not.toHaveProperty('passwordHash');
 
     const claims = await verifyAccessToken(result.accessToken, keyPair);
-    expect(claims.role).toBe('trainer');
+    expect(claims.roles).toEqual(['trainer']);
     expect(claims.clubId).toBe(CLUB_ID);
   });
 
@@ -112,7 +116,7 @@ describe('authService.acceptInvitation', () => {
     // role/clubId/email-Felder (siehe shared-types) — hier wird nur
     // geprüft, dass die tatsächlich vergebene Rolle aus der Einladung stammt.
     const result = await service.acceptInvitation({ token, name: 'Neue Admin', password: 'ein-sicheres-passwort', consent: true });
-    expect(result.user.role).toBe('admin');
+    expect(result.user.roles).toEqual(['admin']);
   });
 
   it('markiert die Einladung nach Verwendung als verbraucht (kein zweites Einlösen möglich)', async () => {
@@ -682,7 +686,7 @@ describe('authService.resetPassword', () => {
     const { service, users, passwordResetTokens } = makeService();
     const user = await users.create({
       clubId: CLUB_ID, name: 'Test Person', email: 'abgelaufen@example.org', passwordHash: 'irrelevant',
-      role: 'trainer', consentGivenAt: new Date(), consentVersion: '2026-07-15',
+      roles: ['trainer'], consentGivenAt: new Date(), consentVersion: '2026-07-15',
     });
     const { hashPasswordResetToken } = await import('../../src/auth/tokens.js');
     const plainToken = 'abgelaufenes-test-token';
@@ -958,5 +962,75 @@ describe('E-Mail-Abgleich ohne Rücksicht auf Groß-/Kleinschreibung (Befund M2)
     await expect(
       registerViaInvitation(service, invitations, { email: 'Doppelt@Example.org' }),
     ).rejects.toThrow(EmailAlreadyRegisteredError);
+  });
+});
+
+// PATCH /api/users/:userId/roles (docs/kampfrichter-modul-plan.md,
+// Abschnitt 1.4) — bislang ungetestet, nachgeholt im Zuge von Phase B
+// (Rolle "referee").
+describe('authService.updateUserRoles', () => {
+  it('ersetzt die vollständige Rollenmenge einer Person im eigenen Verein', async () => {
+    const { service, invitations, users } = makeService();
+    const trainer = await registerViaInvitation(service, invitations, { email: 'trainer@example.org', role: 'trainer' });
+
+    const updated = await service.updateUserRoles(trainer.user.id, ['trainer', 'referee'], { clubId: CLUB_ID });
+
+    expect(updated.roles.sort()).toEqual(['referee', 'trainer']);
+    const stored = await users.findById(trainer.user.id);
+    expect(stored!.roles.sort()).toEqual(['referee', 'trainer']);
+  });
+
+  // Sicherheitsreview-Muster wie bei changePassword()/changeEmail()/
+  // resetPassword(): eine Rechteänderung darf nicht bis zu
+  // JWT_REFRESH_TTL_DAYS (30 Tage) auf das nächste Ablaufen des bereits
+  // ausgestellten Access Tokens warten müssen.
+  it('widerruft alle bestehenden Sitzungen der Zielperson (sofortige Wirkung)', async () => {
+    const { service, invitations, refreshTokens } = makeService();
+    const trainer = await registerViaInvitation(service, invitations, { email: 'trainer@example.org', role: 'trainer' });
+    expect(await refreshTokens.findByHash(hashRefreshToken(trainer.refreshToken))).toMatchObject({ revokedAt: null });
+
+    await service.updateUserRoles(trainer.user.id, ['referee'], { clubId: CLUB_ID });
+
+    const existing = await refreshTokens.findByHash(hashRefreshToken(trainer.refreshToken));
+    expect(existing!.revokedAt).not.toBeNull();
+  });
+
+  it('lehnt die Zuweisung von "superadmin" ab', async () => {
+    const { service, invitations } = makeService();
+    const trainer = await registerViaInvitation(service, invitations, { email: 'trainer@example.org', role: 'trainer' });
+
+    await expect(service.updateUserRoles(trainer.user.id, ['superadmin'], { clubId: CLUB_ID })).rejects.toThrow(CannotAssignSuperadminError);
+  });
+
+  it('lehnt eine Zielperson aus einem fremden Verein ab', async () => {
+    const { service, invitations } = makeService();
+    const trainer = await registerViaInvitation(service, invitations, { email: 'trainer@example.org', role: 'trainer' });
+
+    await expect(
+      service.updateUserRoles(trainer.user.id, ['athlete'], { clubId: '99999999-9999-9999-9999-999999999998' }),
+    ).rejects.toThrow(ForeignClubUserError);
+  });
+
+  it('liefert UserNotFoundError für eine unbekannte userId', async () => {
+    const { service } = makeService();
+    await expect(
+      service.updateUserRoles('00000000-0000-0000-0000-000000000000', ['trainer'], { clubId: CLUB_ID }),
+    ).rejects.toThrow(UserNotFoundError);
+  });
+
+  it('lehnt es ab, der letzten admin-Rolle eines Vereins die Rolle zu entziehen', async () => {
+    const { service, invitations } = makeService();
+    const admin = await registerViaInvitation(service, invitations, { email: 'admin@example.org', role: 'admin' });
+
+    await expect(service.updateUserRoles(admin.user.id, ['trainer'], { clubId: CLUB_ID })).rejects.toThrow(LastAdminError);
+  });
+
+  it('erlaubt das Entziehen der admin-Rolle, wenn ein anderer Admin im Verein verbleibt', async () => {
+    const { service, invitations } = makeService();
+    const adminOne = await registerViaInvitation(service, invitations, { email: 'admin-1@example.org', role: 'admin' });
+    await registerViaInvitation(service, invitations, { email: 'admin-2@example.org', role: 'admin' });
+
+    const updated = await service.updateUserRoles(adminOne.user.id, ['trainer'], { clubId: CLUB_ID });
+    expect(updated.roles).toEqual(['trainer']);
   });
 });

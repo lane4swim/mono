@@ -79,6 +79,34 @@ export class ClubIdRequiredError extends Error {
   }
 }
 
+// PATCH /api/users/:userId/roles (docs/kampfrichter-modul-plan.md,
+// Abschnitt 1.4) — Ziel-Konto gehört nicht zum eigenen Verein. Bewusst wie
+// bei qualifications.service.ts (QualificationForbiddenError) statt 404,
+// analog dem dort bereits etablierten Muster für :userId-Routen.
+export class ForeignClubUserError extends Error {
+  constructor() {
+    super('Diese Person gehört nicht zu Ihrem Verein.');
+  }
+}
+
+// "superadmin" wird ausschließlich über scripts/createSuperAdmin.ts
+// vergeben (siehe RoleSchema-Kommentar) — nie über diesen Endpunkt, auch
+// nicht durch einen Admin des betroffenen Vereins.
+export class CannotAssignSuperadminError extends Error {
+  constructor() {
+    super('"superadmin" kann nicht über diesen Endpunkt vergeben werden.');
+  }
+}
+
+// Verhindert, dass ein Verein durch eine Rollenänderung ohne jede
+// verbleibende admin-Rolle zurückbleibt — sonst könnte niemand mehr
+// Mitglieder verwalten/einladen oder weitere Rollenänderungen vornehmen.
+export class LastAdminError extends Error {
+  constructor() {
+    super('Diese Änderung würde den Verein ohne Administrator:in zurücklassen.');
+  }
+}
+
 // Sicherheitsreview 2026-08, Befund M5 ("Passwort vergessen" +
 // Passwortwechsel).
 export class InvalidCurrentPasswordError extends Error {
@@ -194,7 +222,7 @@ export function createAuthService(deps: AuthServiceDeps) {
   async function issueTokens(user: UserRecord): Promise<AuthTokens> {
     const claims: AccessTokenClaims = {
       sub: user.id,
-      role: user.role as AccessTokenClaims['role'],
+      roles: user.roles as AccessTokenClaims['roles'],
       clubId: user.clubId,
       athleteId: user.athleteId,
     };
@@ -270,7 +298,11 @@ export function createAuthService(deps: AuthServiceDeps) {
           name: input.name,
           email: invitation.email,
           passwordHash,
-          role: invitation.role,
+          // Startmenge mit genau einer Rolle — weitere Rollen kommen
+          // ausschließlich über PATCH /api/users/:userId/roles hinzu, nie
+          // direkt bei der Registrierung (docs/kampfrichter-modul-plan.md,
+          // Abschnitt 1.4).
+          roles: [invitation.role],
           athleteId: invitation.athleteId,
           // input.consent ist an dieser Stelle bereits durch
           // AcceptInvitationRequestSchema (consent: z.literal(true)) erzwungen —
@@ -706,14 +738,23 @@ export function createAuthService(deps: AuthServiceDeps) {
     // abweichende clubId wird ignoriert, analog zu createInvitation());
     // superadmin gehört zu keinem Verein und muss die clubId daher
     // explizit angeben.
-    async listClubMembers(requester: { role: string; clubId: string | null }, requestedClubId?: string) {
-      const clubId = requester.role === 'superadmin' ? requestedClubId : requester.clubId;
+    async listClubMembers(requester: { roles: string[]; clubId: string | null }, requestedClubId?: string) {
+      const clubId = requester.roles.includes('superadmin') ? requestedClubId : requester.clubId;
       if (!clubId) throw new ClubIdRequiredError();
 
-      const rolePriority: Record<string, number> = { admin: 0, trainer: 1, athlete: 2, superadmin: 3 };
+      // Sortiert nach der jeweils HÖCHSTEN Rolle einer Person (docs/
+      // kampfrichter-modul-plan.md, Abschnitt 1.4) — reine Anzeige-/
+      // Gruppierungslogik, keine Berechtigung. Ein Konto mit mehreren
+      // Rollen (z. B. trainer + athlete) erscheint dadurch in derselben
+      // Gruppe wie ein reiner Trainer.
+      // docs/kampfrichter-modul-plan.md, Abschnitt 1.4: "referee" reiht
+      // sich zwischen trainer und athlete ein (admin > trainer > referee >
+      // athlete).
+      const rolePriority: Record<string, number> = { admin: 0, trainer: 1, referee: 2, athlete: 3, superadmin: 4 };
+      const bestPriority = (roles: string[]) => Math.min(...roles.map((r) => rolePriority[r] ?? 9), 9);
       return listMembers(clubId, {
         compare: (a, b) => {
-          const roleDiff = (rolePriority[a.role] ?? 9) - (rolePriority[b.role] ?? 9);
+          const roleDiff = bestPriority(a.roles) - bestPriority(b.roles);
           return roleDiff !== 0 ? roleDiff : a.name.localeCompare(b.name);
         },
         project: toPublicUser,
@@ -732,12 +773,44 @@ export function createAuthService(deps: AuthServiceDeps) {
       if (!requester.clubId) throw new ClubIdRequiredError();
 
       return listMembers(requester.clubId, {
-        filter: (u) => u.role === 'trainer' || u.role === 'admin',
+        filter: (u) => u.roles.includes('trainer') || u.roles.includes('admin'),
         compare: (a, b) => a.name.localeCompare(b.name),
         // Sicherheitsreview 2026-08-27, Befund N6: schmale Projektion
         // statt toPublicUser() — siehe Kommentar bei listMembers() oben.
-        project: (u) => ({ id: u.id, name: u.name, role: u.role }),
+        project: (u) => ({ id: u.id, name: u.name, roles: u.roles }),
       });
+    },
+
+    // PATCH /api/users/:userId/roles — admin, eigener Verein (docs/
+    // kampfrichter-modul-plan.md, Abschnitt 1.4). Ersetzt die vollständige
+    // Rollenmenge einer Person (kein Add/Remove-Diff, siehe
+    // UpdateUserRolesRequestSchema-Kommentar in shared-types) und widerruft
+    // danach ALLE Sitzungen der Zielperson: ohne das bliebe eine entzogene
+    // Rolle bis zu JWT_REFRESH_TTL_DAYS (Standard 30 Tage) lang wirksam,
+    // weil das Access Token die Rollen zum Ausstellzeitpunkt einfriert und
+    // ein Refresh sie unverändert erneuert (analog revokeAllForUser() bei
+    // der DSGVO-Löschung/einem Passwortwechsel).
+    async updateUserRoles(targetUserId: string, roles: string[], requester: { clubId: string | null }) {
+      if (roles.includes('superadmin')) throw new CannotAssignSuperadminError();
+      if (!requester.clubId) throw new ClubIdRequiredError();
+
+      const target = await deps.users.findById(targetUserId);
+      if (!target) throw new UserNotFoundError();
+      if (target.clubId !== requester.clubId) throw new ForeignClubUserError();
+
+      // Entzieht diese Änderung der letzten "admin"-Rolle im Verein?
+      // Geprüft anhand des AKTUELLEN Bestands (vor dieser Änderung) — ein
+      // Verein mit z. B. zwei Admins darf einem von beiden die Rolle
+      // problemlos entziehen.
+      if (target.roles.includes('admin') && !roles.includes('admin')) {
+        const members = await deps.users.listByClub(requester.clubId);
+        const remainingAdmins = members.filter((m) => m.id !== targetUserId && m.roles.includes('admin'));
+        if (remainingAdmins.length === 0) throw new LastAdminError();
+      }
+
+      const updated = await deps.users.update(targetUserId, { roles });
+      await deps.refreshTokens.revokeAllForUser(targetUserId);
+      return toPublicUser(updated);
     },
   };
 }
