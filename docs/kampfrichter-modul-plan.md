@@ -270,9 +270,7 @@ export const QualificationTypeSchema = z.enum([
   // … bestehende Werte (trainer_c, trainer_b, trainer_a,
   // rettungsschwimmer_silber, rettungsschwimmer_gold, erste_hilfe,
   // kinderschutz, sonstige) …
-  'kampfrichter_c',
-  'kampfrichter_b',
-  'kampfrichter_a',
+  'kampfrichter',
   'schiedsrichter',
   'startrichter',
   'zeitnehmer',
@@ -281,15 +279,16 @@ export const QualificationTypeSchema = z.enum([
 ]);
 ```
 
-**Namensgebung als offener Punkt** (analog Entscheidung 1 im
-Qualifikationsplan): DSV- und Landesverbands-Bezeichnungen für
-Kampfrichterlizenzen unterscheiden sich (z. B. reine „Kampfrichter"-Lizenz vs.
-gestufte C/B/A wie bei Trainerscheinen, uneinheitliche Bezeichnung für
-„Wettkampfsekretär:in" vs. „Protokollführer:in"). Die obige Liste ist ein
-Vorschlag zur Diskussion mit dem tatsächlichen Vereins-/Verbandsbedarf, kein
-finaler Beschluss — Umbenennung vor dem Rollout ist unkritisch, da `type` nur
+**Entscheidung (Abstimmung 2026-09-05):** DSV-Standardbegriffe, bewusst
+**ohne** C/B/A-Stufung wie bei Trainerscheinen — im DSV-Kampfrichterwesen
+gibt es je Amt genau eine Lizenz (man ist „Kampfrichter:in"/„Schiedsrichter:in"/
+… oder nicht), keine gestuften Ausbaustufen. Dieselbe flache Liste wird in
+Abschnitt 5.3 für `RefereeFunctionSchema` verwendet — beide Enums bleiben
+trotzdem, wie dort begründet, unabhängige Definitionen. Landesverbands-
+spezifische Abweichungen in der Bezeichnung sind unkritisch, da `type` nur
 als String-Key referenziert wird (i18n-Keys `qualification.type.*` folgen der
-finalen Benennung 1:1).
+Benennung 1:1) und sich später anpassen lässt, ohne bestehende Daten zu
+migrieren.
 
 **Schreibrecht bleibt unverändert admin-only** (Entscheidung 2 des
 Qualifikationsplans gilt hier unverändert weiter — bewusst **kein**
@@ -364,7 +363,10 @@ wahrnehmen".
 - **`admin`:** vollständige Übersicht aller Kampfrichter:innen des Vereins
   (Personen mit `'referee'` in `roles`) mit Qualifikationsstatus und
   Einsatzhistorie — als Planungs-/Nachweisgrundlage (z. B. für die jährliche
-  Kampfrichter-Meldung an den Landesverband).
+  Kampfrichter-Meldung an den Landesverband). Zusätzlich CRUD-Formular je
+  Kampfrichter:in für deren Wettkampfeinsätze (Abschnitt 5.5) — sichtbar als
+  „im Namen von {Name} erfassen", mit deutlicher Kennzeichnung admin-seitig
+  angelegter Einträge (`createdByAdminId`, siehe 5.2) in der Liste.
 
 ### 4.3 i18n
 
@@ -431,6 +433,15 @@ model RefereeAssignment {
   // analog UserQualification.type (Abschnitt 2.2 des Qualifikationsplans).
   function        String
   note            String       @default("")
+  // Gesetzt, wenn der Eintrag über den admin-Schreibpfad (Abschnitt 5.5)
+  // statt von der Kampfrichter:in selbst angelegt/zuletzt geändert wurde —
+  // reines Audit-Feld für die Anzeige („von {name} erfasst"), keine
+  // Berechtigungsprüfung hängt daran. onDelete: SetNull, damit ein
+  // gelöschtes Admin-Konto nicht die Einsatzhistorie der Kampfrichter:in
+  // mitreißt (der Eintrag bleibt bestehen, nur die Zuordnung „von wem"
+  // geht verloren — analog Invitation.invitedById).
+  createdByAdminId String?
+  createdByAdmin  User?        @relation("RefereeAssignmentCreatedByAdmin", fields: [createdByAdminId], references: [id], onDelete: SetNull)
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
   deletedAt       DateTime?
@@ -441,9 +452,13 @@ model RefereeAssignment {
 }
 ```
 
-Ergänzung in `model User`: `refereeAssignments RefereeAssignment[]`; in
-`model Club`: `refereeAssignments RefereeAssignment[]`; in
-`model Competition`: `refereeAssignments RefereeAssignment[]`.
+Ergänzung in `model User`: `refereeAssignments RefereeAssignment[]`
+(Relation über `userId`) sowie `refereeAssignmentsCreatedAsAdmin
+RefereeAssignment[] @relation("RefereeAssignmentCreatedByAdmin")` (Gegenstück
+zu `createdByAdminId` — zwei getrennte Relationsnamen nötig, da `User` hier
+zweimal auf `RefereeAssignment` verweist); in `model Club`:
+`refereeAssignments RefereeAssignment[]`; in `model Competition`:
+`refereeAssignments RefereeAssignment[]`.
 
 ### 5.3 Funktion beim Wettkampf — feste Werteliste
 
@@ -480,6 +495,7 @@ export const RefereeAssignmentSchema = z.object({
   date: isoDate,
   function: RefereeFunctionSchema,
   note: z.string().max(500).default(''),
+  createdByAdminId: z.string().uuid().nullable(),
   createdAt: isoDate,
   updatedAt: isoDate,
 }).strict();
@@ -503,18 +519,25 @@ Qualifikationsplans) für `'kampfrichter'` statt `'qualifications'`.
 | `PATCH /api/me/referee-assignments/:id` | Eigenen Einsatz bearbeiten | `referee` |
 | `DELETE /api/me/referee-assignments/:id` | Eigenen Einsatz löschen (Soft-Delete) | `referee` |
 | `GET /api/users/:userId/referee-assignments` | Einsatzliste einer beliebigen Kampfrichter:in im eigenen Verein | `admin` |
+| `POST /api/users/:userId/referee-assignments` | Einsatz **im Namen von** `:userId` anlegen | `admin` |
+| `PATCH /api/users/:userId/referee-assignments/:id` | Beliebigen Einsatz von `:userId` bearbeiten | `admin` |
+| `DELETE /api/users/:userId/referee-assignments/:id` | Beliebigen Einsatz von `:userId` löschen (Soft-Delete) | `admin` |
 
-**Bewusster Unterschied zur Qualifikationsverwaltung (dort ausschließlich
-`admin`-Schreibzugriff, Entscheidung 2 des Qualifikationsplans):** Hier
-verwaltet die Kampfrichter:in ihre eigenen Einsätze **selbst**. Begründung:
-Eine Qualifikation ist ein extern verliehener, formal zu verifizierender
-Nachweis (Lehrgangs-Zertifikat) — Selbstauskunft wäre keine verlässliche
-Quelle. Ein Wettkampfeinsatz ist dagegen ein reines **Tatsachenprotokoll**
-über die eigene Teilnahme, das niemand zuverlässiger führen kann als die
-Kampfrichter:in selbst (sie war dort); ein Vier-Augen-Prinzip böte hier
-keinen nennenswerten Mehrwert und würde den Alltagsnutzen (zeitnah nach dem
-Wettkampf kurz selbst eintragen) unnötig erschweren. `admin` behält
-lesenden Zugriff auf alle Einsätze des Vereins für Planung/Reporting.
+**Selbstverwaltung UND Admin-Schreibzugriff (Entscheidung 2026-09-05,
+abweichend vom ursprünglichen Entwurf dieses Plans):** Anders als bei
+Qualifikationen (dort ausschließlich `admin`-Schreibzugriff, Entscheidung 2
+des Qualifikationsplans) verwaltet die Kampfrichter:in ihre eigenen Einsätze
+primär **selbst** — niemand kann die eigene Teilnahme zuverlässiger
+protokollieren. Zusätzlich darf `admin` im eigenen Verein Einsätze **im
+Namen einer Kampfrichter:in** anlegen/bearbeiten/löschen (z. B. vergessene
+Einträge vor einer Verbandsmeldung nacherfassen). Jeder admin-seitig
+angelegte oder zuletzt bearbeitete Eintrag setzt `createdByAdminId` auf die
+ID der handelnden Admin-Person (Abschnitt 5.2/5.4) — rein informativ in der
+UI („von {Admin-Name} erfasst"), keine Zugriffsbeschränkung: die
+Kampfrichter:in kann einen so entstandenen Eintrag danach genauso über
+`/api/me/referee-assignments/:id` weiter bearbeiten wie einen selbst
+angelegten (`createdByAdminId` bleibt dabei unverändert stehen — reines
+Herkunfts-Audit, kein „Gesperrt für Selbstbearbeitung"-Flag).
 
 `clubId`-Prüfung wie bei den Qualifikationsendpunkten: Ziel-`User` von
 `:userId`-Routen muss im selben Verein sein wie die anfragende Person.
@@ -544,46 +567,58 @@ befristete Berechtigung. Kein neuer Cron-Job erforderlich.
   `competitionName` leer).
 - Repository: In-Memory-Variante analog `qualifications.repository.memory.ts`.
 - Route: `referee` kann eigene Einsätze anlegen/bearbeiten/löschen, **nicht**
-  die einer anderen Person (auch nicht im eigenen Verein); `admin` kann
-  lesen, aber laut 5.5 nicht schreiben — falls doch ein
-  Admin-Schreibzugriff gewünscht wird (siehe offene Punkte, 6.4), wäre das
-  hier zusätzlich zu testen; Modul-Gate `403`, wenn `kampfrichter` nicht
-  gebucht ist; `competitionId` aus fremdem Verein wird abgelehnt.
+  die einer anderen Person (auch nicht im eigenen Verein) — Schreibversuch
+  über `/api/users/:userId/...` mit `userId !== eigene ID` und Rolle
+  `referee` (ohne `admin`) → `403`; `admin` kann sowohl lesen als auch im
+  Namen jeder Kampfrichter:in des eigenen Vereins schreiben (nicht eines
+  fremden Vereins → `403`), gesetztes `createdByAdminId` nach admin-seitigem
+  Anlegen, unverändert nach nachfolgender Selbstbearbeitung durch die
+  Kampfrichter:in; Modul-Gate `403`, wenn `kampfrichter` nicht gebucht ist;
+  `competitionId` aus fremdem Verein wird abgelehnt.
 
 ---
 
-## 6. Offene Punkte / Entscheidungen zur Abstimmung
+## 6. Entscheidungen
 
-Analog zum Stil in Abschnitt 8 des Qualifikationsplans — hier noch nicht
-final entschieden, sondern zur Abstimmung mit dem tatsächlichen
-Vereins-/Verbandsbedarf vorgeschlagen:
+Ursprünglich als offene Fragen formuliert (analog zum Stil in Abschnitt 8 des
+Qualifikationsplans); die folgenden Entscheidungen wurden am 2026-09-05
+getroffen und oben in den jeweiligen Abschnitten bereits eingearbeitet:
 
-1. **Genaue Bezeichnungen/Stufung der Kampfrichter-Qualifikationstypen**
-   (Abschnitt 3.1) — DSV-/Landesverbandsterminologie klären, bevor die
-   Enum-Werte final gewählt werden (spätere Umbenennung ist möglich, aber
-   verlangt eine Datenmigration bestehender `type`-Werte).
-2. **Admin-Schreibzugriff auf fremde Wettkampfeinsätze:** Abschnitt 5.5 sieht
-   für `admin` bewusst nur Lesezugriff vor. Falls Vereine z. B. nachträgliche
-   Korrekturen durch die Vereinsverwaltung brauchen (Kampfrichter:in vergisst
-   Eintrag, Verein muss für eine Verbandsmeldung nacherfassen), wäre ein
-   zusätzlicher, klar als „im Namen von" gekennzeichneter Admin-Schreibpfad
-   nötig — hier bewusst nicht vorweggenommen.
-3. **Rollen-Umschalter als spätere UX-Verbesserung:** Abschnitt 1.6
-   entscheidet sich bewusst gegen einen Rollen-Switcher, da „gleichzeitig
-   wahrnehmen" die Vereinigung aller Module verlangt. Bei sehr vielen
-   Rollen/Modulen pro Person könnte die Navigation dadurch überladen wirken;
-   eine optionale visuelle Gruppierung nach Rolle in der Navigation (nicht
-   Ausblendung) wäre eine spätere, rein gestalterische Ergänzung, nicht Teil
-   dieses Plans.
-4. **Reporting-Export** (z. B. „Kampfrichter-Einsatzstatistik" als PDF/CSV
-   für die jährliche Landesverbandsmeldung) — fachlich naheliegend, aber
-   bewusst nicht Teil dieses Plans, um den Umfang nicht vorzeitig
-   aufzublähen; `admin`-Leseendpunkt aus Abschnitt 5.5 liefert die
-   Rohdaten dafür bereits.
-5. **Bestandsvereine beim Rollout:** wie beim Qualifikationsmodul offen, ob
-   `kampfrichter` bestehenden Vereinen automatisch zugebucht wird oder ein
-   Superadmin es je Verein manuell aktivieren muss (rein operative
-   Rollout-Entscheidung, technisch unproblematisch).
+1. **Bezeichnungen/Stufung der Kampfrichter-Qualifikationstypen**
+   (Abschnitt 3.1). **Entscheidung:** DSV-Standardbegriffe, flache Liste ohne
+   C/B/A-Stufung (`kampfrichter`, `schiedsrichter`, `startrichter`,
+   `zeitnehmer`, `bahnrichter`, `wettkampfsekretaer`) — im
+   DSV-Kampfrichterwesen gibt es je Amt eine Lizenz, kein Stufensystem wie
+   bei Trainerscheinen. Landesverbandsspezifische Abweichungen bleiben
+   unkritisch (String-Key, siehe 3.1).
+2. **Admin-Schreibzugriff auf fremde Wettkampfeinsätze** (Abschnitt 5.5).
+   **Entscheidung:** Ja — zusätzlich zur Selbstverwaltung durch die
+   Kampfrichter:in darf `admin` im eigenen Verein Einsätze im Namen einer
+   Kampfrichter:in anlegen/bearbeiten/löschen (z. B. Nacherfassung vor einer
+   Verbandsmeldung), mit `createdByAdminId` als reinem Herkunfts-Audit-Feld
+   (Abschnitt 5.2/5.4/5.5).
+3. **Reporting-Export** (z. B. „Kampfrichter-Einsatzstatistik" als PDF/CSV
+   für die jährliche Landesverbandsmeldung). **Entscheidung:** Nicht Teil
+   dieses Plans — der `admin`-Leseendpunkt aus Abschnitt 5.5 liefert die
+   Rohdaten bereits; ein Export bleibt eine spätere, eigenständige
+   Erweiterung, um den Umfang hier nicht vorzeitig aufzublähen.
+4. **Bestandsvereine beim Rollout.** **Entscheidung:** `kampfrichter` wird
+   bestehenden Vereinen automatisch zugebucht (siehe Migrationsschritt in
+   Abschnitt 7, Phase C) — analog zum Standardverhalten neuer Vereine
+   (`enabledModules: input.enabledModules ?? [...MODULE_KEYS]`, siehe
+   Abschnitt 1.2 des Qualifikationsplans). Ein Superadmin kann das Modul
+   danach je Verein über die bestehende Checkbox-Liste in `clubForm.js`
+   wieder deaktivieren, falls ein Verein keine Kampfrichter:innen hat.
+
+### Verbleibender offener Punkt
+
+- **Rollen-Umschalter als spätere UX-Verbesserung:** Abschnitt 1.6
+  entscheidet sich bewusst gegen einen Rollen-Switcher, da „gleichzeitig
+  wahrnehmen" die Vereinigung aller Module verlangt. Bei sehr vielen
+  Rollen/Modulen pro Person könnte die Navigation dadurch überladen wirken;
+  eine optionale visuelle Gruppierung nach Rolle in der Navigation (nicht
+  Ausblendung) wäre eine spätere, rein gestalterische Ergänzung, nicht Teil
+  dieses Plans — bislang nicht zur Abstimmung gestellt.
 
 ---
 
@@ -609,14 +644,23 @@ Vereins-/Verbandsbedarf vorgeschlagen:
 
 **Phase C — Kampfrichter-Modul & Wettkampfeinsätze:**
 8. `MODULE_PACKAGES.kampfrichter` + `ROUTE_TO_PACKAGE`-Eintrag
-   (Abschnitt 4.1).
-9. Prisma-Modell `RefereeAssignment` + Migration (Abschnitt 5.2).
+   (Abschnitt 4.1) **plus** Datenmigration, die `'kampfrichter'` in
+   `Club.enabledModules` für jeden bestehenden Verein ergänzt, der es noch
+   nicht enthält (Entscheidung 4, Abschnitt 6 — automatisches Rollout statt
+   manueller Superadmin-Aktivierung; einmaliges Skript analog dem Backfill
+   aus Phase A, Schritt 1, kein Rückwärts-Feature-Flag nötig, da ein
+   Superadmin das Modul danach jederzeit über `clubForm.js` wieder
+   deaktivieren kann).
+9. Prisma-Modell `RefereeAssignment` inkl. `createdByAdminId` + Migration
+   (Abschnitt 5.2).
 10. `RefereeFunctionSchema`/`RefereeAssignmentSchema` in `shared-types`
     (Abschnitt 5.3/5.4).
-11. Backend-Modul `apps/api/src/modules/referees/` (Abschnitt 5.5).
+11. Backend-Modul `apps/api/src/modules/referees/` inkl. Selbstverwaltungs-
+    UND Admin-Schreibpfad (Abschnitt 5.5).
 12. `GET /api/me/export` um `RefereeAssignment` ergänzen (Abschnitt 5.7).
-13. Frontend-Modul `apps/web/js/modules/kampfrichter.js` (Abschnitt 4.2) +
-    Registrierung in `router.js`.
+13. Frontend-Modul `apps/web/js/modules/kampfrichter.js` (Abschnitt 4.2,
+    inkl. admin-seitigem „im Namen von"-Formular) + Registrierung in
+    `router.js`.
 14. i18n-Keys ergänzen (Abschnitt 4.3).
 15. Tests je Schicht (Abschnitt 1.7, 5.8).
 16. `docs/backend-plan.md` Abschnitt „6 — Erweiterungen" um den
