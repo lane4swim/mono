@@ -28,7 +28,7 @@ describe('PrismaClubRepository.createWithAdminInvitation()', () => {
     // wird später nullable, siehe schema.prisma: onDelete: SetNull) —
     // braucht daher ein tatsächlich existierendes User-Konto.
     const superadmin = await prisma.user.create({
-      data: { clubId: null, name: 'Super', email: `super-${randomUUID()}@example.org`, passwordHash: 'hash', role: 'superadmin' },
+      data: { clubId: null, name: 'Super', email: `super-${randomUUID()}@example.org`, passwordHash: 'hash', role: 'superadmin', roles: ['superadmin'] },
     });
 
     const { club, invitation } = await repo.createWithAdminInvitation(

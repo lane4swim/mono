@@ -132,5 +132,22 @@ export const QUALIFICATION_TYPES = [
   { value: 'rettungsschwimmer_gold', label: 'Rettungsschwimmschein Gold' },
   { value: 'erste_hilfe', label: 'Erste-Hilfe-Kurs' },
   { value: 'kinderschutz', label: 'Kinderschutz-Schulung' },
+  // Kampfrichter-Ämter (docs/kampfrichter-modul-plan.md, Abschnitt 3.1) —
+  // siehe REFEREE_QUALIFICATION_TYPES für die Teilmenge dieser sechs Werte.
+  { value: 'kampfrichter', label: 'Kampfrichter:in' },
+  { value: 'schiedsrichter', label: 'Schiedsrichter:in' },
+  { value: 'startrichter', label: 'Startrichter:in' },
+  { value: 'zeitnehmer', label: 'Zeitnehmer:in' },
+  { value: 'bahnrichter', label: 'Bahnrichter:in' },
+  { value: 'wettkampfsekretaer', label: 'Wettkampfsekretär:in (Protokoll)' },
   { value: 'sonstige', label: 'Sonstige' },
 ];
+
+// Teilmenge von QUALIFICATION_TYPES, die fachlich zu einer Kampfrichter:in
+// gehört (docs/kampfrichter-modul-plan.md, Abschnitt 3.2) — MUSS mit
+// REFEREE_QUALIFICATION_TYPES in packages/shared-types/src/qualification.ts
+// übereinstimmen (apps/web kann dieses Backend-Paket nicht importieren,
+// siehe Kommentar bei QUALIFICATION_TYPES oben). Wird vom künftigen
+// Kampfrichter-Modul (Phase C) genutzt, um qualifications.js' volle Liste
+// auf die Kampfrichter-relevanten Typen zu filtern.
+export const REFEREE_QUALIFICATION_TYPES = ['kampfrichter', 'schiedsrichter', 'startrichter', 'zeitnehmer', 'bahnrichter', 'wettkampfsekretaer'];

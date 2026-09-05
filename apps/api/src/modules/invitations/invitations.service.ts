@@ -338,7 +338,7 @@ export function createInvitationsService(deps: InvitationsServiceDeps) {
       const counts = await deps.clubs.countMembersForClubs(clubs.map((c) => c.id));
       return clubs.map((club) => ({
         ...club,
-        memberCounts: counts.get(club.id) ?? { admin: 0, trainer: 0, athlete: 0 },
+        memberCounts: counts.get(club.id) ?? { admin: 0, trainer: 0, athlete: 0, referee: 0 },
       }));
     },
 

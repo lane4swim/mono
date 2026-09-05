@@ -650,11 +650,49 @@ getroffen und oben in den jeweiligen Abschnitten bereits eingearbeitet:
    dieser Umsetzung (separate, spätere Contract-Migration, siehe
    Abschnitt 1.3).
 
-**Phase B — Rolle & Qualifikationen:**
-6. `'referee'` in `RoleSchema`/`InvitationRoleSchema`;
-   `ClubMemberCountsSchema` + Zähllogik anpassen (Abschnitt 2).
-7. `QualificationTypeSchema` um Kampfrichter-Typen erweitern, i18n-Labels
-   ergänzen (Abschnitt 3.1); `REFEREE_QUALIFICATION_TYPES`-Konstante.
+**Phase B — Rolle & Qualifikationen: ✅ umgesetzt (2026-09-05)**
+6. ✅ `'referee'` in `RoleSchema`/`InvitationRoleSchema` ergänzt.
+   `ClubMemberCountsSchema` um `referee` erweitert; Zähllogik in
+   `invitations.repository.ts`/`.memory.ts` dabei grundsätzlich korrigiert
+   (Abschnitt 2 hatte bereits vorausgesehen, dass ein einzelnes
+   `groupBy(['clubId','role'])` über die Mehrfachrollen-Spalte nicht mehr
+   funktioniert — jetzt ein `findMany()` + Zählung je Rolle in JS, ein
+   Konto mit mehreren Rollen erhöht dadurch jeden passenden Zähler).
+   `GET /api/users`-Sortierpriorität (`auth.service.ts: rolePriority`) um
+   `referee` ergänzt (admin > trainer > referee > athlete).
+   `userManagement.js`: eigene Gruppe „Kampfrichter:innen" in der
+   Mitgliederliste, `referee` als Einlade- und Rollen-Verwaltungs-Option;
+   Superadmin-Oberfläche (`admin/admin.js`) um Kampfrichter:innen-Spalte
+   ergänzt. i18n-Labels (`settings.role_referee` u. a.) in beiden Sprachen.
+   Beim Umsetzen zusätzlich entdeckt und behoben: `prisma/seed.ts` sowie
+   mehrere `test-integration/*.ts`-Fixtures legten Nutzer:innen bislang
+   nur mit der transitionellen `role`-Spalte an (Phase-A-Lücke, `roles`
+   blieb dabei leer) — ergänzt; `qualificationReminder.repository.ts:
+   findAdminsForClub()` filterte ebenfalls noch über die alte
+   Einzelrollen-Spalte statt `roles: { has: 'admin' }` — korrigiert, sonst
+   hätten Admin-Konten mit zusätzlicher Rolle (roles[0] ≠ 'admin') keine
+   Ablauf-Erinnerungs-Mails mehr bekommen.
+7. ✅ `QualificationTypeSchema` um die sechs Kampfrichter-Typen erweitert
+   (`kampfrichter`, `schiedsrichter`, `startrichter`, `zeitnehmer`,
+   `bahnrichter`, `wettkampfsekretaer`), i18n-Labels in
+   `refdata.qualificationTypes.*` (beide Sprachen) sowie im
+   `QUALIFICATION_TYPES`-Fallback-Array (`apps/web/js/refdata.js`)
+   ergänzt; `REFEREE_QUALIFICATION_TYPES`-Konstante in
+   `packages/shared-types/src/qualification.ts` UND als gespiegeltes
+   Frontend-Pendant in `refdata.js` angelegt (Phase C wird sie
+   importieren, um die Kampfrichter-Modulseite zu filtern).
+
+   **Bewusst nicht Teil dieser Umsetzung:** `qualifications.js`s
+   Rollen-Gate (`roles: ['admin','trainer','athlete']`) sowie der
+   Backend-`selfGuard` in `qualifications.route.ts` bleiben unverändert
+   OHNE `'referee'` — ein reines Kampfrichter-Konto (ohne trainer/admin/
+   athlete-Rolle) hat dadurch bis Phase C keinen Zugriff auf
+   `GET /api/me/qualifications`. Das entspricht der in Abschnitt 4.2
+   getroffenen Entscheidung: die eigene, gefilterte Ansicht der
+   Kampfrichter-Qualifikationen kommt über das neue, dedizierte
+   Kampfrichter-Modul (Phase C), nicht über die allgemeine
+   Qualifikationsseite — deren Zuschnitt ändert sich laut Abschnitt 3.2
+   bewusst nicht.
 
 **Phase C — Kampfrichter-Modul & Wettkampfeinsätze:**
 8. `MODULE_PACKAGES.kampfrichter` + `ROUTE_TO_PACKAGE`-Eintrag

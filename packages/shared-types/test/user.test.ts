@@ -70,7 +70,7 @@ describe('UserSchema', () => {
 });
 
 describe('RoleSchema', () => {
-  it.each(['trainer', 'admin', 'athlete'])('akzeptiert die Rolle "%s"', (role) => {
+  it.each(['trainer', 'admin', 'athlete', 'referee'])('akzeptiert die Rolle "%s"', (role) => {
     expect(RoleSchema.safeParse(role).success).toBe(true);
   });
 

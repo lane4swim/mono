@@ -348,7 +348,7 @@ describe('invitationsService — Einladungs-E-Mail-Versand', () => {
 
 describe('invitationsService.listClubs — Mitgliederzahlen', () => {
   it('liefert für jeden Verein die Anzahl aktiver Admins/Trainer:innen/Athlet:innen', async () => {
-    let clubMembers: Array<{ clubId: string | null; role: string; deletedAt?: Date | null }> = [];
+    let clubMembers: Array<{ clubId: string | null; roles: string[]; deletedAt?: Date | null }> = [];
     const clubs = new InMemoryClubRepository(() => clubMembers);
     const invitations = new InMemoryInvitationRepository();
     const mailer = new InMemoryMailSender();
@@ -356,31 +356,45 @@ describe('invitationsService.listClubs — Mitgliederzahlen', () => {
 
     const club = await clubs.create({ name: 'Club A' });
     clubMembers = [
-      { clubId: club.id, role: 'admin' },
-      { clubId: club.id, role: 'trainer' },
-      { clubId: club.id, role: 'trainer' },
-      { clubId: club.id, role: 'athlete' },
+      { clubId: club.id, roles: ['admin'] },
+      { clubId: club.id, roles: ['trainer'] },
+      { clubId: club.id, roles: ['trainer'] },
+      { clubId: club.id, roles: ['athlete'] },
     ];
 
     const result = await service.listClubs(SUPERADMIN);
     expect(result).toHaveLength(1);
-    expect(result[0]!.memberCounts).toEqual({ admin: 1, trainer: 2, athlete: 1 });
+    expect(result[0]!.memberCounts).toEqual({ admin: 1, trainer: 2, athlete: 1, referee: 0 });
+  });
+
+  // docs/kampfrichter-modul-plan.md, Abschnitt 2: eine Person mit mehreren
+  // Rollen gleichzeitig (z. B. trainer + referee) erhöht JEDEN passenden
+  // Zähler — die Rollen schließen sich seit Phase A nicht mehr gegenseitig
+  // aus.
+  it('zählt eine Person mit mehreren Rollen in jedem passenden Zähler', async () => {
+    const clubId = 'the-club-id';
+    const clubs = new InMemoryClubRepository(() => [
+      { clubId, roles: ['trainer', 'referee'] },
+      { clubId, roles: ['athlete'] },
+    ]);
+    const counts = await clubs.countMembersForClubs([clubId]);
+    expect(counts.get(clubId)).toEqual({ admin: 0, trainer: 1, athlete: 1, referee: 1 });
   });
 
   it('zählt nur nicht-gelöschte Nutzer:innen', async () => {
     const clubId = 'the-club-id';
     const clubs = new InMemoryClubRepository(() => [
-      { clubId, role: 'trainer', deletedAt: null },
-      { clubId, role: 'trainer', deletedAt: new Date() }, // gelöscht -> zählt nicht
+      { clubId, roles: ['trainer'], deletedAt: null },
+      { clubId, roles: ['trainer'], deletedAt: new Date() }, // gelöscht -> zählt nicht
     ]);
     const counts = await clubs.countMembersForClubs([clubId]);
-    expect(counts.get(clubId)).toEqual({ admin: 0, trainer: 1, athlete: 0 });
+    expect(counts.get(clubId)).toEqual({ admin: 0, trainer: 1, athlete: 0, referee: 0 });
   });
 
-  it('liefert 0/0/0 für einen Verein ohne Mitglieder', async () => {
+  it('liefert 0/0/0/0 für einen Verein ohne Mitglieder', async () => {
     const clubs = new InMemoryClubRepository();
     const counts = await clubs.countMembersForClubs(['irgendeine-id']);
-    expect(counts.get('irgendeine-id')).toEqual({ admin: 0, trainer: 0, athlete: 0 });
+    expect(counts.get('irgendeine-id')).toEqual({ admin: 0, trainer: 0, athlete: 0, referee: 0 });
   });
 });
 

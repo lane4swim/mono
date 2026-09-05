@@ -229,7 +229,7 @@ describe('PrismaSyncGateway.findClubIdForUser()', () => {
   it('liefert die clubId eines existierenden Nutzers', async () => {
     const club = await createTestClub();
     const user = await prisma.user.create({
-      data: { clubId: club.id, name: 'Trainer:in', email: `t-${randomUUID()}@example.org`, passwordHash: 'hash', role: 'trainer' },
+      data: { clubId: club.id, name: 'Trainer:in', email: `t-${randomUUID()}@example.org`, passwordHash: 'hash', role: 'trainer', roles: ['trainer'] },
     });
     expect(await gateway.findClubIdForUser(user.id)).toBe(club.id);
   });
@@ -240,7 +240,7 @@ describe('PrismaSyncGateway.findClubIdForUser()', () => {
 
   it('liefert null für superadmin (clubId ist dort null)', async () => {
     const user = await prisma.user.create({
-      data: { clubId: null, name: 'Super', email: `s-${randomUUID()}@example.org`, passwordHash: 'hash', role: 'superadmin' },
+      data: { clubId: null, name: 'Super', email: `s-${randomUUID()}@example.org`, passwordHash: 'hash', role: 'superadmin', roles: ['superadmin'] },
     });
     expect(await gateway.findClubIdForUser(user.id)).toBeNull();
   });

@@ -225,7 +225,7 @@ async function main() {
       await prisma.user.create({
         data: {
           id: user.id, clubId: user.clubId, name: user.name, email: user.email,
-          passwordHash, role: user.role, athleteId: user.athleteId, locale: user.locale,
+          passwordHash, role: user.role, roles: [user.role], athleteId: user.athleteId, locale: user.locale,
         },
       });
     }

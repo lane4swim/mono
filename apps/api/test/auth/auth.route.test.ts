@@ -817,6 +817,105 @@ describe('GET /api/users (Nutzerverwaltung: bestehende Vereinsmitglieder)', () =
   });
 });
 
+// docs/kampfrichter-modul-plan.md, Abschnitt 1.4 — bislang ungetestet,
+// nachgeholt im Zuge von Phase B (Rolle "referee").
+describe('PATCH /api/users/:userId/roles', () => {
+  it('liefert 401 ohne Authentifizierung', async () => {
+    const { app } = await buildTestApp();
+    const response = await app.inject({ method: 'PATCH', url: `/api/users/${INVITER_ID}/roles`, payload: { roles: ['trainer'] } });
+    expect(response.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it('lehnt eine trainer-Rolle ab (403) — nur admin darf Rollen ändern', async () => {
+    const { app, invitations } = await buildTestApp();
+    const trainerToken = await seedInvitationToken(invitations, { email: 'trainer@example.org', role: 'trainer' });
+    const trainerReg = await app.inject({ method: 'POST', url: '/auth/register', payload: { token: trainerToken, name: 'Trainer', password: 'ein-sicheres-passwort', consent: true } });
+    const { accessToken, user } = trainerReg.json();
+
+    const response = await app.inject({
+      method: 'PATCH', url: `/api/users/${user.id}/roles`,
+      headers: { authorization: `Bearer ${accessToken}` }, payload: { roles: ['athlete'] },
+    });
+    expect(response.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it('admin kann einer Person im eigenen Verein eine zusätzliche Rolle (referee) zuweisen (200)', async () => {
+    const { app, invitations } = await buildTestApp();
+    const adminToken = await seedInvitationToken(invitations, { email: 'admin@example.org', role: 'admin' });
+    const adminReg = await app.inject({ method: 'POST', url: '/auth/register', payload: { token: adminToken, name: 'Admin', password: 'ein-sicheres-passwort', consent: true } });
+    const { accessToken: adminAccessToken } = adminReg.json();
+
+    const trainerToken = await seedInvitationToken(invitations, { email: 'trainer@example.org', role: 'trainer' });
+    const trainerReg = await app.inject({ method: 'POST', url: '/auth/register', payload: { token: trainerToken, name: 'Trainer', password: 'ein-sicheres-passwort', consent: true } });
+    const { user: trainer } = trainerReg.json();
+
+    const response = await app.inject({
+      method: 'PATCH', url: `/api/users/${trainer.id}/roles`,
+      headers: { authorization: `Bearer ${adminAccessToken}` }, payload: { roles: ['trainer', 'referee'] },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().roles.sort()).toEqual(['referee', 'trainer']);
+
+    const listResponse = await app.inject({ method: 'GET', url: '/api/users', headers: { authorization: `Bearer ${adminAccessToken}` } });
+    const updatedTrainer = listResponse.json().users.find((u: { id: string }) => u.id === trainer.id);
+    expect(updatedTrainer.roles.sort()).toEqual(['referee', 'trainer']);
+    await app.close();
+  });
+
+  it('lehnt die Zuweisung von "superadmin" ab (400)', async () => {
+    const { app, invitations } = await buildTestApp();
+    const adminToken = await seedInvitationToken(invitations, { email: 'admin@example.org', role: 'admin' });
+    const adminReg = await app.inject({ method: 'POST', url: '/auth/register', payload: { token: adminToken, name: 'Admin', password: 'ein-sicheres-passwort', consent: true } });
+    const { accessToken: adminAccessToken } = adminReg.json();
+
+    const trainerToken = await seedInvitationToken(invitations, { email: 'trainer@example.org', role: 'trainer' });
+    const trainerReg = await app.inject({ method: 'POST', url: '/auth/register', payload: { token: trainerToken, name: 'Trainer', password: 'ein-sicheres-passwort', consent: true } });
+    const { user: trainer } = trainerReg.json();
+
+    const response = await app.inject({
+      method: 'PATCH', url: `/api/users/${trainer.id}/roles`,
+      headers: { authorization: `Bearer ${adminAccessToken}` }, payload: { roles: ['superadmin'] },
+    });
+    expect(response.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it('lehnt es ab, der letzten admin-Rolle im Verein die Rolle zu entziehen (409)', async () => {
+    const { app, invitations } = await buildTestApp();
+    const adminToken = await seedInvitationToken(invitations, { email: 'admin@example.org', role: 'admin' });
+    const adminReg = await app.inject({ method: 'POST', url: '/auth/register', payload: { token: adminToken, name: 'Admin', password: 'ein-sicheres-passwort', consent: true } });
+    const { accessToken: adminAccessToken, user: admin } = adminReg.json();
+
+    const response = await app.inject({
+      method: 'PATCH', url: `/api/users/${admin.id}/roles`,
+      headers: { authorization: `Bearer ${adminAccessToken}` }, payload: { roles: ['trainer'] },
+    });
+    expect(response.statusCode).toBe(409);
+    await app.close();
+  });
+
+  it('lehnt eine Zielperson aus einem fremden Verein ab (403)', async () => {
+    const { app, invitations, clubs } = await buildTestApp();
+    const adminToken = await seedInvitationToken(invitations, { email: 'admin@example.org', role: 'admin' });
+    const adminReg = await app.inject({ method: 'POST', url: '/auth/register', payload: { token: adminToken, name: 'Admin', password: 'ein-sicheres-passwort', consent: true } });
+    const { accessToken: adminAccessToken } = adminReg.json();
+
+    const otherClub = await clubs.create({ name: 'Anderer Verein' });
+    const foreignToken = await seedInvitationToken(invitations, { email: 'fremd@example.org', role: 'trainer', clubId: otherClub.id });
+    const foreignReg = await app.inject({ method: 'POST', url: '/auth/register', payload: { token: foreignToken, name: 'Fremd', password: 'ein-sicheres-passwort', consent: true } });
+    const { user: foreignUser } = foreignReg.json();
+
+    const response = await app.inject({
+      method: 'PATCH', url: `/api/users/${foreignUser.id}/roles`,
+      headers: { authorization: `Bearer ${adminAccessToken}` }, payload: { roles: ['athlete'] },
+    });
+    expect(response.statusCode).toBe(403);
+    await app.close();
+  });
+});
+
 describe('GET /api/users/trainers (mögliche Zuständige für ein Handlungsfeld)', () => {
   it('liefert 401 ohne Authentifizierung', async () => {
     const { app } = await buildTestApp();

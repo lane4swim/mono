@@ -747,7 +747,10 @@ export function createAuthService(deps: AuthServiceDeps) {
       // Gruppierungslogik, keine Berechtigung. Ein Konto mit mehreren
       // Rollen (z. B. trainer + athlete) erscheint dadurch in derselben
       // Gruppe wie ein reiner Trainer.
-      const rolePriority: Record<string, number> = { admin: 0, trainer: 1, athlete: 2, superadmin: 3 };
+      // docs/kampfrichter-modul-plan.md, Abschnitt 1.4: "referee" reiht
+      // sich zwischen trainer und athlete ein (admin > trainer > referee >
+      // athlete).
+      const rolePriority: Record<string, number> = { admin: 0, trainer: 1, referee: 2, athlete: 3, superadmin: 4 };
       const bestPriority = (roles: string[]) => Math.min(...roles.map((r) => rolePriority[r] ?? 9), 9);
       return listMembers(clubId, {
         compare: (a, b) => {

@@ -127,6 +127,7 @@ function renderMembersGroupedByRole(members, onRolesChanged) {
   const groups = [
     { role: 'admin', label: t('usermgmt.groupAdmins') },
     { role: 'trainer', label: t('usermgmt.groupTrainers') },
+    { role: 'referee', label: t('usermgmt.groupReferees') },
     { role: 'athlete', label: t('usermgmt.groupAthletes') },
   ];
   groups.forEach(({ role, label }) => {
@@ -159,7 +160,7 @@ function renderMembersGroupedByRole(members, onRolesChanged) {
 // Alle vergebbaren Rollen außer "superadmin" (docs/kampfrichter-modul-
 // plan.md, Abschnitt 1.4 — wird ausschließlich über
 // scripts/createSuperAdmin.ts vergeben, nie über diesen Dialog).
-const ASSIGNABLE_ROLES = ['admin', 'trainer', 'athlete'];
+const ASSIGNABLE_ROLES = ['admin', 'trainer', 'athlete', 'referee'];
 
 // Rollen-Verwaltung für ein bestehendes Vereinsmitglied (PATCH
 // /api/users/:userId/roles) — ersetzt die vollständige Rollenmenge, kein
@@ -303,7 +304,11 @@ function renderInviteSection(clubs, onChanged) {
 function openInviteModal(clubs, onChanged) {
   const isSuper = isSuperAdmin();
   const form = el('form', { class: 'form-grid' });
-  const fRole = selectInput([{ value: 'trainer', label: t('settings.role_trainer') }, { value: 'athlete', label: t('settings.role_athlete') }], 'trainer');
+  const fRole = selectInput([
+    { value: 'trainer', label: t('settings.role_trainer') },
+    { value: 'athlete', label: t('settings.role_athlete') },
+    { value: 'referee', label: t('settings.role_referee') },
+  ], 'trainer');
   const fEmail = textInput('', { type: 'email', required: true });
   const fClub = isSuper
     ? selectInput(clubs.map(c => ({ value: c.id, label: c.name })), clubs[0]?.id || '')

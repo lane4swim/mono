@@ -10,9 +10,13 @@
 //   - admin:      verwaltet genau einen Verein, lädt Trainer:innen und
 //                 Athlet:innen dieses Vereins ein.
 //   - trainer / athlete: wie bisher, jeweils genau einem Verein zugehörig.
+//   - referee:    Kampfrichter:in (docs/kampfrichter-modul-plan.md,
+//                 Abschnitt 2) — einem Verein zugehörig, wie trainer/
+//                 athlete kombinierbar mit jeder anderen Nicht-superadmin-
+//                 Rolle (siehe UserRolesSchema unten).
 import { z } from 'zod';
 
-export const RoleSchema = z.enum(['superadmin', 'admin', 'trainer', 'athlete']);
+export const RoleSchema = z.enum(['superadmin', 'admin', 'trainer', 'athlete', 'referee']);
 export type Role = z.infer<typeof RoleSchema>;
 
 // docs/kampfrichter-modul-plan.md, Abschnitt 1.2: ein Konto kann künftig

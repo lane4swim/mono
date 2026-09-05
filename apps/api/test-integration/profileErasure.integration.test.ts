@@ -42,6 +42,7 @@ async function seedAthleteUser(clubId: string | null) {
       email: `mara-${randomUUID()}@example.org`,
       passwordHash: 'hash',
       role: 'athlete',
+      roles: ['athlete'],
       athleteId: athlete?.id ?? null,
     },
   });
@@ -453,7 +454,7 @@ describe('PrismaErasureJobGateway.purgeUserAndDependents() — Comment.authorNam
     const club = await createTestClub();
     const now = new Date();
     const trainer = await prisma.user.create({
-      data: { clubId: club.id, name: 'Coach Nina', email: `nina-${randomUUID()}@example.org`, passwordHash: 'hash', role: 'trainer', athleteId: null },
+      data: { clubId: club.id, name: 'Coach Nina', email: `nina-${randomUUID()}@example.org`, passwordHash: 'hash', role: 'trainer', roles: ['trainer'], athleteId: null },
     });
     const exercise = await prisma.exercise.create({
       data: { clubId: club.id, name: 'Beinschlag', category: 'kick', comments: [{ id: 'c1', authorId: trainer.id, authorName: 'Coach Nina', text: 'Trainer-Hinweis', createdAt: now.toISOString() }] },

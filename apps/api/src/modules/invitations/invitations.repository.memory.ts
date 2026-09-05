@@ -19,10 +19,12 @@ import type {
 // Minimale Form eines Nutzer-Datensatzes, wie sie für die Zählung
 // gebraucht wird — bewusst nicht auf UserRecord aus modules/auth
 // angewiesen, um keine Modul-Kopplung zwischen auth und invitations
-// einzuführen.
+// einzuführen. `roles` (statt eines Einzelwerts) — analog zur echten
+// Prisma-Implementierung zählt eine Person mit mehreren Rollen (docs/
+// kampfrichter-modul-plan.md, Abschnitt 1) in jedem passenden Zähler mit.
 export interface CountableUser {
   clubId: string | null;
-  role: string;
+  roles: string[];
   deletedAt?: Date | null;
 }
 
@@ -89,16 +91,19 @@ export class InMemoryClubRepository implements ClubRepository {
 
   async countMembersForClubs(clubIds: string[]): Promise<Map<string, ClubMemberCounts>> {
     const result = new Map<string, ClubMemberCounts>();
-    for (const clubId of clubIds) result.set(clubId, { admin: 0, trainer: 0, athlete: 0 });
+    for (const clubId of clubIds) result.set(clubId, { admin: 0, trainer: 0, athlete: 0, referee: 0 });
     for (const user of this.getUsers()) {
       if (user.deletedAt) continue;
       if (!user.clubId || !result.has(user.clubId)) continue;
       const counts = result.get(user.clubId)!;
-      switch (user.role) {
-        case 'admin': counts.admin += 1; break;
-        case 'trainer': counts.trainer += 1; break;
-        case 'athlete': counts.athlete += 1; break;
-        default: break;
+      for (const role of user.roles) {
+        switch (role) {
+          case 'admin': counts.admin += 1; break;
+          case 'trainer': counts.trainer += 1; break;
+          case 'athlete': counts.athlete += 1; break;
+          case 'referee': counts.referee += 1; break;
+          default: break;
+        }
       }
     }
     return result;
