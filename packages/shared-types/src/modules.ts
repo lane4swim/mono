@@ -58,6 +58,14 @@ export const MODULE_PACKAGES = {
   // qualifications-Modul, da dessen Endpunkte NICHT über die generische
   // Sync-API laufen — den Zugriff auf dessen REST-Endpunkte.
   qualifications: { routeIds: ['qualifications'], stores: [] },
+  // Kampfrichter-Modul (docs/kampfrichter-modul-plan.md, Abschnitt 4.1):
+  // `stores: []` wie bei `qualifications` — kein Sync-Store, da
+  // RefereeAssignment über eigene REST-Endpunkte verwaltet wird (analog
+  // UserQualification). Steuert die Sichtbarkeit der Frontend-Route
+  // 'kampfrichter' sowie — über eine eigene enabledModules-Prüfung im
+  // referees-Modul, da dessen Endpunkte NICHT über die generische
+  // Sync-API laufen — den Zugriff auf dessen REST-Endpunkte.
+  kampfrichter: { routeIds: ['kampfrichter'], stores: [] },
 } as const satisfies Record<string, ModulePackage>;
 
 export type ModuleKey = keyof typeof MODULE_PACKAGES;

@@ -437,6 +437,46 @@ export function setQualificationSetting(type, thresholdsDays) {
   });
 }
 
+// ---- Kampfrichter-Modul: Wettkampfeinsätze (docs/kampfrichter-modul-
+// plan.md, Abschnitt 5) ---------------------------------------------------
+// Läuft NICHT über die generische Sync-API (siehe dortiger Abschnitt 5.1)
+// — eigene REST-Endpunkte, analog Qualifikationsmanagement oben. Antwort:
+// { assignments }.
+export function listMyRefereeAssignments() {
+  return request('/api/me/referee-assignments');
+}
+export function createMyRefereeAssignment({ competitionName, competitionPlace, competitionId, date, function: fn, note }) {
+  return request('/api/me/referee-assignments', {
+    method: 'POST',
+    body: JSON.stringify({ competitionName, competitionPlace, competitionId, date, function: fn, note }),
+  });
+}
+export function updateMyRefereeAssignment(id, patch) {
+  return request(`/api/me/referee-assignments/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(patch) });
+}
+export function deleteMyRefereeAssignment(id) {
+  return request(`/api/me/referee-assignments/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+// admin: Verwaltung "im Namen von" einer Kampfrichter:in (Plan Abschnitt 5.5).
+export function listMemberRefereeAssignments(userId) {
+  return request(`/api/users/${encodeURIComponent(userId)}/referee-assignments`);
+}
+export function createMemberRefereeAssignment(userId, { competitionName, competitionPlace, competitionId, date, function: fn, note }) {
+  return request(`/api/users/${encodeURIComponent(userId)}/referee-assignments`, {
+    method: 'POST',
+    body: JSON.stringify({ competitionName, competitionPlace, competitionId, date, function: fn, note }),
+  });
+}
+export function updateMemberRefereeAssignment(userId, id, patch) {
+  return request(`/api/users/${encodeURIComponent(userId)}/referee-assignments/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  });
+}
+export function deleteMemberRefereeAssignment(userId, id) {
+  return request(`/api/users/${encodeURIComponent(userId)}/referee-assignments/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
 // ---- Sync (Push/Pull) --------------------------------------------------
 export function syncPush(events) {
   return postJson('/api/sync/push', { events });

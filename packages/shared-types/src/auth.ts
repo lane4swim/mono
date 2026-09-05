@@ -215,6 +215,16 @@ export const MyDataExportSchema = z.object({
   entries: z.array(z.record(z.unknown())),
   actionItems: z.array(z.record(z.unknown())),
   attendance: z.array(z.record(z.unknown())),
+  // An userId gehängt, nicht athleteId — gilt für jede Person mit Konto
+  // (docs/nutzer-qualifikationen-plan.md, Abschnitt 6). Nachträglich hier
+  // ergänzt (dieses Schema war bislang unabhängig von der tatsächlichen
+  // Export-Antwort auseinandergelaufen, siehe profile.repository.ts:
+  // PersonalDataExport, das dieses Feld schon lange liefert).
+  qualifications: z.array(z.record(z.unknown())),
+  // docs/kampfrichter-modul-plan.md, Abschnitt 5.7 — ebenfalls an userId
+  // gehängt: gilt für jede Person mit Konto und der Rolle "referee",
+  // unabhängig von einer Athletenverknüpfung.
+  refereeAssignments: z.array(z.record(z.unknown())),
 });
 export type MyDataExport = z.infer<typeof MyDataExportSchema>;
 

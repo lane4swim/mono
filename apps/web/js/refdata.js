@@ -147,7 +147,24 @@ export const QUALIFICATION_TYPES = [
 // gehört (docs/kampfrichter-modul-plan.md, Abschnitt 3.2) — MUSS mit
 // REFEREE_QUALIFICATION_TYPES in packages/shared-types/src/qualification.ts
 // übereinstimmen (apps/web kann dieses Backend-Paket nicht importieren,
-// siehe Kommentar bei QUALIFICATION_TYPES oben). Wird vom künftigen
-// Kampfrichter-Modul (Phase C) genutzt, um qualifications.js' volle Liste
-// auf die Kampfrichter-relevanten Typen zu filtern.
+// siehe Kommentar bei QUALIFICATION_TYPES oben). Wird vom Kampfrichter-
+// Modul (modules/kampfrichter.js) genutzt, um qualifications.js' volle
+// Liste auf die Kampfrichter-relevanten Typen zu filtern.
 export const REFEREE_QUALIFICATION_TYPES = ['kampfrichter', 'schiedsrichter', 'startrichter', 'zeitnehmer', 'bahnrichter', 'wettkampfsekretaer'];
+
+// Funktion, in der eine Kampfrichter:in bei EINEM konkreten Wettkampf
+// eingesetzt war (docs/kampfrichter-modul-plan.md, Abschnitt 5.3) — MUSS
+// mit RefereeFunctionSchema in packages/shared-types/src/referee.ts
+// übereinstimmen. Bewusst eine eigene Liste, getrennt von
+// QUALIFICATION_TYPES/REFEREE_QUALIFICATION_TYPES oben (siehe dortiger
+// Plan-Abschnitt für die Begründung: Qualifikation = Befähigungsnachweis,
+// Einsatz = tatsächlich ausgeübter Termin).
+export const REFEREE_FUNCTIONS = [
+  { value: 'kampfrichter', label: 'Kampfrichter:in' },
+  { value: 'schiedsrichter', label: 'Schiedsrichter:in' },
+  { value: 'startrichter', label: 'Startrichter:in' },
+  { value: 'zeitnehmer', label: 'Zeitnehmer:in' },
+  { value: 'bahnrichter', label: 'Bahnrichter:in' },
+  { value: 'wettkampfsekretaer', label: 'Wettkampfsekretär:in (Protokoll)' },
+  { value: 'sonstige', label: 'Sonstige' },
+];

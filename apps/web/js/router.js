@@ -41,6 +41,10 @@ const ROUTE_TO_PACKAGE = {
   // 1.2) — MUSS mit packages/shared-types/src/modules.ts: MODULE_PACKAGES.
   // qualifications übereinstimmen.
   qualifications: 'qualifications',
+  // Kampfrichter-Modul (docs/kampfrichter-modul-plan.md, Abschnitt 4.1) —
+  // MUSS mit packages/shared-types/src/modules.ts: MODULE_PACKAGES.
+  // kampfrichter übereinstimmen.
+  kampfrichter: 'kampfrichter',
 };
 
 // Alle togglebaren Paket-Keys — Default für `enabledModules`, wenn ein

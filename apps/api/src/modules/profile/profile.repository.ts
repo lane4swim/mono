@@ -23,6 +23,10 @@ export interface PersonalDataExport {
   // athlete/results/entries/actionItems gilt das für JEDE Person mit
   // Konto, nicht nur für mit einem Athletenprofil verknüpfte.
   qualifications: Array<Record<string, unknown>>;
+  // Kampfrichter-Modul (docs/kampfrichter-modul-plan.md, Abschnitt 5.7) —
+  // ebenfalls an `userId` gehängt, aus demselben Grund wie qualifications
+  // oben.
+  refereeAssignments: Array<Record<string, unknown>>;
 }
 
 // Code-Review, Befund R8: `purgedAt`/`status` gestrichen — siehe
@@ -69,6 +73,9 @@ export class PrismaProfileDataGateway implements ProfileDataGateway {
     // unabhängig von einer Athletenverknüpfung (siehe PersonalDataExport-
     // Kommentar oben).
     const qualifications = await this.prisma.userQualification.findMany({
+      where: { userId, deletedAt: null },
+    });
+    const refereeAssignments = await this.prisma.refereeAssignment.findMany({
       where: { userId, deletedAt: null },
     });
 
@@ -135,6 +142,7 @@ export class PrismaProfileDataGateway implements ProfileDataGateway {
       actionItems,
       attendance,
       qualifications,
+      refereeAssignments,
     };
   }
 

@@ -32,7 +32,7 @@ export const NAV_GROUPS = [
   { id: 'dashboard', moduleIds: ['dashboard'] },
   { id: 'training', labelKey: 'nav.groups.training', icon: GROUP_ICON_TRAINING, moduleIds: ['plans', 'templates', 'catalog', 'sessions'] },
   { id: 'performance', labelKey: 'nav.groups.performance', icon: GROUP_ICON_PERFORMANCE, moduleIds: ['times', 'competitions', 'stats'] },
-  { id: 'team', labelKey: 'nav.groups.team', icon: GROUP_ICON_TEAM, moduleIds: ['athletes', 'actionitems'] },
+  { id: 'team', labelKey: 'nav.groups.team', icon: GROUP_ICON_TEAM, moduleIds: ['athletes', 'actionitems', 'qualifications', 'kampfrichter'] },
   { id: 'admin', labelKey: 'nav.groups.admin', icon: GROUP_ICON_ADMIN, moduleIds: ['usermgmt', 'syncqueue', 'info'] },
   { id: 'profile', moduleIds: ['profile'] },
 ];

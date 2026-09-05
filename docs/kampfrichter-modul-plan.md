@@ -694,26 +694,63 @@ getroffen und oben in den jeweiligen Abschnitten bereits eingearbeitet:
    Qualifikationsseite — deren Zuschnitt ändert sich laut Abschnitt 3.2
    bewusst nicht.
 
-**Phase C — Kampfrichter-Modul & Wettkampfeinsätze:**
-8. `MODULE_PACKAGES.kampfrichter` + `ROUTE_TO_PACKAGE`-Eintrag
-   (Abschnitt 4.1) **plus** Datenmigration, die `'kampfrichter'` in
-   `Club.enabledModules` für jeden bestehenden Verein ergänzt, der es noch
-   nicht enthält (Entscheidung 4, Abschnitt 6 — automatisches Rollout statt
-   manueller Superadmin-Aktivierung; einmaliges Skript analog dem Backfill
-   aus Phase A, Schritt 1, kein Rückwärts-Feature-Flag nötig, da ein
-   Superadmin das Modul danach jederzeit über `clubForm.js` wieder
-   deaktivieren kann).
-9. Prisma-Modell `RefereeAssignment` inkl. `createdByAdminId` + Migration
-   (Abschnitt 5.2).
-10. `RefereeFunctionSchema`/`RefereeAssignmentSchema` in `shared-types`
-    (Abschnitt 5.3/5.4).
-11. Backend-Modul `apps/api/src/modules/referees/` inkl. Selbstverwaltungs-
-    UND Admin-Schreibpfad (Abschnitt 5.5).
-12. `GET /api/me/export` um `RefereeAssignment` ergänzen (Abschnitt 5.7).
-13. Frontend-Modul `apps/web/js/modules/kampfrichter.js` (Abschnitt 4.2,
+**Phase C — Kampfrichter-Modul & Wettkampfeinsätze: ✅ umgesetzt
+(2026-09-05)**
+8. ✅ `MODULE_PACKAGES.kampfrichter` + `ROUTE_TO_PACKAGE`-Eintrag
+   (Abschnitt 4.1) **plus** Datenmigration
+   (`20260905140000_enable_kampfrichter_for_existing_clubs`), die
+   `'kampfrichter'` in `Club.enabledModules` für jeden bestehenden Verein
+   ergänzt, der es noch nicht enthält (Entscheidung 4, Abschnitt 6 —
+   automatisches Rollout statt manueller Superadmin-Aktivierung; einmaliges
+   Skript analog dem Backfill aus Phase A, Schritt 1, kein
+   Rückwärts-Feature-Flag nötig, da ein Superadmin das Modul danach
+   jederzeit über `clubForm.js` wieder deaktivieren kann).
+9. ✅ Prisma-Modell `RefereeAssignment` inkl. `createdByAdminId` + Migration
+   `20260905130000_add_referee_assignments` (Abschnitt 5.2) — Beziehungen zu
+   `User` (Cascade), `Club` (Restrict), optional `Competition` (SetNull) und
+   `createdByAdminId` (SetNull).
+10. ✅ `RefereeFunctionSchema`/`RefereeAssignmentSchema` in `shared-types`
+    (Abschnitt 5.3/5.4), inkl. `.strict()`-Schemas für Create/Update und
+    voller Testabdeckung (`packages/shared-types/test/referee.test.ts`).
+11. ✅ Backend-Modul `apps/api/src/modules/referees/` inkl.
+    Selbstverwaltungs- UND Admin-Schreibpfad (Abschnitt 5.5) —
+    `/api/me/referee-assignments[/:id]` sowie
+    `/api/users/:userId/referee-assignments[/:id]`, Modul-Gate analog den
+    übrigen zubuchbaren Modulen, `competitionId`-Validierung gegen den
+    eigenen Verein (neue, minimale `CompetitionRepository`/
+    `CompetitionLookup`-Abstraktion).
+12. ✅ `GET /api/me/export` um `RefereeAssignment` ergänzt (Abschnitt 5.7) —
+    dabei zusätzlich eine bestehende Lücke behoben:
+    `MyDataExportSchema`/`PersonalDataExport` fehlte bislang auch das
+    `qualifications`-Feld, obwohl `exportUserData()` es längst zurückgab.
+13. ✅ Frontend-Modul `apps/web/js/modules/kampfrichter.js` (Abschnitt 4.2,
     inkl. admin-seitigem „im Namen von"-Formular) + Registrierung in
-    `router.js`.
-14. i18n-Keys ergänzen (Abschnitt 4.3).
-15. Tests je Schicht (Abschnitt 1.7, 5.8).
-16. `docs/backend-plan.md` Abschnitt „6 — Erweiterungen" um den
-    Umsetzungsstand ergänzen, sobald begonnen wird.
+    `moduleRegistry.js`/`router.js`. Wiederverwendet die
+    Status-Berechnung aus `qualifications.js`
+    (`statusOf`/`statusBadge`/`thresholdsFor`/`typeLabel`, dafür dort
+    exportiert) statt sie zu duplizieren. Bewusst kein Auswahlfeld für einen
+    bestehenden Competition-Datensatz im Formular (Kampfrichter:innen
+    amtieren überwiegend bei vereinsfremden Wettkämpfen, ein Freitextfeld
+    deckt den Regelfall ab).
+    Beim Umsetzen zusätzlich entdeckt und behoben: `qualifications` war
+    zwar über `registerModule()` registriert, aber nie Teil von
+    `shell.js: NAV_GROUPS` — dadurch über die UI-Navigation nicht
+    erreichbar (Vor-Phase-C-Lücke). `qualifications` UND `kampfrichter`
+    wurden gemeinsam der Gruppe „team" hinzugefügt, um dieselbe Lücke nicht
+    für das neue Modul zu wiederholen.
+14. ✅ i18n-Keys ergänzt (Abschnitt 4.3) — `nav.kampfrichter`, vollständiger
+    `kampfrichter.*`-Namensraum sowie `refdata.refereeFunctions.*`, in
+    `de-DE.js` und `en-US.js` (Vollständigkeits-Test `test/i18n.test.js`
+    deckt Schlüsselgleichheit ab).
+15. ✅ Tests je Schicht (Abschnitt 1.7, 5.8) —
+    `packages/shared-types/test/referee.test.ts`,
+    `apps/api/test/referees/referees.service.test.ts` (15 Tests),
+    `apps/api/test/referees/referees.route.test.ts` (12 Tests),
+    Erweiterungen in `apps/api/test/profile/profile.repository.test.ts`
+    (DSGVO-Export), `apps/web/test/kampfrichter.module.test.js`. Vollständige
+    Verifikation: `shared-types` 194/194, `sync-protocol` 9/9, `apps/api`
+    556/556 (inkl. Typecheck & Lint fehlerfrei), `apps/web` 228/228 (inkl.
+    Lint fehlerfrei), Prisma-Schema valide.
+16. ⏳ `docs/backend-plan.md` Abschnitt „6 — Erweiterungen" um den
+    Umsetzungsstand ergänzen — bislang nicht nachgezogen, kein Blocker für
+    diese Umsetzung.
