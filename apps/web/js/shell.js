@@ -156,16 +156,30 @@ export function markActive(routeId) {
 // Verein/keine Athlet:innen vorhanden). Gilt unverändert auch für
 // app-demo.js, obwohl die Demo nie einen Superadmin-Account kennt (siehe
 // demoMode.js: DEMO_USERS) — der Eintrag greift dort schlicht nie.
-const DEFAULT_ROUTE_BY_ROLE = { superadmin: 'usermgmt' };
+const DEFAULT_ROUTE_BY_ROLE = { superadmin: 'usermgmt', referee: 'kampfrichter' };
 
 // `roles` statt eines Einzelwerts (docs/kampfrichter-modul-plan.md,
 // Abschnitt 1) — "superadmin" ist die einzige Rolle mit einem eigenen
 // Standard-Ziel und bleibt exklusiv (nie mit einer anderen Rolle
 // kombiniert, siehe UserRolesSchema), ein einfaches `.includes()` genügt
 // daher hier.
+//
+// "referee" braucht dieselbe Sonderbehandlung, ABER nur, wenn es die
+// EINZIGE Rolle des Kontos ist: ein reines Kampfrichter-Konto hat kein
+// sichtbares Dashboard (dashboard.js: roles ['trainer','admin','athlete'],
+// referee fehlt dort bewusst — ein Kampfrichter-Dashboard mit
+// Athleten-/Trainingskennzahlen ergäbe fachlich keinen Sinn) und würde
+// ohne diesen Eintrag auf "Mein Profil" landen — das erste in
+// moduleRegistry.js registrierte Modul ohne eigenes Rollen-Gate, noch vor
+// dem Kampfrichter-Modul. Trägt das Konto zusätzlich eine andere Rolle
+// (z. B. ['trainer','referee']), bleibt regulär deren Startseite
+// maßgeblich (visibleModules()[0] liefert dann bereits das Dashboard).
 export function defaultModuleFor(roles) {
   const enabledModules = getEnabledModules();
-  const preferred = getModule(roles.includes('superadmin') ? DEFAULT_ROUTE_BY_ROLE.superadmin : '');
+  const preferredRole = roles.includes('superadmin')
+    ? 'superadmin'
+    : (roles.length === 1 && roles[0] === 'referee' ? 'referee' : '');
+  const preferred = getModule(DEFAULT_ROUTE_BY_ROLE[preferredRole] || '');
   if (preferred && isModuleVisible(preferred, roles, enabledModules)) return preferred;
   return visibleModules(roles, enabledModules)[0];
 }

@@ -754,3 +754,20 @@ getroffen und oben in den jeweiligen Abschnitten bereits eingearbeitet:
 16. ⏳ `docs/backend-plan.md` Abschnitt „6 — Erweiterungen" um den
     Umsetzungsstand ergänzen — bislang nicht nachgezogen, kein Blocker für
     diese Umsetzung.
+
+**Nachgezogen — Rollenhandbuch (`docs/rollenhandbuch.html`): ✅ umgesetzt
+(2026-09-05)**
+17. ✅ Rolle „Kampfrichter:in" (Rollen-Karte, Modul-Tabelle, API-Guards,
+    Datenmodell-Glossar für `UserQualification`/
+    `ClubQualificationReminderSetting`/`RefereeAssignment`) sowie
+    Mehrfachrollen allgemein (`User.roles: string[]`, `requireAnyRole()`)
+    im Rollenhandbuch ergänzt.
+    Beim Nachziehen zusätzlich entdeckt und behoben: `shell.js:
+    defaultModuleFor()` kannte nur eine Sonderbehandlung für `superadmin`
+    — ein reines Kampfrichter-Konto (keine weitere Rolle) hätte beim
+    ersten Laden auf „Mein Profil" statt im Kampfrichter-Modul landen
+    müssen, da `dashboard.js` referee bewusst nicht in seinem Rollen-Gate
+    führt und „Mein Profil" (kein eigenes Rollen-Gate) vor dem
+    Kampfrichter-Modul registriert ist. Analog zur bestehenden
+    superadmin-Sonderbehandlung ergänzt, inkl. Regressionstest
+    (`apps/web/test/shell.defaultModuleFor.test.js`).

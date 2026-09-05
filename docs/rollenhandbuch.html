@@ -29,6 +29,7 @@
     --accent:    var(--chlorine);
     --accent-ink: #06342C;
     --critical:  var(--lane);
+    --judge:     #B8860B;
     --shadow: 0 1px 2px rgba(11,46,68,.06), 0 10px 28px rgba(11,46,68,.08);
 
     --f-display: 'Fraunces', 'Iowan Old Style', ui-serif, Georgia, serif;
@@ -47,6 +48,7 @@
       --accent:    #3ED9BC;
       --accent-ink: #06342C;
       --critical:  #FF8B69;
+      --judge:     #E3B341;
       --shadow: 0 1px 2px rgba(0,0,0,.3), 0 16px 34px rgba(0,0,0,.35);
     }
   }
@@ -60,6 +62,7 @@
     --accent:    #3ED9BC;
     --accent-ink: #06342C;
     --critical:  #FF8B69;
+    --judge:     #E3B341;
     --shadow: 0 1px 2px rgba(0,0,0,.3), 0 16px 34px rgba(0,0,0,.35);
   }
 
@@ -133,6 +136,7 @@
   .role-card.admin{ --rail: var(--accent); }
   .role-card.trainer{ --rail: var(--petrol); }
   .role-card.athlete{ --rail: var(--slate-2); }
+  .role-card.referee{ --rail: var(--judge); }
   .role-head{ display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
   .role-name{ font-family: var(--f-display); font-weight: 700; font-size: 1.22rem; }
   .role-slug{ font-family: var(--f-mono); font-size: .72rem; color: var(--text-dim); background: var(--surface-2); border: 1px solid var(--border); padding: 2px 8px; border-radius: 999px; }
@@ -234,11 +238,12 @@
   <div class="hero">
     <span class="eyebrow">Interne Referenz</span>
     <h1>Rollen, Rechte und Datenmodell von Lane 1</h1>
-    <p class="lede">Lane 1 ist eine offline-fähige Trainingsmanagement-App für Schwimmvereine. Der Zugriff ist über vier Rollen gestaffelt und über Vereine (Mandanten) strikt getrennt. Dieses Dokument fasst zusammen, wer was darf — in der App, in der API — und wie die zugrundeliegenden Daten zusammenhängen.</p>
+    <p class="lede">Lane 1 ist eine offline-fähige Trainingsmanagement-App für Schwimmvereine. Der Zugriff ist über fünf Rollen gestaffelt, von denen ein Konto auch mehrere gleichzeitig innehaben kann, und über Vereine (Mandanten) strikt getrennt. Dieses Dokument fasst zusammen, wer was darf — in der App, in der API — und wie die zugrundeliegenden Daten zusammenhängen.</p>
     <div class="meta">
-      <span><b>4</b> Rollen</span>
+      <span><b>5</b> Rollen</span>
+      <span>Mehrfachrollen möglich</span>
       <span><b>1</b> Mandant je Konto (außer Superadmin)</span>
-      <span><b>15</b> fachliche Tabellen</span>
+      <span><b>18</b> fachliche Tabellen</span>
       <span>Quelle: <code class="mono">schema.prisma</code> · <code class="mono">shared-types</code> · <code class="mono">router.js</code></span>
     </div>
   </div>
@@ -247,12 +252,12 @@
   <section id="rollen">
     <div class="section-head">
       <span class="eyebrow">01 — Zugriffsmodell</span>
-      <h2>Vier Rollen, ein Mandantenprinzip</h2>
+      <h2>Fünf Rollen, ein Mandantenprinzip</h2>
     </div>
-    <p>Jedes Konto hat genau eine Rolle. Mit Ausnahme des Superadmin gehört jedes Konto genau einem Verein (<code>clubId</code>) an — Daten verschiedener Vereine sind für die App unsichtbar füreinander.</p>
+    <p>Ein Konto trägt eine Menge von Rollen (<code class="mono">roles: string[]</code>) statt nur einer einzelnen — die eigentlich additive Fähigkeit, mehrere Rollen gleichzeitig zu haben (z. B. Trainer:in <em>und</em> Kampfrichter:in), ist unten unter „Mehrfachrollen" näher erläutert. Mit Ausnahme des Superadmin gehört jedes Konto genau einem Verein (<code>clubId</code>) an — Daten verschiedener Vereine sind für die App unsichtbar füreinander.</p>
 
     <figure class="panel">
-      <svg viewBox="0 0 860 320" role="img" aria-label="Superadmin steht außerhalb jedes Vereins und verwaltet mehrere Vereine; innerhalb eines Vereins gehört jede Rolle genau einem Verein an, Admin lädt Trainer und Athleten ein.">
+      <svg viewBox="0 0 860 320" role="img" aria-label="Superadmin steht außerhalb jedes Vereins und verwaltet mehrere Vereine; innerhalb eines Vereins gehört jede Rolle genau einem Verein an, Admin lädt Trainer, Athleten und Kampfrichter:innen ein.">
         <defs>
           <marker id="rar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
@@ -300,7 +305,7 @@
         <rect x="618" y="252" width="112" height="24" rx="12" class="dg-box"/>
         <text x="674" y="268" text-anchor="middle" font-size="10" class="dg-sub" fill="currentColor">Athlet ×N</text>
       </svg>
-      <figcaption><b>Geltungsbereich der Rollen.</b> Nur der Superadmin steht außerhalb jedes Vereins und kann mehrere verwalten. Admin, Trainer und Athlet gehören jeweils zu genau einem Verein; der Admin lädt die Trainer:innen und Athlet:innen seines eigenen Vereins ein.</figcaption>
+      <figcaption><b>Geltungsbereich der Rollen.</b> Nur der Superadmin steht außerhalb jedes Vereins und kann mehrere verwalten. Admin, Trainer, Athlet und Kampfrichter:in (hier aus Platzgründen nicht eigens eingezeichnet) gehören jeweils zu genau einem Verein; der Admin lädt die Trainer:innen, Athlet:innen und Kampfrichter:innen seines eigenen Vereins ein. Ein Konto kann dabei mehrere dieser Rollen gleichzeitig tragen (siehe „Mehrfachrollen" unten) — das Diagramm zeigt vereinfacht je eine Box pro Rolle.</figcaption>
     </figure>
 
     <div class="roles">
@@ -343,6 +348,26 @@
           <div><dt>Kein Zugriff auf</dt><dd>Athleten- &amp; Teamverwaltung, Übungskatalog, Vorlagen, Wettkampfverwaltung, Statistiken, Nutzerverwaltung.</dd></div>
         </dl>
       </div>
+
+      <div class="role-card referee">
+        <div class="role-head"><span class="role-name">Kampfrichter:in</span><span class="role-slug">referee</span></div>
+        <div class="role-scope">Genau ein Verein · üblicherweise zusätzlich zu einer anderen Rolle</div>
+        <dl>
+          <div><dt>Aufgabe</dt><dd>Pflegt im zubuchbaren Kampfrichter-Modul die eigenen Wettkampfeinsätze (Funktion, Wettkampf, Datum, Notiz) und sieht dort den eigenen, auf Kampfrichter-Ämter gefilterten Qualifikationsstatus (lesend).</dd></div>
+          <div><dt>Besonderheit</dt><dd>Hat <em>keinen</em> Zugriff auf die allgemeine Qualifikationsseite (deren Rollen-Gate bleibt bewusst auf admin/trainer/athlete beschränkt) — der eigene Qualifikationsstatus erscheint stattdessen im Kampfrichter-Modul selbst.</dd></div>
+          <div><dt>Kein Zugriff auf</dt><dd>Alles außer dem Kampfrichter-Modul, sofern nicht zusätzlich eine weitere Rolle vorliegt.</dd></div>
+        </dl>
+      </div>
+    </div>
+
+    <div class="callout">
+      <h4>Mehrfachrollen</h4>
+      <p>Ein Konto trägt seine Rollen als Menge (<code class="mono">User.roles: string[]</code>) statt als einzelnen Wert — z. B. kann eine Person gleichzeitig <code class="mono">trainer</code> und <code class="mono">referee</code> sein. Sichtbar ist dann automatisch die Vereinigung aller Module, für die mindestens eine der eigenen Rollen berechtigt ist; es gibt keinen manuellen Rollen-Umschalter in der Oberfläche.</p>
+      <ul>
+        <li>Frontend: <code class="mono">isModuleVisible()</code>/<code class="mono">visibleModules()</code> (<code class="mono">router.js</code>) prüfen, ob <em>irgendeine</em> eigene Rolle im <code class="mono">roles</code>-Array eines Moduls vorkommt.</li>
+        <li>Backend: <code class="mono">requireAnyRole(...erlaubte Rollen)</code> löst den früheren <code class="mono">requireRole()</code>-Guard mit fester Einzelrolle ab und prüft die Schnittmenge aus Token-Rollen und erlaubten Rollen.</li>
+        <li>Ein Admin vergibt/entzieht Rollen eines Vereinsmitglieds über <code class="mono">PATCH /api/users/:userId/roles</code> — mit „letzter Admin"-Schutz (409), damit ein Verein nie ohne Admin-Rolle zurückbleibt.</li>
+      </ul>
     </div>
   </section>
 
@@ -355,7 +380,7 @@
     <p>Jedes Konto entsteht ausschließlich über ein zeitlich befristetes, einmal verwendbares Einladungs-Token. <code class="mono">POST /auth/register</code> ohne gültiges Token wird abgelehnt.</p>
 
     <figure class="panel">
-      <svg viewBox="0 0 860 340" role="img" aria-label="Superadmin erstellt Verein und Admin-Einladung, der neue Admin akzeptiert und lädt seinerseits Trainer oder Athlet ein, die die Einladung ebenfalls akzeptieren.">
+      <svg viewBox="0 0 860 340" role="img" aria-label="Superadmin erstellt Verein und Admin-Einladung, der neue Admin akzeptiert und lädt seinerseits Trainer, Athlet oder Kampfrichter:in ein, die die Einladung ebenfalls akzeptieren.">
         <defs>
           <marker id="far" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
@@ -395,13 +420,13 @@
 
         <rect x="356" y="186" width="230" height="70" rx="10" class="dg-box"/>
         <text x="471" y="215" text-anchor="middle" font-size="12.5" class="dg-label" fill="currentColor">Einladung</text>
-        <text x="471" y="234" text-anchor="middle" font-size="10" class="dg-sub" fill="currentColor" opacity=".75">role: trainer | athlete</text>
+        <text x="471" y="234" text-anchor="middle" font-size="10" class="dg-sub" fill="currentColor" opacity=".75">role: trainer | athlete | referee</text>
 
         <path d="M586,221 H700" stroke="currentColor" stroke-width="1.6" marker-end="url(#far)"/>
         <text x="643" y="208" text-anchor="middle" font-size="10" class="dg-arrowlabel">akzeptiert Token</text>
 
         <rect x="700" y="186" width="140" height="70" rx="10" class="dg-box-strong" style="color:var(--slate-2)"/>
-        <text x="770" y="215" text-anchor="middle" font-size="12.5" class="dg-label" fill="currentColor">Trainer /<tspan x="770" dy="14">Athlet — aktiv</tspan></text>
+        <text x="770" y="215" text-anchor="middle" font-size="12.5" class="dg-label" fill="currentColor">Trainer / Athlet /<tspan x="770" dy="14">Kampfrichter:in</tspan></text>
 
         <text x="20" y="308" font-size="10.5" class="dg-sub" fill="currentColor" opacity=".65">Ein Athlet-Konto kann optional mit einem bereits angelegten Athlete-Datensatz verknüpft werden (athleteId) — Login-Konto und Athlet:innen-Stammdaten sind getrennte Entitäten.</text>
       </svg>
@@ -420,27 +445,29 @@
     <div class="table-wrap">
       <table>
         <thead>
-          <tr><th>Modul</th><th class="ctr">Admin</th><th class="ctr">Trainer</th><th class="ctr">Athlet</th></tr>
+          <tr><th>Modul</th><th class="ctr">Admin</th><th class="ctr">Trainer</th><th class="ctr">Athlet</th><th class="ctr">Kampfrichter:in</th></tr>
         </thead>
         <tbody>
-          <tr><td class="mod-name">Dashboard<span class="id">dashboard</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr yes">●</td></tr>
-          <tr><td class="mod-name">Athleten &amp; Team<span class="id">athletes</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr no">–</td></tr>
-          <tr><td class="mod-name">Übungskatalog<span class="id">catalog</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr no">–</td></tr>
-          <tr><td class="mod-name">Vorlagen<span class="id">templates</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr no">–</td></tr>
-          <tr><td class="mod-name">Trainingspläne<span class="id">plans</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr yes">●</td></tr>
-          <tr><td class="mod-name">Einheiten &amp; Feedback<span class="id">sessions</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr yes">●</td></tr>
-          <tr><td class="mod-name">Wettkämpfe<span class="id">competitions</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr no">–</td></tr>
-          <tr><td class="mod-name">Zeiten &amp; Leistung<span class="id">times</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr yes">●</td></tr>
-          <tr><td class="mod-name">Statistiken<span class="id">stats</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr no">–</td></tr>
-          <tr><td class="mod-name">Handlungsfelder<span class="id">actionitems</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr yes">●</td></tr>
-          <tr><td class="mod-name">Sync-Warteschlange<span class="id">syncqueue</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr no">–</td></tr>
-          <tr><td class="mod-name">Nutzerverwaltung<span class="id">usermgmt</span></td><td class="ctr yes">●</td><td class="ctr no">–</td><td class="ctr no">–</td></tr>
-          <tr><td class="mod-name">Mein Profil<span class="id">profile</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr yes">●</td></tr>
-          <tr><td class="mod-name">Rechtliches &amp; Datenschutz<span class="id">info</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr yes">●</td></tr>
+          <tr><td class="mod-name">Dashboard<span class="id">dashboard</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr no">–</td></tr>
+          <tr><td class="mod-name">Athleten &amp; Team<span class="id">athletes</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr no">–</td><td class="ctr no">–</td></tr>
+          <tr><td class="mod-name">Übungskatalog<span class="id">catalog</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr no">–</td><td class="ctr no">–</td></tr>
+          <tr><td class="mod-name">Vorlagen<span class="id">templates</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr no">–</td><td class="ctr no">–</td></tr>
+          <tr><td class="mod-name">Trainingspläne<span class="id">plans</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr no">–</td></tr>
+          <tr><td class="mod-name">Einheiten &amp; Feedback<span class="id">sessions</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr no">–</td></tr>
+          <tr><td class="mod-name">Wettkämpfe<span class="id">competitions</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr no">–</td><td class="ctr no">–</td></tr>
+          <tr><td class="mod-name">Zeiten &amp; Leistung<span class="id">times</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr no">–</td></tr>
+          <tr><td class="mod-name">Statistiken<span class="id">stats</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr no">–</td><td class="ctr no">–</td></tr>
+          <tr><td class="mod-name">Handlungsfelder<span class="id">actionitems</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr no">–</td></tr>
+          <tr><td class="mod-name">Sync-Warteschlange<span class="id">syncqueue</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr no">–</td><td class="ctr no">–</td></tr>
+          <tr><td class="mod-name">Nutzerverwaltung<span class="id">usermgmt</span></td><td class="ctr yes">●</td><td class="ctr no">–</td><td class="ctr no">–</td><td class="ctr no">–</td></tr>
+          <tr><td class="mod-name">Qualifikationen*<span class="id">qualifications</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr no">–</td></tr>
+          <tr><td class="mod-name">Kampfrichter*<span class="id">kampfrichter</span></td><td class="ctr yes">●</td><td class="ctr no">–</td><td class="ctr no">–</td><td class="ctr yes">●</td></tr>
+          <tr><td class="mod-name">Mein Profil<span class="id">profile</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr yes">●</td></tr>
+          <tr><td class="mod-name">Rechtliches &amp; Datenschutz<span class="id">info</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr yes">●</td></tr>
         </tbody>
       </table>
     </div>
-    <footer class="legend"><span><span class="yes">●</span> sichtbar</span><span><span class="no">–</span> ausgeblendet</span></footer>
+    <footer class="legend"><span><span class="yes">●</span> sichtbar</span><span><span class="no">–</span> ausgeblendet</span><span>* zubuchbares Modul — zusätzlich zur Rolle muss der Verein es über <code class="mono">Club.enabledModules</code> aktiviert haben</span></footer>
 
     <div class="callout">
       <h4>Wo bleibt der Superadmin?</h4>
@@ -459,7 +486,7 @@
       <span class="eyebrow">04 — Backend</span>
       <h2>Rollenprüfung auf API-Ebene</h2>
     </div>
-    <p>Das Frontend blendet Module nur aus — durchgesetzt wird die Rolle serverseitig, per <code class="mono">requireRole(...)</code>-Guard nach der Authentifizierung. Ein Auszug der zugriffsrelevanten Endpunkte:</p>
+    <p>Das Frontend blendet Module nur aus — durchgesetzt wird die Rolle serverseitig, per <code class="mono">requireAnyRole(...erlaubte Rollen)</code>-Guard nach der Authentifizierung. Er prüft die Schnittmenge aus den Rollen im Zugriffstoken (<code class="mono">roles: string[]</code>) und den für den Endpunkt erlaubten Rollen — ein Konto mit mehreren Rollen braucht dafür nur eine passende. Einige zubuchbare Module (Qualifikationen, Kampfrichter) erzwingen zusätzlich in einem eigenen Guard, dass der Verein das jeweilige Modul-Paket gebucht hat. Ein Auszug der zugriffsrelevanten Endpunkte:</p>
 
     <div class="table-wrap">
       <table>
@@ -473,10 +500,15 @@
           <tr><td class="path">POST /api/invitations/preview</td><td><span class="roletag pub">öffentlich</span></td><td>Verein/Rolle einer Einladung vor dem Registrieren anzeigen (Token im Body, nicht im URL-Pfad)</td></tr>
           <tr><td class="path">POST /auth/register</td><td><span class="roletag pub">Token erforderlich</span></td><td>Konto per Einladungs-Token anlegen — keine offene Selbstregistrierung</td></tr>
           <tr><td class="path">GET /api/users</td><td><span class="roletag">admin</span><span class="roletag">superadmin</span></td><td>Vereinsmitglieder auflisten (Admin: eigener Verein automatisch, Superadmin: <code>?clubId=</code> Pflicht)</td></tr>
-          <tr><td class="path">POST /api/sync/push · pull</td><td><span class="roletag">trainer</span><span class="roletag">admin</span><span class="roletag">athlete</span></td><td>Fachliche Offline-Änderungen synchronisieren — Superadmin hat keine fachlichen Daten</td></tr>
+          <tr><td class="path">PATCH /api/users/:userId/roles</td><td><span class="roletag">admin</span></td><td>Rollen eines Vereinsmitglieds setzen — additiv (<code>roles: string[]</code>), mit „letzter Admin"-Schutz (409) und Sperre gegen Vergabe von <code>superadmin</code> (400)</td></tr>
+          <tr><td class="path">POST /api/sync/push · pull</td><td><span class="roletag">trainer</span><span class="roletag">admin</span><span class="roletag">athlete</span></td><td>Fachliche Offline-Änderungen synchronisieren — Superadmin und ein reines Kampfrichter-Konto haben keine über Sync verwalteten Daten</td></tr>
           <tr><td class="path">GET · PATCH /api/me</td><td><span class="roletag pub">jede eingeloggte Rolle</span></td><td>Eigenes Profil ansehen/bearbeiten</td></tr>
-          <tr><td class="path">GET /api/me/export</td><td><span class="roletag pub">jede eingeloggte Rolle</span></td><td>DSGVO-Datenexport der eigenen Person</td></tr>
+          <tr><td class="path">GET /api/me/export</td><td><span class="roletag pub">jede eingeloggte Rolle</span></td><td>DSGVO-Datenexport der eigenen Person — inkl. Qualifikationen und Wettkampfeinsätzen, sofern vorhanden</td></tr>
           <tr><td class="path">DELETE /api/me</td><td><span class="roletag pub">jede eingeloggte Rolle</span></td><td>DSGVO-Löschantrag — Konto sofort funktionslos, Hard-Purge nach Fristablauf</td></tr>
+          <tr><td class="path">GET /api/me/qualifications</td><td><span class="roletag">admin</span><span class="roletag">trainer</span><span class="roletag">athlete</span></td><td>Eigene Qualifikationen einsehen — zubuchbares Modul; <code>referee</code> ist hier bewusst NICHT enthalten (siehe Kampfrichter-Modul)</td></tr>
+          <tr><td class="path">POST · PATCH · DELETE /api/users/:userId/qualifications[/:id]</td><td><span class="roletag">admin</span></td><td>Qualifikationen eines Vereinsmitglieds erfassen/ändern/löschen (Soft-Delete)</td></tr>
+          <tr><td class="path">GET · POST · PATCH · DELETE /api/me/referee-assignments[/:id]</td><td><span class="roletag">referee</span></td><td>Eigene Wettkampfeinsätze verwalten — zubuchbares Kampfrichter-Modul</td></tr>
+          <tr><td class="path">GET · POST · PATCH · DELETE /api/users/:userId/referee-assignments[/:id]</td><td><span class="roletag">admin</span></td><td>Wettkampfeinsätze einer Kampfrichter:in „im Namen von" verwalten (eigener Verein)</td></tr>
         </tbody>
       </table>
     </div>
@@ -506,7 +538,7 @@ erDiagram
       </div>
       <div class="entity-grid">
         <div class="entity"><div class="ename">Club</div><div class="edesc">Ein Verein / Mandant — Wurzel der Datenisolation.</div></div>
-        <div class="entity"><div class="ename">User</div><div class="edesc">Login-Konto (E-Mail, Passwort-Hash, <code>role</code>). <code>clubId</code> ist nur bei <code>superadmin</code> leer; <code>athleteId</code> verknüpft optional den zugehörigen Athlete-Datensatz.</div></div>
+        <div class="entity"><div class="ename">User</div><div class="edesc">Login-Konto (E-Mail, Passwort-Hash, <code>roles: string[]</code> — additive Rollenmenge, siehe „Mehrfachrollen" oben). <code>clubId</code> ist nur bei <code>superadmin</code> leer; <code>athleteId</code> verknüpft optional den zugehörigen Athlete-Datensatz.</div></div>
         <div class="entity"><div class="ename">Invitation</div><div class="edesc">Zeitlich befristetes, einmal einlösbares Token samt vergebener Rolle. Bleibt nach Verbrauch als historischer Datensatz bestehen.</div></div>
         <div class="entity"><div class="ename">RefreshToken</div><div class="edesc">Rotierendes Sitzungstoken je Login/Gerät (JWT-Refresh).</div></div>
         <div class="entity"><div class="ename">DataDeletionRequest</div><div class="edesc">DSGVO-Löschantrag (Art. 17): sofort dokumentiert, Konto ab dann funktionslos; endgültiger Hard-Purge erst nach Karenzfrist (Standard 30 Tage).</div></div>
@@ -550,6 +582,28 @@ erDiagram
         <div class="entity"><div class="ename">Result</div><div class="edesc">Erzieltes Ergebnis, optional an einen Wettkampf gebunden; <code>laps</code> optional als JSON-Array (Rundenzeiten aus der Stoppuhr).</div></div>
         <div class="entity"><div class="ename">ActionItem</div><div class="edesc">Handlungsfeld / Entwicklungsschwerpunkt je Athlet:in mit Status (<code>offen · progress · done</code>).</div></div>
       </div>
+    </div>
+
+    <div class="glossary-group">
+      <h3>Qualifikationen &amp; Kampfrichter</h3>
+      <p class="g-desc">Zwei zubuchbare Module (<code class="mono">Club.enabledModules</code>) rund um Nachweise und Wettkampfeinsätze — beide laufen bewusst NICHT über die generische Sync-API, sondern über eigene Endpunkte (siehe API-Guards oben).</p>
+      <div class="mermaid-wrap">
+        <pre class="mermaid">
+erDiagram
+  USER ||--o{ USERQUALIFICATION : "hat"
+  CLUB ||--o{ CLUBQUALIFICATIONREMINDERSETTING : "konfiguriert"
+  USER ||--o{ REFEREEASSIGNMENT : "amtiert bei"
+  CLUB ||--o{ REFEREEASSIGNMENT : "verortet"
+  REFEREEASSIGNMENT }o--o| COMPETITION : "optional verknüpft mit"
+  REFEREEASSIGNMENT }o--o| USER : "erfasst von (optional admin)"
+        </pre>
+      </div>
+      <div class="entity-grid">
+        <div class="entity"><div class="ename">UserQualification</div><div class="edesc">Erfasste Qualifikation einer Person (Trainerlizenz, Rettungsschwimmschein, Kampfrichter-Amt, …) mit Erwerbs- und optionalem Ablaufdatum. <code>type</code> ist ein fester Wertebereich ohne eigene Tabelle.</div></div>
+        <div class="entity"><div class="ename">ClubQualificationReminderSetting</div><div class="edesc">Je Verein und Qualifikationstyp konfigurierbare Vorlaufzeit (in Tagen vor Ablauf) für Erinnerungsmails an Admins; ohne eigene Zeile gilt ein globaler Standardwert.</div></div>
+        <div class="entity"><div class="ename">RefereeAssignment</div><div class="edesc">Erfasster Wettkampfeinsatz einer Kampfrichter:in (Funktion, Datum, Wettkampf als Freitext oder optional verknüpfter <code>Competition</code>-Datensatz). <code>createdByAdminId</code> markiert Einträge, die ein Admin „im Namen von" angelegt hat.</div></div>
+      </div>
+      <p style="margin-top:16px; font-size:.86rem">Zusätzlich verbucht <code class="mono">QualificationReminderLog</code> je bereits verschickter Erinnerungsschwelle einen Eintrag, um bei mehrfachem Cron-Lauf keine doppelten Erinnerungsmails zu verschicken — reine Versandhistorie ohne eigenes Diagramm, analog <code class="mono">SyncedEvent</code>/<code class="mono">SyncTombstone</code> unten.</p>
     </div>
 
     <div class="callout">
