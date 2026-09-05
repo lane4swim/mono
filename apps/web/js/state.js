@@ -75,19 +75,23 @@ export function getCurrentUser() { return current; }
 // Person. Diese Registrierung liefert sie ihm, ohne dass db.js selbst
 // von state.js abhängen muss.
 setClubIdProvider(() => getCurrentUser()?.clubId);
-// Fällt bei fehlender Sitzung auf `null` zurück, NICHT auf eine konkrete
-// Rolle (vormals 'trainer') — ein Default-Wert sollte im Zweifel
+// Fällt bei fehlender Sitzung auf ein leeres Array zurück, NICHT auf eine
+// konkrete Rolle (vormals 'trainer') — ein Default-Wert sollte im Zweifel
 // zusperren, nicht öffnen. 'trainer' hätte defensiv aufgerufenen
-// Rollenprüfungen (isTrainerOrAdmin(), visibleModules(role) in router.js)
+// Rollenprüfungen (isTrainerOrAdmin(), visibleModules(roles) in router.js)
 // stillschweigend Zugriff auf trainer-restringierte Module gewährt, statt
-// ihn korrekt zu verweigern. `visibleModules(null)` zeigt weiterhin alle
-// Module OHNE Rollenbeschränkung (siehe router.js) — nur die
+// ihn korrekt zu verweigern. `visibleModules([])` zeigt weiterhin alle
+// Kern-Module OHNE Rollenbeschränkung (siehe router.js) — nur die
 // rollenbeschränkten werden nun korrekt ausgeblendet statt fälschlich
 // gezeigt.
-export function getRole() { return current?.role ?? null; }
+//
+// docs/kampfrichter-modul-plan.md, Abschnitt 1: ein Konto kann mehrere
+// Rollen gleichzeitig haben — getRoles() ersetzt das frühere getRole().
+export function getRoles() { return current?.roles ?? []; }
+export function hasRole(role) { return getRoles().includes(role); }
 export function isLoggedIn() { return !!current; }
 // Fällt ohne Sitzung auf ein leeres Array zurück (zusperren statt öffnen,
-// siehe getRole()-Kommentar oben) — router.js: visibleModules() blendet
+// siehe getRoles()-Kommentar oben) — router.js: visibleModules() blendet
 // dadurch alle Fach-Module aus, bis eine Sitzung mit enabledModules
 // geladen ist.
 export function getEnabledModules() { return current?.enabledModules ?? []; }
@@ -399,8 +403,19 @@ export async function changeEmail(currentPassword, newEmail) {
 }
 
 export function isTrainerOrAdmin() {
-  return ['trainer', 'admin', 'superadmin'].includes(getRole());
+  return getRoles().some((r) => ['trainer', 'admin', 'superadmin'].includes(r));
 }
-export function isAdmin() { return getRole() === 'admin'; }
-export function isSuperAdmin() { return getRole() === 'superadmin'; }
-export function isAdminOrSuperAdmin() { return ['admin', 'superadmin'].includes(getRole()); }
+export function isAdmin() { return hasRole('admin'); }
+export function isSuperAdmin() { return hasRole('superadmin'); }
+export function isAdminOrSuperAdmin() { return getRoles().some((r) => ['admin', 'superadmin'].includes(r)); }
+
+// Analog zu isAthleteScoped() im Backend (sync.permissions.ts): die
+// eigene, schreibgeschützte "nur meine Daten"-Ansicht (sessions.js,
+// dashboard.js, actionItems.js) gilt nur, wenn die Person die Rolle
+// "athlete" hat UND KEINE Staff-Rolle ("trainer"/"admin") — sonst würde
+// z. B. ein Konto mit roles: ['trainer','athlete'] fälschlich auf die
+// eingeschränkte Athlet:innen-Ansicht verwiesen, obwohl die Trainer-Rolle
+// vollen Zugriff verleiht (docs/kampfrichter-modul-plan.md, Abschnitt 1.5).
+export function isAthleteScoped() {
+  return hasRole('athlete') && !isTrainerOrAdmin();
+}

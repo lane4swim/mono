@@ -12,7 +12,7 @@
 // alles andere. Diese Datei bündelt genau den geteilten Teil; app.js und
 // app-demo.js rufen sie auf und behalten nur ihre eigene Logik.
 import { pendingSyncCount } from './db.js';
-import { getRole, getCurrentUser, getEnabledModules } from './state.js';
+import { getRoles, getCurrentUser, getEnabledModules } from './state.js';
 import { visibleModules, isModuleVisible, navigate, getModule, currentRoute } from './router.js';
 import { el, clear, beginRender, icon } from './dom.js';
 import { toast } from './ui.js';
@@ -47,8 +47,8 @@ export const MORE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentCo
 export function buildNav() {
   const navList = document.getElementById('nav-list');
   const bottomNav = document.getElementById('bottomnav');
-  const role = getRole();
-  const byId = new Map(visibleModules(role, getEnabledModules()).map(m => [m.id, m]));
+  const roles = getRoles();
+  const byId = new Map(visibleModules(roles, getEnabledModules()).map(m => [m.id, m]));
   clear(navList);
   clear(bottomNav);
 
@@ -158,11 +158,16 @@ export function markActive(routeId) {
 // demoMode.js: DEMO_USERS) — der Eintrag greift dort schlicht nie.
 const DEFAULT_ROUTE_BY_ROLE = { superadmin: 'usermgmt' };
 
-export function defaultModuleFor(role) {
+// `roles` statt eines Einzelwerts (docs/kampfrichter-modul-plan.md,
+// Abschnitt 1) — "superadmin" ist die einzige Rolle mit einem eigenen
+// Standard-Ziel und bleibt exklusiv (nie mit einer anderen Rolle
+// kombiniert, siehe UserRolesSchema), ein einfaches `.includes()` genügt
+// daher hier.
+export function defaultModuleFor(roles) {
   const enabledModules = getEnabledModules();
-  const preferred = getModule(DEFAULT_ROUTE_BY_ROLE[role] || '');
-  if (preferred && isModuleVisible(preferred, role, enabledModules)) return preferred;
-  return visibleModules(role, enabledModules)[0];
+  const preferred = getModule(roles.includes('superadmin') ? DEFAULT_ROUTE_BY_ROLE.superadmin : '');
+  if (preferred && isModuleVisible(preferred, roles, enabledModules)) return preferred;
+  return visibleModules(roles, enabledModules)[0];
 }
 
 // Rendert die angeforderte Route in `viewEl`. Bewusst OHNE die
@@ -171,12 +176,12 @@ export function defaultModuleFor(role) {
 // Sinn (keine echte, ablaufende Sitzung) und bleibt daher dort weg.
 export async function renderRoute(viewEl, route) {
   const isCurrent = beginRender(viewEl);
-  const role = getRole();
+  const roles = getRoles();
   let mod = getModule(route.routeId);
   // Greift auch, wenn `mod` existiert und die Rolle passt, aber der Verein
   // das zugehörige Modul-Paket nicht gebucht hat (direkter Hash-Aufruf
   // einer gesperrten Route, z. B. "#/competitions" ohne Wettkampfmodul).
-  if (!mod || !isModuleVisible(mod, role, getEnabledModules())) mod = defaultModuleFor(role);
+  if (!mod || !isModuleVisible(mod, roles, getEnabledModules())) mod = defaultModuleFor(roles);
   markActive(mod.id);
   // Über el()/clear() statt eines Template-Literals auf viewEl.innerHTML
   // — konsistent mit dem sonst in dieser Datei konsequent verwendeten
@@ -256,7 +261,7 @@ export function setupSettingsModal({ storageNoteKey, exportPrefix, getExportData
     const user = getCurrentUser();
     const body = el('div');
     body.appendChild(el('h3', { class: 'mt-0' }, t('settings.accounts')));
-    if (user) body.appendChild(el('p', { class: 'text-sm' }, `${user.name} — ${t('settings.roleLabel')}: ${t(`settings.role_${user.role}`)}`));
+    if (user) body.appendChild(el('p', { class: 'text-sm' }, `${user.name} — ${t('settings.roleLabel')}: ${user.roles.map((r) => t(`settings.role_${r}`)).join(', ')}`));
     body.appendChild(el('p', { class: 'hint' }, t(storageNoteKey)));
     body.appendChild(el('div', { class: 'form-actions', style: 'justify-content:flex-start;margin-top:20px' }, [
       el('button', { class: 'btn btn-ghost', onclick: exportData }, t('settings.exportButton')),

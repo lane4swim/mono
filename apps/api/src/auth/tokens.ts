@@ -44,7 +44,7 @@ export async function signAccessToken(
   ttlSeconds: number,
 ): Promise<string> {
   const privateKey = await getPrivateKey(keyPair.privateKey);
-  return new SignJWT({ role: claims.role, clubId: claims.clubId, athleteId: claims.athleteId })
+  return new SignJWT({ roles: claims.roles, clubId: claims.clubId, athleteId: claims.athleteId })
     .setProtectedHeader({ alg: ALG })
     .setSubject(claims.sub)
     .setIssuedAt()
@@ -61,7 +61,7 @@ export async function verifyAccessToken(token: string, keyPair: KeyPair): Promis
     if (!payload.sub) throw new InvalidAccessTokenError('Token ohne "sub"-Claim.');
     return {
       sub: payload.sub,
-      role: payload.role as AccessTokenClaims['role'],
+      roles: payload.roles as AccessTokenClaims['roles'],
       clubId: (payload.clubId as string | null) ?? null,
       athleteId: (payload.athleteId as string | null) ?? null,
     };

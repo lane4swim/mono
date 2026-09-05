@@ -24,6 +24,9 @@ import {
   ClubIdRequiredError,
   InvalidCurrentPasswordError,
   InvalidOrExpiredResetTokenError,
+  ForeignClubUserError,
+  CannotAssignSuperadminError,
+  LastAdminError,
 } from '../modules/auth/auth.service.js';
 import { UserNotFoundForExportError, ErasureAlreadyRequestedError } from '../modules/profile/profile.repository.js';
 import {
@@ -91,6 +94,11 @@ const HTTP_ERROR_REGISTRY = new Map<abstract new (...args: never[]) => Error, Ht
   [QualificationNotFoundError, { status: 404, code: 'not_found' }],
   [QualificationForbiddenError, { status: 403, code: 'forbidden' }],
   [QualificationInvalidDateRangeError, { status: 400, code: 'qualification_invalid_date_range' }],
+  // PATCH /api/users/:userId/roles (docs/kampfrichter-modul-plan.md,
+  // Abschnitt 1.4).
+  [ForeignClubUserError, { status: 403, code: 'forbidden' }],
+  [CannotAssignSuperadminError, { status: 400, code: 'cannot_assign_superadmin' }],
+  [LastAdminError, { status: 409, code: 'last_admin' }],
 ]);
 
 function sendMappedError(err: Error, mapping: HttpErrorMapping, reply: FastifyReply) {

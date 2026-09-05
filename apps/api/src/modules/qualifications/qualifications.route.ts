@@ -16,7 +16,7 @@ import {
   DEFAULT_QUALIFICATION_REMINDER_THRESHOLDS_DAYS,
 } from '@lane1/shared-types';
 import type { QualificationsService, RequesterContext } from './qualifications.service.js';
-import { requireRole } from '../../plugins/authorize.js';
+import { requireAnyRole } from '../../plugins/authorize.js';
 import { parseInput } from '../../plugins/parseInput.js';
 
 // Minimale, für dieses Modul ausreichende Nachschlagemöglichkeit für die
@@ -46,9 +46,9 @@ interface CachedClubModules {
 // spekulative Abstraktion für einen bislang einzigen zweiten Fall.
 const CLUB_MODULES_CACHE_TTL_MS = 45_000;
 
-function requesterFrom(request: { user?: { sub: string; role: string; clubId: string | null } }): RequesterContext {
+function requesterFrom(request: { user?: { sub: string; roles: string[]; clubId: string | null } }): RequesterContext {
   const user = request.user!;
-  return { id: user.sub, role: user.role, clubId: user.clubId };
+  return { id: user.sub, roles: user.roles, clubId: user.clubId };
 }
 
 export async function qualificationsRoutes(app: FastifyInstance, opts: QualificationsRoutesOptions) {
@@ -74,7 +74,7 @@ export async function qualificationsRoutes(app: FastifyInstance, opts: Qualifica
     return enabledModules;
   }
 
-  // Läuft NACH requireRole() (siehe *Guard unten) — request.user.role ist an
+  // Läuft NACH requireAnyRole() (siehe *Guard unten) — request.user.roles ist an
   // dieser Stelle bereits geprüft, `superadmin` (kein eigener Verein) kommt
   // hier also nie an (Entscheidung zu Frage 5, Abschnitt 8 des Plans).
   async function requireQualificationsModule(request: { user?: { clubId: string | null } }, reply: { code: (n: number) => { send: (b: unknown) => void } }) {
@@ -89,10 +89,10 @@ export async function qualificationsRoutes(app: FastifyInstance, opts: Qualifica
   }
 
   // Eigene, schreibgeschützte Ansicht — jede Rolle außer superadmin.
-  const selfGuard = [app.authenticate, requireRole('admin', 'trainer', 'athlete'), requireQualificationsModule];
+  const selfGuard = [app.authenticate, requireAnyRole('admin', 'trainer', 'athlete'), requireQualificationsModule];
   // Verwaltung von Mitgliedern + Einstellungen — ausschließlich admin
   // (Entscheidung zu Frage 2, Abschnitt 8 des Plans).
-  const adminGuard = [app.authenticate, requireRole('admin'), requireQualificationsModule];
+  const adminGuard = [app.authenticate, requireAnyRole('admin'), requireQualificationsModule];
 
   app.get('/api/me/qualifications', { preHandler: selfGuard }, async (request, reply) => {
     const qualifications = await qualificationsService.listOwn(requesterFrom(request));

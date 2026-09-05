@@ -7,7 +7,7 @@ import { fmtDateLong, todayISO, toIsoDateTime } from '../dates.js';
 import { badge, emptyState, laneWave, average, fullName, toast } from '../ui.js';
 import { openModal, confirmAction } from '../modal.js';
 import { field, selectInput, dateInput, formActions } from '../forms.js';
-import { getRole, getCurrentUser } from '../state.js';
+import { isAthleteScoped, getCurrentUser } from '../state.js';
 import { navigate } from '../router.js';
 import { t } from '../i18n.js';
 
@@ -18,8 +18,7 @@ export const sessionsModule = {
   async render(container, params) {
     const isCurrent = beginRender(container);
     clear(container);
-    const role = getRole();
-    if (role === 'athlete') return renderAthleteView(container, isCurrent);
+    if (isAthleteScoped()) return renderAthleteView(container, isCurrent);
     const [sessions, groups, athletes] = await Promise.all(['sessions', 'groups', 'athletes'].map(getAll));
     if (!isCurrent()) return;
     if (params[0]) return renderDetail(container, params[0]);

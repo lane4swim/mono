@@ -94,12 +94,12 @@ describe('authService.acceptInvitation', () => {
     const result = await service.acceptInvitation({ token, name: 'Sabine Reuter', password: 'ein-sicheres-passwort', consent: true });
 
     expect(result.user.email).toBe('sabine.reuter@example.org');
-    expect(result.user.role).toBe('trainer');
+    expect(result.user.roles).toEqual(['trainer']);
     expect(result.user.clubId).toBe(CLUB_ID);
     expect(result.user).not.toHaveProperty('passwordHash');
 
     const claims = await verifyAccessToken(result.accessToken, keyPair);
-    expect(claims.role).toBe('trainer');
+    expect(claims.roles).toEqual(['trainer']);
     expect(claims.clubId).toBe(CLUB_ID);
   });
 
@@ -112,7 +112,7 @@ describe('authService.acceptInvitation', () => {
     // role/clubId/email-Felder (siehe shared-types) — hier wird nur
     // geprüft, dass die tatsächlich vergebene Rolle aus der Einladung stammt.
     const result = await service.acceptInvitation({ token, name: 'Neue Admin', password: 'ein-sicheres-passwort', consent: true });
-    expect(result.user.role).toBe('admin');
+    expect(result.user.roles).toEqual(['admin']);
   });
 
   it('markiert die Einladung nach Verwendung als verbraucht (kein zweites Einlösen möglich)', async () => {
@@ -682,7 +682,7 @@ describe('authService.resetPassword', () => {
     const { service, users, passwordResetTokens } = makeService();
     const user = await users.create({
       clubId: CLUB_ID, name: 'Test Person', email: 'abgelaufen@example.org', passwordHash: 'irrelevant',
-      role: 'trainer', consentGivenAt: new Date(), consentVersion: '2026-07-15',
+      roles: ['trainer'], consentGivenAt: new Date(), consentVersion: '2026-07-15',
     });
     const { hashPasswordResetToken } = await import('../../src/auth/tokens.js');
     const plainToken = 'abgelaufenes-test-token';

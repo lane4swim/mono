@@ -9,7 +9,7 @@ import { badge, emptyState, laneWave, fullName, toast } from '../ui.js';
 import { openModal, confirmAction } from '../modal.js';
 import { field, textInput, selectInput, dateInput, formActions } from '../forms.js';
 import { ACTION_CATEGORIES, ACTION_STATUS } from '../refdata.js';
-import { getRole, getCurrentUser } from '../state.js';
+import { isAthleteScoped, getCurrentUser } from '../state.js';
 import { navigate } from '../router.js';
 import { t, trLabel, trOptions } from '../i18n.js';
 import * as api from '../apiClient.js';
@@ -21,8 +21,7 @@ export const actionItemsModule = {
   async render(container, params) {
     const isCurrent = beginRender(container);
     clear(container);
-    const role = getRole();
-    if (role === 'athlete') {
+    if (isAthleteScoped()) {
       const items = await getAll('actionItems');
       if (!isCurrent()) return;
       const user = getCurrentUser();

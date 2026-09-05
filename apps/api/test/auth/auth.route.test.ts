@@ -791,14 +791,14 @@ describe('GET /api/users (Nutzerverwaltung: bestehende Vereinsmitglieder)', () =
     const response = await app.inject({ method: 'GET', url: '/api/users', headers: { authorization: `Bearer ${adminAccessToken}` } });
     expect(response.statusCode).toBe(200);
     const { users } = response.json();
-    expect(users.map((u: { role: string }) => u.role)).toEqual(['admin', 'trainer', 'athlete']);
+    expect(users.map((u: { roles: string[] }) => u.roles)).toEqual([['admin'], ['trainer'], ['athlete']]);
     expect(users.every((u: Record<string, unknown>) => !('passwordHash' in u))).toBe(true);
     await app.close();
   });
 
   it('superadmin ohne ?clubId erhält 400', async () => {
     const { app, keyPair } = await buildTestApp();
-    const token = await signAccessToken({ sub: '00000000-0000-0000-0000-000000000099', role: 'superadmin', clubId: null, athleteId: null }, keyPair, 900);
+    const token = await signAccessToken({ sub: '00000000-0000-0000-0000-000000000099', roles: ['superadmin'], clubId: null, athleteId: null }, keyPair, 900);
     const response = await app.inject({ method: 'GET', url: '/api/users', headers: { authorization: `Bearer ${token}` } });
     expect(response.statusCode).toBe(400);
     await app.close();
@@ -809,7 +809,7 @@ describe('GET /api/users (Nutzerverwaltung: bestehende Vereinsmitglieder)', () =
     const trainerToken = await seedInvitationToken(invitations, { email: 'trainer-for-superadmin@example.org', role: 'trainer' });
     await app.inject({ method: 'POST', url: '/auth/register', payload: { token: trainerToken, name: 'X', password: 'ein-sicheres-passwort', consent: true } });
 
-    const superadminToken = await signAccessToken({ sub: '00000000-0000-0000-0000-000000000099', role: 'superadmin', clubId: null, athleteId: null }, keyPair, 900);
+    const superadminToken = await signAccessToken({ sub: '00000000-0000-0000-0000-000000000099', roles: ['superadmin'], clubId: null, athleteId: null }, keyPair, 900);
     const response = await app.inject({ method: 'GET', url: `/api/users?clubId=${CLUB_ID}`, headers: { authorization: `Bearer ${superadminToken}` } });
     expect(response.statusCode).toBe(200);
     expect(response.json().users).toHaveLength(1);
@@ -861,7 +861,7 @@ describe('GET /api/users/trainers (mögliche Zuständige für ein Handlungsfeld)
   // Endpunkt bedient ausschließlich ein Dropdown (id + Anzeigename) —
   // toPublicUser() lieferte bislang zusätzlich E-Mail-Adresse und DSGVO-
   // Einwilligungs-Nachweisdaten, die hier nichts verloren haben.
-  it('liefert NUR id/name/role, insbesondere KEINE E-Mail-Adresse und keine DSGVO-Einwilligungs-Nachweisdaten', async () => {
+  it('liefert NUR id/name/roles, insbesondere KEINE E-Mail-Adresse und keine DSGVO-Einwilligungs-Nachweisdaten', async () => {
     const { app, invitations } = await buildTestApp();
     const trainerToken = await seedInvitationToken(invitations, { email: 'schmal@example.org', role: 'trainer' });
     const trainerReg = await app.inject({ method: 'POST', url: '/auth/register', payload: { token: trainerToken, name: 'Schmale Sicht', password: 'ein-sicheres-passwort', consent: true } });
@@ -871,8 +871,8 @@ describe('GET /api/users/trainers (mögliche Zuständige für ein Handlungsfeld)
     expect(response.statusCode).toBe(200);
     const { users } = response.json();
     expect(users).toHaveLength(1);
-    expect(Object.keys(users[0]).sort()).toEqual(['id', 'name', 'role']);
-    expect(users[0].role).toBe('trainer');
+    expect(Object.keys(users[0]).sort()).toEqual(['id', 'name', 'roles']);
+    expect(users[0].roles).toEqual(['trainer']);
     await app.close();
   });
 

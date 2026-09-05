@@ -59,7 +59,7 @@ export class InvitationRevokedError extends Error {
 
 export interface RequesterContext {
   id: string;
-  role: string; // 'superadmin' | 'admin' | 'trainer' | 'athlete'
+  roles: string[]; // Teilmenge von 'superadmin' | 'admin' | 'trainer' | 'athlete'
   clubId: string | null;
 }
 
@@ -156,7 +156,7 @@ const ACTION_ROLES = {
 } as const satisfies Record<string, ReadonlySet<string>>;
 
 function requireActionRole(requester: RequesterContext, allowed: ReadonlySet<string>, message: string) {
-  if (!allowed.has(requester.role)) throw new ForbiddenError(message);
+  if (!requester.roles.some((r) => allowed.has(r))) throw new ForbiddenError(message);
 }
 
 function assertCanIssueRole(requester: RequesterContext, role: InvitationRole, targetClubId: string | null) {
@@ -169,12 +169,12 @@ function assertCanIssueRole(requester: RequesterContext, role: InvitationRole, t
   }
   // role === 'trainer' | 'athlete'
   requireActionRole(requester, ACTION_ROLES.issueMemberInvitation, 'Nur Admins (oder Superadministrator:innen) dürfen Trainer:innen/Athlet:innen einladen.');
-  if (requester.role === 'admin' && !requester.clubId) {
+  if (requester.roles.includes('admin') && !requester.clubId) {
     // Sollte praktisch nie vorkommen (jeder Admin gehört zu einem Verein),
     // aber defensiv geprüft.
     throw new ForbiddenError('Dem einladenden Admin-Konto ist kein Verein zugeordnet.');
   }
-  if (requester.role === 'superadmin' && !targetClubId) {
+  if (requester.roles.includes('superadmin') && !targetClubId) {
     throw new ForbiddenError('Als Superadministrator:in muss der Ziel-Verein (clubId) explizit angegeben werden.');
   }
 }
@@ -185,7 +185,7 @@ function assertCanIssueRole(requester: RequesterContext, role: InvitationRole, t
 // unterscheiden muss.
 function resolveTargetClubId(requester: RequesterContext, role: InvitationRole, requestedClubId?: string): string | null {
   if (role === 'admin') return requestedClubId ?? null;
-  if (requester.role === 'admin') return requester.clubId;
+  if (requester.roles.includes('admin')) return requester.clubId;
   return requestedClubId ?? null; // superadmin lädt trainer/athlete ein
 }
 
@@ -312,8 +312,8 @@ export function createInvitationsService(deps: InvitationsServiceDeps) {
     },
 
     async list(requester: RequesterContext): Promise<Array<Omit<InvitationRecord, 'tokenHash'>>> {
-      if (requester.role === 'superadmin') return (await deps.invitations.listAll()).map(toPublicInvitation);
-      if (requester.role === 'admin' && requester.clubId) return (await deps.invitations.listByClub(requester.clubId)).map(toPublicInvitation);
+      if (requester.roles.includes('superadmin')) return (await deps.invitations.listAll()).map(toPublicInvitation);
+      if (requester.roles.includes('admin') && requester.clubId) return (await deps.invitations.listByClub(requester.clubId)).map(toPublicInvitation);
       throw new ForbiddenError('Nur Admins/Superadministrator:innen dürfen Einladungen einsehen.');
     },
 
@@ -321,8 +321,8 @@ export function createInvitationsService(deps: InvitationsServiceDeps) {
       const invitation = await deps.invitations.findById(id);
       if (!invitation) throw new InvitationNotFoundError();
       const allowed =
-        requester.role === 'superadmin' ||
-        (requester.role === 'admin' && requester.clubId && invitation.clubId === requester.clubId);
+        requester.roles.includes('superadmin') ||
+        (requester.roles.includes('admin') && requester.clubId && invitation.clubId === requester.clubId);
       if (!allowed) throw new ForbiddenError('Diese Einladung gehört nicht zu Ihrem Verein.');
       await deps.invitations.revoke(id);
     },
@@ -364,7 +364,7 @@ export function createInvitationsService(deps: InvitationsServiceDeps) {
       requester: RequesterContext,
     ): Promise<ClubRecord> {
       requireActionRole(requester, ACTION_ROLES.updateClubIdentity, 'Nur Admins (oder Superadministrator:innen) dürfen die Vereinskennung ändern.');
-      if (requester.role === 'admin' && requester.clubId !== clubId) {
+      if (requester.roles.includes('admin') && requester.clubId !== clubId) {
         throw new ForbiddenError('Admins dürfen nur die Vereinskennung des eigenen Vereins ändern.');
       }
       const club = await deps.clubs.findById(clubId);

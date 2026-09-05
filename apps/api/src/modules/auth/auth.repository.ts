@@ -13,7 +13,13 @@ export interface UserRecord {
   name: string;
   email: string;
   passwordHash: string;
-  role: string;
+  // docs/kampfrichter-modul-plan.md, Abschnitt 1: ein Konto kann mehrere
+  // Rollen gleichzeitig haben. Die transitionelle, einzelne "role"-Spalte
+  // (schema.prisma) ist bewusst NICHT Teil dieses Interfaces mehr — sie
+  // wird ausschließlich innerhalb von PrismaUserRepository (unten) als
+  // roles[0] mitgepflegt, kein Aufrufer dieses Moduls soll sich noch auf
+  // sie verlassen.
+  roles: string[];
   athleteId: string | null;
   locale: string;
   // DSGVO: Zeitpunkt/Version der zuletzt bestätigten Einwilligung.
@@ -29,7 +35,7 @@ export interface CreateUserInput {
   name: string;
   email: string;
   passwordHash: string;
-  role: string;
+  roles: string[];
   athleteId?: string | null;
   consentGivenAt: Date;
   consentVersion: string;
@@ -42,6 +48,10 @@ export interface UpdateUserInput {
   consentGivenAt?: Date;
   consentVersion?: string;
   deletedAt?: Date | null;
+  // PATCH /api/users/:userId/roles (docs/kampfrichter-modul-plan.md,
+  // Abschnitt 1.4) — ersetzt die vollständige Rollenmenge, kein
+  // Add/Remove-Diff.
+  roles?: string[];
   // Sicherheitsreview 2026-08, Befund M5 (Passwortwechsel/-Reset) — beide
   // Flüsse (auth.service.ts: changePassword()/resetPassword()) rufen
   // update() erst NACH bereits erfolgter Verifikation (aktuelles Passwort
@@ -148,8 +158,17 @@ export class PrismaUserRepository implements UserRepository {
   async findById(id: string): Promise<UserRecord | null> {
     return this.prisma.user.findFirst({ where: { id, deletedAt: null } });
   }
+  // Schreibt zusätzlich zu "roles" weiterhin die transitionelle "role"-
+  // Spalte (roles[0] — der "primäre" Wert) mit, damit die Datenbank-
+  // Constraint (NOT NULL, kein Default, siehe schema.prisma) erfüllt
+  // bleibt und ein direkter SQL-Blick auf "role" währenddessen einen
+  // plausiblen Wert zeigt. Kein Aufrufer außerhalb dieser Klasse kennt
+  // "role" noch (siehe UserRecord-Kommentar oben) — wird entfernt, sobald
+  // die Spalte selbst per eigener Migration verschwindet (docs/
+  // kampfrichter-modul-plan.md, Abschnitt 1.3, "Contract").
   async create(input: CreateUserInput): Promise<UserRecord> {
-    return this.prisma.user.create({ data: { ...input, athleteId: input.athleteId ?? null } });
+    const { roles, ...rest } = input;
+    return this.prisma.user.create({ data: { ...rest, role: roles[0]!, roles, athleteId: input.athleteId ?? null } });
   }
   // Sicherheitskorrektur (Code-Review, Befund S5): `findByEmail()`/
   // `findById()`/`listByClub()` oben filtern bewusst und dokumentiert auf
@@ -170,7 +189,14 @@ export class PrismaUserRepository implements UserRepository {
   // Methode für Aufrufer weiterhin identisch zu einem echten
   // `prisma.user.update()` auf eine nicht (mehr) existente id verhält.
   async update(id: string, input: UpdateUserInput): Promise<UserRecord> {
-    const result = await this.prisma.user.updateMany({ where: { id, deletedAt: null }, data: input });
+    // Spiegelt roles[0] weiterhin in die transitionelle "role"-Spalte,
+    // analog zu create() oben — nur wenn roles tatsächlich Teil dieses
+    // Patches ist (sonst bliebe "role" sonst fälschlich auf dem alten
+    // Wert stehenbleiben, was hier aber ohnehin unverändert bliebe, da
+    // updateMany() nur die im data-Objekt genannten Felder ändert; die
+    // explizite Ergänzung dient nur der Lesbarkeit).
+    const data = input.roles ? { ...input, role: input.roles[0]! } : input;
+    const result = await this.prisma.user.updateMany({ where: { id, deletedAt: null }, data });
     if (result.count === 0) {
       const err = new Error('An operation failed because it depends on one or more records that were required but not found. No record was found for an update.') as Error & { code: string };
       err.code = 'P2025';

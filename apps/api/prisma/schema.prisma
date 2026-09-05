@@ -87,6 +87,15 @@ model User {
   // blockiert, ohne den Purge-Ablauf selbst ändern zu müssen.
   athleteId           String?              @unique
   athlete             Athlete?             @relation(fields: [athleteId], references: [id], onDelete: SetNull)
+  // docs/kampfrichter-modul-plan.md, Abschnitt 1: ein Konto kann mehrere
+  // Rollen gleichzeitig haben (z. B. Trainer:in UND Athlet:in). Löst
+  // schrittweise "role" oben ab (expand -> migrate -> contract, siehe
+  // Plan Abschnitt 1.3) — Anwendungscode liest/schreibt ab sofort
+  // AUSSCHLIESSLICH "roles"; "role" bleibt vorerst als Sicherheitsnetz
+  // bestehen (rein informativ, wird von PrismaUserRepository weiterhin
+  // als roles[0] mitgepflegt, siehe auth.repository.ts), bis eine
+  // spätere, eigene Migration die Spalte entfernt.
+  roles               String[]             @default([])
   locale              String               @default("de-DE")
   // DSGVO: Zeitpunkt/Version der zuletzt bestätigten Einwilligung zur
   // Datenverarbeitung — wird bei jedem Login/jeder Registrierung erneut

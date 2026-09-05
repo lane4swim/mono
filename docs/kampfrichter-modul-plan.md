@@ -624,17 +624,31 @@ getroffen und oben in den jeweiligen Abschnitten bereits eingearbeitet:
 
 ## 7. Umsetzungsschritte
 
-**Phase A — Mehrfachrollen (Voraussetzung, Abschnitt 1):**
-1. Prisma: `User.roles String[]` ergänzen, Backfill-Skript, Übergangsphase
-   mit weiterhin bestehender `role`-Spalte.
-2. `RoleSchema`/`UserRolesSchema`, `AccessTokenClaimsSchema.roles`,
-   `requireAnyRole()` (Backend), `getRoles()`/`hasRole()`,
-   `isModuleVisible()` (Frontend) umstellen.
-3. `PATCH /api/users/:userId/roles` inkl. „letzter Admin"-Schutz und
-   `revokeAllForUser()`; `userManagement.js`-Dialog dafür.
-4. Sync-Regressionstests für athlete-Einschränkungen bei Mehrfachrollen
-   (Abschnitt 1.5).
-5. `role`-Spalte nach Übergangszeit entfernen (separate, spätere Migration).
+**Phase A — Mehrfachrollen (Voraussetzung, Abschnitt 1): ✅ umgesetzt
+(2026-09-05)**
+1. ✅ Prisma: `User.roles String[]` ergänzt (Migration
+   `20260905120000_add_user_roles_array`, inkl. Backfill `roles = [role]`
+   für Bestandszeilen), `role`-Spalte bleibt bewusst bestehen
+   (Übergangsphase) und wird von `PrismaUserRepository` weiterhin als
+   `roles[0]` mitgepflegt.
+2. ✅ `UserRolesSchema`, `AccessTokenClaimsSchema.roles`,
+   `requireAnyRole()` (Backend), `getRoles()`/`hasRole()`/
+   `isAthleteScoped()`, `isModuleVisible()`/`visibleModules()` (Frontend)
+   umgestellt — inkl. aller Aufrufstellen in `auth`/`invitations`/
+   `qualifications`/`sync`-Modulen sowie `shell.js`/`sessions.js`/
+   `dashboard.js`/`actionItems.js`.
+3. ✅ `PATCH /api/users/:userId/roles` (admin, eigener Verein) inkl.
+   „letzter Admin"-Schutz (`LastAdminError`, 409),
+   `CannotAssignSuperadminError` (400) und `revokeAllForUser()`;
+   `userManagement.js`-Dialog (`openManageRolesModal()`) dafür, inkl.
+   Rollen-Badges je Mitglied.
+4. ✅ Sync-Regressionen: `isAthleteScoped()` in `sync.permissions.ts`
+   greift nur, wenn keine Staff-Rolle vorhanden ist (nicht nur bei
+   „ausschließlich athlete") — deckt sowohl `['trainer','athlete']`
+   (weiterhin voller Zugriff) als auch künftige Nicht-Staff-Rollen ab.
+5. ⏳ `role`-Spalte nach Übergangszeit entfernen — bewusst noch NICHT Teil
+   dieser Umsetzung (separate, spätere Contract-Migration, siehe
+   Abschnitt 1.3).
 
 **Phase B — Rolle & Qualifikationen:**
 6. `'referee'` in `RoleSchema`/`InvitationRoleSchema`;

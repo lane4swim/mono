@@ -29,7 +29,7 @@ export const ADMIN_USER_ID = '77777777-0000-0000-0000-000000000003';
 // gebucht) — diese Suite testet Rollen-/FK-/Konflikt-Verhalten, nicht das
 // Modul-Gating selbst (siehe sync.permissions.test.ts dafür).
 function asTrainer(clubId: string) {
-  return { userId: TRAINER_USER_ID, clubId, role: 'trainer' as const, athleteId: null, enabledModules: MODULE_KEYS };
+  return { userId: TRAINER_USER_ID, clubId, roles: ['trainer'] as const, athleteId: null, enabledModules: MODULE_KEYS };
 }
 
 function makeGroupPayload(overrides: Partial<Record<string, unknown>> = {}) {
@@ -65,7 +65,7 @@ function makeResultPayload(overrides: Partial<Record<string, unknown>> = {}) {
 }
 
 function asAthlete(clubId: string, athleteId: string | null) {
-  return { userId: ATHLETE_USER_ID, clubId, role: 'athlete' as const, athleteId, enabledModules: MODULE_KEYS };
+  return { userId: ATHLETE_USER_ID, clubId, roles: ['athlete'] as const, athleteId, enabledModules: MODULE_KEYS };
 }
 
 // "athletes" ist seit der Access-Konsistenz-Korrektur (siehe STORE_PERMISSIONS)
@@ -74,7 +74,7 @@ function asAthlete(clubId: string, athleteId: string | null) {
 // hier oben ein eigenes admin-Pendant für Tests, die ausschließlich die
 // Fremdschlüssel-/Feld-Logik prüfen wollen, unabhängig von der Rollensperre.
 function asAdmin(clubId: string) {
-  return { userId: ADMIN_USER_ID, clubId, role: 'admin' as const, athleteId: null, enabledModules: MODULE_KEYS };
+  return { userId: ADMIN_USER_ID, clubId, roles: ['admin'] as const, athleteId: null, enabledModules: MODULE_KEYS };
 }
 
 function makeActionItemPayload(overrides: Partial<Record<string, unknown>> = {}) {
@@ -1905,7 +1905,7 @@ describe('syncService.pull — Store-Vorauswahl nach gebuchten Modulen (Review 3
 
     const result = await service.pull(
       {},
-      { userId: TRAINER_USER_ID, clubId: CLUB_A, role: 'trainer', athleteId: null, enabledModules: ONLY_ATHLETES },
+      { userId: TRAINER_USER_ID, clubId: CLUB_A, roles: ['trainer'], athleteId: null, enabledModules: ONLY_ATHLETES },
     );
 
     // Paket "athletes" trägt genau die Stores "athletes" und "groups".
@@ -1923,7 +1923,7 @@ describe('syncService.pull — Store-Vorauswahl nach gebuchten Modulen (Review 3
 
     const result = await service.pull(
       {},
-      { userId: TRAINER_USER_ID, clubId: CLUB_A, role: 'trainer', athleteId: null, enabledModules: MODULE_KEYS },
+      { userId: TRAINER_USER_ID, clubId: CLUB_A, roles: ['trainer'], athleteId: null, enabledModules: MODULE_KEYS },
     );
 
     expect(result.changes.map((c) => c.store).sort()).toEqual([...ENTITY_STORE_NAMES].sort());
@@ -1942,7 +1942,7 @@ describe('syncService.pull — Store-Vorauswahl nach gebuchten Modulen (Review 3
 
     const result = await service.pull(
       {},
-      { userId: TRAINER_USER_ID, clubId: CLUB_A, role: 'trainer', athleteId: null, enabledModules: ONLY_ATHLETES },
+      { userId: TRAINER_USER_ID, clubId: CLUB_A, roles: ['trainer'], athleteId: null, enabledModules: ONLY_ATHLETES },
     );
 
     expect(result.changes.map((c) => c.entityId)).toEqual(['ath-1']);

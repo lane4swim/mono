@@ -4,11 +4,11 @@
 // Siehe Abschnitt 6 des Backend-Entwicklungsplans für den Gesamtfluss.
 // Nur eingeloggte Vereinsmitglieder (trainer/admin/athlete) dürfen
 // synchronisieren — Superadmin hat keinen eigenen Verein und wird über
-// requireRole ausgeschlossen.
+// requireAnyRole ausgeschlossen.
 import type { FastifyInstance } from 'fastify';
 import { SyncPushRequestSchema, SyncPullQuerySchema } from '@lane1/shared-types';
 import type { SyncService, SyncRequester } from './sync.service.js';
-import { requireRole } from '../../plugins/authorize.js';
+import { requireAnyRole } from '../../plugins/authorize.js';
 import { parseInput } from '../../plugins/parseInput.js';
 
 // Minimale, für dieses Modul ausreichende Nachschlagemöglichkeit für die
@@ -77,7 +77,7 @@ export function sweepExpiredClubModules(cache: Map<string, CachedClubModules>, n
 // direkt über app.authenticate), nicht übersehen.
 export async function syncRoutes(app: FastifyInstance, opts: SyncRoutesOptions) {
   const { syncService, clubs } = opts;
-  const syncGuard = [app.authenticate, requireRole('trainer', 'admin', 'athlete')];
+  const syncGuard = [app.authenticate, requireAnyRole('trainer', 'admin', 'athlete')];
 
   const clubModulesCache = new Map<string, CachedClubModules>();
 
@@ -106,7 +106,7 @@ export async function syncRoutes(app: FastifyInstance, opts: SyncRoutesOptions) 
     return enabledModules;
   }
 
-  // requireRole hat bereits sichergestellt, dass die Rolle stimmt; eine Rolle
+  // requireAnyRole hat bereits sichergestellt, dass die Rolle stimmt; eine Rolle
   // ohne Verein (theoretisch nur superadmin) kommt hier also nicht an —
   // clubId ist an dieser Stelle immer gesetzt. role/athleteId werden
   // zusätzlich mitgegeben, damit der Service die Rollen-Scopierung für
@@ -120,14 +120,14 @@ export async function syncRoutes(app: FastifyInstance, opts: SyncRoutesOptions) 
   // `userId` durchgereicht — für die Autor:innen-Prüfung eingebetteter
   // Kommentare (siehe sync.commentAuthorship.ts).
   async function requesterFrom(
-    request: { user?: { sub: string; role: SyncRequester['role']; clubId: string | null; athleteId: string | null } },
+    request: { user?: { sub: string; roles: SyncRequester['roles']; clubId: string | null; athleteId: string | null } },
   ): Promise<SyncRequester> {
     const user = request.user!;
     const enabledModules = await resolveEnabledModules(user.clubId!);
     return {
       userId: user.sub,
       clubId: user.clubId!,
-      role: user.role,
+      roles: user.roles,
       athleteId: user.athleteId,
       enabledModules,
     };

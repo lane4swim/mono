@@ -10,7 +10,7 @@ import { fmtDateShort } from '../dates.js';
 import { badge, emptyState, laneWave, toast } from '../ui.js';
 import { openModal, confirmAction } from '../modal.js';
 import { field, textInput, selectInput, formActions } from '../forms.js';
-import { isSuperAdmin, getCurrentUser, setClubIdentity } from '../state.js';
+import { isSuperAdmin, isAdmin, getCurrentUser, setClubIdentity } from '../state.js';
 import * as api from '../apiClient.js';
 import { describeError } from '../apiClient.js';
 import { t } from '../i18n.js';
@@ -74,7 +74,7 @@ function renderView(container, clubs, invitations, members) {
   if (isSuperAdmin()) {
     wrap.appendChild(renderClubsSection(clubs, refresh));
   } else {
-    wrap.appendChild(renderMembersSection(members));
+    wrap.appendChild(renderMembersSection(members, refresh));
     wrap.appendChild(renderClubIdentitySection());
   }
 
@@ -105,17 +105,20 @@ function renderView(container, clubs, invitations, members) {
 // superadmin: je Verein über einen Button in der Vereinsliste (siehe
 // renderClubsSection), da ein Superadmin-Konto selbst zu keinem Verein
 // gehört und daher explizit wählen muss, welchen Verein es ansehen will.
-function renderMembersSection(members) {
+function renderMembersSection(members, onRolesChanged) {
   const card = el('div', { class: 'card mb-16' }, [el('h3', { class: 'mt-0' }, t('usermgmt.membersSection'))]);
-  card.appendChild(renderMembersGroupedByRole(members));
+  card.appendChild(renderMembersGroupedByRole(members, onRolesChanged));
   return card;
 }
 
 // Gruppiert eine (bereits vom Server nach Rolle+Namen sortierte) Liste
 // visuell nach Rolle — Admins, Trainer:innen, Athlet:innen je eigene
 // Tabelle, nur sichtbar, wenn es in dieser Rolle tatsächlich Mitglieder
-// gibt.
-function renderMembersGroupedByRole(members) {
+// gibt. `onRolesChanged` bleibt optional — die schreibgeschützte
+// Ansicht für superadmin (openClubMembersModal() unten) übergibt keinen
+// Callback, `isAdmin()` ist dort ohnehin immer false (siehe Button-Guard
+// unten), der Parameter würde also nie aufgerufen.
+function renderMembersGroupedByRole(members, onRolesChanged) {
   const wrap = el('div');
   if (!members || members.length === 0) {
     wrap.appendChild(el('p', {}, t('usermgmt.noMembersYet')));
@@ -127,17 +130,75 @@ function renderMembersGroupedByRole(members) {
     { role: 'athlete', label: t('usermgmt.groupAthletes') },
   ];
   groups.forEach(({ role, label }) => {
-    const inRole = members.filter((m) => m.role === role);
+    // docs/kampfrichter-modul-plan.md, Abschnitt 1: eine Person mit
+    // mehreren Rollen (z. B. trainer + athlete) erscheint dadurch in JEDER
+    // passenden Gruppe — anders als die serverseitige Sortierung (die nur
+    // die jeweils höchste Rolle für die Reihenfolge nutzt), weil hier jede
+    // Zeile für sich die volle Zugehörigkeit zeigen soll.
+    const inRole = members.filter((m) => m.roles.includes(role));
     if (inRole.length === 0) return;
     wrap.appendChild(el('h4', { style: 'margin-bottom:8px' }, `${label} (${inRole.length})`));
     const table = el('table');
-    table.appendChild(el('thead', {}, el('tr', {}, [el('th', {}, t('usermgmt.colName')), el('th', {}, t('usermgmt.colEmail'))])));
+    table.appendChild(el('thead', {}, el('tr', {}, [el('th', {}, t('usermgmt.colName')), el('th', {}, t('usermgmt.colEmail')), el('th', {}, t('usermgmt.colRole')), el('th', {}, '')])));
     const tbody = el('tbody');
-    inRole.forEach((member) => tbody.appendChild(el('tr', {}, [el('td', {}, member.name), el('td', {}, member.email)])));
+    inRole.forEach((member) => tbody.appendChild(el('tr', {}, [
+      el('td', {}, member.name),
+      el('td', {}, member.email),
+      el('td', {}, el('div', { class: 'flex gap-8' }, member.roles.map((r) => badge(t(`settings.role_${r}`), 'neutral')))),
+      el('td', {}, isAdmin() ? el('button', {
+        class: 'btn btn-ghost btn-sm',
+        onclick: () => openManageRolesModal(member, onRolesChanged),
+      }, t('usermgmt.manageRoles')) : null),
+    ])));
     table.appendChild(tbody);
     wrap.appendChild(el('div', { class: 'table-wrap mb-16' }, table));
   });
   return wrap;
+}
+
+// Alle vergebbaren Rollen außer "superadmin" (docs/kampfrichter-modul-
+// plan.md, Abschnitt 1.4 — wird ausschließlich über
+// scripts/createSuperAdmin.ts vergeben, nie über diesen Dialog).
+const ASSIGNABLE_ROLES = ['admin', 'trainer', 'athlete'];
+
+// Rollen-Verwaltung für ein bestehendes Vereinsmitglied (PATCH
+// /api/users/:userId/roles) — ersetzt die vollständige Rollenmenge, kein
+// Add/Remove-Diff (siehe UpdateUserRolesRequestSchema-Kommentar in
+// shared-types). Nur für admin sichtbar (siehe renderMembersGroupedByRole()
+// oben).
+function openManageRolesModal(member, onChanged) {
+  const form = el('form', { class: 'form-grid' });
+  const checkboxes = new Map();
+  ASSIGNABLE_ROLES.forEach((role) => {
+    const cb = el('input', { type: 'checkbox', checked: member.roles.includes(role) });
+    checkboxes.set(role, cb);
+    const label = el('label', { class: 'flex items-center gap-8', style: 'grid-column:1/-1' }, [cb, t(`settings.role_${role}`)]);
+    form.appendChild(label);
+  });
+  form.appendChild(el('p', { class: 'hint', style: 'grid-column:1/-1' }, t('usermgmt.manageRolesHint')));
+  const errorBox = el('p', { class: 'form-error', style: 'grid-column:1/-1;display:none' });
+  form.appendChild(errorBox);
+  const { row: actionsRow, submitBtn } = formActions({ onCancel: () => close(), submitLabel: t('common.save') });
+  form.appendChild(actionsRow);
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    errorBox.style.display = 'none';
+    const roles = ASSIGNABLE_ROLES.filter((role) => checkboxes.get(role).checked);
+    if (roles.length === 0) { toast(t('usermgmt.manageRolesEmpty'), 'error'); return; }
+    submitBtn.disabled = true;
+    try {
+      await api.updateUserRoles(member.id, roles);
+      toast(t('usermgmt.manageRolesSaved'));
+      close();
+      onChanged?.();
+    } catch (err) {
+      errorBox.textContent = describeError(err);
+      errorBox.style.display = 'block';
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
+  const { close } = openModal({ title: t('usermgmt.manageRolesTitle', { name: member.name }), bodyNode: form, wide: true });
 }
 
 // Externe Vereinskennung für den DSV7/Lenex-Ergebnisimport (siehe

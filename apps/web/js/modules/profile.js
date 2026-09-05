@@ -215,7 +215,7 @@ function renderView(container, athletes, results, entries, actionItems, sessions
 
   const roleRow = el('div', { class: 'field span-2' }, [
     el('label', {}, t('profile.roleLabel')),
-    el('div', {}, badge(t(`settings.role_${user.role}`), 'neutral')),
+    el('div', { class: 'flex gap-8' }, user.roles.map((r) => badge(t(`settings.role_${r}`), 'neutral'))),
   ]);
   form.appendChild(roleRow);
 

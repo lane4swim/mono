@@ -68,11 +68,11 @@ afterAll(async () => {
 // Invitation.invitedById trägt eine echte Fremdschlüssel-Beziehung zu
 // users.id (siehe schema.prisma) — anders als bei einem In-Memory-Double
 // braucht der "requester" hier ein tatsächlich existierendes Konto.
-async function createTestSuperadmin(): Promise<{ id: string; role: 'superadmin'; clubId: null }> {
+async function createTestSuperadmin(): Promise<{ id: string; roles: ['superadmin']; clubId: null }> {
   const user = await prisma.user.create({
-    data: { clubId: null, name: 'Super', email: `super-${randomUUID()}@example.org`, passwordHash: 'hash', role: 'superadmin' },
+    data: { clubId: null, name: 'Super', email: `super-${randomUUID()}@example.org`, passwordHash: 'hash', role: 'superadmin', roles: ['superadmin'] },
   });
-  return { id: user.id, role: 'superadmin', clubId: null };
+  return { id: user.id, roles: ['superadmin'], clubId: null };
 }
 
 describe('authService.acceptInvitation() — P2002-Regressionen (Code-Review)', () => {

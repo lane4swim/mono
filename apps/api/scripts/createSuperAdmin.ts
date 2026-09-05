@@ -198,7 +198,7 @@ async function main() {
     // --force für den bewussten Ausnahmefall (z. B. ein zusätzliches
     // Notfall-Konto für einen zweiten Dachverband auf derselben Instanz).
     if (!flags.has('force')) {
-      const existingSuperadmin = await prisma.user.findFirst({ where: { role: 'superadmin' } });
+      const existingSuperadmin = await prisma.user.findFirst({ where: { roles: { has: 'superadmin' } } });
       if (existingSuperadmin) {
         console.error(
           `Es existiert bereits ein Superadmin-Konto (${existingSuperadmin.email}). ` +
@@ -216,6 +216,7 @@ async function main() {
         email: validEmail,
         passwordHash,
         role: 'superadmin',
+        roles: ['superadmin'],
         athleteId: null,
       },
     });

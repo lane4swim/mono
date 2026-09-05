@@ -135,10 +135,39 @@ const STORE_MODULE_MAP: Record<EntityStoreName, readonly ModuleKey[]> = (() => {
   return map;
 })();
 
-export function canRead(store: SyncStore, role: Role, enabledModules: readonly string[]): boolean {
-  return isKnownStore(store) && STORE_PERMISSIONS[store].read.has(role) && STORE_MODULE_MAP[store].some((m) => enabledModules.includes(m));
+// docs/kampfrichter-modul-plan.md, Abschnitt 1.4/1.5: ein Konto kann
+// mehrere Rollen gleichzeitig haben — canRead()/canWrite() prüfen daher,
+// ob MINDESTENS EINE der Rollen die Berechtigung hat (Vereinigung, nicht
+// Gleichheit). Für die drei bestehenden Team-Rollen ist "trainer"/"admin"
+// ohnehin eine Obermenge von "athlete" (siehe STORE_PERMISSIONS oben),
+// eine Kombination wie ['trainer','athlete'] verhält sich damit
+// automatisch wie ein reiner Trainer.
+export function canRead(store: SyncStore, roles: readonly Role[], enabledModules: readonly string[]): boolean {
+  return (
+    isKnownStore(store) &&
+    roles.some((role) => STORE_PERMISSIONS[store].read.has(role)) &&
+    STORE_MODULE_MAP[store].some((m) => enabledModules.includes(m))
+  );
 }
 
-export function canWrite(store: SyncStore, role: Role, enabledModules: readonly string[]): boolean {
-  return isKnownStore(store) && STORE_PERMISSIONS[store].write.has(role) && STORE_MODULE_MAP[store].some((m) => enabledModules.includes(m));
+export function canWrite(store: SyncStore, roles: readonly Role[], enabledModules: readonly string[]): boolean {
+  return (
+    isKnownStore(store) &&
+    roles.some((role) => STORE_PERMISSIONS[store].write.has(role)) &&
+    STORE_MODULE_MAP[store].some((m) => enabledModules.includes(m))
+  );
+}
+
+// Athlet:innen-spezifische Einschränkungen (Zeilen-/Feldebene beim Pull in
+// sync.athleteScope.ts, Eigentümer-Verengung bei "results" in
+// sync.service.ts) gelten nur, wenn KEINE der Rollen einer Person eine
+// Staff-Rolle ("trainer"/"admin") ist — sonst würde ein Konto mit z. B.
+// roles: ['trainer','athlete'] fälschlich auf "nur eigene Daten"
+// eingeschränkt, obwohl die Trainer-Rolle vollen Zugriff verleiht. Eine
+// künftig hinzukommende, mit "athlete" kombinierbare Rolle ohne eigenen
+// Sync-Zugriff (siehe docs/kampfrichter-modul-plan.md, Abschnitt 1.5) soll
+// an dieser Einschränkung NICHTS ändern — deshalb hier bewusst geprüft
+// "keine Staff-Rolle vorhanden", nicht "ausschließlich athlete".
+export function isAthleteScoped(roles: readonly Role[]): boolean {
+  return roles.includes('athlete') && !roles.some((r) => r === 'trainer' || r === 'admin');
 }

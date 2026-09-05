@@ -188,7 +188,7 @@ function renderMembersSection(members, settings, onChanged) {
   members.forEach((member) => {
     tbody.appendChild(el('tr', {}, [
       el('td', {}, member.name),
-      el('td', {}, badge(t(`settings.role_${member.role}`), 'neutral')),
+      el('td', {}, el('div', { class: 'flex gap-8' }, member.roles.map((r) => badge(t(`settings.role_${r}`), 'neutral')))),
       el('td', {}, el('button', {
         class: 'btn btn-ghost btn-sm',
         onclick: () => openMemberQualificationsModal(member, settings, onChanged),
