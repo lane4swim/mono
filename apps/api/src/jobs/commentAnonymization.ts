@@ -1,53 +1,35 @@
-// Sicherheitsreview 2026-08, Befund N5: purgeUserAndDependents()
-// (erasure.repository.ts) löschte bislang Nutzer, Athletenprofil,
-// Ergebnisse, Startlisteneinträge, Handlungsfelder und die
-// Anwesenheitszeilen der gelöschten Person — nicht erfasst wurde
-// `Comment.authorName` (siehe CommentSchema in
-// packages/shared-types/src/entities.ts), der Klarname, der in
-// "plans.comments", "exercises.comments" sowie verschachtelt in
-// "plans.days[].sets[].comments" UND "templates.sets[].comments"
-// eingebettet ist (dieselbe SetEntry-Struktur — Sätze/Blöcke, siehe
-// SetEntrySchema — wird sowohl von Plan.days als auch von Template.sets
-// verwendet; Templates waren im ursprünglichen Befund nicht ausdrücklich
-// genannt, tragen aber dieselbe Struktur und damit dieselbe Lücke).
-// Nach einem vollständigen Art.-17-Purge blieben diese Namen samt
-// Kommentartext dauerhaft in der Datenbank.
+// Anonymisiert `Comment.authorName` beim Art.-17-Hard-Purge. Der Klarname
+// steckt eingebettet in "plans.comments", "exercises.comments" sowie
+// verschachtelt in "plans.days[].sets[].comments" und
+// "templates.sets[].comments" — dieselbe SetEntry-Struktur trägt Plan.days
+// wie Template.sets. Ohne diesen Schritt überlebten die Namen samt
+// Kommentartext einen vollständigen Purge.
 //
-// Sicherheitsreview 2026-08-27, Befund M2: gleicht primär gegen
-// `authorId` statt gegen `authorName` ab. CommentSchema trägt jetzt ein
-// `authorId` (die tatsächliche, stabile User-ID) — anders als der frei
-// wählbare `authorName` serverseitig durchgesetzt (siehe
-// sync.commentAuthorship.ts: ein neuer Kommentar muss `authorId ===
-// request.user.sub` tragen, ein bestehender lässt sich nur unverändert
-// weiterreichen). Für alles seit M2 Geschriebene entfällt die vormals
-// hier dokumentierte Erkennungsgrenze (Namensgleichheit mit einer anderen
-// Person, nachträgliche Namensänderung, ein absichtlich abweichender Name
-// entzieht den eigenen Kommentar der Anonymisierung) damit vollständig —
-// `authorId` ist ein exakter, eindeutiger und nicht fälschbarer
+// Abgeglichen wird primär gegen `authorId`: anders als der frei wählbare
+// `authorName` ist die User-ID serverseitig durchgesetzt (siehe
+// sync.commentAuthorship.ts) und damit ein exakter, nicht fälschbarer
 // Abgleichswert.
 //
-// Für den ALTBESTAND (Kommentare ohne `authorId`, geschrieben vor M2 —
-// eingebettetes JSONB, daher nicht per Spalten-Migration nachrüstbar)
-// bleibt der ursprüngliche Namensabgleich samt seiner Unschärfe als
-// Rückfall bestehen; ohne ihn verlören ausgerechnet die ältesten
-// Kommentare ihre Anonymisierung. Siehe anonymizeCommentArray() unten.
+// Für den ALTBESTAND — Kommentare ohne `authorId`, eingebettetes JSONB und
+// daher nicht per Spalten-Migration nachrüstbar — bleibt der Namensabgleich
+// als Rückfall bestehen, samt seiner Unschärfe (Namensgleichheit,
+// nachträgliche Umbenennung, ein absichtlich abweichender Name entzieht den
+// eigenen Kommentar der Anonymisierung). Ohne ihn verlören ausgerechnet die
+// ältesten Kommentare ihre Anonymisierung. Siehe anonymizeCommentArray().
 //
 // Reine, DB-freie Funktionen — von erasure.repository.ts (Prisma) UND
 // erasure.repository.memory.ts (InMemory-Testdouble) gemeinsam genutzt,
-// damit beide Implementierungen exakt dasselbe Anonymisierungsverhalten
-// haben, statt es zweimal (potenziell abweichend) zu duplizieren.
+// damit beide Implementierungen exakt dasselbe Verhalten zeigen.
 
-// Kein Anzeigetext mehr, sondern ein sprachneutraler, technischer Marker:
-// vormals stand hier direkt der deutsche Anzeigename ("Gelöschtes Konto"),
-// fest in die DB geschrieben und damit unabhängig von der Locale der
+// Ein sprachneutraler, technischer Marker statt eines Anzeigetexts: ein fest
+// in die DB geschriebener Name wäre unabhängig von der Locale der
 // betrachtenden Person. Das Frontend (apps/web/js/modules/comments.js)
-// erkennt diesen Marker beim Rendern und übersetzt ihn zur Anzeigezeit über
-// t('comments.deletedAuthor') — wie jeden anderen UI-String auch.
+// erkennt den Marker und übersetzt ihn zur Anzeigezeit über
+// t('comments.deletedAuthor') — wie jeden anderen UI-String.
 export const ANONYMIZED_COMMENT_AUTHOR = '__deleted_account__';
 
-// Die zu anonymisierende Person. `id` ist der exakte Abgleichswert für
-// alle seit Befund M2 geschriebenen Kommentare; `name` ausschließlich für
-// den Altbestand (Kommentare ohne `authorId`, siehe unten).
+// Die zu anonymisierende Person. `id` ist der exakte Abgleichswert; `name`
+// dient ausschließlich dem Altbestand ohne `authorId` (siehe oben).
 export interface DeletedCommentAuthor {
   id: string;
   name: string | null;
@@ -74,11 +56,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 // Einführung von `authorId` war das nicht möglich, das Feld darf diese
 // Möglichkeit also nicht neu schaffen.
 //
-// Altbestand: Kommentare, die vor Befund M2 geschrieben wurden, tragen
-// gar kein `authorId` (JSONB, keine Spalten-Migration möglich — siehe
-// CommentSchema in packages/shared-types/src/entities.ts). Für sie gilt
-// weiterhin der Namensabgleich des ursprünglichen N5-Fixes, samt dessen
-// dokumentierter Unschärfe (Namensgleichheit/-änderung). Ohne diesen
+// Altbestand: ältere Kommentare tragen gar kein `authorId` (JSONB, keine
+// Spalten-Migration möglich — siehe CommentSchema in
+// packages/shared-types/src/entities.ts). Für sie gilt weiterhin der
+// Namensabgleich samt seiner Unschärfe (Namensgleichheit/-änderung). Ohne
+// diesen
 // Rückfall verlören ausgerechnet die ältesten Kommentare ihre
 // Anonymisierung — eine Verschlechterung gegenüber dem Stand vor M2. Für
 // alles seit M2 Geschriebene greift ausschließlich der exakte

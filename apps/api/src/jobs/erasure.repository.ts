@@ -8,17 +8,13 @@
 import type { PrismaClient, Prisma } from '@prisma/client';
 import { anonymizePlanCommentAuthors, anonymizeExerciseCommentAuthors, anonymizeTemplateCommentAuthors } from './commentAnonymization.js';
 
-// Sicherheitsreview 2026-08-27, Befund M1: Platzhalter, auf den
-// `Invitation.email` beim Hard-Purge gesetzt wird (siehe
-// purgeUserAndDependents() unten) — analog zu `ANONYMIZED_COMMENT_AUTHOR`
-// in commentAnonymization.ts, nur für ein E-Mail- statt ein Namensfeld.
-// `.invalid` ist die von RFC 2606 exakt für diesen Zweck reservierte
-// Top-Level-Domain (garantiert nie real vergeben) — im Unterschied zu
-// z. B. "example.org" (dort bereits als Test-Fixture-Domain in Gebrauch,
-// siehe apps/api/test/**) macht das für Lesende sofort ersichtlich, dass
-// der Wert absichtlich unzustellbar ist, nicht nur zufällig unbenutzt.
-// In `erasure.repository.memory.ts` (InMemory-Testdouble) wiederverwendet,
-// damit beide Implementierungen exakt denselben Platzhalter schreiben.
+// Platzhalter, auf den `Invitation.email` beim Hard-Purge gesetzt wird
+// (purgeUserAndDependents() unten); Gegenstück zu ANONYMIZED_COMMENT_AUTHOR
+// in commentAnonymization.ts. `.invalid` ist die von RFC 2606 für diesen
+// Zweck reservierte TLD — anders als "example.org" (im Projekt bereits als
+// Test-Fixture-Domain in Gebrauch) ist damit auf einen Blick klar, dass der
+// Wert absichtlich unzustellbar ist. Auch vom InMemory-Testdouble genutzt,
+// damit beide Implementierungen denselben Platzhalter schreiben.
 export const ANONYMIZED_INVITATION_EMAIL = 'geloeschtes-konto@geloescht.invalid';
 
 export interface DueErasureRequest {
@@ -39,11 +35,9 @@ export interface ErasureJobGateway {
 export class PrismaErasureJobGateway implements ErasureJobGateway {
   constructor(private readonly prisma: PrismaClient) {}
 
-  // Kein `status`-Filter mehr (Code-Review, Befund R8): jede noch
-  // EXISTIERENDE DataDeletionRequest-Zeile ist implizit "pending" — eine
-  // bereits abgearbeitete verschwindet mit dem gepurgten User per
-  // onDelete: Cascade (siehe schema.prisma). Ein separates Statusfeld war
-  // dafür überflüssig.
+  // Kein `status`-Filter: jede noch EXISTIERENDE DataDeletionRequest-Zeile
+  // ist implizit "pending" — eine abgearbeitete verschwindet mit dem
+  // gepurgten User per onDelete: Cascade (schema.prisma).
   async findDuePendingRequests(now: Date): Promise<DueErasureRequest[]> {
     const rows = await this.prisma.dataDeletionRequest.findMany({
       where: { purgeAfter: { lte: now } },
@@ -56,11 +50,9 @@ export class PrismaErasureJobGateway implements ErasureJobGateway {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) return; // bereits gelöscht (z. B. durch einen vorherigen, abgebrochenen Lauf)
 
-    // Sicherheitskorrektur (Code-Review, Befund C4): `timeout`/`maxWait`
-    // explizit über Prismas Standardwerte (5 s bzw. 2 s) hinaus angehoben —
-    // zusätzliche Sicherheitsmarge zu der unten beschriebenen strukturellen
-    // Korrektur (ein einzelnes UPDATE-Statement statt einer Schleife), rein
-    // defensiv für einen selten laufenden Hintergrund-Job ohne
+    // `timeout`/`maxWait` über Prismas Standardwerte (5 s bzw. 2 s) hinaus
+    // angehoben — Sicherheitsmarge zusätzlich zum einzelnen UPDATE-Statement
+    // unten, rein defensiv für einen selten laufenden Hintergrund-Job ohne
     // Nutzer:innen-Wartezeit-Anforderung. `maxWait` deckt die Wartezeit auf
     // einen freien Connection-Pool-Slot ab (relevant, wenn der Cron-Lauf
     // mehrere fällige Löschanfragen nacheinander abarbeitet), `timeout` die
@@ -100,24 +92,17 @@ export class PrismaErasureJobGateway implements ErasureJobGateway {
         // Trainingseinheit (kein eigenes Tabellen-Feld), daher kein
         // schlichtes `deleteMany`/`updateMany` mit einer Feld-Bedingung.
         //
-        // Sicherheitskorrektur (Code-Review, Befund C4): vormals wurden
-        // ALLE Trainingseinheiten des VEREINS geladen (nicht nur die, an
-        // denen diese Person überhaupt teilnahm) und einzeln per
-        // JS-Schleife gefiltert + zurückgeschrieben — bei einem Verein mit
-        // mehrjähriger Trainingshistorie (Tausende Zeilen) konnte allein
-        // das die Laufzeit dieser interaktiven Transaktion über Prismas
-        // Standard-Timeout (5 s) treiben. Da eine fehlgeschlagene
-        // Transaktion die Löschanfrage unverändert "pending" belässt (siehe
-        // purgeExpiredDeletions.ts), hätte ein einmal zu großer Verein
-        // NIEMALS erfolgreich purgen können — bei jedem Cron-Lauf erneut
-        // derselbe Timeout, obwohl der Anwendung bereits ein konkretes
-        // Löschdatum zugesagt wurde (DSGVO-Konformitätsrisiko).
+        // EIN einzelnes SQL-UPDATE, das per JSONB-Containment (`@>`) nur die
+        // Zeilen trifft, die den Eintrag dieser Person enthalten — alle
+        // anderen Einheiten des Vereins werden weder gelesen noch
+        // geschrieben. Der naheliegende Weg (alle Einheiten laden, in JS
+        // filtern, zurückschreiben) treibt bei einem Verein mit mehrjähriger
+        // Historie die Laufzeit dieser interaktiven Transaktion über Prismas
+        // 5-Sekunden-Timeout; da eine fehlgeschlagene Transaktion die
+        // Löschanfrage "pending" belässt, könnte ein zu großer Verein dann
+        // NIE erfolgreich purgen, obwohl ein Löschdatum zugesagt ist.
         //
-        // Ersetzt durch EIN einzelnes SQL-UPDATE, das per JSONB-
-        // Containment (`@>`) direkt nur die Zeilen trifft, die den Eintrag
-        // dieser Person tatsächlich enthalten — alle anderen Einheiten des
-        // Vereins werden weder gelesen noch geschrieben, unabhängig von der
-        // Gesamtgröße des Vereins. `elem->>'athleteId' IS DISTINCT FROM`
+        // `elem->>'athleteId' IS DISTINCT FROM`
         // statt `!=` behandelt einen (im Schema nicht vorgesehenen, aber
         // defensiv abgedeckten) fehlenden `athleteId`-Schlüssel NULL-sicher.
         // `COALESCE(..., '[]'::jsonb)`: entfernt das Filtern den EINZIGEN
@@ -154,30 +139,22 @@ export class PrismaErasureJobGateway implements ErasureJobGateway {
         await tx.athlete.delete({ where: { id: user.athleteId } });
       }
 
-      // Sicherheitskorrektur (Sicherheitsreview 2026-08, Befund N5):
-      // Comment.authorName (siehe CommentSchema in
-      // packages/shared-types/src/entities.ts) ist ein freier, vom Client
-      // beim Anlegen aus dem eingeloggten Konto übernommener Klarname —
-      // eingebettet in "plans.comments", "exercises.comments",
-      // "plans.days[].sets[].comments" und "templates.sets[].comments"
-      // (siehe commentAnonymization.ts für die genaue Struktur/Begründung).
-      // Bewusst NICHT an `user.athleteId` gekoppelt (anders als der Block
-      // oben) — Kommentare stammen ebenso von Trainer:innen/Admins ohne
-      // athleteId, ein rein athletengebundener Filter hätte deren
-      // Klarnamen nach dem Purge unangetastet gelassen. Gescoped auf
-      // `user.clubId`, damit ein Konto ohne Verein (z. B. Superadmin, das
-      // ohnehin nie Kommentare verfasst) keinen club-weiten Scan auslöst.
+      // Comment.authorName ist ein freier, beim Anlegen aus dem eingeloggten
+      // Konto übernommener Klarname — eingebettet in "plans.comments",
+      // "exercises.comments", "plans.days[].sets[].comments" und
+      // "templates.sets[].comments" (Struktur siehe commentAnonymization.ts).
+      // Bewusst NICHT an `user.athleteId` gekoppelt: Kommentare stammen auch
+      // von Trainer:innen/Admins ohne athleteId, deren Klarnamen ein
+      // athletengebundener Filter unangetastet ließe. Gescoped auf
+      // `user.clubId`, damit ein Konto ohne Verein keinen club-weiten Scan
+      // auslöst.
       //
-      // Sicherheitsreview 2026-08-27, Befund M2: Abgleich läuft jetzt über
-      // `authorId` statt über den frei wählbaren `authorName` — CommentSchema
-      // trägt seither eine serverseitig durchgesetzte, stabile User-ID
-      // (siehe sync.commentAuthorship.ts). Die vormals hier geltende
-      // Einschränkung (Namensgleichheit mit einer anderen Person,
-      // nachträgliche Namensänderung, ein absichtlich abweichender Name
-      // entzieht den eigenen Kommentar der Anonymisierung) entfällt
-      // dadurch vollständig.
+      // Abgeglichen wird über `authorId`, nicht über den frei wählbaren
+      // `authorName`: die serverseitig durchgesetzte User-ID (siehe
+      // sync.commentAuthorship.ts) hält auch bei Namensgleichheit,
+      // Umbenennung oder absichtlich abweichendem Namen.
       //
-      // Wie bei der Anwesenheits-Bereinigung oben (Befund C4): erst per
+      // Wie bei der Anwesenheits-Bereinigung oben: erst per
       // gezielter SQL-Bedingung nur die TATSÄCHLICH betroffenen Zeilen
       // laden (Containment `@>` für die flache oberste Ebene,
       // `jsonb_path_exists(..., '$.**.comments[*] ? (...)')` für die
@@ -192,8 +169,8 @@ export class PrismaErasureJobGateway implements ErasureJobGateway {
         // commentAnonymization.ts). Welche Kommentare tatsächlich
         // anonymisiert werden, entscheidet allein die dortige Funktion —
         // eine zu viel geladene Zeile ergibt schlicht `changed: false`
-        // und wird nicht geschrieben. Das war schon vor Befund M2 so und
-        // ist der Grund, warum hier gefiltert statt exakt selektiert wird.
+        // und wird nicht geschrieben — deshalb wird hier gefiltert statt
+        // exakt selektiert.
         const author = { id: user.id, name: user.name };
         const authorIdContainment = JSON.stringify([{ authorId: user.id }]);
         const authorNameContainment = JSON.stringify([{ authorName: user.name }]);
@@ -246,16 +223,13 @@ export class PrismaErasureJobGateway implements ErasureJobGateway {
         }
       }
 
-      // Sicherheitsreview 2026-08-27, Befund M1: `Invitation.email`
-      // (siehe schema.prisma) blieb bislang unangetastet — die
-      // E-Mail-Adresse der gelöschten Person überlebte in JEDER
-      // Einladung, die je AN sie ausgestellt wurde (angenommen,
-      // abgelaufen oder widerrufen), dauerhaft in der Datenbank und blieb
-      // über GET /api/invitations für admin/superadmin weiterhin
-      // einsehbar. Anders als bei Comment.authorName (Befund N5) gibt es
-      // hier keine Namensgleichheits-Unschärfe: `email` selbst ist der
-      // Abgleichswert, ein exakter Treffer betrifft garantiert nur
-      // Einladungen an GENAU diese Person.
+      // Ohne diesen Schritt überlebte die E-Mail-Adresse der gelöschten
+      // Person in JEDER je AN sie ausgestellten Einladung (angenommen,
+      // abgelaufen oder widerrufen) dauerhaft in der Datenbank und bliebe
+      // über GET /api/invitations für admin/superadmin einsehbar. Anders als
+      // bei Comment.authorName gibt es hier keine Unschärfe: `email` ist
+      // selbst der Abgleichswert, ein Treffer betrifft garantiert nur
+      // Einladungen an genau diese Person.
       //
       // Bewusst NICHT auf `user.clubId` gescoped (anders als die
       // Kommentar-Anonymisierung oben) — dieselbe E-Mail-Adresse kann
@@ -268,7 +242,7 @@ export class PrismaErasureJobGateway implements ErasureJobGateway {
       // AUSGESTELLT hat) bleibt bewusst unverändert — das ist eine andere
       // Beziehung ("von", nicht "an" diese Person) und bereits als
       // gewollter historischer Datensatz behandelt (schema.prisma:
-      // onDelete: SetNull statt Cascade), nicht Teil dieses Befunds.
+      // onDelete: SetNull statt Cascade).
       //
       // `athleteId` wird auf den betroffenen Zeilen zusätzlich auf `null`
       // gesetzt: die konkrete Athletenprofil-Verknüpfung ist nach der

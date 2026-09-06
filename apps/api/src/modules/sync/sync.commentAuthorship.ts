@@ -1,60 +1,44 @@
-// Sicherheitsreview 2026-08-27, Befund M2: `CommentSchema.authorName`
-// (packages/shared-types/src/entities.ts) war eine reine Client-Angabe
-// ohne jede serverseitige Verifikation — jedes Vereinsmitglied konnte per
-// direktem POST /api/sync/push einen Kommentar unter einem beliebigen
-// Namen hinterlassen (Identitätsvortäuschung), und die Art.-17-
-// Anonymisierung (Befund N5 des Vorreviews) ließ sich über einen bewusst
-// abweichenden Namen gezielt umgehen.
+// `CommentSchema.authorName` ist eine reine Client-Angabe. Ohne
+// serverseitige Prüfung könnte jedes Vereinsmitglied per direktem
+// POST /api/sync/push einen Kommentar unter beliebigem Namen hinterlassen
+// und die Art.-17-Anonymisierung (jobs/commentAnonymization.ts) über einen
+// abweichenden Namen gezielt umgehen. CommentSchema trägt deshalb
+// zusätzlich `authorId`, und diese Datei prüft sie beim Push für die Stores
+// mit eingebetteten Kommentar-Arrays:
 //
-// Fix: CommentSchema trägt jetzt zusätzlich `authorId` (die tatsächliche
-// User-ID). Diese Datei prüft für die drei Stores mit eingebetteten
-// Kommentar-Arrays (exercises, plans, templates) beim Push:
+//   * Ein Kommentar mit `authorId === requesterId` ist IMMER erlaubt.
+//   * Jeder ANDERE Kommentar (fremde `authorId` oder gar keine) muss
+//     ZEICHENGLEICH aus dem gespeicherten Datensatz stammen und wird dabei
+//     höchstens EINMAL "verbraucht".
 //
-//   * Ein Kommentar mit `authorId === requesterId` ist IMMER erlaubt —
-//     eigene Kommentare dürfen frei angelegt, bearbeitet und gelöscht
-//     werden.
-//   * Jeder ANDERE Kommentar (fremde `authorId`, oder gar keine — siehe
-//     Altbestand unten) muss ZEICHENGLEICH aus dem bereits gespeicherten
-//     Datensatz stammen und wird dabei höchstens EINMAL "verbraucht".
+// Die zweite Regel ist bewusst ein verbrauchender Abgleich über den
+// GESAMTEN Kommentar (Vielfachmenge) und NICHT ein Nachschlagen der
+// `authorId` über die Kommentar-`id`: `CommentSchema.id` ist ein frei
+// wählbarer, nicht eindeutiger Client-String (bewusst kein UUID, siehe
+// entities.ts), weshalb ein id-Abgleich auf drei Wegen zu umgehen wäre —
+// denselben id-Wert mit anderem Text ein zweites Mal im Array senden; ihn an
+// einer anderen Stelle des Datensatzes einsetzen (Plan- statt
+// Satz-Kommentar), da die Zuordnung über alle Fundstellen flach ist; oder
+// nur den `text` eines bestehenden fremden Kommentars austauschen. Wer einen
+// fremden Kommentar nicht unverändert lässt, hat im Vorrat keinen passenden
+// Eintrag mehr.
 //
-// Die zweite Regel ist bewusst als verbrauchender Abgleich über den
-// GESAMTEN Kommentar (Vielfachmenge) formuliert, nicht als Nachschlagen
-// der `authorId` über die Kommentar-`id`. Ein reiner id-Abgleich war die
-// erste Fassung dieses Fixes und ließ sich auf drei Wegen umgehen, weil
-// `CommentSchema.id` ein frei wählbarer, nicht eindeutiger Client-String
-// ist (bewusst kein UUID, siehe entities.ts):
-//   1. Denselben `id`-Wert ein zweites Mal im selben Array senden — der
-//      Nachschlag traf den bestehenden Kommentar, der Text war frei
-//      wählbar (beliebig viele erfundene Kommentare unter fremdem Namen).
-//   2. Denselben `id`-Wert an einer ANDEREN Stelle des Datensatzes
-//      einsetzen (z. B. Plan-Kommentar -> Satz-Kommentar), da die
-//      id->authorId-Zuordnung über alle Fundstellen hinweg flach war.
-//   3. Nur den `text` eines bestehenden fremden Kommentars austauschen —
-//      die `authorId` blieb dabei unverändert und der Abgleich griff
-//      nicht.
-// Alle drei fallen mit dem Abgleich über den vollständigen Kommentar weg:
-// wer einen fremden Kommentar nicht unverändert lässt, hat keinen
-// passenden Eintrag mehr im Vorrat.
+// Altbestand: vor Einführung von `authorId` gespeicherte Kommentare tragen
+// keins (JSONB, daher keine Spalten-Migration möglich). Sie gelten hier als
+// "fremd" und sind damit unveränderlich, lassen sich aber unverändert
+// weiterreichen — der umgebende Datensatz bleibt bearbeitbar, ohne dass sich
+// ein Alt-Kommentar nachträglich jemandem zuschreiben ließe.
 //
-// Altbestand: Kommentare, die VOR Einführung von `authorId` gespeichert
-// wurden, tragen keins (JSONB, daher keine Spalten-Migration möglich —
-// siehe Kommentar an CommentSchema). Sie sind hier automatisch "fremd"
-// und damit unveränderlich, lassen sich aber unverändert weiterreichen —
-// der umgebende Datensatz bleibt also bearbeitbar, ohne dass sich ein
-// Alt-Kommentar nachträglich jemandem zuschreiben ließe.
-//
-// GRENZE DER ZUSICHERUNG (bewusst, nicht übersehen): Zugesichert ist,
-// dass sich einer ANDEREN Person nichts unterschieben lässt. NICHT
-// zugesichert ist, dass ein fremder Kommentar unantastbar wäre — wer den
-// umgebenden Datensatz schreiben darf, darf ihn auch löschen oder auf den
-// EIGENEN Namen umschreiben. Beides ist datenseitig nicht von "fremden
-// Kommentar gelöscht und einen eigenen mit demselben Text angelegt" zu
-// unterscheiden, und Letzteres steht in einem geteilten Team-Dokument
-// (plans/exercises/templates, siehe STORE_PERMISSIONS) ohnehin jeder
-// schreibberechtigten Person offen. Eine Sperre dagegen müsste das
-// Löschen fremder Kommentare generell verbieten — eine fachliche
-// Einschränkung (auch Trainer:innen könnten dann keinen unpassenden
-// Kommentar mehr entfernen), die über den Befund hinausginge.
+// GRENZE DER ZUSICHERUNG (bewusst, nicht übersehen): zugesichert ist, dass
+// sich einer ANDEREN Person nichts unterschieben lässt. NICHT zugesichert
+// ist, dass ein fremder Kommentar unantastbar wäre — wer den umgebenden
+// Datensatz schreiben darf, darf ihn löschen oder auf den EIGENEN Namen
+// umschreiben. Datenseitig ist das nicht von "fremden Kommentar gelöscht,
+// eigenen mit demselben Text angelegt" zu unterscheiden, und Letzteres steht
+// in einem geteilten Team-Dokument ohnehin jeder schreibberechtigten Person
+// offen. Eine Sperre müsste das Löschen fremder Kommentare generell
+// verbieten — auch Trainer:innen könnten dann keinen unpassenden Kommentar
+// mehr entfernen.
 import type { EntityStoreName } from '@lane1/shared-types';
 
 // Die vier Stores, deren Entity-Schema irgendwo ein CommentSchema[]

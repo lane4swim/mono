@@ -69,15 +69,12 @@ export interface SyncGateway {
   // Vereins gefunden und über den Umweg des Konfliktergebnisses ausgelesen
   // werden.
   findById(store: EntityStoreName, id: string, clubId?: string): Promise<SyncRecord | null>;
-  // Ineffizienz-Korrektur: Mengen-Variante von findById() für die reine
-  // EXISTENZ-Prüfung mehrerer Fremdschlüssel-Referenzen desselben Stores
-  // (siehe sync.foreignKeys.ts). findById() dort je Referenz einzeln
-  // aufzurufen bedeutete eine eigene, SERIELLE Datenbankabfrage pro
-  // Referenz — bei einem Trainingsplan mit vielen verschachtelten
-  // exerciseId-Verweisen (packages/shared-types/src/entities.ts:
-  // PlainSetSchema) also Dutzende Roundtrips nacheinander, jeder davon
-  // zudem mit der VOLLSTÄNDIGEN Zeile im Ergebnis (inkl. großer
-  // JSON-Spalten), obwohl nur "existiert im eigenen Verein?" gefragt war.
+  // Mengen-Variante von findById() für die reine EXISTENZ-Prüfung mehrerer
+  // Fremdschlüssel-Referenzen desselben Stores (sync.foreignKeys.ts). Je
+  // Referenz einzeln zu fragen bedeutete serielle Roundtrips — bei einem
+  // Trainingsplan mit vielen verschachtelten exerciseId-Verweisen Dutzende,
+  // jeder mit der vollständigen Zeile samt großer JSON-Spalten, obwohl nur
+  // "existiert im eigenen Verein?" gefragt ist.
   //
   // Liefert die Teilmenge von `ids`, die TATSÄCHLICH zu `clubId` gehört
   // — clubId ist hier PFLICHT (nicht optional wie bei findById): diese
@@ -88,8 +85,8 @@ export interface SyncGateway {
   // Ergebnis ununterscheidbar (beide fehlen schlicht) — dasselbe
   // Existenz-Orakel-Verhalten wie beim club-gescopten findById().
   findExistingIdsInClub(store: EntityStoreName, ids: readonly string[], clubId: string): Promise<Set<string>>;
-  // Review 30.08.2026, Befund E2: Batch-Variante von findById() für die
-  // "existing"-Ermittlung in push() — anders als findExistingIdsInClub()
+  // Batch-Variante von findById() für die "existing"-Ermittlung in push().
+  // Anders als findExistingIdsInClub()
   // (reine Existenzmenge, genügt für die Fremdschlüsselprüfung) liefert
   // diese Methode die VOLLSTÄNDIGEN Datensätze, die push() für die
   // Konfliktentscheidung (resolveConflict() braucht updatedAt), die
@@ -98,14 +95,14 @@ export interface SyncGateway {
   // clubId ist PFLICHT, aus demselben Grund wie bei findExistingIdsInClub().
   findManyByIdsInClub(store: EntityStoreName, ids: readonly string[], clubId: string): Promise<Map<string, SyncRecord>>;
   // Batch-Variante von isEventProcessed() für push()s Idempotenz-Vorabprüfung
-  // (Review 30.08.2026, Befund E2) — liefert die Teilmenge von `eventIds`,
+  // — liefert die Teilmenge von `eventIds`,
   // die für `clubId` BEREITS verarbeitet wurde. isEventProcessed() bleibt
   // daneben unverändert bestehen (siehe dessen Kommentar unten — u. a.
   // intern von applyAndMarkProcessed() genutzt).
   findProcessedEventIds(eventIds: readonly string[], clubId: string): Promise<Set<string>>;
   // Änderungen eines Vereins seit einem Zeitpunkt, absteigend nach
-  // updatedAt limitiert (Pagination via `limit`). `stores` (Review
-  // 30.08.2026, Befund E3) grenzt bereits die Watermark-Abfragen selbst
+  // updatedAt limitiert (Pagination via `limit`). `stores` grenzt bereits
+  // die Watermark-Abfragen selbst
   // auf die für die anfragende Rolle/das gebuchte Modul-Set lesbaren
   // Stores ein (siehe sync.service.ts: pull(), canRead()) — PFLICHT statt
   // optional, damit kein Aufrufer versehentlich alle zehn Stores abfragt,
@@ -141,16 +138,13 @@ export interface SyncGateway {
   findClubIdForUser(userId: string): Promise<string | null>;
 }
 
-// Code-Review, Befund L5: create()/update()/softDelete()/markEventProcessed()
-// standen bislang direkt in SyncGateway, obwohl push() (sync.service.ts)
-// AUSSCHLIESSLICH applyAndMarkProcessed() für Schreibzugriffe nutzt (Repo-
-// weit bestätigt: kein Aufrufer ruft sie einzeln auf — anders als
-// isEventProcessed() oben, das TATSÄCHLICH als Fast-Path in push() steht;
-// der ursprüngliche Befund zählte es fälschlich mit zu den toten Methoden).
-// Beide Gateway-Implementierungen mussten sie trotzdem als Teil von
-// SyncGateway tragen und konsistent halten — ein Testgerüst, das als
-// Produktions-Interface auftrat. Jetzt ein eigenes, schmaleres Interface,
-// das NUR PrismaSyncGateway zusätzlich implementiert: einzig
+// create()/update()/softDelete()/markEventProcessed() gehören nicht in
+// SyncGateway: push() (sync.service.ts) schreibt ausschließlich über
+// applyAndMarkProcessed(), kein Aufrufer nutzt sie einzeln. Als Teil von
+// SyncGateway müssten beide Implementierungen sie dennoch tragen und
+// konsistent halten — ein Testgerüst im Gewand eines Produktions-Interfaces.
+// Deshalb ein eigenes, schmaleres Interface, das NUR PrismaSyncGateway
+// zusätzlich implementiert: einzig
 // test-integration/syncGateway.integration.test.ts prüft diese Primitiven
 // unabhängig von applyAndMarkProcessed() (u. a. das clubId-Scoping über
 // eine ECHTE SQL-WHERE-Klausel, das ein In-Memory-Double nicht verlässlich
@@ -200,7 +194,7 @@ export class PrismaSyncGateway implements SyncGateway, SyncGatewayTestSurface {
     return new Set(rows.map((row) => row.id));
   }
 
-  // Siehe Interface-Kommentar oben (Befund E2). EINE Abfrage je Store statt
+  // Siehe Interface-Kommentar oben. EINE Abfrage je Store statt
   // einer je Event — anders als findExistingIdsInClub() werden hier die
   // VOLLSTÄNDIGEN Zeilen benötigt (push() braucht u. a. updatedAt für
   // resolveConflict()).
@@ -211,8 +205,8 @@ export class PrismaSyncGateway implements SyncGateway, SyncGatewayTestSurface {
     return new Map(rows.map((row) => [row.id, row]));
   }
 
-  // Siehe Interface-Kommentar oben (Befund E2). EINE Abfrage für den
-  // gesamten Push-Batch statt einer je Event.
+  // Siehe Interface-Kommentar oben. EINE Abfrage für den gesamten
+  // Push-Batch statt einer je Event.
   async findProcessedEventIds(eventIds: readonly string[], clubId: string): Promise<Set<string>> {
     if (eventIds.length === 0) return new Set();
     const rows = await this.prisma.syncedEvent.findMany({
@@ -232,7 +226,7 @@ export class PrismaSyncGateway implements SyncGateway, SyncGatewayTestSurface {
     // clubId in der where-Klausel: analog zu softDelete() — verhindert,
     // dass ein manipuliertes Event mit einer fremden entityId (aber
     // korrekter eigener clubId im Payload) einen Datensatz eines FREMDEN
-    // Vereins überschreibt (siehe Sicherheitsreview, Punkt 1). Trifft die
+    // Vereins überschreibt. Trifft die
     // where-Klausel nicht (fremder Verein oder id existiert nicht mehr),
     // wirft Prisma "P2025" (Record not found) — wird im Service wie ein
     // regulärer Anwendungsfehler behandelt und als "error" gemeldet, statt
@@ -247,44 +241,27 @@ export class PrismaSyncGateway implements SyncGateway, SyncGatewayTestSurface {
     await delegate.update({ where: { id, clubId }, data: { deletedAt: new Date() } });
   }
 
-  // Ineffizienz-Korrektur (Code-Review, Befund P2): vormals holte JEDE der
-  // zehn Store-Abfragen bis zu `limit` VOLLSTÄNDIGE Zeilen (inkl. u. U.
-  // großer JSONB-Spalten wie "attendance") — bei limit=201 im Normalfall
-  // also bis zu 2.211 vollständige Zeilen aus der Datenbank, von denen im
-  // Regelfall über 90 % sofort wieder verworfen werden (nur die global
-  // ältesten `limit` Zeilen über ALLE Stores hinweg werden tatsächlich
-  // ausgeliefert). Zweiphasiger Ansatz statt einer einzigen
-  // "pro Store bis zu limit Volltreffer" -Abfrage:
+  // Dreiphasig statt "pro Store bis zu limit Volltreffer": eine Abfrage je
+  // Store mit vollständigen Zeilen holte bei limit=201 bis zu 2.211 Zeilen
+  // samt großer JSONB-Spalten, von denen über 90 % sofort wieder verworfen
+  // werden — ausgeliefert werden nur die global ältesten `limit`.
   //
-  //  1) Schlanke "Wasserstand"-Abfrage je Store (nur id/updatedAt/
-  //     deletedAt, ohne Payload-Spalten) — bleibt bewusst weiterhin auf
-  //     `limit` pro Store begrenzt (der Extremfall "alle Änderungen liegen
-  //     in einem einzigen Store" deckt bis zu `limit` Zeilen ab), ist aber
-  //     um ein Vielfaches billiger als dieselbe Anzahl Zeilen samt voller
-  //     Nutzdaten zu übertragen.
-  //  2) Globale Zusammenführung + Kürzung auf `limit` — identisch zur
-  //     bisherigen Logik, nur ohne dabei bereits Nutzdaten mitzuschleppen.
-  //  3) Payload NUR für die tatsächlich ausgelieferten (≤ `limit`) Zeilen
-  //     nachladen, gruppiert nach Store (ein `findMany({ id: { in: […] } })`
-  //     je beteiligtem Store statt zehn ungefilterten Abfragen). Ein
-  //     Store, der zwar Kandidaten in Schritt 1 lieferte, aber keinen
-  //     einzigen davon in die finalen `limit` Zeilen schafft, verursacht
-  //     dadurch GAR KEINE Payload-Abfrage. Bereits gelöschte Zeilen
-  //     (deletedAt gesetzt) brauchen ohnehin keine Payload (payload: null)
-  //     und werden in Schritt 3 konsequent ausgespart.
+  //  1) Schlanke "Wasserstand"-Abfrage je Store (nur id/updatedAt/deletedAt).
+  //     Bleibt auf `limit` pro Store begrenzt, damit auch der Extremfall
+  //     "alle Änderungen in einem Store" abgedeckt ist.
+  //  2) Global zusammenführen und auf `limit` kürzen.
+  //  3) Payload nur für die verbliebenen Zeilen nachladen, gruppiert nach
+  //     Store. Ein Store ohne Treffer in den finalen `limit` Zeilen
+  //     verursacht damit gar keine Payload-Abfrage; gelöschte Zeilen
+  //     brauchen ohnehin keine.
   //
-  // Race-Hinweis: zwischen Schritt 1 und Schritt 3 könnte eine Zeile
-  // theoretisch erneut geändert werden. Das zurückgegebene `updatedAt`
-  // stammt bewusst weiterhin aus Schritt 1 (bestimmt Sortierung UND den
-  // nächsten Cursor) — die in Schritt 3 geladene Payload ist dadurch im
-  // Extremfall geringfügig NEUER als der gemeldete Zeitstempel. Das ist
-  // unkritisch: pull() (sync.service.ts) ist ohnehin idempotent
-  // (putWithoutSync als Upsert), die betroffene Zeile würde beim nächsten
-  // Sync-Zyklus lediglich erneut (redundant, aber korrekt) ausgeliefert,
-  // da ihr tatsächliches updatedAt in der Datenbank dann über dem
-  // gemeldeten Cursor liegt. Die umgekehrte Reihenfolge (Payload ÄLTER als
-  // der gemeldete Zeitstempel) kann dagegen nicht auftreten — genau das
-  // wäre der gefährliche Fall (stiller Datenverlust) gewesen.
+  // Race-Hinweis: zwischen Schritt 1 und 3 kann eine Zeile erneut geändert
+  // werden. Das gemeldete `updatedAt` stammt bewusst aus Schritt 1 (es
+  // bestimmt Sortierung und Cursor), die Payload ist dadurch im Extremfall
+  // etwas NEUER als der Zeitstempel. Unkritisch, weil pull() idempotent ist:
+  // die Zeile wird beim nächsten Zyklus redundant, aber korrekt erneut
+  // ausgeliefert. Der umgekehrte Fall — Payload ÄLTER als der Zeitstempel,
+  // also stiller Datenverlust — kann so nicht auftreten.
   async listChangedSince(clubId: string, since: Date | null, limit: number, stores: readonly EntityStoreName[]): Promise<ChangedRecord[]> {
     type Candidate = { store: EntityStoreName; id: string; updatedAt: Date; deleted: boolean };
 
@@ -301,10 +278,9 @@ export class PrismaSyncGateway implements SyncGateway, SyncGatewayTestSurface {
           return rows.map((row): Candidate => ({ store, id: row.id, updatedAt: row.updatedAt, deleted: row.deletedAt !== null }));
         }),
       ),
-      // Review 30.08.2026, Befund E3: zusätzlich zur Store-Auswahl oben auch
-      // hier per `store: { in: [...stores] }` eingegrenzt — ein Löschvermerk
-      // aus einem für die anfragende Rolle/das Modul-Set nicht lesbaren
-      // Store wäre sonst weiterhin unnötig mitgeladen worden.
+      // Wie die Store-Auswahl oben per `store: { in: [...stores] }`
+      // eingegrenzt: ein Löschvermerk aus einem für die anfragende Rolle
+      // nicht lesbaren Store würde sonst unnötig mitgeladen.
       this.prisma.syncTombstone.findMany({
         where: { clubId, store: { in: [...stores] }, ...(since ? { deletedAt: { gt: since } } : {}) },
         orderBy: { deletedAt: 'asc' },
@@ -344,12 +320,10 @@ export class PrismaSyncGateway implements SyncGateway, SyncGatewayTestSurface {
     return top.map((candidate): ChangedRecord => ({
       store: candidate.store,
       entityId: candidate.id,
-      // Aufräumarbeit (Code-Review): vormals `since ? 'update' : 'create'`
-      // — das unterstellte fälschlich, jede Zeile eines ERSTEN Pulls
-      // (since === null) sei eine Neuanlage. Tatsächlich weiß der Server
-      // an dieser Stelle gar nicht, ob die anfragende Person diese Zeile
-      // schon einmal gesehen hat — auch beim allerersten Pull kann eine
-      // Zeile längst mehrfach aktualisiert worden sein. syncClient.js
+      // Immer 'update', nie 'create': der Server weiß hier nicht, ob die
+      // anfragende Person die Zeile schon einmal gesehen hat — auch beim
+      // ersten Pull kann sie längst mehrfach aktualisiert worden sein.
+      // syncClient.js
       // (pull()) behandelt ohnehin jede nicht gelöschte Zeile identisch
       // (putWithoutSync, ein Upsert) — der Unterschied zwischen "create"
       // und "update" hat für den Aufrufer keine Bedeutung, nur "delete"
@@ -369,8 +343,7 @@ export class PrismaSyncGateway implements SyncGateway, SyncGatewayTestSurface {
     await this.prisma.syncedEvent.create({ data: { id: eventId, clubId, store, action } });
   }
 
-  // Sicherheitskorrektur (Code-Review, Befund C3): siehe ausführlichen
-  // Kommentar bei SyncWriteOperation/ApplyOutcome oben für den Hintergrund.
+  // Siehe SyncWriteOperation/ApplyOutcome oben für den Hintergrund.
   //
   // Der Ledger-Eintrag wird bewusst per `createMany({ skipDuplicates:
   // true })` statt per `create()` geschrieben: bei einem bereits
@@ -403,8 +376,7 @@ export class PrismaSyncGateway implements SyncGateway, SyncGatewayTestSurface {
       if (operation.kind === 'create') {
         await delegate.create({ data: operation.payload });
       } else if (operation.kind === 'update') {
-        // clubId in der where-Klausel: siehe update() oben (Sicherheitsreview,
-        // Punkt 1) — dieselbe Begründung gilt hier unverändert.
+        // clubId in der where-Klausel: siehe update() oben.
         await delegate.update({ where: { id: operation.id, clubId: operation.clubId }, data: operation.payload });
       } else {
         await delegate.update({ where: { id: operation.id, clubId: operation.clubId }, data: { deletedAt: new Date() } });
