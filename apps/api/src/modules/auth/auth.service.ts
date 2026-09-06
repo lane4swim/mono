@@ -1,5 +1,3 @@
-// apps/api/src/modules/auth/auth.service.ts
-//
 // Geschäftslogik für Login/Refresh/Logout/Profil sowie — jetzt
 // einladungsbasiert — das Registrieren via acceptInvitation(). Eine offene
 // Selbstregistrierung (vormals register()) existiert nicht mehr: ein neues

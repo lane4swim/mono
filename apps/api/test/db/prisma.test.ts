@@ -1,5 +1,3 @@
-// apps/api/test/db/prisma.test.ts
-//
 // Regressionstest für Sicherheitsreview 2026-08-29, Befund M1: getPrisma()
 // cachte die PrismaClient-Instanz ausschließlich in `globalThis.__prisma`,
 // und diese Zuweisung war bewusst auf Nicht-Produktion beschränkt. In

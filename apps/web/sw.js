@@ -1,5 +1,4 @@
-// ============================================================
-// sw.js — offline-first service worker.
+// offline-first service worker.
 // Strategy: cache-first for the app shell/static assets (precached
 // on install), network-first fallback to cache for anything else.
 // Backend API calls (/api/*, /auth/*) are always passed straight

@@ -1,5 +1,3 @@
-// apps/api/src/jobs/syncBookkeeping.repository.ts
-//
 // Aufräumarbeit (Code-Review): sowohl SyncedEvent (Idempotenz-Ledger für
 // POST /api/sync/push, siehe sync.gateway.ts: isEventProcessed()) als auch
 // SyncTombstone (Löschmarkierungen für endgültig gepurgte Zeilen, siehe

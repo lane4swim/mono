@@ -1,5 +1,3 @@
-// apps/api/src/modules/sync/sync.permissions.ts
-//
 // Code-Review, Befund L2: aus sync.service.ts herausgelöst — eine von
 // fünf Zuständigkeiten, die zuvor in einer 737-Zeilen-Datei steckten.
 // Reines clubId-Scoping würde jeder authentifizierten Rolle denselben,

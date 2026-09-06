@@ -1,5 +1,4 @@
-// ============================================================
-// modules/clubForm.js — "Verein anlegen"-Formular.
+// "Verein anlegen"-Formular.
 //
 // Code-Review, Befund R4: war byte-identisch (Felder, Validierung,
 // Fehlerbehandlung) in modules/userManagement.js UND admin/admin.js

@@ -1,5 +1,3 @@
-// apps/api/test-integration/helpers.ts
-//
 // Gemeinsame Hilfsfunktionen für die Prisma-Integrationstests (siehe
 // vitest.integration.config.ts für den Hintergrund). Diese Tests brauchen
 // eine echte, leere PostgreSQL-Datenbank mit bereits angewendetem Schema

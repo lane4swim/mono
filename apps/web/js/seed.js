@@ -1,12 +1,10 @@
-// ============================================================
-// seed.js — legacy demo-data cleanup. The demo data itself and the
+// legacy demo-data cleanup. The demo data itself and the
 // "reset to demo data" button that used to (re)generate it in the
 // settings panel have been removed: every real account starts on a
 // real, empty club and gets its content from the backend via sync.
 // What remains here is wipeDemoDataIfPresent() — needed only to clean
 // up devices that still carry local demo data from before this
 // removal (see its own comment below).
-// ============================================================
 import { get, remove, clearStore, CLUB_SCOPED_STORES } from './db.js';
 
 // Marker in 'meta' — previously set whenever local demo data was

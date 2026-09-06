@@ -1,5 +1,3 @@
-// apps/web/test/resultsImport.importRunner.test.js
-//
 // executeImportPlan() ist der einzige Teil des Ergebnisimports, der
 // tatsächlich IndexedDB schreibt — dieser Test läuft daher gegen ein
 // echtes (fake-indexeddb-gestütztes) db.js statt gegen Mocks, wie schon

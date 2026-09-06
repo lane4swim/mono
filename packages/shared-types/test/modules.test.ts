@@ -1,4 +1,3 @@
-// packages/shared-types/test/modules.test.ts
 import { describe, it, expect } from 'vitest';
 import { MODULE_PACKAGES, MODULE_KEYS, ROUTE_TO_PACKAGE, ModuleKeySchema } from '../src/modules.js';
 import { ENTITY_STORE_NAMES } from '../src/entities.js';

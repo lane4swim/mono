@@ -1,5 +1,3 @@
-// packages/shared-types/src/invitation.ts
-//
 // Vertrag für den einladungsbasierten Registrierungsprozess:
 //   - Superadmin legt einen Verein an und lädt dessen ersten Admin ein
 //     (POST /api/clubs).

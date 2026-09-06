@@ -1,5 +1,3 @@
-// packages/shared-types/src/modules.ts
-//
 // Vertrag für die pro-Verein aktivierbaren Feature-Pakete (z. B. das
 // Wettkampfmodul). Module werden bewusst nicht einzeln, sondern als
 // benannte PAKETE an-/abgeschaltet: ein Paket kann mehrere Frontend-

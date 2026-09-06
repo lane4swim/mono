@@ -1,5 +1,3 @@
-// apps/api/src/jobs/qualificationReminder.repository.memory.ts
-//
 // In-Memory-Implementierung für Tests von jobs/notifyExpiringQualifications.ts
 // ohne Datenbank (analog erasure.repository.memory.ts-Muster für den
 // Löschungs-Job).

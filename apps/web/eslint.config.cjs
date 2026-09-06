@@ -1,5 +1,3 @@
-// apps/web/eslint.config.cjs
-//
 // Flat Config (ESLint 9+/10) — bindet die gemeinsame Basis aus
 // packages/shared-config ein und ergänzt Browser-Globals (document,
 // window, fetch, indexedDB, localStorage, …), die die gemeinsame Basis

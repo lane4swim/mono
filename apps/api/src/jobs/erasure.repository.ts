@@ -1,5 +1,3 @@
-// apps/api/src/jobs/erasure.repository.ts
-//
 // Zweite Hälfte des DSGVO-Löschprozesses (Art. 17): während
 // modules/profile/profile.repository.ts die SOFORTIGE Reaktion auf eine
 // Löschanfrage übernimmt (Soft-Delete + DataDeletionRequest anlegen),

@@ -1,9 +1,7 @@
-// ============================================================
-// modal.js — Modal-Dialog und die darauf aufbauende Bestätigungs-Abfrage.
+// Modal-Dialog und die darauf aufbauende Bestätigungs-Abfrage.
 //
 // Code-Review, Befund L4: aus utils.js herausgelöst (siehe dom.js für
 // den vollständigen Hintergrund der Aufteilung).
-// ============================================================
 import { el, clear } from './dom.js';
 import { t } from './i18n.js';
 

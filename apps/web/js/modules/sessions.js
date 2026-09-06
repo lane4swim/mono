@@ -1,6 +1,4 @@
-// ============================================================
-// modules/sessions.js — Nachverfolgung der Trainingseinheiten & Feedback
-// ============================================================
+// Nachverfolgung der Trainingseinheiten & Feedback
 import { getAll, put, remove } from '../db.js';
 import { el, clear, beginRender } from '../dom.js';
 import { fmtDateLong, todayISO, toIsoDateTime } from '../dates.js';

@@ -1,4 +1,3 @@
-// packages/shared-types/test/entities.test.ts
 import { describe, it, expect } from 'vitest';
 import {
   GroupSchema,

@@ -1,4 +1,3 @@
-// apps/api/test/db/entityRegistry.test.ts
 import { describe, it, expect } from 'vitest';
 import { getEntityDelegate, ENTITY_STORE_NAMES } from '../../src/db/entityRegistry.js';
 import type { PrismaClient } from '@prisma/client';

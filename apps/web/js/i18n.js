@@ -1,5 +1,4 @@
-// ============================================================
-// i18n.js — translation engine.
+// translation engine.
 //
 // Design goals (see README "Mehrsprachigkeit" section for details):
 //  - Adding a new language = add one file under js/i18n/<locale>.js
@@ -12,7 +11,6 @@
 //    are translated via trLabel()/trCode()/trOptions() so the
 //    *stored* values in athletes/results/plans etc. never change
 //    when the display language changes — only how they're shown.
-// ============================================================
 import de_DE from './i18n/de-DE.js';
 import en_US from './i18n/en-US.js';
 

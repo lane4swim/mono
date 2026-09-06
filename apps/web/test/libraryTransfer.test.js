@@ -1,5 +1,3 @@
-// apps/web/test/libraryTransfer.test.js
-//
 // Testet js/modules/libraryTransfer.js::importLibrary() gegen echtes
 // js/db.js (per fake-indexeddb, siehe test/setup.js) — bislang
 // ungetestet. Deckt insbesondere Befund P7 (Code-Review) ab.

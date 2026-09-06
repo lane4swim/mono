@@ -1,5 +1,3 @@
-// apps/web/test/swimTime.test.js
-//
 // timeToSec() wurde um dreisegmentige Zeiten (hh:mm:ss.cc) erweitert, damit
 // der DSV7-Ergebnisimport (Zeitformat HH:MM:SS,hh, siehe
 // docs/dsv7-lenex-import-plan.md Abschnitt 1.1) sie wiederverwenden kann,

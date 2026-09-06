@@ -1,5 +1,4 @@
-// ============================================================
-// modules/info.js — "Rechtliches & Datenschutz" / "Legal & Privacy"
+// "Rechtliches & Datenschutz" / "Legal & Privacy"
 //
 // Deliberately NOT restricted via `roles` on the module (see profile.js
 // for the same pattern) — this page must be reachable from every view,
@@ -11,7 +10,6 @@
 // modal BEFORE login — Impressum-style legal notices are required to be
 // reachable independent of login state (§5 TMG), and duplicating the
 // text in two places would be a maintenance trap.
-// ============================================================
 import { el, clear, beginRender } from '../dom.js';
 import { laneWave } from '../ui.js';
 import { t } from '../i18n.js';

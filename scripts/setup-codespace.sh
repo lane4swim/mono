@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# scripts/setup-codespace.sh
-#
 # Automatisiert die Schritte 4–10 aus docs/deployment-github-codespaces.md
 # (Software installieren, npm-Abhängigkeiten, apps/api/.env konfigurieren,
 # Datenbank-Schema anlegen, Backend bauen, PM2 starten, ersten Superadmin

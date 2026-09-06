@@ -1,5 +1,3 @@
-// apps/api/src/auth/keys.ts
-//
 // Löst das RS256-Schlüsselpaar für die Access-Token-Signatur auf.
 // Produktion: Pflicht aus der Umgebung, je Schlüssel entweder als
 // Inline-PEM (JWT_PRIVATE_KEY/JWT_PUBLIC_KEY) oder als Dateipfad

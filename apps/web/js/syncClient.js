@@ -1,12 +1,10 @@
-// ============================================================
-// syncClient.js — Phase 4: löst die Simulation in modules/syncQueue.js
+// Phase 4: löst die Simulation in modules/syncQueue.js
 // durch echte Aufrufe von POST /api/sync/push und GET /api/sync/pull ab.
 //
 // Reihenfolge pro Zyklus: erst push(), dann pull() (siehe Backend-
 // Entwicklungsplan, Abschnitt 6.3) — eigene Änderungen zuerst hochladen,
 // damit sie nicht durch einen Pull-Konflikt mit dem eigenen, noch nicht
 // gesendeten Stand kollidieren.
-// ============================================================
 import { getSendableSyncEvents, bulkUpdateSyncEvents, applyPulledChanges, put, get, putWithoutSync, removeWithoutSync } from './db.js';
 import * as api from './apiClient.js';
 

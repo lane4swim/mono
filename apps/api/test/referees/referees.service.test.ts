@@ -1,4 +1,3 @@
-// apps/api/test/referees/referees.service.test.ts
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   createRefereesService,

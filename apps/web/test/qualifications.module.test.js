@@ -1,5 +1,3 @@
-// apps/web/test/qualifications.module.test.js
-//
 // Schlanker Import-/Formsanity-Test für modules/qualifications.js (docs/
 // nutzer-qualifikationen-plan.md) — kein voller render()-Test (dafür gibt
 // es im Repo kein etabliertes Muster, siehe andere modules/*.js: die

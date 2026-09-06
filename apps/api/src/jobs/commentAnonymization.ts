@@ -1,5 +1,3 @@
-// apps/api/src/jobs/commentAnonymization.ts
-//
 // Sicherheitsreview 2026-08, Befund N5: purgeUserAndDependents()
 // (erasure.repository.ts) löschte bislang Nutzer, Athletenprofil,
 // Ergebnisse, Startlisteneinträge, Handlungsfelder und die

@@ -1,5 +1,4 @@
-// ============================================================
-// modules/setEditor.js — shared "Sets/Serien" editor widget used
+// shared "Sets/Serien" editor widget used
 // by both templates.js and plans.js so the editing UX is consistent.
 //
 // An editable list is an array of "entries". Each entry is one of:
@@ -26,7 +25,6 @@
 // die Sätze INNERHALB eines Wiederholungsblocks — da jede Ebene auf ihrer
 // EIGENEN Liste arbeitet, ist ein Verschieben über eine Abschnittsgrenze
 // hinweg strukturell ausgeschlossen (nicht extra zu sperren).
-// ============================================================
 import { el, clear, localId } from '../dom.js';
 import { badge } from '../ui.js';
 import { selectInput } from '../forms.js';

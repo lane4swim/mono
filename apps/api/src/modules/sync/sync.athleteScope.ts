@@ -1,5 +1,3 @@
-// apps/api/src/modules/sync/sync.athleteScope.ts
-//
 // Code-Review, Befund L2: aus sync.service.ts herausgelöst (eine von fünf
 // Zuständigkeiten der ehemaligen 737-Zeilen-Datei). Rollen-Scopierung
 // beim Pull auf Zeilen-/Feld-Ebene — zusätzlich zur Store-Ebene in

@@ -1,5 +1,4 @@
-// ============================================================
-// modules/comments.js — shared "Kommentare" thread widget.
+// shared "Kommentare" thread widget.
 //
 // Used at three places (see backend packages/shared-types/src/entities.ts,
 // CommentSchema): on a whole Trainingsplan (Plan.comments), on an
@@ -15,7 +14,6 @@
 // awaits it before the thread re-draws. This keeps the widget reusable
 // across very different "where does this array actually live" contexts
 // without needing to know about plans/exercises/db.js itself.
-// ============================================================
 import { el, clear, localId } from '../dom.js';
 import { fmtDateTime } from '../dates.js';
 import { toast } from '../ui.js';

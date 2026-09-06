@@ -1,5 +1,3 @@
-// packages/shared-types/src/user.ts
-//
 // Vertrag für einen Nutzer-Datensatz, wie er zwischen Client und Server
 // ausgetauscht wird.
 //

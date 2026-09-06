@@ -1,5 +1,4 @@
-// ============================================================
-// modules/qualifications.js — Qualifikationsmanagement (docs/
+// Qualifikationsmanagement (docs/
 // nutzer-qualifikationen-plan.md). Zubuchbares Modul (siehe Abschnitt 1.2)
 // — erscheint nur, wenn der Verein 'qualifications' gebucht hat.
 //
@@ -7,7 +6,6 @@
 // Abschnitt 4.1): jede Person sieht immer die eigene, schreibgeschützte
 // Liste; `admin` sieht zusätzlich alle Mitglieder samt Verwaltung sowie die
 // Einstellungen für die Erinnerungs-Schwellen je Qualifikationstyp.
-// ============================================================
 import { el, clear, beginRender } from '../dom.js';
 import { fmtDateShort, dateOnly, toIsoDateTime, todayISO } from '../dates.js';
 import { badge, laneWave, toast } from '../ui.js';

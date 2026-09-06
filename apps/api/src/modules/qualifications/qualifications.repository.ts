@@ -1,5 +1,3 @@
-// apps/api/src/modules/qualifications/qualifications.repository.ts
-//
 // Repository-Pattern (wie überall sonst im Backend) — qualifications.service.ts
 // hängt nur von diesen Interfaces ab, nie direkt von Prisma. Zwei getrennte
 // Repositories in derselben Datei (analog invitations.repository.ts, das

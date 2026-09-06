@@ -1,5 +1,3 @@
-// packages/shared-types/src/entities.ts
-//
 // Vertrag für das fachliche Datenmodell (Backend-Entwicklungsplan,
 // Abschnitt 4 / Phase 2). Jede Schema-Definition spiegelt exakt die Form,
 // in der apps/web die Daten bereits in IndexedDB hält (js/db.js, js/seed.js)

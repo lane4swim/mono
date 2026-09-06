@@ -1,4 +1,3 @@
-// apps/api/test/mail/mailer.test.ts
 import { describe, it, expect, vi } from 'vitest';
 import { InMemoryMailSender } from '../../src/mail/mailer.memory.js';
 import {

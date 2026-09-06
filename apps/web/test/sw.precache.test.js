@@ -1,5 +1,3 @@
-// apps/web/test/sw.precache.test.js
-//
 // Regressionstest: sw.js listet die App-Shell-Dateien für den Offline-
 // Erstinstall von Hand in PRECACHE_URLS auf (kein Build-Schritt, der das
 // automatisch aus dem Dateisystem ableitet) — ein neues Modul unter

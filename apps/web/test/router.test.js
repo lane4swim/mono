@@ -1,5 +1,3 @@
-// apps/web/test/router.test.js
-//
 // Testet js/router.js: visibleModules()/isModuleVisible() — die
 // Sichtbarkeitsregel für "Module pro Verein aktivierbar" (Kern-Module
 // immer sichtbar, Fach-Module nur wenn ihr Paket in enabledModules steht),

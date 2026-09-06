@@ -1,5 +1,4 @@
-// ============================================================
-// modules/competitionLive.js — Wettkampfmodus ("live mode").
+// Wettkampfmodus ("live mode").
 //
 // Code-Review, Befund L3: extracted out of competitions.js (was 675
 // lines mixing three unrelated features — CRUD, this live timekeeping
@@ -17,7 +16,6 @@
 // already described. modules/competitions.js imports buildLiveGroups()
 // from here for its start-list "jump into live mode" links, since that
 // grouping is exactly the running order this module renders.
-// ============================================================
 import { getAll, put } from '../db.js';
 import { el, clear } from '../dom.js';
 import { secToTime, isPersonalBest } from '../swimTime.js';

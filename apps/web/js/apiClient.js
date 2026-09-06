@@ -1,5 +1,4 @@
-// ============================================================
-// apiClient.js — Phase 4 (Frontend-Integration): einziger Ort, an dem das
+// Phase 4 (Frontend-Integration): einziger Ort, an dem das
 // Frontend HTTP-Aufrufe an apps/api macht. Kapselt:
 //   - Basis-URL-Auflösung (Standard: gleicher Origin, z. B. hinter dem in
 //     der Hetzner-Anleitung beschriebenen Nginx-Reverse-Proxy; für lokale
@@ -18,7 +17,6 @@
 //     mehrere parallele Promise.all()-Requests, deren Access Token
 //     zeitgleich abläuft) auf GENAU einen tatsächlichen
 //     POST /auth/refresh-Aufruf.
-// ============================================================
 import { t } from './i18n.js';
 
 const API_BASE_URL_KEY = 'lane1-api-base-url';

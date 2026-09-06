@@ -1,5 +1,4 @@
-// ============================================================
-// charts.js — minimales SVG-Linien-/Balkendiagramm (ohne externe
+// minimales SVG-Linien-/Balkendiagramm (ohne externe
 // Abhängigkeit, offlinefähig).
 //
 // Code-Review, Befund L4: aus utils.js herausgelöst (siehe dom.js für
@@ -7,7 +6,6 @@
 // Diagramm-Generatoren waren zuvor Teil des einen großen Sammelmoduls,
 // obwohl nur die Statistik-Ansicht (modules/stats.js) sie tatsächlich
 // braucht — jedes andere Modul zog sie über utils.js dennoch mit.
-// ============================================================
 import { el } from './dom.js';
 import { t } from './i18n.js';
 

@@ -1,5 +1,4 @@
-// ============================================================
-// admin/admin.js — Superadmin-Oberfläche, nur unter "/admin" erreichbar.
+// Superadmin-Oberfläche, nur unter "/admin" erreichbar.
 //
 // Bewusst als eigenständiges, schlankes Skript (kein Teil des normalen
 // Router-/Modul-Systems in ../js/app.js): diese Oberfläche dient

@@ -1,4 +1,3 @@
-// apps/api/test/sync/sync.service.test.ts
 import { describe, it, expect, vi } from 'vitest';
 import { createSyncService } from '../../src/modules/sync/sync.service.js';
 import { describeSyncError } from '../../src/modules/sync/sync.errors.js';

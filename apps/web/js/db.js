@@ -1,4 +1,4 @@
-// db.js — schlanker, Promise-basierter Wrapper um IndexedDB.
+// schlanker, Promise-basierter Wrapper um IndexedDB.
 // Eine Datenbank, ein Object Store je Entität. Generisches CRUD, damit
 // neue Module nur einen Store-Namen ergänzen müssen und get/getAll/
 // put/remove kostenlos dazubekommen.

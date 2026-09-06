@@ -1,5 +1,3 @@
-// apps/web/test/state.moduleDeprovisioning.test.js
-//
 // Regressionstest für Sicherheitsreview 2026-08-27, Befund N5: ein
 // abbestelltes Modul-Paket entfernte bislang die bereits lokal
 // synchronisierten Daten NICHT von den Geräten (der serverseitige Filter

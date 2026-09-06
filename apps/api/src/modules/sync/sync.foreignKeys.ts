@@ -1,5 +1,3 @@
-// apps/api/src/modules/sync/sync.foreignKeys.ts
-//
 // Code-Review, Befund L2: aus sync.service.ts herausgelöst (eine von fünf
 // Zuständigkeiten der ehemaligen 737-Zeilen-Datei).
 //

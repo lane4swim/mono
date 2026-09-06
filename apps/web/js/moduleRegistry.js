@@ -1,11 +1,9 @@
-// ============================================================
-// moduleRegistry.js — die vollständige Liste der Feature-Module, die
+// die vollständige Liste der Feature-Module, die
 // app.js UND app-demo.js gleichermaßen einbinden (Wartbarkeits-Review,
 // Befund R3). Vormals in beiden Dateien wortgleich als 14 Imports +
 // `.forEach(registerModule)` ausgeschrieben — ein neues Modul musste an
 // ZWEI Stellen registriert werden; vergaß man app-demo.js, fehlte es dort
 // lautlos.
-// ============================================================
 import { registerModule } from './router.js';
 
 import { dashboardModule } from './modules/dashboard.js';

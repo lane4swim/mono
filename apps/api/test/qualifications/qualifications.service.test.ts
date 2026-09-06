@@ -1,4 +1,3 @@
-// apps/api/test/qualifications/qualifications.service.test.ts
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createQualificationsService, QualificationForbiddenError, QualificationNotFoundError, QualificationInvalidDateRangeError, type QualificationsService } from '../../src/modules/qualifications/qualifications.service.js';
 import { InMemoryUserQualificationRepository, InMemoryQualificationReminderSettingRepository } from '../../src/modules/qualifications/qualifications.repository.memory.js';

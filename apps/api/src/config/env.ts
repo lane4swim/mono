@@ -1,5 +1,3 @@
-// apps/api/src/config/env.ts
-//
 // Liest und validiert Umgebungsvariablen einmalig beim Start. Ein
 // fehlender/ungültiger Wert lässt den Server sofort mit einer klaren
 // Fehlermeldung abbrechen, statt erst später mit einem kryptischen

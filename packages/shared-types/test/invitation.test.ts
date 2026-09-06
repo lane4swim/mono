@@ -1,4 +1,3 @@
-// packages/shared-types/test/invitation.test.ts
 import { describe, it, expect } from 'vitest';
 import {
   CreateClubRequestSchema,

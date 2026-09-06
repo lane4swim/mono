@@ -1,9 +1,7 @@
-// ============================================================
-// dates.js — Datumsrechnung/-formatierung.
+// Datumsrechnung/-formatierung.
 //
 // Code-Review, Befund L4: aus utils.js herausgelöst (siehe dom.js für
 // den vollständigen Hintergrund der Aufteilung).
-// ============================================================
 import { getLocale } from './i18n.js';
 
 // ---- Datumsangaben ----

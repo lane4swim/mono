@@ -1,4 +1,3 @@
-// packages/shared-config/prettier-preset.cjs
 module.exports = {
   semi: true,
   singleQuote: true,

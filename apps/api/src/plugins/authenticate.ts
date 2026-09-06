@@ -1,5 +1,3 @@
-// apps/api/src/plugins/authenticate.ts
-//
 // Stellt `app.authenticate` als preHandler bereit, den geschützte Routen
 // (z. B. GET/PATCH /api/me) referenzieren. Liest den Access Token aus dem
 // "Authorization: Bearer <token>"-Header, verifiziert ihn (RS256) und

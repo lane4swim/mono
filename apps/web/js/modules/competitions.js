@@ -1,12 +1,10 @@
-// ============================================================
-// modules/competitions.js — Wettkampfmanagement (CRUD: Liste, Detail,
+// Wettkampfmanagement (CRUD: Liste, Detail,
 // Start-/Ergebnisliste, drei Formular-Modals).
 //
 // Code-Review, Befund L3: war 675 Zeilen mit drei kaum verwandten
 // Zuständigkeiten (CRUD hier; Wettkampfmodus jetzt in
 // competitionLive.js; die Stoppuhr-Widgets jetzt in stopwatch.js). Diese
 // Datei behält nur noch die Vereinsverwaltung der Wettkämpfe selbst.
-// ============================================================
 import { getAll, put, remove } from '../db.js';
 import { el, clear, beginRender } from '../dom.js';
 import { fmtDateLong, todayISO, toIsoDateTime } from '../dates.js';

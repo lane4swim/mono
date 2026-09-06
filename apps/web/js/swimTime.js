@@ -1,10 +1,8 @@
-// ============================================================
-// swimTime.js — Schwimmzeit-Formatierung: Sekunden (Fließkommazahl)
+// Schwimmzeit-Formatierung: Sekunden (Fließkommazahl)
 // <-> "mm:ss.cc".
 //
 // Code-Review, Befund L4: aus utils.js herausgelöst (siehe dom.js für
 // den vollständigen Hintergrund der Aufteilung).
-// ============================================================
 export function secToTime(sec) {
   if (sec === null || sec === undefined || isNaN(sec)) return '—';
   const m = Math.floor(sec / 60);

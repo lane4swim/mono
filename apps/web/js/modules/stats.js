@@ -1,6 +1,4 @@
-// ============================================================
-// modules/stats.js — Statistiken und Auswertungen
-// ============================================================
+// Statistiken und Auswertungen
 import { getAll } from '../db.js';
 import { el, clear, beginRender } from '../dom.js';
 import { fmtDateShort } from '../dates.js';

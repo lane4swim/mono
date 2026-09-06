@@ -1,7 +1,5 @@
-// ============================================================
-// modules/actionItems.js — Identifikation & Dokumentation von
+// Identifikation & Dokumentation von
 // Handlungsfeldern (Entwicklungsschwerpunkte pro Athlet:in)
-// ============================================================
 import { getAll, put, remove } from '../db.js';
 import { el, clear, beginRender } from '../dom.js';
 import { fmtDateShort, todayISO, toIsoDateTime } from '../dates.js';

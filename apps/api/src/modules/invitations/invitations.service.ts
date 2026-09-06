@@ -1,5 +1,3 @@
-// apps/api/src/modules/invitations/invitations.service.ts
-//
 // Geschäftslogik für den einladungsbasierten Registrierungsprozess:
 //   - createClub(): NUR superadmin. Legt einen Verein an und erzeugt in
 //     einem Zug die Einladung für dessen ersten Admin, inkl. E-Mail-Versand.

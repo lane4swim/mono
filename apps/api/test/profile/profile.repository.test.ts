@@ -1,4 +1,3 @@
-// apps/api/test/profile/profile.repository.test.ts
 import { describe, it, expect } from 'vitest';
 import { InMemoryProfileDataGateway, type InMemoryProfileDatabase } from '../../src/modules/profile/profile.repository.memory.js';
 import { UserNotFoundForExportError, ErasureAlreadyRequestedError } from '../../src/modules/profile/profile.repository.js';

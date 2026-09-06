@@ -1,5 +1,3 @@
-// apps/api/src/jobs/purgeExpiredDeletions.ts
-//
 // Orchestrierung des zeitversetzten Hard-Purge (Art. 17 DSGVO): findet
 // alle Löschanfragen, deren Aufbewahrungsfrist abgelaufen ist, und löscht
 // die zugehörigen Daten unwiderruflich. Wird von scripts/purgeDeletedData.ts

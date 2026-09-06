@@ -1,5 +1,3 @@
-// apps/web/test/setEditor.test.js
-//
 // Testet die reine Listenlogik aus js/modules/setEditor.js — das
 // Umsortieren (moveEntry) und das Einfügen an beliebiger Stelle
 // (insertEntry), auf denen die Umsortier-/Einfüge-Bedienelemente des

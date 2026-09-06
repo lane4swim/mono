@@ -1,5 +1,3 @@
-// apps/api/src/modules/sync/sync.gateway.ts
-//
 // Abstraktionsschicht zwischen sync.service.ts und der Datenhaltung.
 // Anders als bei auth/invitations (ein Repository-Interface je Entität)
 // braucht die generische Sync-API GENAU EINE Schnittstelle, die über alle

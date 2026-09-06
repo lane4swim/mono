@@ -1,7 +1,5 @@
-// ============================================================
-// i18n/en-US.js — English (US). Keep the key structure identical
+// English (US). Keep the key structure identical
 // to de-DE.js; add new keys to both files together.
-// ============================================================
 export default {
   common: {
     save: 'Save', cancel: 'Cancel', create: 'Create', edit: 'Edit',

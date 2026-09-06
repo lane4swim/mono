@@ -1,5 +1,3 @@
-// apps/api/src/plugins/parseInput.ts
-//
 // Ein Aufruf statt der zwei wiederholten Zeilen, die bislang jeden der
 // neun Routen-Handler mit Eingabevalidierung einleiteten:
 //

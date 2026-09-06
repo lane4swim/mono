@@ -1,8 +1,6 @@
-// ============================================================
-// router.js — minimal hash router + module registry.
+// minimal hash router + module registry.
 // New feature modules register themselves here; this list is
 // the core extensibility mechanism for adding future modules.
-// ============================================================
 
 export const MODULES = [];
 

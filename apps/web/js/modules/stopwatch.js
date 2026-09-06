@@ -1,11 +1,9 @@
-// ============================================================
-// modules/stopwatch.js — self-contained stopwatch widgets.
+// self-contained stopwatch widgets.
 //
 // Code-Review, Befund L3: extracted out of competitions.js (was 675
 // lines mixing three unrelated features) — neither widget here knows
 // anything about competitions, entries, or results; both just report
 // elapsed time / recorded laps back to the caller via callbacks.
-// ============================================================
 import { el, clear } from '../dom.js';
 import { secToTime } from '../swimTime.js';
 import { t } from '../i18n.js';

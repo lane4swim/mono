@@ -1,5 +1,3 @@
-// apps/api/test/auth/keys.test.ts
-//
 // Regressionstests für Sicherheitsreview 2026-08-28, Befund H2,
 // Empfehlung 3: resolveKeyPair() muss das RS256-Schlüsselpaar sowohl aus
 // den bisherigen Inline-PEM-Variablen (JWT_PRIVATE_KEY/JWT_PUBLIC_KEY) als

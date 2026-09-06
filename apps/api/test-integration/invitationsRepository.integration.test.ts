@@ -1,5 +1,3 @@
-// apps/api/test-integration/invitationsRepository.integration.test.ts
-//
 // Prüft PrismaClubRepository.createWithAdminInvitation() gegen eine echte
 // Datenbank (siehe vitest.integration.config.ts) — insbesondere die
 // tatsächliche Transaktions-Atomarität (Code-Review): schlägt die

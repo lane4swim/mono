@@ -1,5 +1,3 @@
-// apps/api/vitest.integration.config.ts
-//
 // Eigene Konfiguration statt eines gemeinsamen Configs mit vitest.config.ts
 // (siehe Code-Review, Befund 14): die dortige Suite (test/**/*.test.ts)
 // läuft bewusst OHNE Datenbank — ausschließlich gegen die *.repository.

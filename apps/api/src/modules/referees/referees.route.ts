@@ -1,5 +1,3 @@
-// apps/api/src/modules/referees/referees.route.ts
-//
 // Endpunkte für die Wettkampfeinsätze von Kampfrichter:innen (docs/
 // kampfrichter-modul-plan.md, Abschnitt 5). Läuft NICHT über die
 // generische Sync-API (POST /api/sync/push/pull) — RefereeAssignment ist

@@ -1,5 +1,3 @@
-// packages/shared-config/eslint-preset.cjs
-//
 // Gemeinsame ESLint-Basis für alle Workspaces, als Flat-Config-Array
 // (ESLint 9+/10 — Code-Review, Befund W4: ESLint 8 war zum Zeitpunkt des
 // Reviews bereits End-of-Life, das alte eslintrc-Format inzwischen

@@ -1,6 +1,4 @@
-// ============================================================
-// modules/times.js — Zeiten- und Leistungserfassung
-// ============================================================
+// Zeiten- und Leistungserfassung
 import { getAll, put, remove } from '../db.js';
 import { el, clear, beginRender } from '../dom.js';
 import { fmtDateShort, todayISO, toIsoDateTime } from '../dates.js';

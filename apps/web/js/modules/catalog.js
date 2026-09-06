@@ -1,6 +1,4 @@
-// ============================================================
-// modules/catalog.js — Übungskatalog
-// ============================================================
+// Übungskatalog
 import { getAll, put, remove } from '../db.js';
 import { el, clear, beginRender, icon } from '../dom.js';
 import { badge, emptyState, laneWave, toast } from '../ui.js';

@@ -1,5 +1,4 @@
-// ============================================================
-// resultsImport/dsv7Parser.js — Parser für DSV7-Wettkampfergebnislisten
+// Parser für DSV7-Wettkampfergebnislisten
 // ("DSV Standard", Format 7, DSV, gültig ab 01.01.2023) in das
 // gemeinsame Zwischenformat ImportedResult (siehe
 // docs/dsv7-lenex-import-plan.md Abschnitt 4).

@@ -1,5 +1,3 @@
-// packages/shared-types/src/qualification.ts
-//
 // Vertrag für das Qualifikationsmanagement (docs/nutzer-qualifikationen-plan.md).
 // Bewusst NICHT Teil von entities.ts/ENTITY_SCHEMAS — UserQualification ist
 // kein Sync-Store (User selbst ist keiner, siehe Plan Abschnitt 1.1), diese

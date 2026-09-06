@@ -1,4 +1,3 @@
-// apps/api/test/jobs/notifyExpiringQualifications.test.ts
 import { describe, it, expect } from 'vitest';
 import { notifyExpiringQualifications } from '../../src/jobs/notifyExpiringQualifications.js';
 import { InMemoryNotifyExpiringQualificationsGateway } from '../../src/jobs/qualificationReminder.repository.memory.js';

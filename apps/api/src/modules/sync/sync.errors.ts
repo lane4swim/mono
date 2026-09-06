@@ -1,5 +1,3 @@
-// apps/api/src/modules/sync/sync.errors.ts
-//
 // Code-Review, Befund L2: aus sync.service.ts herausgelöst (eine von fünf
 // Zuständigkeiten der ehemaligen 737-Zeilen-Datei).
 import { FOREIGN_ENTITY_ERROR, FOREIGN_ENTITY_ERROR_CODE } from './sync.foreignKeys.js';

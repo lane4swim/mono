@@ -1,5 +1,4 @@
-// ============================================================
-// state.js — Phase 4: echte Sitzungsverwaltung über apps/api statt
+// Phase 4: echte Sitzungsverwaltung über apps/api statt
 // des früheren, rein lokalen Profil-Umschalters. Die aktuelle
 // Nutzer-Identität kommt jetzt vom Backend (Login/Refresh/`/api/me`),
 // nicht mehr aus dem lokalen `users`-Store — dieser dient weiterhin als
@@ -12,7 +11,6 @@
 // rein lokalen Version. `login()`/`acceptInvitation()` unten geben die
 // Einwilligung 1:1 an das Backend weiter, das sie serverseitig erzwingt
 // (siehe packages/shared-types/src/auth.ts: consent-Pflichtfeld).
-// ============================================================
 import * as api from './apiClient.js';
 import { setLocale, detectInitialLocale } from './i18n.js';
 import { IS_DEMO } from './demoMode.js';

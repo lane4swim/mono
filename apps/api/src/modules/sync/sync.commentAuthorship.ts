@@ -1,5 +1,3 @@
-// apps/api/src/modules/sync/sync.commentAuthorship.ts
-//
 // Sicherheitsreview 2026-08-27, Befund M2: `CommentSchema.authorName`
 // (packages/shared-types/src/entities.ts) war eine reine Client-Angabe
 // ohne jede serverseitige Verifikation — jedes Vereinsmitglied konnte per

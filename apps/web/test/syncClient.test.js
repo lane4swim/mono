@@ -1,5 +1,3 @@
-// apps/web/test/syncClient.test.js
-//
 // Testet js/syncClient.js gegen eine gemockte apiClient.js (kein echtes
 // Netzwerk) und echtes js/db.js (per fake-indexeddb, siehe test/setup.js)
 // — bislang völlig ungetestet (Code-Review, Befund 15). Deckt insbesondere

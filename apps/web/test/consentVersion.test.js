@@ -1,5 +1,3 @@
-// apps/web/test/consentVersion.test.js
-//
 // Review 30.08.2026, Befund S1, Empfehlung 4: „Die Konstante einmalig
 // führen … Solange das nicht geschieht, mindestens ein Test, der beide
 // Werte vergleicht." Der S1-Fix setzte Empfehlung 1 und 2 um, ersetzte

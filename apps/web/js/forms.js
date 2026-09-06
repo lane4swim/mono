@@ -1,9 +1,7 @@
-// ============================================================
-// forms.js — Formularfeld-Hilfsfunktionen.
+// Formularfeld-Hilfsfunktionen.
 //
 // Code-Review, Befund L4: aus utils.js herausgelöst (siehe dom.js für
 // den vollständigen Hintergrund der Aufteilung).
-// ============================================================
 import { el } from './dom.js';
 import { dateOnly } from './dates.js';
 import { t } from './i18n.js';

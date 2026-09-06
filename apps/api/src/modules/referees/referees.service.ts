@@ -1,5 +1,3 @@
-// apps/api/src/modules/referees/referees.service.ts
-//
 // Geschäftslogik für Wettkampfeinsätze von Kampfrichter:innen (docs/
 // kampfrichter-modul-plan.md, Abschnitt 5). Zentrale Entscheidung aus dem
 // Plan (Abschnitt 5.5, abweichend vom Muster bei Qualifikationen): eine

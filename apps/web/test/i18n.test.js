@@ -1,5 +1,3 @@
-// apps/web/test/i18n.test.js
-//
 // Testet js/i18n.js::t() — bislang ungetestet. Deckt Befund C6
 // (Code-Review) ab.
 import { describe, it, expect } from 'vitest';

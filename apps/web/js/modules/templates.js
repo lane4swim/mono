@@ -1,6 +1,4 @@
-// ============================================================
-// modules/templates.js — wiederverwendbare Trainingsplan-Vorlagen
-// ============================================================
+// wiederverwendbare Trainingsplan-Vorlagen
 import { getAll, put, remove } from '../db.js';
 import { el, clear, beginRender } from '../dom.js';
 import { badge, emptyState, laneWave, toast } from '../ui.js';

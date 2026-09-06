@@ -1,5 +1,3 @@
-// apps/api/test/sync/sync.permissions.test.ts
-//
 // Testet die Modul-Gating-Erweiterung von canRead()/canWrite() (Module pro
 // Verein aktivierbar, z. B. das Wettkampfmodul nur für bestimmte Vereine).
 // Die reine Rollen-Matrix (STORE_PERMISSIONS) ist bereits über

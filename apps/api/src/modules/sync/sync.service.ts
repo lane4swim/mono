@@ -1,5 +1,3 @@
-// apps/api/src/modules/sync/sync.service.ts
-//
 // Kern von Phase 3 (Backend-Entwicklungsplan, Abschnitt 6): generische
 // Push/Pull-Sync-API. "Generisch" heißt hier konkret — kein separater
 // Codepfad je fachlichem Store, sondern:

@@ -1,5 +1,3 @@
-// apps/api/src/db/prisma.ts
-//
 // Lazy statt eager: die PrismaClient-Instanz wird erst bei tatsächlichem
 // Bedarf erzeugt (getPrisma()), nicht schon beim Import dieses Moduls.
 // Wichtig für Tests — buildApp() übergibt dort immer einen authService-

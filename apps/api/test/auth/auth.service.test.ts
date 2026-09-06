@@ -1,4 +1,3 @@
-// apps/api/test/auth/auth.service.test.ts
 import { describe, it, expect, vi } from 'vitest';
 import {
   createAuthService,

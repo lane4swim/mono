@@ -1,5 +1,3 @@
-// apps/api/src/modules/referees/referees.repository.ts
-//
 // Repository-Pattern (wie überall sonst im Backend, siehe
 // modules/qualifications/qualifications.repository.ts als direktes
 // Vorbild) — referees.service.ts hängt nur von diesem Interface ab, nie

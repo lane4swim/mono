@@ -1,4 +1,3 @@
-// apps/api/test/sync/sync.route.test.ts
 import { describe, it, expect, vi } from 'vitest';
 import { MODULE_KEYS } from '@lane1/shared-types';
 import { buildApp } from '../../src/app.js';

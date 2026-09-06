@@ -1,5 +1,3 @@
-// apps/api/src/modules/auth/auth.repository.memory.ts
-//
 // Test-Doubles für UserRepository/RefreshTokenRepository. Ermöglichen
 // schnelle, isolierte Tests der Auth-Business-Logik ohne Postgres/Prisma —
 // insbesondere relevant, solange keine echte Datenbank verfügbar ist

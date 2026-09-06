@@ -1,5 +1,4 @@
-// ============================================================
-// resultsImport/matching.js — Matching- und Overwrite-Logik für den
+// Matching- und Overwrite-Logik für den
 // Ergebnisimport (DSV7/Lenex), formatunabhängig: nimmt ImportedResult[]
 // (siehe resultsImport/dsv7Parser.js) entgegen und baut daraus einen
 // Vorschau-/Ausführungsplan gegen die lokalen Athlet:innen/Ergebnisse.

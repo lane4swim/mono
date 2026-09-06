@@ -1,5 +1,3 @@
-// apps/api/src/mail/mailer.ts
-//
 // Versand der Einladungs-E-Mail (Nutzerverwaltung → Superadmin-Oberfläche
 // "/admin"). Repository-Pattern wie überall sonst im Backend: ein
 // Interface, gegen das invitations.service.ts arbeitet, plus austauschbare

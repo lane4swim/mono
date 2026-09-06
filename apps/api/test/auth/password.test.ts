@@ -1,4 +1,3 @@
-// apps/api/test/auth/password.test.ts
 import { describe, it, expect } from 'vitest';
 import { hashPassword, verifyPassword } from '../../src/auth/password.js';
 
