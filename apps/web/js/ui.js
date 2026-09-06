@@ -1,12 +1,6 @@
 // kleine UI-Bausteine (liefern DOM-Knoten), Toast-Meldungen,
 // und die paar generischen Array-/Objekt-Helfer, die keine eigene Datei
 // rechtfertigen.
-//
-// Code-Review, Befund L4: aus utils.js herausgelöst (siehe dom.js für
-// den vollständigen Hintergrund der Aufteilung). `groupBy`/`average`
-// gehören inhaltlich zu keinem der übrigen sechs Dateien — hier
-// mituntergebracht, statt für zwei kleine Funktionen eine achte Datei
-// anzulegen.
 import { el } from './dom.js';
 
 export function badge(text, variant = 'neutral') {

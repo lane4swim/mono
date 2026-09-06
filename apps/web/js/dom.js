@@ -1,10 +1,4 @@
 // ID-Erzeugung, DOM-Baukasten, Render-Absicherung.
-//
-// Code-Review, Befund L4: aus utils.js herausgelöst — utils.js war ein
-// 360-Zeilen-Sammelmodul aus rund zehn zusammenhanglosen Themen, von 23
-// der 30 Frontend-Dateien importiert. Ein Modul, das nur eine einzelne
-// Funktion von hier braucht, zieht dadurch keine Diagramm-Generatoren
-// oder Modal-Mechanik mehr mit.
 
 // Nicht für Primärschlüssel fachlicher Entitäten (athletes.id, results.id, …)
 // gedacht — die Entity-Schemas (packages/shared-types/src/entities.ts)
