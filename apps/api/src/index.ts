@@ -1,4 +1,3 @@
-// apps/api/src/index.ts
 import { loadEnv } from './config/env.js';
 import { buildApp } from './app.js';
 

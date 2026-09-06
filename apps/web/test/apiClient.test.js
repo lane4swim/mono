@@ -1,5 +1,3 @@
-// apps/web/test/apiClient.test.js
-//
 // Testet js/apiClient.js gegen ein gemocktes globalThis.fetch (kein
 // echtes Netzwerk) — bislang ungetestet. Deckt insbesondere Befund S4 ab:
 // refreshTokens() muss mehrere gleichzeitige Aufrufer auf GENAU einen

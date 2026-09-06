@@ -1,5 +1,3 @@
-// apps/api/src/modules/sync/sync.pagination.ts
-//
 // Code-Review, Befund L2: aus sync.service.ts herausgelöst (eine von fünf
 // Zuständigkeiten der ehemaligen 737-Zeilen-Datei) — bereits vorher als
 // eigenständige, exportierte, reine Funktion angelegt, um sie direkt ohne

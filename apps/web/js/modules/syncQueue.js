@@ -1,5 +1,4 @@
-// ============================================================
-// modules/syncQueue.js — Event-Queue zur Vorbereitung der
+// Event-Queue zur Vorbereitung der
 // Backend-Synchronisation ("Outbox-Pattern").
 //
 // Jede Änderung (Anlegen/Bearbeiten/Löschen) an den fachlichen
@@ -7,7 +6,6 @@
 // "syncQueue" geschrieben (siehe db.js: enqueueSyncEvent). Diese
 // Ansicht macht die Warteschlange sichtbar und erlaubt es, die
 // spätere Übertragung an ein Backend in der Demo zu simulieren.
-// ============================================================
 import { getSyncQueue, updateSyncEvent, clearSyncedEvents, remove } from '../db.js';
 import { runSync } from '../syncClient.js';
 import { ApiError, NetworkError, apiErrorMessage } from '../apiClient.js';

@@ -1,5 +1,3 @@
-// apps/api/scripts/createSuperAdmin.ts
-//
 // Bootstrapping-Problem: seit der Umstellung auf einladungsbasierte
 // Registrierung gibt es keinen offenen Weg mehr, ein Konto anzulegen — das
 // ist gewollt (siehe Aufgabenstellung), führt aber zur Henne-Ei-Frage: wer

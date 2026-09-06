@@ -1,5 +1,3 @@
-// apps/api/src/auth/tokens.ts
-//
 // Access Token: JWT, RS256-signiert (asymmetrisch — siehe Abschnitt 5.2 des
 // Backend-Entwicklungsplans), kurzlebig. Refresh Token: KEIN JWT, sondern
 // ein opakes Zufalls-Token — der Server speichert nur dessen SHA-256-Hash,

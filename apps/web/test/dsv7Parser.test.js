@@ -1,5 +1,3 @@
-// apps/web/test/dsv7Parser.test.js
-//
 // Der Fixture-Text unten ist das offizielle Beispiel für eine
 // "Wettkampfergebnisliste" aus dem DSV-Standard-Dokument ("DSV Standard",
 // Format 7, DSV, Abschnitt 5.4, Beispiel-Dateiname

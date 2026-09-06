@@ -1,6 +1,4 @@
-// ============================================================
-// modules/plans.js — Trainingspläne (Sets, Serien, Wochenpläne, Kalender)
-// ============================================================
+// Trainingspläne (Sets, Serien, Wochenpläne, Kalender)
 import { getAll, put, remove } from '../db.js';
 import { el, clear, beginRender } from '../dom.js';
 import { fmtDateLong, fmtDateShort, todayISO, toIsoDateTime, dateOnly, isoAddDays, startOfWeek } from '../dates.js';

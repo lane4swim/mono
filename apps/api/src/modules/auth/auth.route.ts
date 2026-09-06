@@ -1,5 +1,3 @@
-// apps/api/src/modules/auth/auth.route.ts
-//
 // Phase 1: echte Authentifizierungs-Routen (ersetzen die 501-Platzhalter
 // aus Phase 0). Siehe Abschnitt 5 des Backend-Entwicklungsplans.
 import { createHash } from 'node:crypto';

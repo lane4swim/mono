@@ -1,4 +1,3 @@
-// packages/shared-types/test/user.test.ts
 import { describe, it, expect } from 'vitest';
 import { UserSchema, RoleSchema, UserRolesSchema, ClubMembersResponseSchema } from '../src/user.js';
 

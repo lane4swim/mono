@@ -1,5 +1,4 @@
-// ============================================================
-// modules/planPdfExport.js — "Plan drucken" für Trainingspläne.
+// "Plan drucken" für Trainingspläne.
 //
 // Kein PDF-Vendor-Code nötig: baut eine eigene, druckoptimierte Ansicht
 // des Plans auf (großer, kontrastreicher Text, Wiederholungsblöcke als
@@ -17,7 +16,6 @@
 // heutigen Zettel poolside auszudrucken statt der ganzen Woche. Der
 // Einzeltag bekommt die volle Seitenbreite statt der Mehrspalten-Ansicht,
 // dadurch bleiben Übungsname/Distanz/Wiederholungen noch größer.
-// ============================================================
 import { el, clear } from '../dom.js';
 import { fmtDateLong } from '../dates.js';
 import { totalDistance, exerciseById, equipmentForEntry } from './setEditor.js';

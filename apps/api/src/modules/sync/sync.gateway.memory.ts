@@ -1,5 +1,3 @@
-// apps/api/src/modules/sync/sync.gateway.memory.ts
-//
 // Test-Double für SyncGateway — hält alle Stores als einfache Maps im
 // Speicher. Ermöglicht vollständige Tests von sync.service.ts (Idempotenz,
 // Konfliktlogik, Vereins-Scoping, Pagination) ohne Datenbank.

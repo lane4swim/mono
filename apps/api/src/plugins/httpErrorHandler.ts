@@ -1,5 +1,3 @@
-// apps/api/src/plugins/httpErrorHandler.ts
-//
 // Zentrale Zuordnung "welche Domänen-Fehlerklasse wird zu welcher
 // HTTP-Antwort?" — ersetzt die zuvor in jedem Routen-Handler einzeln
 // wiederholte try/catch-Kette aus `if (err instanceof X) return

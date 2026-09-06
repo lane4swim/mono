@@ -1,4 +1,3 @@
-// apps/api/test/auth/tokens.test.ts
 import { describe, it, expect, vi } from 'vitest';
 
 // Umhüllt importPKCS8()/importSPKI() aus "jose" mit Spies (Delegation an

@@ -1,5 +1,3 @@
-// apps/web/test/state.test.js
-//
 // Testet js/state.js — bisher ungetestet. demoMode.js wird gemockt (liest
 // `location.pathname` auf Modulebene, in einer reinen Node-Testumgebung
 // nicht vorhanden), apiClient.js und db.js werden ebenfalls gemockt, da

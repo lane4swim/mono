@@ -1,5 +1,3 @@
-// apps/api/src/jobs/notifyExpiringQualifications.ts
-//
 // Orchestrierung der Ablauf-Erinnerungen für Qualifikationen (docs/
 // nutzer-qualifikationen-plan.md, Abschnitt 5). Wird von
 // scripts/notifyExpiringQualifications.ts per Cron ausgeführt.

@@ -1,5 +1,3 @@
-// apps/api/src/modules/qualifications/qualifications.route.ts
-//
 // Endpunkte für das Qualifikationsmanagement (docs/nutzer-qualifikationen-
 // plan.md). Läuft NICHT über die generische Sync-API (POST /api/sync/push/
 // pull) — UserQualification ist kein Sync-Store (siehe Plan, Abschnitt

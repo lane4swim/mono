@@ -1,5 +1,3 @@
-// apps/web/test/refdata.dsv7EventLabel.test.js
-//
 // dsv7EventLabel() bildet DSV7-WETTKAMPF-Attribute (Technik, Einzelstrecke,
 // AnzahlStarter) auf einen EVENTS-String ab — Grundlage für das
 // Event-Matching beim Ergebnisimport (siehe

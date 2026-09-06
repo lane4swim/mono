@@ -1,5 +1,3 @@
-// apps/api/src/modules/invitations/invitations.repository.memory.ts
-//
 // Test-Doubles für ClubRepository/InvitationRepository — siehe
 // modules/auth/auth.repository.memory.ts für dasselbe Prinzip.
 import { randomUUID } from 'node:crypto';

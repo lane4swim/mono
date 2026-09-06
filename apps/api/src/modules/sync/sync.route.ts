@@ -1,5 +1,3 @@
-// apps/api/src/modules/sync/sync.route.ts
-//
 // Phase 3: echte Implementierung (ersetzt den Phase-0/1-501-Platzhalter).
 // Siehe Abschnitt 6 des Backend-Entwicklungsplans für den Gesamtfluss.
 // Nur eingeloggte Vereinsmitglieder (trainer/admin/athlete) dürfen

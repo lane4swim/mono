@@ -1,5 +1,3 @@
-// apps/api/scripts/notifyExpiringQualifications.ts
-//
 // Verschickt Ablauf-Erinnerungen für Qualifikationen (docs/nutzer-
 // qualifikationen-plan.md, Abschnitt 5) an die betroffene Person und die
 // Admins ihres Vereins. Nur relevant für Vereine, die das Modul

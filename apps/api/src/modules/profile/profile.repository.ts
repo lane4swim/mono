@@ -1,5 +1,3 @@
-// apps/api/src/modules/profile/profile.repository.ts
-//
 // DSGVO-Selbstbedienung: Auskunft (Art. 15) und Löschung (Art. 17) für das
 // EIGENE Konto. Bewusst als eigenes, schlankes Gateway statt eines
 // Repositories je fachlicher Tabelle (Athlete/Result/StartlistEntry/…) —

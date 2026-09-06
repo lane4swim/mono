@@ -1,5 +1,4 @@
-// ============================================================
-// demoMode.js — shared "am I running as demo.html?" signal plus the
+// shared "am I running as demo.html?" signal plus the
 // fixed demo fixtures (three accounts, one clubId). Every other infra
 // module that needs to behave differently in the demo (db.js: separate
 // IndexedDB so demo data can never mix with a real, synced account;
@@ -11,7 +10,6 @@
 // (like every other js/*.js file) is only ever loaded from either
 // index.html or demo.html, never both in the same page load, so a
 // simple pathname check is enough and needs no runtime toggle.
-// ============================================================
 
 import { MODULE_KEYS } from './router.js';
 

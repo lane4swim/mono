@@ -1,4 +1,3 @@
-// apps/api/test/jobs/purgeSyncBookkeeping.test.ts
 import { describe, it, expect } from 'vitest';
 import { purgeSyncBookkeeping } from '../../src/jobs/purgeSyncBookkeeping.js';
 import { InMemorySyncBookkeepingGateway } from '../../src/jobs/syncBookkeeping.repository.memory.js';

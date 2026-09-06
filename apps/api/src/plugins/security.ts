@@ -1,5 +1,3 @@
-// apps/api/src/plugins/security.ts
-//
 // Bündelt die sicherheitsrelevanten Fastify-Plugins aus Abschnitt 9 des
 // Backend-Entwicklungsplans (CORS, Security-Header, Rate-Limiting).
 import type { FastifyInstance } from 'fastify';

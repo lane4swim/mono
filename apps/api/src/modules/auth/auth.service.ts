@@ -1,5 +1,3 @@
-// apps/api/src/modules/auth/auth.service.ts
-//
 // Geschäftslogik für Login/Refresh/Logout/Profil sowie — jetzt
 // einladungsbasiert — das Registrieren via acceptInvitation(). Eine offene
 // Selbstregistrierung (vormals register()) existiert nicht mehr: ein neues
@@ -39,12 +37,10 @@ export class EmailAlreadyRegisteredError extends Error {
     super('Diese E-Mail-Adresse ist bereits registriert.');
   }
 }
-// Aufräumarbeit (Code-Review): User.athleteId trägt jetzt ein
-// Unique-Constraint (siehe schema.prisma) — verhindert, dass zwei Konten
-// auf dasselbe Athletenprofil zeigen. Tritt praktisch nur auf, wenn ein
-// Admin versehentlich zwei Einladungen mit derselben athleteId ausstellt
-// (die Einladungsausstellung selbst prüft das nicht, siehe
-// invitations.service.ts) und beide angenommen werden.
+// User.athleteId trägt ein Unique-Constraint (schema.prisma): zwei Konten
+// dürfen nicht auf dasselbe Athletenprofil zeigen. Tritt praktisch nur auf,
+// wenn ein Admin zwei Einladungen mit derselben athleteId ausstellt — die
+// Ausstellung selbst prüft das nicht (invitations.service.ts).
 export class AthleteAlreadyLinkedError extends Error {
   constructor() {
     super('Für dieses Athletenprofil existiert bereits ein Nutzerkonto.');
@@ -107,8 +103,6 @@ export class LastAdminError extends Error {
   }
 }
 
-// Sicherheitsreview 2026-08, Befund M5 ("Passwort vergessen" +
-// Passwortwechsel).
 export class InvalidCurrentPasswordError extends Error {
   constructor() {
     super('Das aktuelle Passwort ist nicht korrekt.');
@@ -138,10 +132,8 @@ export interface AuthTokens {
 // invitations.service.ts' preview() — nämlich GENAU dessen
 // findValidByToken() —, statt die vier Prüfungen (nicht gefunden/
 // widerrufen/verwendet/abgelaufen) hier ein zweites Mal, potenziell
-// abweichend, zu implementieren (siehe Code-Review: die beiden Prüfungen
-// waren bereits einmal auseinandergelaufen — unterschiedliche Fehlertypen
-// trotz eines Kommentars dort, der fälschlich eine gemeinsame Nutzung
-// behauptete). In Produktion (app.ts) ist dies dieselbe InvitationsService-
+// abweichend, zu implementieren — sie waren bereits einmal auseinander-
+// gelaufen. In Produktion (app.ts) ist dies dieselbe InvitationsService-
 // Instanz, die auch preview() bedient.
 export interface InvitationValidator {
   findValidByToken(token: string): Promise<InvitationRecord>;
@@ -167,7 +159,7 @@ export interface AuthServiceDeps {
   keyPair: KeyPair;
   accessTtlSeconds: number;
   refreshTtlDays: number;
-  // "Passwort vergessen" (Sicherheitsreview 2026-08, Befund M5).
+  // "Passwort vergessen".
   passwordResetTokens: PasswordResetTokenRepository;
   mailer: MailSender;
   frontendBaseUrl: string;
@@ -185,27 +177,16 @@ export function toPublicUser(user: UserRecord) {
   return publicUser;
 }
 
-// Code-Review 2026-09-02, Befund R1: vormals zwei getrennte Funktionen
-// (resolveEnabledModules()/resolveClubIdentity()), die JEDE für sich
-// dieselbe Zeile per clubs.findById() luden — an allen acht Aufrufstellen
-// unten (acceptInvitation/login/refresh/resetPassword/changePassword/
-// changeEmail/getMe/updateMe) also zwei sequentiell awaitete
-// Datenbankzugriffe für denselben Club-Datensatz, statt eines einzigen.
-// `PrismaClubRepository.findById()` (invitations.repository.ts) liefert
-// alle drei benötigten Felder (enabledModules/nationalID/nationalIDType)
-// ohnehin in einem `findUnique()`. `null` nur für "superadmin" (gehört zu
-// keinem Verein, siehe UserRecord.clubId-Kommentar) — liefert dafür
-// konsequent leere/null-Werte statt eines Fehlers, die Superadmin-
-// Oberfläche ("/admin") nutzt den normalen Router mit Modul-Gating und den
-// Ergebnisimport (siehe unten) ohnehin nicht.
+// Lädt den Vereinskontext, den alle acht Aufrufstellen unten in ihre
+// Session-/Profil-Antwort einbetten, in EINEM clubs.findById(). `clubId` ist
+// nur für "superadmin" null (gehört zu keinem Verein) — dafür konsequent
+// leere/null-Werte statt eines Fehlers.
 //
-// `clubNationalID`/`clubNationalIDType` dienen der externen Vereinskennung
-// des Ergebnisimports (DSV7/Lenex, siehe
-// docs/dsv7-lenex-import-plan.md Abschnitt 3.1) — eingebettet in dieselben
-// Session-/Profil-Antworten, damit das Frontend den eigenen Verein beim
-// Import automatisch gegen die Datei abgleichen kann
-// (apps/web/js/modules/resultsImportUI.js), ohne einen eigenen Endpunkt
-// dafür aufrufen zu müssen.
+// `clubNationalID`/`clubNationalIDType` sind die externe Vereinskennung für
+// den Ergebnisimport (docs/dsv7-lenex-import-plan.md, Abschnitt 3.1): sie
+// reisen in der Session-Antwort mit, damit das Frontend den eigenen Verein
+// gegen die Importdatei abgleichen kann, ohne einen eigenen Endpunkt zu
+// brauchen.
 async function resolveClubContext(
   clubs: ClubModulesLookup,
   clubId: string | null,
@@ -232,20 +213,11 @@ export function createAuthService(deps: AuthServiceDeps) {
     return { accessToken, refreshToken: refresh.plainToken, expiresIn: deps.accessTtlSeconds };
   }
 
-  // Code-Review, Befund R9: listClubMembers() und listAssignableTrainers()
-  // teilten sich zuvor Abruf, Sortierung und toPublicUser()-Mapping als
-  // Kopie und unterschieden sich nur in Filter und Sortierkriterium.
-  //
-  // Sicherheitsreview 2026-08-27, Befund N6: `project` zusätzlich
-  // parametrisiert (statt fest `toPublicUser()`) — `/api/users/trainers`
-  // (siehe listAssignableTrainers() unten) bedient ausschließlich ein
-  // Dropdown zur Auswahl der zuständigen Person für ein Handlungsfeld und
-  // brauchte dafür nie mehr als id/name/role; `toPublicUser()` lieferte
-  // dort bislang zusätzlich E-Mail-Adresse und DSGVO-Einwilligungs-
-  // Nachweisdaten (`consentGivenAt`/`consentVersion`), die in einem
-  // reinen Auswahl-Endpunkt nichts verloren haben. `listClubMembers()`
-  // (echte Mitgliederverwaltung, braucht tatsächlich mehr Felder) bleibt
-  // unverändert bei `toPublicUser()`.
+  // Gemeinsame Basis von listClubMembers() und listAssignableTrainers(), die
+  // sich nur in Filter, Sortierung und Projektion unterscheiden. `project` ist
+  // parametrisiert, damit /api/users/trainers (ein reines Auswahl-Dropdown)
+  // mit id/name/role auskommt, statt über toPublicUser() zusätzlich
+  // E-Mail-Adresse und DSGVO-Nachweisdaten preiszugeben.
   async function listMembers<T>(
     clubId: string,
     opts: {
@@ -345,15 +317,12 @@ export function createAuthService(deps: AuthServiceDeps) {
     async login(input: LoginRequest) {
       const user = await deps.users.findByEmail(input.email); // findByEmail liefert nie gelöschte Konten
       if (!user) {
-        // Sicherheitskorrektur (Code-Review): ohne diesen Zweig kehrte
-        // login() bei einer unbekannten E-Mail-Adresse SOFORT zurück,
-        // während eine bekannte Adresse erst nach einem vollständigen,
-        // absichtlich teuren argon2id-Vergleich (64 MiB Speicher, siehe
-        // auth/password.ts) fehlschlug. Dieser klar messbare Zeitunterschied
-        // hebelt den bewusst generischen InvalidCredentialsError unten aus
-        // (siehe dessen Kommentar: "verrät nicht, ob die E-Mail existiert")
-        // — ein Angreifer könnte per Timing-Messung trotzdem systematisch
-        // registrierte E-Mail-Adressen von unregistrierten unterscheiden.
+        // Ohne diesen Zweig kehrte login() bei unbekannter Adresse sofort
+        // zurück, während eine bekannte erst nach dem absichtlich teuren
+        // argon2id-Vergleich (64 MiB, siehe auth/password.ts) fehlschlägt.
+        // Dieser messbare Unterschied hebelt den generischen
+        // InvalidCredentialsError aus: registrierte Adressen ließen sich per
+        // Timing-Messung von unregistrierten unterscheiden.
         // Der Vergleich läuft daher IMMER gegen einen fest einprogrammierten
         // Dummy-Hash (mit denselben Kostenparametern), das Ergebnis wird
         // verworfen — der Rechenaufwand bleibt für beide Fälle derselbe.
@@ -364,15 +333,11 @@ export function createAuthService(deps: AuthServiceDeps) {
       const passwordOk = await verifyPassword(input.password, user.passwordHash);
       if (!passwordOk) throw new InvalidCredentialsError();
 
-      // Review 30.08.2026, Befund S1: input.consentVersion ist durch
-      // LoginRequestSchema (z.literal(CURRENT_CONSENT_VERSION)) bereits auf
-      // exakt die aktuelle Fassung geprüft — der Datensatz unten spiegelt
-      // damit eine tatsächlich vom Client bestätigte Version wider, keine
-      // vom Server unterstellte. Geschrieben wird trotzdem nur, wenn sich
-      // etwas ändert (das gespeicherte consentVersion also veraltet war):
-      // sonst würde jeder Routine-Login dieselbe Zeile erneut schreiben und
-      // consentGivenAt ohne fachlichen Anlass vorrücken, obwohl niemand neu
-      // zugestimmt hat.
+      // LoginRequestSchema hat input.consentVersion bereits gegen
+      // CURRENT_CONSENT_VERSION geprüft — der Nachweis unten hält damit eine
+      // tatsächlich bestätigte Fassung fest, keine unterstellte. Geschrieben
+      // wird nur bei einer Änderung: sonst rückte consentGivenAt bei jedem
+      // Routine-Login vor, ohne dass jemand neu zugestimmt hat.
       const updated =
         user.consentVersion === CURRENT_CONSENT_VERSION
           ? user
@@ -391,10 +356,8 @@ export function createAuthService(deps: AuthServiceDeps) {
       const existing = await deps.refreshTokens.findByHash(tokenHash);
       if (!existing) throw new InvalidRefreshTokenError();
 
-      // Sicherheitskorrektur (Code-Review, Befund S2 — Reuse-Detection):
-      // ein bereits widerrufenes Token wurde bislang identisch zu einem
-      // unbekannten/abgelaufenen behandelt (schlicht InvalidRefreshTokenError).
-      // Ein Token wird aber AUSSCHLIESSLICH durch Rotation widerrufen (siehe
+      // Reuse-Detection: ein Token wird AUSSCHLIESSLICH durch Rotation
+      // widerrufen (siehe
       // deps.refreshTokens.revoke() unten) oder durch Logout — ein Aufruf
       // mit einem bereits rotierten Token ist damit das einzige verlässliche
       // Signal für einen Token-Diebstahl: löst ein Angreifer ein gestohlenes
@@ -411,14 +374,11 @@ export function createAuthService(deps: AuthServiceDeps) {
       // wiederverwendetes Token bleibt auch nach seinem eigenen Ablaufdatum
       // ein Diebstahlsignal, solange der Datensatz noch existiert.
       //
-      // WICHTIG: dieser Zweig reagiert scharf auf jede Zweit-Verwendung —
-      // ein Client, der ein rotiertes Token versehentlich ein zweites Mal
-      // schickt (z. B. mehrere parallele 401-getriebene Refresh-Versuche
-      // ohne Bündelung), löst denselben Massen-Widerruf aus. apiClient.js
-      // bündelt gleichzeitige refreshTokens()-Aufrufe deshalb serverseitig
-      // wie clientseitig auf GENAU einen In-Flight-Versuch (siehe dort,
-      // Befund S4) — ohne dieses Bündeln wäre dieser Reuse-Schutz gegen
-      // das eigene, harmlose Nebeneinanderherlaufen der App ausgelöst worden.
+      // WICHTIG: der Zweig reagiert scharf auf JEDE Zweit-Verwendung — auch
+      // auf ein versehentlich doppelt geschicktes Token. apiClient.js bündelt
+      // gleichzeitige refreshTokens()-Aufrufe deshalb auf genau einen
+      // In-Flight-Versuch; ohne das schlüge dieser Schutz gegen das eigene,
+      // harmlose Nebeneinanderherlaufen der App zu.
       if (existing.revokedAt) {
         await deps.refreshTokens.revokeAllForUser(existing.userId);
         throw new InvalidRefreshTokenError();
@@ -450,7 +410,7 @@ export function createAuthService(deps: AuthServiceDeps) {
       // ist ohnehin bereits erreicht.
     },
 
-    // "Passwort vergessen" (Sicherheitsreview 2026-08, Befund M5). Liefert
+    // "Passwort vergessen". Liefert
     // IMMER denselben Effekt nach außen (kein Fehler, keine Information
     // darüber, ob die E-Mail-Adresse zu einem Konto gehört) — verhindert
     // User-Enumeration über diesen öffentlichen, nicht authentifizierten
@@ -466,34 +426,24 @@ export function createAuthService(deps: AuthServiceDeps) {
     // DB-Abfrage) bleibt, statt für den "gefunden"-Fall um einen vollen
     // SMTP-Roundtrip zu wachsen.
     //
-    // Review 30.08.2026, Befund S3: dieselbe Überlegung galt bislang nicht
-    // für die Arbeit ZWISCHEN der Suche und dem E-Mail-Versand — der
-    // Nicht-Treffer-Pfad kehrte sofort zurück, während der Treffer-Pfad
-    // zusätzlich ein Token erzeugte, hashte und in die Datenbank schrieb.
-    // Zwar leichtgewichtige Operationen (randomBytes()/SHA-256, kein
-    // teurer argon2id-Vergleich wie bei login()), aber eine stabile,
-    // messbare Differenz — genug, um die Adressliste eines Vereins über
-    // wiederholte Zeitmessungen durchzuprobieren. Token-Erzeugung/-Hash
-    // läuft jetzt auf BEIDEN Pfaden; der Schreibvorgang selbst lässt sich
-    // für den Nicht-Treffer-Fall nicht spiegeln (kein Konto, in das
-    // geschrieben werden könnte) und wird deshalb — wie der Mailversand
-    // unten — ebenfalls nicht awaitet.
+    // Dasselbe gilt für die Arbeit ZWISCHEN Suche und Versand: Token-
+    // Erzeugung und -Hash laufen auf BEIDEN Pfaden, sonst bliebe eine
+    // stabile, messbare Differenz, über die sich die Adressliste eines
+    // Vereins durchprobieren ließe. Der Schreibvorgang selbst lässt sich ohne
+    // Konto nicht spiegeln und wird deshalb — wie der Mailversand — nicht
+    // awaitet.
     async requestPasswordReset(email: string): Promise<void> {
       const user = await deps.users.findByEmail(email); // liefert nie gelöschte Konten
       const { plainToken, tokenHash, expiresAt } = generatePasswordResetToken(deps.passwordResetTtlMinutes);
       if (!user) return;
 
-      // Bewusst ohne await (Befund S3, siehe Kommentar oben) — der
-      // Aufrufer wartet auf keines von beidem, die generische Antwort geht
-      // unabhängig vom Ausgang sofort zurück.
+      // Bewusst ohne await (siehe Kommentar oben) — der Aufrufer wartet auf
+      // keines von beidem, die generische Antwort geht sofort zurück.
       //
-      // Sicherheitskorrektur (Code-Review 2026-09-02, Befund P1): der
-      // Mailversand hängt jetzt AN das Schreiben des Tokens (`.then()`
-      // statt eines zweiten, unabhängigen `deps.mailer...`-Aufrufs
-      // darunter). Vormals liefen beide Zweige parallel und unabhängig
-      // voneinander — schlug NUR der Schreibvorgang fehl (z. B. DB
-      // kurzzeitig nicht erreichbar), ging die Mail mit einem Link
-      // trotzdem hinaus, dessen Token nie gespeichert wurde. Diese Person
+      // Der Mailversand hängt per `.then()` AM Schreiben des Tokens, statt
+      // parallel dazu zu laufen: schlüge nur der Schreibvorgang fehl (DB
+      // kurzzeitig nicht erreichbar), ginge sonst eine Mail mit einem Link
+      // hinaus, dessen Token nie gespeichert wurde. Diese Person
       // bekäme beim Klick InvalidOrExpiredResetTokenError ("ungültig,
       // abgelaufen oder bereits verwendet") angezeigt, obwohl nichts davon
       // zutrifft — der einzige Hinweis auf die eigentliche Ursache wäre
@@ -539,16 +489,11 @@ export function createAuthService(deps: AuthServiceDeps) {
 
       const passwordHash = await hashPassword(newPassword);
       const updated = await deps.users.update(user.id, { passwordHash });
-      // Sicherheitsreview 2026-08-27, Befund N4: markAllUsedForUser()
-      // statt nur markUsed(existing.id) — deckt das gerade eingelöste
-      // Token mit ab (dessen usedAt ist an dieser Stelle noch null) UND
-      // invalidiert zusätzlich jeden ANDEREN, noch offenen Reset-Link
-      // desselben Kontos (siehe Kommentar am Interface in
-      // auth.repository.ts). Ohne dies blieb z. B. bei mehreren innerhalb
-      // der TTL angeforderten Reset-Mails jeder weitere Link bis zu seinem
-      // eigenen Ablauf gültig und hätte unabhängig vom soeben gesetzten
-      // neuen Passwort erneut einen Passwortwechsel samt Auto-Login
-      // ausgelöst.
+      // markAllUsedForUser() statt markUsed(existing.id): deckt das gerade
+      // eingelöste Token mit ab und entwertet jeden ANDEREN offenen Reset-Link
+      // desselben Kontos. Sonst bliebe bei mehreren angeforderten Reset-Mails
+      // jeder weitere Link gültig und löste trotz des neuen Passworts erneut
+      // einen Wechsel samt Auto-Login aus.
       await deps.passwordResetTokens.markAllUsedForUser(user.id);
       await deps.refreshTokens.revokeAllForUser(user.id);
 
@@ -557,13 +502,9 @@ export function createAuthService(deps: AuthServiceDeps) {
       return { ...tokens, user: toPublicUser(updated), ...clubContext };
     },
 
-    // Passwortwechsel für die AKTUELL eingeloggte Person (Sicherheitsreview
-    // 2026-08, Befund M5) — verlangt zusätzlich das aktuelle Passwort
-    // (verhindert, dass ein kurzzeitig entwendeter Access Token allein zur
-    // dauerhaften Kontoübernahme reicht: ohne diese Prüfung könnte ein
-    // gestohlenes, noch gültiges Access Token genutzt werden, um die
-    // eigentliche Besitzerin/den eigentlichen Besitzer per neuem Passwort
-    // dauerhaft auszusperren).
+    // Passwortwechsel für die aktuell eingeloggte Person. Verlangt zusätzlich
+    // das aktuelle Passwort, damit ein kurzzeitig entwendeter Access Token
+    // allein nicht ausreicht, um die rechtmäßige Person dauerhaft auszusperren.
     //
     // Widerruft — wie resetPassword() oben — ALLE bestehenden Sitzungen und
     // stellt danach sofort ein frisches Token-Paar aus: die AKTUELLE
@@ -578,22 +519,16 @@ export function createAuthService(deps: AuthServiceDeps) {
 
       const passwordHash = await hashPassword(newPassword);
       const updated = await deps.users.update(userId, { passwordHash });
-      // Sicherheitsreview 2026-08-27, Befund N4: ein regulärer
-      // Passwortwechsel (mit Kenntnis des aktuellen Passworts) soll einen
-      // zuvor angeforderten, noch nicht eingelösten "Passwort
-      // vergessen"-Link nicht überleben lassen — sonst bliebe dieser
-      // weiterhin bis zu seinem eigenen Ablauf gültig, obwohl das Konto
-      // längst ein neues Passwort hat.
+      // Ein regulärer Passwortwechsel entwertet auch einen zuvor
+      // angeforderten, noch offenen "Passwort vergessen"-Link — sonst bliebe
+      // der gültig, obwohl das Konto längst ein neues Passwort hat.
       await deps.passwordResetTokens.markAllUsedForUser(userId);
       await deps.refreshTokens.revokeAllForUser(userId);
 
-      // Review 30.08.2026, Befund S4: ein kurzzeitig entwendetes, noch
-      // gültiges Access Token reicht — kombiniert mit diesem aktuellen
-      // Passwort — bereits aus, um das Konto zu übernehmen; die
-      // rechtmäßige Person erfährt davon sonst erst beim nächsten eigenen
-      // Anmeldeversuch. Bewusst ohne await (wie der Mailversand bei
-      // requestPasswordReset()): ein Fehlschlag darf den erfolgreichen
-      // Passwortwechsel selbst nicht verzögern oder scheitern lassen.
+      // Ohne diesen Hinweis erführe die rechtmäßige Person von einer
+      // Übernahme erst beim nächsten eigenen Anmeldeversuch. Bewusst ohne
+      // await (wie bei requestPasswordReset()): ein Fehlschlag darf den
+      // erfolgreichen Passwortwechsel nicht verzögern oder scheitern lassen.
       deps.mailer
         .sendAccountSecurityChangeNotice({ to: user.email, recipientName: user.name, changeType: 'password', locale: user.locale })
         .catch((err) => {
@@ -605,12 +540,11 @@ export function createAuthService(deps: AuthServiceDeps) {
       return { ...tokens, user: toPublicUser(updated), ...clubContext };
     },
 
-    // E-Mail-Wechsel für die AKTUELL eingeloggte Person (Sicherheitsreview
-    // 2026-08-27, Befund H2) — verlangt wie changePassword() oben
-    // zusätzlich das aktuelle Passwort. `email` ist deshalb bewusst KEIN
-    // Feld von updateMe()/UpdateMeRequestSchema mehr (siehe dortiger
-    // Kommentar in packages/shared-types/src/auth.ts für die vollständige
-    // Begründung): ohne diese Prüfung hätte ein kurzzeitig entwendeter,
+    // E-Mail-Wechsel für die aktuell eingeloggte Person — verlangt wie
+    // changePassword() zusätzlich das aktuelle Passwort. `email` ist deshalb
+    // bewusst KEIN Feld von updateMe()/UpdateMeRequestSchema (Begründung am
+    // Schema in packages/shared-types/src/auth.ts): ohne diese Prüfung hätte
+    // ein kurzzeitig entwendeter,
     // noch gültiger Access Token gereicht, um die hinterlegte Adresse auf
     // eine eigene umzubiegen und sich über POST /auth/forgot-password
     // selbst einen Reset-Link zuzustellen — eine dauerhafte
@@ -633,19 +567,12 @@ export function createAuthService(deps: AuthServiceDeps) {
       // gehört zu einem AKTIVEN Konto) — spart einen DB-Schreibversuch,
       // der ohnehin scheitern würde.
       //
-      // Sicherheitsreview 2026-08-29, Befund M2: die Prüfung schließt
-      // jetzt das EIGENE Konto explizit aus (`emailTaken.id !== userId`),
-      // statt vorab `newEmail !== user.email` zu vergleichen. Zwei Gründe,
-      // beide Folge der Normalisierung/des case-insensitiven Abgleichs:
-      //   - findByEmail() findet seit Befund M2 auch die eigene, in
-      //     abweichender Schreibweise gespeicherte Adresse — der frühere
-      //     Zeichenvergleich hätte „Anna@verein.de" -> „anna@verein.de"
-      //     (die Normalisierung der EIGENEN Adresse) fälschlich als
-      //     „bereits vergeben" abgelehnt.
-      //   - Der Vergleich `newEmail !== user.email` war ohnehin
-      //     zeichengenau und hätte eine reine Schreibweisen-Änderung als
-      //     echten Wechsel behandelt.
-      // Der Aufwand bleibt identisch: eine Abfrage in beiden Fällen.
+      // Schließt das EIGENE Konto per `emailTaken.id !== userId` aus, statt
+      // vorab `newEmail !== user.email` zu vergleichen: findByEmail() gleicht
+      // case-insensitiv ab und fände damit auch die eigene, abweichend
+      // geschriebene Adresse — ein Zeichenvergleich lehnte die reine
+      // Normalisierung „Anna@verein.de" -> „anna@verein.de" fälschlich als
+      // „bereits vergeben" ab.
       const emailTaken = await deps.users.findByEmail(newEmail);
       if (emailTaken && emailTaken.id !== userId) throw new EmailAlreadyRegisteredError();
 
@@ -653,17 +580,11 @@ export function createAuthService(deps: AuthServiceDeps) {
       try {
         updated = await deps.users.update(userId, { email: newEmail });
       } catch (err) {
-        // Sicherheitsreview 2026-08-27, Befund N3 (behoben zusammen mit
-        // H2) — analog zum bestehenden P2002-Fang in acceptInvitation()
-        // (siehe dort für die ausführliche Begründung): findByEmail() oben
-        // liefert bewusst NUR aktive Konten, für eine E-Mail-Adresse eines
-        // bereits SOFT-gelöschten Kontos also fälschlich "nicht vergeben",
-        // obwohl `email` in der Datenbank weiterhin `@unique` ist. Ohne
-        // diesen Fang schlüge Prismas "P2002" hier als ungefangener 500
-        // durch, statt als derselbe, bereits vorhandene 409, den eine
-        // Adresse eines aktiven Kontos liefert — ein Existenz-Orakel
-        // (500 vs. 409 verriet, ob die Adresse zu einem — wenn auch
-        // gelöschten — Konto gehört).
+        // Analog zum P2002-Fang in acceptInvitation(): findByEmail() liefert
+        // nur aktive Konten, meldet die Adresse eines soft-gelöschten also als
+        // frei, obwohl `email` in der Datenbank `@unique` bleibt. Ohne diesen
+        // Fang schlüge P2002 als 500 durch statt als der 409, den eine Adresse
+        // eines aktiven Kontos liefert — ein Existenz-Orakel.
         if (err && typeof err === 'object' && 'code' in err && (err as { code?: string }).code === 'P2002') {
           throw new EmailAlreadyRegisteredError();
         }
@@ -672,13 +593,10 @@ export function createAuthService(deps: AuthServiceDeps) {
 
       await deps.refreshTokens.revokeAllForUser(userId);
 
-      // Review 30.08.2026, Befund S4: geht an user.email — die Adresse VOR
-      // diesem Wechsel, nicht `updated.email` (die neue). Nur die
-      // bisherige Adresse ist noch ein Kanal, über den die rechtmäßige
-      // Person eine unautorisierte Änderung überhaupt erfahren kann: die
-      // neue Adresse gehört im Übernahme-Fall bereits der angreifenden
-      // Person. Bewusst ohne await, aus demselben Grund wie bei
-      // changePassword() oben.
+      // Geht an user.email, die Adresse VOR dem Wechsel — nicht an
+      // updated.email: im Übernahme-Fall gehört die neue Adresse bereits der
+      // angreifenden Person, nur die bisherige erreicht noch die rechtmäßige.
+      // Ohne await, aus demselben Grund wie bei changePassword().
       deps.mailer
         .sendAccountSecurityChangeNotice({ to: user.email, recipientName: user.name, changeType: 'email', locale: user.locale })
         .catch((err) => {
@@ -697,10 +615,8 @@ export function createAuthService(deps: AuthServiceDeps) {
       return { ...toPublicUser(user), ...clubContext };
     },
 
-    // Sicherheitsreview 2026-08-27, Befund H2: `email` ist bewusst KEIN
-    // Feld dieses Patches mehr — siehe changeEmail() oben bzw. den
-    // Kommentar an UpdateMeRequestSchema (packages/shared-types/src/
-    // auth.ts) für die vollständige Begründung.
+    // `email` ist bewusst KEIN Feld dieses Patches — siehe changeEmail()
+    // oben bzw. den Kommentar an UpdateMeRequestSchema.
     async updateMe(userId: string, patch: { name?: string; locale?: string }) {
       const current = await deps.users.findById(userId);
       if (!current) throw new UserNotFoundError();
@@ -775,8 +691,7 @@ export function createAuthService(deps: AuthServiceDeps) {
       return listMembers(requester.clubId, {
         filter: (u) => u.roles.includes('trainer') || u.roles.includes('admin'),
         compare: (a, b) => a.name.localeCompare(b.name),
-        // Sicherheitsreview 2026-08-27, Befund N6: schmale Projektion
-        // statt toPublicUser() — siehe Kommentar bei listMembers() oben.
+        // Schmale Projektion statt toPublicUser(), siehe listMembers() oben.
         project: (u) => ({ id: u.id, name: u.name, roles: u.roles }),
       });
     },

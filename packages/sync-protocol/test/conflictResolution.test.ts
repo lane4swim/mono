@@ -1,4 +1,3 @@
-// packages/sync-protocol/test/conflictResolution.test.ts
 import { describe, it, expect } from 'vitest';
 import { resolveConflict, strategyForStore } from '../src/conflictResolution.js';
 

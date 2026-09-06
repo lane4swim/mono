@@ -1,5 +1,3 @@
-// apps/web/test/kampfrichter.module.test.js
-//
 // Schlanker Import-/Formsanity-Test für modules/kampfrichter.js (docs/
 // kampfrichter-modul-plan.md), analog test/qualifications.module.test.js —
 // kein voller render()-Test (dafür gibt es im Repo kein etabliertes Muster,

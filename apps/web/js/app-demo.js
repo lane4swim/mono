@@ -1,5 +1,4 @@
-// ============================================================
-// app-demo.js — bootstraps demo.html.
+// bootstraps demo.html.
 //
 // Same feature modules and router as the real app (js/app.js), but:
 //   - no login screen — instead a fixed choice of three demo accounts
@@ -14,7 +13,6 @@
 //     IS_DEMO), fully separate from the real app's — demo data can
 //     never appear after a real login, and a real account's already-
 //     synced data is never reachable from here.
-// ============================================================
 import { exportAll } from './db.js';
 import { ensureDemoDataSeeded, resetDemoClubData } from './demoSeed.js';
 import { DEMO_USERS } from './demoMode.js';

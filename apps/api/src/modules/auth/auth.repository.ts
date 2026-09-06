@@ -1,5 +1,3 @@
-// apps/api/src/modules/auth/auth.repository.ts
-//
 // Repository-Pattern: auth.service.ts hängt nur von diesen Interfaces ab,
 // nie direkt von Prisma. Das hat zwei Vorteile — (1) die Business-Logik
 // lässt sich mit einer In-Memory-Implementierung (auth.repository.memory.ts)

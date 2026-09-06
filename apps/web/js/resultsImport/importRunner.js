@@ -1,5 +1,4 @@
-// ============================================================
-// resultsImport/importRunner.js — verbindet resultsImport/matching.js
+// verbindet resultsImport/matching.js
 // (reine Logik) mit db.js/syncClient.js (IndexedDB + Sync), für den
 // tatsächlichen Schreibvorgang eines Ergebnisimports. Siehe
 // docs/dsv7-lenex-import-plan.md Abschnitt 5/6.

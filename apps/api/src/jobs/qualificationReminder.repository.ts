@@ -1,5 +1,3 @@
-// apps/api/src/jobs/qualificationReminder.repository.ts
-//
 // Datenzugriff für den Erinnerungsjob (jobs/notifyExpiringQualifications.ts)
 // — analog erasure.repository.ts: eine schlanke Gateway-Schnittstelle statt
 // der vollen qualifications.repository.ts-Interfaces, zugeschnitten genau

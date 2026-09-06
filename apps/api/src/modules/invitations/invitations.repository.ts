@@ -1,5 +1,3 @@
-// apps/api/src/modules/invitations/invitations.repository.ts
-//
 // Repository-Pattern (wie schon in modules/auth) — die Service-Logik hängt
 // nur von diesen Interfaces ab, nie direkt von Prisma. Ermöglicht
 // vollständig datenbankfreie Tests der Autorisierungs- und Ablauflogik.

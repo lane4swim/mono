@@ -1,5 +1,3 @@
-// apps/api/test/plugins/security.test.ts
-//
 // Regressionstests für Patch #5 (Sicherheitsreview, Punkt 4): explizite
 // CSP statt Helmet-Defaults, sowie das CORS_ORIGIN="*"-Verbot in
 // Produktion (siehe auch test/env.test.ts für die reine env.ts-Logik).

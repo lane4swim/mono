@@ -1,5 +1,3 @@
-// packages/shared-types/src/auth.ts
-//
 // Vertrag für die Authentifizierung (Backend-Entwicklungsplan, Abschnitt 5),
 // jetzt einladungsbasiert: eine offene Selbstregistrierung existiert nicht
 // mehr — siehe invitation.ts (AcceptInvitationRequestSchema übernimmt die

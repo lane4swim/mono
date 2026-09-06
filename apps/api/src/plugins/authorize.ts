@@ -1,5 +1,3 @@
-// apps/api/src/plugins/authorize.ts
-//
 // Rollenbasierte Zugriffskontrolle, ergänzend zu app.authenticate (das nur
 // prüft, OB jemand eingeloggt ist). requireAnyRole(...) prüft zusätzlich,
 // WER es ist. Muss immer NACH app.authenticate als preHandler stehen, da es

@@ -1,5 +1,3 @@
-// apps/web/test/state.localStoreOwner.test.js
-//
 // Regressionstest für Sicherheitsreview 2026-08-29, Befund H1: die lokale
 // IndexedDB wurde ausschließlich von logout() geleert. Endete eine Sitzung
 // auf einem anderen Weg — abgelaufenes/serverseitig widerrufenes Refresh

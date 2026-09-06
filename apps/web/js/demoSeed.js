@@ -1,5 +1,4 @@
-// ============================================================
-// demoSeed.js — fixture data for demo.html.
+// fixture data for demo.html.
 //
 // Writes only through db.js's normal put()/bulkPut() API, so it lands
 // in the demo-only IndexedDB (see db.js: DB_NAME switches based on
@@ -14,7 +13,6 @@
 // real, synced account clean if someone resets to demo data and later
 // logs in for real; here that scenario can't happen at all (separate
 // database), so there's nothing to guard against.
-// ============================================================
 import { bulkPut, wipeAll, getAll, uid } from './db.js';
 import { todayISO, isoAddDays, startOfWeek, toIsoDateTime } from './dates.js';
 import { DEMO_CLUB_ID, DEMO_ATHLETE_ID_MAYA } from './demoMode.js';

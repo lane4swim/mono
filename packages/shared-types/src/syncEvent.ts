@@ -1,5 +1,3 @@
-// packages/shared-types/src/syncEvent.ts
-//
 // Vertrag für die Sync-API (Abschnitt 6 im Backend-Entwicklungsplan).
 // Ein SyncEvent entspricht einem Eintrag der clientseitigen Sync-
 // Warteschlange (js/db.js: enqueueSyncEvent) und wird 1:1 an

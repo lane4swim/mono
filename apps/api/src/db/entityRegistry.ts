@@ -1,5 +1,3 @@
-// apps/api/src/db/entityRegistry.ts
-//
 // Zentrale Zuordnung SyncStore -> Prisma-Delegate. Vorbereitung für Phase 3
 // (generische Sync-API): Ein eingehendes Event `{ store: "athletes", ... }`
 // muss dynamisch auf `prisma.athlete` (bzw. dessen create/update/…)

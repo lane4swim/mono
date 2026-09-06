@@ -1,4 +1,3 @@
-// apps/api/src/modules/profile/profile.repository.memory.ts
 import { randomUUID } from 'node:crypto';
 import type {
   ProfileDataGateway,

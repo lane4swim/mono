@@ -544,7 +544,7 @@ server {
     #   - style-src erlaubt bewusst 'unsafe-inline': apps/web ist bewusst
     #     ohne Build-Schritt (siehe apps/web/package.json) und setzt an
     #     vielen Stellen `style="..."` direkt per JavaScript (`el()` in
-    #     js/utils.js) statt über CSS-Klassen — ein vollständiger Umbau
+    #     js/dom.js) statt über CSS-Klassen — ein vollständiger Umbau
     #     wäre eine eigene, große Refactoring-Aufgabe. Style-basierte
     #     CSS-Injection ist ein deutlich kleineres Risiko als
     #     Script-Injection, daher hier als bewusster, dokumentierter

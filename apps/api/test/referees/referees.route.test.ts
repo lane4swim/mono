@@ -1,4 +1,3 @@
-// apps/api/test/referees/referees.route.test.ts
 import { describe, it, expect } from 'vitest';
 import { buildApp } from '../../src/app.js';
 import { loadEnv } from '../../src/config/env.js';

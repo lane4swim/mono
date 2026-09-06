@@ -1,5 +1,3 @@
-// apps/api/src/jobs/syncBookkeeping.repository.memory.ts
-//
 // Test-Double für SyncBookkeepingGateway — siehe jobs/erasure.repository.ts
 // für dasselbe Prinzip.
 import type { SyncBookkeepingGateway } from './syncBookkeeping.repository.js';

@@ -1,21 +1,12 @@
-// ============================================================
-// forms.js — Formularfeld-Hilfsfunktionen.
-//
-// Code-Review, Befund L4: aus utils.js herausgelöst (siehe dom.js für
-// den vollständigen Hintergrund der Aufteilung).
-// ============================================================
+// Formularfeld-Hilfsfunktionen.
 import { el } from './dom.js';
 import { dateOnly } from './dates.js';
 import { t } from './i18n.js';
 
-// Review 30.08.2026, Befund U2: field() rendert das <label> und das
-// Eingabefeld nebeneinander im DOM, aber ohne jede programmatische
-// Verbindung (kein "for"/"id") — Screenreader kündigten JEDES
-// Formularfeld der Anwendung als "Eingabefeld, leer" an, unabhängig vom
-// sichtbaren Beschriftungstext, und ein Klick auf die Beschriftung
-// fokussierte das Feld nicht. Da praktisch jedes Formular der Anwendung
-// über field() läuft, behebt eine Verbindung hier alle Aufrufstellen auf
-// einmal, ohne dass eine von ihnen angefasst werden muss.
+// Praktisch jedes Formular der Anwendung läuft über field(). Die
+// "for"/"id"-Verbindung zwischen <label> und Eingabefeld sitzt deshalb hier
+// und gilt damit für alle Aufrufstellen; ohne sie kündigt ein Screenreader
+// jedes Feld unabhängig vom sichtbaren Text als "Eingabefeld, leer" an.
 let fieldIdCounter = 0;
 
 // inputNode ist meist das Eingabefeld selbst, gelegentlich (z. B.

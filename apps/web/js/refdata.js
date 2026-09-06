@@ -1,7 +1,5 @@
-// ============================================================
-// refdata.js — static reference lists (not user-editable data,
+// static reference lists (not user-editable data,
 // just vocab used across forms/filters).
-// ============================================================
 
 export const STROKES = ['Freistil', 'Rücken', 'Brust', 'Schmetterling', 'Lagen'];
 

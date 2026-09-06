@@ -1,4 +1,3 @@
-// apps/api/test/jobs/purgeExpiredDeletions.test.ts
 import { describe, it, expect } from 'vitest';
 import { MODULE_KEYS } from '@lane1/shared-types';
 import { purgeExpiredDeletions } from '../../src/jobs/purgeExpiredDeletions.js';

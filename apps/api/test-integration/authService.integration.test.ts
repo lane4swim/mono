@@ -1,5 +1,3 @@
-// apps/api/test-integration/authService.integration.test.ts
-//
 // Prüft createAuthService() end-to-end mit den ECHTEN Prisma-
 // Repositories gegen eine echte Datenbank (siehe vitest.integration.
 // config.ts) — insbesondere zwei P2002-Zweige in acceptInvitation(), die

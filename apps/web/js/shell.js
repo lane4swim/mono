@@ -1,5 +1,4 @@
-// ============================================================
-// shell.js — von app.js UND app-demo.js gemeinsam genutzte Navigations-/
+// von app.js UND app-demo.js gemeinsam genutzte Navigations-/
 // Render-Bausteine (Code-Review, Befund R1).
 //
 // Beide Dateien bootstrappen dieselbe App-Shell (Sidebar, mobile

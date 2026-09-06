@@ -1,5 +1,3 @@
-// apps/web/test/shell.defaultModuleFor.test.js
-//
 // Regressionstest für shell.js: defaultModuleFor() — deckt eine beim
 // Anpassen des Rollenhandbuchs (docs/kampfrichter-modul-plan.md) entdeckte
 // Lücke ab: ein reines Kampfrichter-Konto (roles: ['referee'], keine

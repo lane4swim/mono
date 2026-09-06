@@ -1,6 +1,4 @@
-// ============================================================
-// modules/athletes.js — Athleten-, Team- und Gruppenverwaltung
-// ============================================================
+// Athleten-, Team- und Gruppenverwaltung
 import { getAll, put, remove } from '../db.js';
 import { el, clear, beginRender } from '../dom.js';
 import { ageFromBirthdate, fmtDateShort, todayISO, toIsoDateTime } from '../dates.js';

@@ -1,5 +1,3 @@
-// apps/api/src/app.ts
-//
 // Trennung von "App bauen" (app.ts) und "App starten" (index.ts) ist
 // bewusst — so kann ein Test die App per Fastify's `.inject()` gegen
 // echte Route-Handler testen, ohne einen Netzwerk-Port zu belegen.

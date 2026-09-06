@@ -1,5 +1,4 @@
-// ============================================================
-// modules/resultsImportUI.js — UI-Flow für den DSV7-Ergebnisimport in
+// UI-Flow für den DSV7-Ergebnisimport in
 // der Wettkampfansicht (siehe docs/dsv7-lenex-import-plan.md Abschnitt
 // 6). Verbindet die reine Parser-/Matching-Logik in resultsImport/*.js
 // mit einer Abfolge von Modals: Datei wählen -> (Vereinsauswahl, falls

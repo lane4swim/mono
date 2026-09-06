@@ -1,5 +1,3 @@
-// apps/web/vitest.config.js
-//
 // apps/web bleibt bewusst ohne Build-Schritt (siehe package.json:
 // description) — Vitest wird HIER ausschließlich als Testlaufzeit
 // eingesetzt (führt js/*.js unverändert als ESM aus, kompiliert/bündelt

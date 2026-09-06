@@ -1,5 +1,3 @@
-// apps/api/src/jobs/purgeSyncBookkeeping.ts
-//
 // Orchestrierung des Aufräumens alter Sync-Bookkeeping-Zeilen (SyncedEvent,
 // SyncTombstone — siehe syncBookkeeping.repository.ts für die Begründung
 // der beiden unterschiedlichen Aufbewahrungsfristen). Wird zusammen mit dem

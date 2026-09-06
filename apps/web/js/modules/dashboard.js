@@ -1,6 +1,4 @@
-// ============================================================
-// modules/dashboard.js
-// ============================================================
+// Startseite — je nach Rolle die Trainer:innen- oder die Athlet:innen-Ansicht.
 import { getAll } from '../db.js';
 import { el, clear, beginRender } from '../dom.js';
 import { fmtDateLong, todayISO } from '../dates.js';

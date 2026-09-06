@@ -1,5 +1,4 @@
-// ============================================================
-// app.js — bootstraps the application.
+// bootstraps the application.
 //
 // Phase 4: echte Sitzung statt lokalem Profil-Umschalter. Boot-Ablauf:
 //   1. Ist die URL ein Einladungslink (#/accept-invite/<token>)? -> immer
@@ -29,7 +28,6 @@
 //   störende Meldungen erzeugt. Der Sync-Badge (Anzahl ausstehender
 //   Events) und ggf. eine offene Sync-Warteschlangen-Ansicht werden
 //   trotzdem aktualisiert.
-// ============================================================
 import { pendingSyncCount } from './db.js';
 import { wipeDemoDataIfPresent } from './seed.js';
 import { registerServiceWorker } from './swUpdate.js';

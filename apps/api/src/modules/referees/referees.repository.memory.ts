@@ -1,5 +1,3 @@
-// apps/api/src/modules/referees/referees.repository.memory.ts
-//
 // In-Memory-Implementierungen für Tests — ermöglicht vollständige Tests der
 // Autorisierungs-/Ablauflogik in referees.service.ts ohne Datenbank
 // (analog qualifications.repository.memory.ts).

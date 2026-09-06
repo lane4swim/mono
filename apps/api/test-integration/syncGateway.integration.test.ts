@@ -1,5 +1,3 @@
-// apps/api/test-integration/syncGateway.integration.test.ts
-//
 // Prüft PrismaSyncGateway gegen eine echte Datenbank (siehe
 // vitest.integration.config.ts). Genau hier sitzt das sicherheitskritische
 // Vereins-Scoping ("where: { id, clubId }") — kein In-Memory-Double kann

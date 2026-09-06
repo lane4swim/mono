@@ -1,5 +1,4 @@
-// ============================================================
-// modules/libraryTransfer.js — JSON-Export/Import für Vorlagen (templates)
+// JSON-Export/Import für Vorlagen (templates)
 // und Übungskatalog (exercises), gemeinsam als ein Bundle.
 //
 // Export schließt bewusst clubId (Mandantenbindung) und persönliche Daten
@@ -25,7 +24,6 @@
 // Für die EINGEBETTETEN Set-/Block-ids in remapSetEntry() unten gilt das
 // nicht (PlainSetSchema.id/RepeatBlockSchema.id sind nur `z.string()`) —
 // dort kommt weiterhin localId() aus dom.js zum Einsatz.
-// ============================================================
 import { getAll, bulkPut, bulkEnqueueSyncEvents, uid } from '../db.js';
 import { getCurrentUser } from '../state.js';
 import { el, localId } from '../dom.js';

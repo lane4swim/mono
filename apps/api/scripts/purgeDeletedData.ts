@@ -1,5 +1,3 @@
-// apps/api/scripts/purgeDeletedData.ts
-//
 // Führt zwei voneinander unabhängige Aufräum-Läufe aus, die absichtlich in
 // EINEM Skript/Cron-Eintrag statt zweien gebündelt sind (identische
 // tägliche Kadenz, kein Mehrwert durch getrennte Cron-Jobs):

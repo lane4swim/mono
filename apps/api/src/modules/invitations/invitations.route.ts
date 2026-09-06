@@ -1,5 +1,3 @@
-// apps/api/src/modules/invitations/invitations.route.ts
-//
 // Endpunkte für den einladungsbasierten Registrierungsprozess. Siehe
 // invitations.service.ts für die Autorisierungsmatrix.
 import type { FastifyInstance } from 'fastify';

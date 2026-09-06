@@ -1,5 +1,3 @@
-// apps/web/test/db.test.js
-//
 // Testet js/db.js — den generischen IndexedDB-Wrapper inkl. der
 // Sync-Warteschlange (Outbox-Pattern). db.js kennt state.js bewusst
 // nicht (siehe dortiger Kommentar zum vormaligen Import-Zyklus zwischen

@@ -1,5 +1,4 @@
-// ============================================================
-// modules/kampfrichter.js — Kampfrichter-Modul (docs/kampfrichter-modul-
+// Kampfrichter-Modul (docs/kampfrichter-modul-
 // plan.md, Abschnitte 4/5). Zubuchbares Modul — erscheint nur, wenn der
 // Verein 'kampfrichter' gebucht hat, UND nur für Personen mit der Rolle
 // 'referee' oder 'admin' (Abschnitt 4.2 — anders als die allgemeine
@@ -19,7 +18,6 @@
 // vereinsfremden Wettkämpfen (Plan Abschnitt 5.1), ein Freitextfeld deckt
 // den Regelfall ab; eine Verknüpfung mit eigenen Wettkämpfen bleibt eine
 // spätere, eigenständige Ergänzung.
-// ============================================================
 import { el, clear, beginRender } from '../dom.js';
 import { fmtDateShort, dateOnly, toIsoDateTime, todayISO } from '../dates.js';
 import { emptyState, laneWave, toast } from '../ui.js';

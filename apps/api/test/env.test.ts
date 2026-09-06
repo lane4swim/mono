@@ -1,4 +1,3 @@
-// apps/api/test/env.test.ts
 import { describe, it, expect } from 'vitest';
 import { loadEnv } from '../src/config/env.js';
 

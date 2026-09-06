@@ -1,4 +1,3 @@
-// apps/api/test/auth/auth.route.test.ts
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../../src/app.js';

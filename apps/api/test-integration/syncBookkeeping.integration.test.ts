@@ -1,5 +1,3 @@
-// apps/api/test-integration/syncBookkeeping.integration.test.ts
-//
 // Prüft PrismaSyncBookkeepingGateway gegen eine echte Datenbank (siehe
 // vitest.integration.config.ts) — insbesondere, dass deleteMany() mit
 // einem echten Zeitstempel-Vergleich tatsächlich nur die veralteten Zeilen

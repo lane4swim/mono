@@ -1,18 +1,12 @@
-// ============================================================
-// state.js — Phase 4: echte Sitzungsverwaltung über apps/api statt
-// des früheren, rein lokalen Profil-Umschalters. Die aktuelle
-// Nutzer-Identität kommt jetzt vom Backend (Login/Refresh/`/api/me`),
-// nicht mehr aus dem lokalen `users`-Store — dieser dient weiterhin als
-// Offline-Cache für fachliche Daten (siehe syncClient.js), aber nicht
-// mehr als Quelle für "wer bin ich".
+// Sitzungsverwaltung. Die Nutzer-Identität kommt vom Backend
+// (Login/Refresh/`/api/me`); der lokale `users`-Store ist reiner
+// Offline-Cache für fachliche Daten (siehe syncClient.js), nicht die Quelle
+// für "wer bin ich".
 //
-// DSGVO-Einwilligung: wird jetzt direkt als Teil des Login-/
-// Registrierungsformulars abgefragt (siehe modules/authScreens.js) —
-// nicht mehr als nachträgliches Modal wie in der vorherigen,
-// rein lokalen Version. `login()`/`acceptInvitation()` unten geben die
-// Einwilligung 1:1 an das Backend weiter, das sie serverseitig erzwingt
-// (siehe packages/shared-types/src/auth.ts: consent-Pflichtfeld).
-// ============================================================
+// Die DSGVO-Einwilligung wird im Login-/Registrierungsformular abgefragt
+// (modules/authScreens.js); login()/acceptInvitation() reichen sie 1:1 an
+// das Backend weiter, das sie erzwingt (consent-Pflichtfeld in
+// packages/shared-types/src/auth.ts).
 import * as api from './apiClient.js';
 import { setLocale, detectInitialLocale } from './i18n.js';
 import { IS_DEMO } from './demoMode.js';
@@ -118,41 +112,24 @@ const MODULE_STORES = {
 
 const ENABLED_MODULES_META_KEY = 'enabledModules';
 
-// Sicherheitsreview 2026-08-29, Befund H1: Schlüssel im 'meta'-Store, unter
-// dem die User-ID hinterlegt wird, zu der der aktuelle Inhalt der lokalen
-// IndexedDB gehört.
+// 'meta'-Schlüssel für die User-ID, zu der der aktuelle Inhalt der lokalen
+// IndexedDB gehört: die Ablage ist an GENAU EINE Identität gebunden und wird
+// bei einem Wechsel geleert.
 //
-// Vorgeschichte: logout() unten räumt die lokale Ablage per wipeAll() auf
-// — genau dafür wurde es eingeführt. Es gibt aber mehrere Wege, auf denen
-// eine Sitzung endet, OHNE dass logout() je läuft:
-//   - restoreSession() schlägt fehl, weil das Refresh Token abgelaufen
-//     ist oder serverseitig widerrufen wurde (Passwort-/E-Mail-Wechsel auf
-//     einem anderen Gerät, Reuse-Detection in auth.service.ts: refresh(),
-//     Kontolöschung) — die Funktion räumt dann nur die Tokens weg und
-//     zeigt den Login-Bildschirm,
-//   - der Browser/das Gerät wird schlicht geschlossen und später von einer
-//     anderen Person geöffnet.
-// In beiden Fällen blieb der VOLLSTÄNDIGE gesynchte Vereinsbestand der
-// vorherigen Person in der IndexedDB liegen, und login() räumte ihn nicht
-// auf. Da alle Module ihre Daten über getAll(<store>) lesen — ohne jeden
-// clubId-/Rollenfilter, siehe db.js — bekam die NÄCHSTE angemeldete
-// Person diesen Altbestand vollständig angezeigt. Zwei Ausprägungen:
-//   - vereinsübergreifend: auf einem geteilten Gerät (Vereinsheim-Tablet,
-//     Poolrand-Gerät, ein die Vereine wechselnder Trainer) sah Verein B
-//     die Athlet:innen, Notizen, Pläne und Anwesenheiten von Verein A;
-//   - rollenübergreifend und praktisch näherliegend: meldet sich auf dem
-//     Tablet einer Trainerin anschließend eine Athlet:in an, sieht sie
-//     genau die Felder, die der Server für ihre Rolle gezielt redigiert
-//     (athletes.notes, sessions.trainerNote, fremde attendance-Zeilen,
-//     birthdate/gender/joinDate fremder Personen — siehe
-//     sync.athleteScope.ts). Die serverseitige Redaktion war damit lokal
-//     vollständig ausgehebelt.
+// logout() räumt zwar per wipeAll() auf, aber eine Sitzung endet auch, ohne
+// dass logout() je läuft — ein abgelaufenes/widerrufenes Refresh Token in
+// restoreSession(), oder schlicht ein geschlossenes und später von jemand
+// anderem geöffnetes Gerät. Der gesynchte Vereinsbestand bliebe dann liegen,
+// und da alle Module ihre Daten ungefiltert über getAll(<store>) lesen (siehe
+// db.js), bekäme ihn die nächste angemeldete Person vollständig zu sehen.
+// Das betrifft nicht nur geteilte Geräte über Vereinsgrenzen hinweg, sondern
+// vor allem die Rollengrenze: meldet sich auf dem Tablet einer Trainerin eine
+// Athlet:in an, sähe sie genau die Felder, die der Server für ihre Rolle
+// redigiert (sync.athleteScope.ts) — die serverseitige Redaktion wäre lokal
+// ausgehebelt.
 //
-// Fix: die lokale Ablage ist ab jetzt an GENAU EINE Identität gebunden.
-// Wechselt sie, wird vorher vollständig aufgeräumt. Bewusst an der
-// User-ID festgemacht, nicht an der clubId: auch ein Rollenwechsel
-// INNERHALB eines Vereins (Trainerin -> Athlet:in auf demselben Gerät)
-// ist genau der Fall, den die zweite Ausprägung oben beschreibt.
+// Deshalb an der User-ID festgemacht, nicht an der clubId: der Rollenwechsel
+// innerhalb eines Vereins ist der praktisch näherliegende Fall.
 const LOCAL_STORE_OWNER_META_KEY = 'localStoreOwner';
 
 // Liegen überhaupt fachliche (vereinsgebundene) Daten lokal? Wird nur für
@@ -209,23 +186,14 @@ async function ensureLocalStoreBelongsTo(userId) {
   await put('meta', { id: LOCAL_STORE_OWNER_META_KEY, userId });
 }
 
-// Sicherheitsreview 2026-08-27, Befund N5: enabledModules kommt bei jeder
-// hier unten aufgerufenen Stelle (Login, Sitzungswiederherstellung,
-// Passwort-/E-Mail-Wechsel, Profil-Aktualisierung — überall dort liefert
-// das Backend ohnehin den aktuellen Stand mit) frisch vom Server. Der
-// letzte lokal bekannte Stand wird dauerhaft in IndexedDB gehalten (nicht
-// nur im Speicher, siehe `current` oben) — ein Seiten-Reload NACH einer
-// Abbestellung durchläuft `current = null -> neu gesetzt` und würde einen
-// rein speicherbasierten Vergleich sonst immer als "erste Sitzung"
-// missverstehen, obwohl auf dem Gerät noch der volle Altbestand des
-// abbestellten Pakets in der IndexedDB liegt.
+// Räumt die Stores abbestellter Modul-Pakete ab und setzt den Sync-Cursor
+// zurück (Begründung in syncClient.js: resetCursor()). Ohne bekannten
+// Vorstand (erste Sitzung nach einem wipeAll()) gibt es nichts zu tun.
 //
-// Für jedes Paket, das im neuen Stand fehlt, aber im letzten bekannten
-// Stand noch enthalten war, werden die zugehörigen Stores geleert und der
-// globale Sync-Cursor zurückgesetzt (siehe syncClient.js: resetCursor()
-// für die Begründung, warum das nötig ist). Ohne verknüpften bekannten
-// Stand (allererste Sitzung auf diesem Gerät nach einem wipeAll(), siehe
-// logout()) gibt es nichts zu bereinigen.
+// Der letzte bekannte Stand liegt in IndexedDB, nicht nur im Speicher: ein
+// Reload nach einer Abbestellung durchläuft `current = null -> neu gesetzt`
+// und ein speicherbasierter Vergleich hielte das immer für die erste Sitzung,
+// obwohl der Altbestand des Pakets noch auf dem Gerät liegt.
 async function applyEnabledModules(nextModules) {
   const modules = nextModules ?? [];
   const stored = await get('meta', ENABLED_MODULES_META_KEY);
@@ -245,17 +213,12 @@ async function applyEnabledModules(nextModules) {
 }
 
 export async function login(email, password, consent) {
-  // Review 30.08.2026, Befund S1: die Version, der zugestimmt wird, kommt
-  // von hier — derselben Konstante, die authScreens.js im Einwilligungstext
-  // anzeigt (t('auth.consentLabel', { version: CURRENT_CONSENT_VERSION })).
-  // Der Server (LoginRequestSchema) lässt nur seine eigene, tagesaktuelle
-  // Fassung durch; driften beide Konstanten auseinander, scheitert der
-  // Login hier sichtbar, statt den Nachweis stillschweigend falsch zu
-  // protokollieren.
+  // Zugestimmt wird derselben Konstante, die authScreens.js im
+  // Einwilligungstext anzeigt. Der Server lässt nur seine eigene Fassung
+  // durch: driften beide auseinander, scheitert der Login sichtbar, statt
+  // den Nachweis still falsch zu protokollieren.
   const user = await api.login({ email, password, consent, consentVersion: CURRENT_CONSENT_VERSION });
-  // Sicherheitsreview 2026-08-29, Befund H1 — siehe
-  // ensureLocalStoreBelongsTo(): räumt die lokale Ablage auf, falls sie
-  // noch einer anderen Person gehört.
+  // Räumt die lokale Ablage auf, falls sie noch einer anderen Person gehört.
   await ensureLocalStoreBelongsTo(user.id);
   await applyEnabledModules(user.enabledModules);
   current = user;
@@ -266,9 +229,7 @@ export async function login(email, password, consent) {
 
 export async function acceptInvitation(token, name, password, consent) {
   const user = await api.acceptInvitation({ token, name, password, consent });
-  // Sicherheitsreview 2026-08-29, Befund H1 — siehe
-  // ensureLocalStoreBelongsTo(): räumt die lokale Ablage auf, falls sie
-  // noch einer anderen Person gehört.
+  // Räumt die lokale Ablage auf, falls sie noch einer anderen Person gehört.
   await ensureLocalStoreBelongsTo(user.id);
   await applyEnabledModules(user.enabledModules);
   current = user;
@@ -283,9 +244,7 @@ export async function acceptInvitation(token, name, password, consent) {
 // apiClient.js: resetPassword()).
 export async function resetPassword(token, newPassword) {
   const user = await api.resetPassword({ token, newPassword });
-  // Sicherheitsreview 2026-08-29, Befund H1 — siehe
-  // ensureLocalStoreBelongsTo(): räumt die lokale Ablage auf, falls sie
-  // noch einer anderen Person gehört.
+  // Räumt die lokale Ablage auf, falls sie noch einer anderen Person gehört.
   await ensureLocalStoreBelongsTo(user.id);
   await applyEnabledModules(user.enabledModules);
   current = user;

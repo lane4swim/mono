@@ -1,5 +1,3 @@
-// apps/api/src/modules/qualifications/qualifications.service.ts
-//
 // Geschäftslogik für das Qualifikationsmanagement (docs/
 // nutzer-qualifikationen-plan.md). Zentrale Entscheidungen aus dem Plan:
 //   - Ausschließlich `admin` legt Qualifikationen von Vereinsmitgliedern an/

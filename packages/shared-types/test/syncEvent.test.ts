@@ -1,4 +1,3 @@
-// packages/shared-types/test/syncEvent.test.ts
 import { describe, it, expect } from 'vitest';
 import { SyncEventSchema, SyncPushRequestSchema, SyncPullQuerySchema, SyncPullResponseSchema } from '../src/syncEvent.js';
 

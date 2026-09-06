@@ -1,5 +1,3 @@
-// apps/api/test/jobs/commentAnonymization.test.ts
-//
 // Sicherheitsreview 2026-08, Befund N5. Reine Funktionen, DB-frei
 // testbar — siehe src/jobs/commentAnonymization.ts für die Begründung.
 //

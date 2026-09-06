@@ -1,20 +1,12 @@
-// ============================================================
-// modal.js — Modal-Dialog und die darauf aufbauende Bestätigungs-Abfrage.
-//
-// Code-Review, Befund L4: aus utils.js herausgelöst (siehe dom.js für
-// den vollständigen Hintergrund der Aufteilung).
-// ============================================================
+// Modal-Dialog und die darauf aufbauende Bestätigungs-Abfrage.
 import { el, clear } from './dom.js';
 import { t } from './i18n.js';
 
-// Review 30.08.2026, Befund U1: openModal() ist der EINZIGE Dialog-
-// Einstiegspunkt der Anwendung — jedes Anlegen-/Bearbeiten-/Löschformular
-// läuft hindurch. Bislang fehlten sämtliche Bausteine eines für Tastatur
-// und Screenreader nutzbaren Dialogs (Rolle/Name, Fokus hinein, Fokusfalle,
-// Fokusrückgabe, ein für den Rest der Seite inerter Hintergrund) — wer
-// keine Maus benutzt, konnte keinen Datensatz anlegen, bearbeiten oder
-// löschen. Alles unten ist an dieser einen Stelle behoben, ohne dass
-// irgendeine der ~20 Aufrufstellen angepasst werden muss.
+// openModal() ist der einzige Dialog-Einstiegspunkt der Anwendung — jedes
+// Anlegen-/Bearbeiten-/Löschformular läuft hindurch. Die Bausteine eines
+// tastatur- und screenreadertauglichen Dialogs (Rolle/Name, Fokus hinein,
+// Fokusfalle, Fokusrückgabe, inerter Hintergrund) sitzen deshalb hier und
+// gelten damit für alle ~20 Aufrufstellen.
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 

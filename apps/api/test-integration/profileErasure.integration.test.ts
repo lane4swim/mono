@@ -1,5 +1,3 @@
-// apps/api/test-integration/profileErasure.integration.test.ts
-//
 // Prüft PrismaProfileDataGateway und PrismaErasureJobGateway (den
 // zweiteiligen DSGVO-Löschprozess, Art. 15/17) gegen eine echte Datenbank
 // (siehe vitest.integration.config.ts). Deckt insbesondere zwei zuvor per

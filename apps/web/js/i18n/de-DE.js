@@ -1,7 +1,5 @@
-// ============================================================
-// i18n/de-DE.js — Deutsch (Referenz-/Fallback-Sprache).
+// Deutsch (Referenz-/Fallback-Sprache).
 // Jeder neue Schlüssel sollte zuerst hier ergänzt werden.
-// ============================================================
 export default {
   common: {
     save: 'Speichern', cancel: 'Abbrechen', create: 'Anlegen', edit: 'Bearbeiten',

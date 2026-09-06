@@ -1,4 +1,3 @@
-// apps/api/src/mail/mailer.memory.ts
 import type { MailSender, InvitationMailPayload, PasswordResetMailPayload, AccountSecurityChangeMailPayload, QualificationReminderMailPayload } from './mailer.js';
 
 export class InMemoryMailSender implements MailSender {

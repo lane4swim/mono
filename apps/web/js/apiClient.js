@@ -1,24 +1,13 @@
-// ============================================================
-// apiClient.js — Phase 4 (Frontend-Integration): einziger Ort, an dem das
-// Frontend HTTP-Aufrufe an apps/api macht. Kapselt:
-//   - Basis-URL-Auflösung (Standard: gleicher Origin, z. B. hinter dem in
-//     der Hetzner-Anleitung beschriebenen Nginx-Reverse-Proxy; für lokale
-//     Entwicklung gegen `npm run dev:api` überschreibbar über
-//     localStorage, siehe setApiBaseUrl())
-//   - Access-Token im Speicher (NICHT localStorage — mindert XSS-Risiko,
-//     siehe Backend-Entwicklungsplan Abschnitt 5.2), Refresh-Token in
-//     localStorage (nötig, um die Sitzung über einen Seiten-Reload hinweg
-//     wiederherzustellen; eine echte httpOnly-Cookie-Lösung würde
-//     serverseitiges Setzen des Cookies erfordern, was der aktuelle
-//     JSON-basierte Refresh-Endpunkt nicht tut — bewusste, dokumentierte
-//     Vereinfachung gegenüber der ursprünglichen Planungsskizze)
+// Einziger Ort, an dem das Frontend HTTP-Aufrufe an apps/api macht. Kapselt:
+//   - Basis-URL-Auflösung (Standard: gleicher Origin; für lokale Entwicklung
+//     gegen `npm run dev:api` überschreibbar, siehe setApiBaseUrl())
+//   - Access Token im Speicher (nicht localStorage — mindert das XSS-Risiko),
+//     Refresh Token in localStorage, damit die Sitzung einen Seiten-Reload
+//     übersteht. Eine httpOnly-Cookie-Lösung bräuchte serverseitiges Setzen
+//     des Cookies, was der JSON-basierte Refresh-Endpunkt nicht tut —
+//     bewusste, dokumentierte Vereinfachung.
 //   - automatisches, einmaliges Refresh+Retry bei 401
-//   - Single-Flight für refreshTokens() (siehe dort) — bündelt mehrere
-//     GLEICHZEITIGE Refresh-Auslöser (z. B. runSync()'s push()+pull() oder
-//     mehrere parallele Promise.all()-Requests, deren Access Token
-//     zeitgleich abläuft) auf GENAU einen tatsächlichen
-//     POST /auth/refresh-Aufruf.
-// ============================================================
+//   - Single-Flight für refreshTokens() (siehe dort)
 import { t } from './i18n.js';
 
 const API_BASE_URL_KEY = 'lane1-api-base-url';
@@ -27,35 +16,23 @@ const REFRESH_TOKEN_KEY = 'lane1-refresh-token';
 let accessToken = null;
 let accessTokenExpiresAt = 0; // Unix-Millisekunden
 
-// Code-Review, Befund R6: accessTokenExpiresAt wurde bislang nur
-// GESCHRIEBEN (in setTokens()/clearTokens()), nirgends gelesen — eine
-// angefangene, nie fertiggestellte proaktive Refresh-Logik. Der Puffer
-// hier lässt request() unten das Access Token bereits kurz VOR dem
-// tatsächlichen Ablauf erneuern, statt ausschließlich auf einen
-// tatsächlichen 401 zu warten (siehe dortiger Kommentar) — verringert die
-// Zahl der reaktiven 401-Retry-Zyklen im Normalbetrieb und entschärft
-// damit Befund S4 (Massen-Logout-Risiko bei gleichzeitigen abgelaufenen
-// Requests) zusätzlich, da ein rechtzeitig proaktiv erneuertes Token gar
-// nicht erst mehrere parallele 401-Retries auslösen kann.
+// Puffer, mit dem request() das Access Token schon kurz VOR dem Ablauf
+// erneuert, statt auf einen 401 zu warten. Spart reaktive Retry-Zyklen und
+// entschärft das Massen-Logout-Risiko bei refreshTokens() (siehe dort): ein
+// rechtzeitig erneuertes Token löst gar nicht erst parallele 401-Retries aus.
 const PROACTIVE_REFRESH_MARGIN_MS = 10_000;
 
 function isAccessTokenExpiringSoon() {
   return accessToken !== null && Date.now() >= accessTokenExpiresAt - PROACTIVE_REFRESH_MARGIN_MS;
 }
 
-// Sicherheitsreview 2026-08, Befund N3: getApiBaseUrl() bestimmte die
-// Ziel-URL SÄMTLICHER Requests inkl. Authorization: Bearer-Header allein
-// aus dem localStorage — wer diesen Schlüssel setzen konnte (z. B. über
-// eine XSS-Lücke), hätte damit alle Tokens an einen fremden Host umleiten
-// können. Der Override ist laut Kopfkommentar oben ein reines
-// Entwicklungswerkzeug (lokaler Dev-Server auf :5173 gegen eine separat
-// laufende API auf :3000) — eine echte Produktionsinstanz läuft laut
-// docs/deployment*.md immer auf einer eigenen Domain, nie auf
-// localhost/127.0.0.1. Der Override wird deshalb nur noch berücksichtigt
-// (gelesen UND geschrieben), wenn die Seite selbst gerade von einem
-// solchen lokalen Origin ausgeliefert wird — auf jedem anderen Origin
-// bleibt es beim sicheren Standard (gleicher Origin), selbst wenn der
-// Schlüssel im localStorage gesetzt ist.
+// Der Basis-URL-Override bestimmt das Ziel sämtlicher Requests samt
+// Authorization-Header. Käme er ungeprüft aus dem localStorage, könnte ihn
+// eine XSS-Lücke auf einen fremden Host umbiegen und alle Tokens dorthin
+// leiten. Er ist reines Entwicklungswerkzeug (Dev-Server auf :5173 gegen die
+// API auf :3000), Produktionsinstanzen laufen laut docs/deployment*.md immer
+// auf einer eigenen Domain — er wird deshalb nur gelesen UND geschrieben,
+// wenn die Seite selbst von einem lokalen Origin kommt.
 const LOCAL_DEV_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
 
 function isLocalDevOrigin() {
@@ -168,16 +145,11 @@ async function rawRequest(path, options = {}) {
 // echten Auth-Fehlern (falsches Passwort etc.) in eine Schleife zu geraten,
 // da refreshTokens() selbst kein 401-Retry auslöst.
 //
-// Zusätzlich (Befund R6): PROAKTIVER Refresh, wenn das aktuelle Access
-// Token laut accessTokenExpiresAt in Kürze abläuft — bewusst VOR dem
-// eigentlichen Request, nicht erst nach einem 401. `allowRefreshRetry`
-// steuert auch diesen Zweig (nicht nur den reaktiven unten): Aufrufer, die
-// bewusst OHNE Refresh-Verhalten arbeiten wollen (z. B. login() — vor dem
-// ersten erfolgreichen Login existiert noch gar kein Access Token, die
-// Prüfung wäre dort ohnehin ein No-op, aber die Absicht bleibt so an
-// einer Stelle konsistent), lösen dadurch auch keinen proaktiven Refresh
-// aus. Schlägt der proaktive Versuch fehl (z. B. offline), fängt der
-// bestehende reaktive 401-Pfad unten den Fall unverändert ab.
+// Davor zusätzlich ein PROAKTIVER Refresh, wenn das Token laut
+// accessTokenExpiresAt bald abläuft. `allowRefreshRetry` steuert auch diesen
+// Zweig, damit Aufrufer ohne Refresh-Verhalten (z. B. login()) konsistent
+// beide Pfade abschalten. Schlägt der proaktive Versuch fehl (offline), fängt
+// der reaktive 401-Pfad den Fall unverändert ab.
 async function request(path, options = {}, { allowRefreshRetry = true } = {}) {
   if (allowRefreshRetry && isAccessTokenExpiringSoon() && getStoredRefreshToken()) {
     try { await refreshTokens(); } catch { /* reaktiver 401-Pfad unten übernimmt bei Bedarf */ }
@@ -189,16 +161,12 @@ async function request(path, options = {}, { allowRefreshRetry = true } = {}) {
       try {
         await refreshTokens();
       } catch (refreshErr) {
-        // Review 30.08.2026, Befund U4: ein Ratenlimit-Treffer (429) auf
-        // /auth/refresh (siehe Befund S2 — dessen Grenzwert jetzt gerade
-        // deshalb angehoben ist, weil mehrere Geräte hinter derselben NAT
-        // regelmäßig gleichzeitig proaktiv erneuern) sagt nichts darüber
-        // aus, ob die Sitzung noch gültig ist — nur, dass DIESER
-        // Erneuerungsversuch gerade nicht möglich war. Tokens bleiben
-        // erhalten, der 429 wird durchgereicht (statt des ursprünglichen
-        // 401), damit describeError() eine passende Meldung zeigen kann,
-        // statt eine noch gültige Sitzung wie bei einem echten
-        // Auth-Fehler zu beenden.
+        // Ein Ratenlimit-Treffer (429) auf /auth/refresh sagt nichts über die
+        // Gültigkeit der Sitzung aus — nur, dass dieser Versuch gerade nicht
+        // ging (mehrere Geräte hinter derselben NAT erneuern regelmäßig
+        // gleichzeitig). Tokens bleiben erhalten und der 429 wird statt des
+        // 401 durchgereicht, damit describeError() eine passende Meldung
+        // zeigt, statt eine gültige Sitzung zu beenden.
         if (refreshErr instanceof ApiError && refreshErr.status === 429) {
           throw refreshErr;
         }
@@ -251,27 +219,15 @@ export async function resetPassword({ token, newPassword }) {
   return { ...result.user, enabledModules: result.enabledModules, clubNationalID: result.clubNationalID, clubNationalIDType: result.clubNationalIDType };
 }
 
-// Code-Review, Befund S4: refreshTokens() bündelt gleichzeitige Aufrufer
-// auf GENAU einen In-Flight-Versuch. Ohne dieses Bündeln lösten mehrere
-// parallel abgesetzte Requests (typischerweise runSync()'s push()+pull(),
-// oder ein modulweites Promise.all() wie in userManagement.js), deren
-// Access Token zwischenzeitlich abgelaufen war, jeweils EIGENSTÄNDIG einen
-// 401-Retry über request() aus (siehe unten) — jeder rief refreshTokens()
-// auf. Serverseitig rotiert der ERSTE dieser Aufrufe das Refresh Token
-// (auth.service.ts: refresh()); jeder weitere schickte danach ein bereits
-// rotiertes Token und scheiterte, wodurch clearTokens() griff und die
-// gesamte — eigentlich noch gültige — Sitzung verworfen wurde, obwohl kein
-// echter Auth-Fehler vorlag.
-//
-// Seit der Reuse-Detection auf dem Server (auth.service.ts: refresh(),
-// Befund S2) ist dieses Bündeln nicht mehr nur "lästig", sondern
-// SICHERHEITSRELEVANT: ein serverseitig als Wiederverwendung erkanntes,
-// bereits rotiertes Token widerruft dort inzwischen ALLE Sitzungen des
-// Kontos — ohne dieses Bündeln hätte der zweite, rein durch das eigene
-// parallele Anfrageverhalten der App ausgelöste Refresh-Versuch also nicht
-// nur die eigene Anfrage scheitern lassen, sondern serverseitig einen
-// Massen-Logout ausgelöst, obwohl niemand tatsächlich ein Token gestohlen
-// hat.
+// Bündelt gleichzeitige Aufrufer auf GENAU einen In-Flight-Versuch. Ohne das
+// lösen parallele Requests mit abgelaufenem Access Token (runSync()'s
+// push()+pull(), ein modulweites Promise.all()) jeweils eigenständig einen
+// 401-Retry aus. Der erste rotiert serverseitig das Refresh Token
+// (auth.service.ts: refresh()), jeder weitere schickt danach ein bereits
+// rotiertes — und die Reuse-Detection dort widerruft daraufhin ALLE
+// Sitzungen des Kontos. Das Bündeln ist deshalb sicherheitsrelevant, nicht
+// nur eine Optimierung: sonst löste das eigene parallele Anfrageverhalten der
+// App einen Massen-Logout aus, ohne dass ein Token gestohlen wurde.
 let refreshInFlight = null;
 
 export function refreshTokens() {

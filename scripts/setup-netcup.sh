@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# scripts/setup-netcup.sh
-#
 # Automatisiert die Schritte 6–9 aus docs/deployment-netcup.md (Software
 # installieren, npm-Abhängigkeiten, apps/api/.env konfigurieren, Datenbank-
 # Schema anlegen, Backend bauen, PM2 starten samt Autostart, ersten

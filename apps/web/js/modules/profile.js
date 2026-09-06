@@ -1,5 +1,4 @@
-// ============================================================
-// modules/profile.js — "Mein Profil" / "My Profile"
+// "Mein Profil" / "My Profile"
 //
 // Lets the currently signed-in account (trainer, admin, or athlete)
 // change their own personal data — name, plus their preferred display
@@ -16,7 +15,6 @@
 // (birthdate, group, notes, …) is intentionally out of scope here —
 // that remains coach-managed under "Athleten & Team", since it
 // reflects team/roster decisions rather than personal account info.
-// ============================================================
 import { getAll } from '../db.js';
 import { el, clear, beginRender } from '../dom.js';
 import { laneWave, badge, fullName, toast } from '../ui.js';

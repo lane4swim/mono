@@ -1,5 +1,3 @@
-// apps/api/prisma/seed.ts
-//
 // Seed-Skript "analog seed.js" (Phase-2-Auftrag, siehe docs/backend-plan.md
 // Abschnitt 11). Spiegelt bewusst dieselben Demo-Daten wie
 // apps/web/js/seed.js, damit Frontend-Demo und Backend-Demo inhaltlich

@@ -1,4 +1,3 @@
-// packages/shared-types/test/referee.test.ts
 import { describe, it, expect } from 'vitest';
 import {
   RefereeFunctionSchema,

@@ -1,5 +1,3 @@
-// apps/api/src/auth/password.ts
-//
 // Passwort-Hashing mit argon2id (OWASP-Empfehlung, siehe Abschnitt 5.2 des
 // Backend-Entwicklungsplans). Nutzt `hash-wasm` statt des nativen `argon2`-
 // Pakets — reines WebAssembly, kein Compile-Schritt/Build-Tools nötig,

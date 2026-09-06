@@ -1,11 +1,9 @@
-// ============================================================
-// modules/authScreens.js — Phase 4: echter Login-Bildschirm + Annahme
+// Phase 4: echter Login-Bildschirm + Annahme
 // einer Einladung (ersetzt den früheren rein lokalen Profil-Umschalter).
 //
 // Kein Router-Modul im üblichen Sinn (registerModule/roles) — diese beiden
 // Ansichten müssen funktionieren, BEVOR eine Sitzung besteht, und werden
 // daher direkt von app.js gerendert, je nach Sitzungs-/URL-Zustand.
-// ============================================================
 import { el } from '../dom.js';
 import { toast } from '../ui.js';
 import { openModal } from '../modal.js';

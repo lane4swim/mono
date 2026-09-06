@@ -1,5 +1,3 @@
-// packages/shared-types/src/referee.ts
-//
 // Vertrag für das Kampfrichter-Modul (docs/kampfrichter-modul-plan.md,
 // Abschnitt 5: Wettkampfeinsätze). Bewusst NICHT Teil von entities.ts/
 // ENTITY_SCHEMAS — RefereeAssignment ist kein Sync-Store (User selbst ist

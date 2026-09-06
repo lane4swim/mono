@@ -1,4 +1,3 @@
-// apps/api/src/jobs/erasure.repository.memory.ts
 import { ANONYMIZED_INVITATION_EMAIL, type ErasureJobGateway, type DueErasureRequest } from './erasure.repository.js';
 import type { TombstoneRecord } from '../modules/sync/sync.gateway.js';
 import { anonymizePlanCommentAuthors, anonymizeExerciseCommentAuthors, anonymizeTemplateCommentAuthors } from './commentAnonymization.js';

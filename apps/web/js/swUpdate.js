@@ -1,5 +1,4 @@
-// ============================================================
-// swUpdate.js — Service-Worker-Registrierung + Update-Hinweis.
+// Service-Worker-Registrierung + Update-Hinweis.
 //
 // Review 30.08.2026, Befund U5: sw.js aktiviert einen neu installierten
 // Worker nicht mehr von selbst (kein self.skipWaiting() mehr beim

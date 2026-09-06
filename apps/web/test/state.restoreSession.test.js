@@ -1,5 +1,3 @@
-// apps/web/test/state.restoreSession.test.js
-//
 // Regressionstest für Review 30.08.2026, Befund U4: restoreSession()
 // behandelte JEDEN Fehlschlag von api.refreshTokens() gleich — auch einen
 // 429 (Ratenlimit-Treffer auf /auth/refresh, siehe Befund S2) — und rief

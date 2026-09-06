@@ -1,5 +1,3 @@
-// apps/api/test-integration/authRepository.integration.test.ts
-//
 // Prüft PrismaUserRepository gegen eine echte Datenbank (siehe
 // vitest.integration.config.ts). Fokus: findByEmail()/findById() müssen
 // ein bereits soft-gelöschtes Konto als "nicht existent" behandeln (Code-

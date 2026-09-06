@@ -1,5 +1,4 @@
-// ============================================================
-// sw.js — offline-first service worker.
+// offline-first service worker.
 // Strategy: cache-first for the app shell/static assets (precached
 // on install), network-first fallback to cache for anything else.
 // Backend API calls (/api/*, /auth/*) are always passed straight
@@ -7,20 +6,16 @@
 // Bump CACHE_VERSION whenever any cached file changes so clients
 // pick up the new version instead of serving stale assets.
 //
-// Review 30.08.2026, Befund U5: NICHT mehr self.skipWaiting() beim
-// Install — ein neuer Worker installiert sich zwar (füllt seinen eigenen
-// Cache vollständig), aktiviert sich aber erst, wenn app.js dies über
-// eine "SKIP_WAITING"-Nachricht ausdrücklich anstößt (siehe der
-// 'message'-Handler unten sowie registerServiceWorker() in app.js). Vorher
-// übernahm ein frisch installierter Worker sofort die Kontrolle über
-// bereits offene Tabs (self.clients.claim() im 'activate'-Handler
-// unten), ohne dass deren bereits geladenes JavaScript davon betroffen
-// war — eine über Stunden offene PWA (z. B. auf einem Tablet am
-// Beckenrand) blieb dadurch beliebig lange auf dem alten Stand, ohne
-// jeden Hinweis. app.js zeigt jetzt stattdessen einen Hinweis an, sobald
-// ein neuer Worker bereitsteht, und lässt die Person selbst entscheiden,
-// wann neu geladen wird.
-const CACHE_VERSION = 'lane1-v40';
+// Bewusst KEIN self.skipWaiting() beim Install: ein neuer Worker füllt
+// seinen Cache, aktiviert sich aber erst, wenn app.js das per
+// "SKIP_WAITING"-Nachricht anstößt (siehe 'message'-Handler unten und
+// registerServiceWorker() in app.js). Sonst übernähme er sofort die
+// Kontrolle über offene Tabs, ohne dass deren bereits geladenes JavaScript
+// davon berührt wird — eine über Stunden offene PWA (Tablet am Beckenrand)
+// bliebe beliebig lange auf dem alten Stand, ohne jeden Hinweis. app.js
+// meldet stattdessen, dass eine neue Fassung bereitsteht, und lässt die
+// Person entscheiden, wann neu geladen wird.
+const CACHE_VERSION = 'lane1-v41';
 const PRECACHE_URLS = [
   './',
   './index.html',
@@ -43,9 +38,6 @@ const PRECACHE_URLS = [
   './js/demoSeed.js',
   './js/state.js',
   './js/router.js',
-  // Code-Review, Befund L4: js/utils.js (ein 360-Zeilen-Sammelmodul) wurde
-  // aufgeteilt — die sieben Nachfolgedateien ersetzen den einen Eintrag,
-  // den diese Liste zuvor dafür trug.
   './js/dom.js',
   './js/dates.js',
   './js/swimTime.js',
@@ -98,7 +90,7 @@ self.addEventListener('install', (event) => {
       .then((cache) => Promise.all(
         // Kein cache.addAll(): das ist atomar — eine einzelne nicht
         // auflösbare URL (z. B. ein beim nächsten Refactor vergessener
-        // Eintrag, siehe Code-Review Befund W8) würde die komplette
+        // Eintrag) würde die komplette
         // Installation und damit die gesamte Offline-Fähigkeit zum
         // Scheitern bringen. Stattdessen scheitert höchstens die einzelne
         // Datei; alle anderen werden trotzdem gecacht.
@@ -117,8 +109,8 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Review 30.08.2026, Befund U5: einzige Möglichkeit für einen wartenden
-// Worker, tatsächlich zu aktivieren — ausgelöst über
+// Einzige Möglichkeit für einen wartenden Worker, tatsächlich zu aktivieren
+// — ausgelöst über
 // registration.waiting.postMessage('SKIP_WAITING') aus app.js, nachdem
 // die Person den Hinweis "Neue Version verfügbar" bestätigt hat.
 self.addEventListener('message', (event) => {
@@ -140,8 +132,7 @@ self.addEventListener('fetch', (event) => {
   // Pfade relativ zum tatsächlichen Registrierungs-Scope prüfen statt
   // fest von "/" auszugehen — unter einem GitHub-Pages-Unterpfad (siehe
   // .github/workflows/static.yml) läuft die App z. B. unter
-  // /<repo>/ statt /, und "/admin"/"/api/" würden dort nie zutreffen
-  // (Code-Review, Befund W8).
+  // /<repo>/ statt /, und "/admin"/"/api/" würden dort nie zutreffen.
   const scopePath = new URL(self.registration.scope).pathname;
   if (url.pathname.startsWith(`${scopePath}admin`)) {
     event.respondWith(fetch(req));

@@ -1,10 +1,8 @@
-// ============================================================
-// modules/userManagement.js — "Nutzerverwaltung"
+// "Nutzerverwaltung"
 //
 // Phase 4: ruft die echten Backend-Endpunkte auf (POST/GET /api/clubs,
 // POST/GET/DELETE /api/invitations, GET /api/users), statt den Ablauf nur
 // lokal in IndexedDB zu simulieren.
-// ============================================================
 import { el, clear, beginRender } from '../dom.js';
 import { fmtDateShort } from '../dates.js';
 import { badge, emptyState, laneWave, toast } from '../ui.js';

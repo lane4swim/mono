@@ -1,5 +1,3 @@
-// packages/sync-protocol/src/conflictResolution.ts
-//
 // Konfliktregeln aus dem Backend-Entwicklungsplan (Abschnitt 7). Bewusst
 // als reine, seiteneffektfreie Funktionen implementiert — der Server
 // (Phase 3: /api/sync/push) ruft diese auf, statt die Strategie erneut

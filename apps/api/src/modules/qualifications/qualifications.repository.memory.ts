@@ -1,5 +1,3 @@
-// apps/api/src/modules/qualifications/qualifications.repository.memory.ts
-//
 // In-Memory-Implementierungen für Tests — ermöglicht vollständige Tests der
 // Autorisierungs-/Ablauflogik in qualifications.service.ts ohne Datenbank
 // (analog invitations.repository.memory.ts).
