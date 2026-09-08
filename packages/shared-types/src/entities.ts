@@ -302,6 +302,34 @@ export const PlanSchema = z.object({
 }).strict();
 export type Plan = z.infer<typeof PlanSchema>;
 
+// Wiederkehrende Trainingspläne (Phase 1, Abschnitt 3.1 —
+// docs/trainingsplanung-phase1-plan.md). Ein Zyklus ist eine Vorlage für
+// eine Abfolge von Wochen; "Zyklus anwenden" erzeugt daraus konkrete
+// Plan-Datensätze (Snapshot, keine dauerhafte Beziehung).
+export const CycleDaySchema = z.object({
+  dayOfWeek: z.number().int().min(0).max(6), // 0 = Montag … 6 = Sonntag
+  templateId: z.string().uuid(),
+}).strict();
+export type CycleDay = z.infer<typeof CycleDaySchema>;
+
+export const CycleWeekSchema = z.object({
+  weekOffset: z.number().int().min(0).max(51),
+  label: z.string().max(200).default(''),
+  days: z.array(CycleDaySchema).max(7),
+}).strict();
+export type CycleWeek = z.infer<typeof CycleWeekSchema>;
+
+export const PlanCycleSchema = z.object({
+  id: z.string().uuid(),
+  clubId: z.string().uuid(),
+  name: z.string().min(1).max(200),
+  description: z.string().max(2000).default(''),
+  weeks: z.array(CycleWeekSchema).max(52), // Obergrenze analog Plan.days (max 60)
+  createdAt: isoDate,
+  updatedAt: isoDate,
+}).strict();
+export type PlanCycle = z.infer<typeof PlanCycleSchema>;
+
 export const AttendanceRecordSchema = z.object({
   athleteId: z.string().uuid(),
   present: z.boolean(),
@@ -366,6 +394,7 @@ export const ENTITY_SCHEMAS = {
   exercises: ExerciseSchema,
   templates: TemplateSchema,
   plans: PlanSchema,
+  planCycles: PlanCycleSchema,
   sessions: TrainingSessionSchema,
   actionItems: ActionItemSchema,
 } satisfies Partial<Record<z.infer<typeof SyncStoreSchema>, z.ZodTypeAny>>;

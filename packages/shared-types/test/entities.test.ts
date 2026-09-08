@@ -9,6 +9,7 @@ import {
   SetEntrySchema,
   TemplateSchema,
   PlanSchema,
+  PlanCycleSchema,
   TrainingSessionSchema,
   ActionItemSchema,
   CommentSchema,
@@ -337,6 +338,34 @@ describe('PlanSchema', () => {
     expect(PlanSchema.safeParse({ ...base, days: Array(60).fill(oneDay), comments: [] }).success).toBe(true);
     const manyComments = Array.from({ length: 501 }, (_, i) => ({ id: `c${i}`, authorId: TRAINER_ID, authorName: 'X', text: 'x', createdAt: now }));
     expect(PlanSchema.safeParse({ ...base, days: [], comments: manyComments }).success).toBe(false);
+  });
+});
+
+// Phase 1, Abschnitt 3.1 (docs/trainingsplanung-phase1-plan.md).
+describe('PlanCycleSchema', () => {
+  it('akzeptiert einen Zyklus mit mehreren Wochen', () => {
+    const cycle = {
+      id: ATHLETE_ID, clubId: CLUB_ID, name: 'Aufbauzyklus', description: '',
+      weeks: [{ weekOffset: 0, label: 'Woche 1', days: [{ dayOfWeek: 0, templateId: TRAINER_ID }] }],
+      createdAt: now, updatedAt: now,
+    };
+    expect(PlanCycleSchema.safeParse(cycle).success).toBe(true);
+  });
+  it('akzeptiert eine leere Wochen-/Tagesliste', () => {
+    const cycle = { id: ATHLETE_ID, clubId: CLUB_ID, name: 'Leer', description: '', weeks: [], createdAt: now, updatedAt: now };
+    expect(PlanCycleSchema.safeParse(cycle).success).toBe(true);
+  });
+  it('lehnt einen dayOfWeek außerhalb von 0–6 ab', () => {
+    const cycle = {
+      id: ATHLETE_ID, clubId: CLUB_ID, name: 'X', description: '',
+      weeks: [{ weekOffset: 0, label: '', days: [{ dayOfWeek: 7, templateId: TRAINER_ID }] }],
+      createdAt: now, updatedAt: now,
+    };
+    expect(PlanCycleSchema.safeParse(cycle).success).toBe(false);
+  });
+  it('lehnt einen leeren Namen ab', () => {
+    const cycle = { id: ATHLETE_ID, clubId: CLUB_ID, name: '', description: '', weeks: [], createdAt: now, updatedAt: now };
+    expect(PlanCycleSchema.safeParse(cycle).success).toBe(false);
   });
 });
 

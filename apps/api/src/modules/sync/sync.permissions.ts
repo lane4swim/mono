@@ -41,6 +41,10 @@ const adminManaged: StoreAccess = { read: new Set(TEAM_ROLES), write: new Set(['
 export const STORE_PERMISSIONS: Record<EntityStoreName, StoreAccess> = {
   results: shared,
   plans: shared,
+  // Wie "templates": Athlet:innen lesen mit, anlegen/bearbeiten/anwenden
+  // bleibt trainer/admin vorbehalten (docs/trainingsplanung-phase1-plan.md,
+  // Abschnitt 1.5).
+  planCycles: coachManaged,
   athletes: adminManaged,
   groups: coachManaged,
   exercises: coachManaged,

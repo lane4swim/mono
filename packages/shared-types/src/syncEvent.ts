@@ -14,6 +14,7 @@ export const SyncStoreSchema = z.enum([
   'exercises',
   'templates',
   'plans',
+  'planCycles',
   'sessions',
   'actionItems',
 ]);

@@ -56,6 +56,7 @@ model Club {
   exercises                     Exercise[]
   templates                     Template[]
   plans                         Plan[]
+  planCycles                    PlanCycle[]
   sessions                      TrainingSession[]
   actionItems                   ActionItem[]
   qualificationReminderSettings ClubQualificationReminderSetting[]
@@ -469,6 +470,27 @@ model Plan {
   @@index([clubId, updatedAt])
   @@index([groupId])
   @@map("plans")
+}
+
+// Wiederkehrende Trainingspläne (Phase 1, Abschnitt 3.1 —
+// docs/trainingsplanung-phase1-plan.md). Bewusst OHNE groupId (analog
+// Template): ein Zyklus ist gruppenunabhängig wiederverwendbar, die
+// Zielgruppe wird erst beim "Anwenden" abgefragt. "Anwenden" erzeugt
+// Plan-Datensätze als Snapshot — keine Relation zu Plan.
+model PlanCycle {
+  id          String    @id @default(uuid())
+  clubId      String
+  club        Club      @relation(fields: [clubId], references: [id])
+  name        String
+  description String    @default("")
+  // Array von { weekOffset, label, days: [{ dayOfWeek, templateId }] }.
+  weeks       Json
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  @@index([clubId, updatedAt])
+  @@map("plan_cycles")
 }
 
 // Heißt "TrainingSession" (nicht "Session"), um Verwechslung mit

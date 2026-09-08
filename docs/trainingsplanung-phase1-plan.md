@@ -12,9 +12,11 @@ noch vor jeder Implementierung als Diskussionsgrundlage gedacht.
 
 ## Umsetzungsstand
 
+**Phase 1 ist damit vollständig umgesetzt** (alle drei Teile).
+
 | Teil | Status |
 |---|---|
-| 3.1 Wiederkehrende Trainingspläne/Vorlagen-Zyklen | offen |
+| 3.1 Wiederkehrende Trainingspläne/Vorlagen-Zyklen | **umgesetzt** — siehe Abschnitt 1.7 |
 | 3.2 Belastungssteuerung/Trainingsumfang-Auswertung | **umgesetzt** — siehe Abschnitt 2.5 |
 | 3.3 Anwesenheitsstatistik & -prognose | **umgesetzt** — siehe Abschnitt 3.4 |
 
@@ -224,6 +226,72 @@ zugreifen (Erstellen/Anwenden ausschließlich `trainer`/`admin`, analog zu
 - `apps/web`: Unit-Test für die „Zyklus anwenden"-Funktion als reine
   Funktion (`weeks + startDate + templates → Plan[]`), unabhängig vom
   DOM testbar, analog zum Trennungsprinzip bei `buildDemoData()`.
+
+### 1.7 Umsetzungsstand: **umgesetzt**
+
+- **Datenmodell** — `PlanCycle` wie geplant, ohne `groupId`:
+  `apps/api/prisma/schema.prisma` + Migration
+  `20260909090000_add_plan_cycle`; `CycleDaySchema`/`CycleWeekSchema`/
+  `PlanCycleSchema` in `packages/shared-types/src/entities.ts`, neuer
+  Store `planCycles` in `ENTITY_SCHEMAS` (11 → 12 fachliche Stores) und
+  in `SyncStoreSchema` (`syncEvent.ts`). **Nicht gegen eine echte
+  Postgres-Instanz geprüft** (kein Docker-Zugriff in dieser Sandbox,
+  wie bei den beiden vorherigen Migrationen dieser Phase).
+- **An mehr Stellen verankert als im Plan explizit aufgeführt** — beim
+  Umsetzen zeigte sich, dass `EntityStoreName` an drei weiteren,
+  TypeScript-erzwungenen Stellen exhaustiv sein muss (der Compiler
+  bricht sonst ab, ein Vergessen ist strukturell ausgeschlossen):
+  - `apps/api/src/modules/sync/sync.permissions.ts:
+    STORE_PERMISSIONS` — `planCycles: coachManaged` (wie `templates`:
+    alle drei Rollen lesen, nur `trainer`/`admin` schreiben).
+  - `packages/shared-types/src/modules.ts: MODULE_PACKAGES.plans.stores`
+    — `['plans', 'planCycles']`, damit das Vereins-Modul-Gating
+    (zubuchbare Pakete) den neuen Store mit abdeckt, ohne ein eigenes
+    Paket zu benötigen.
+  - `packages/sync-protocol/src/conflictResolution.ts:
+    STRATEGY_BY_STORE` — `planCycles: 'last-write-wins-document'`
+    (wie `templates`/`plans`, da strukturell derselbe Art
+    verschachteltes Dokument).
+  - Zusätzlich `apps/api/src/db/entityRegistry.ts: getEntityDelegate()`
+    (im Plan bereits genannt) — dessen `never`-exhaustiver `switch`
+    erzwingt den `planCycles`-Fall ebenfalls zur Compile-Zeit.
+- **`apps/web/js/db.js`** — `planCycles` in `STORES` und
+  `CLUB_SCOPED_STORES`; `DB_VERSION` 3 → 4 (**notwendig**, sonst legt
+  IndexedDB bei bereits installierten Clients den neuen Object Store
+  nie an — `onupgradeneeded` feuert nur bei einer Versionserhöhung).
+- **`apps/web/js/modules/planCycles.js`** (neu) — die reine Funktion
+  `buildPlansFromCycle()` sowie die komplette UI (Liste, Detail,
+  Erstellen/Bearbeiten-Modal mit Wochen-Editor je Wochentag,
+  Anwenden-Modal mit Pflicht-Zielgruppe). Kein registriertes Modul
+  (`registerModule()`) — die Route hängt an `plans` (`navigate('plans',
+  'cycles', …)`), wie in Abschnitt 1.5 festgelegt.
+  - **Rollen-Feinsteuerung ergänzt, über den Plantext hinaus:** Abschnitt
+    1.5 sagt nur "Erstellen/Anwenden ausschließlich trainer/admin" —
+    beim Umsetzen zeigte sich, dass das serverseitige `coachManaged`
+    dafür nicht reicht, wenn die Buttons client-seitig trotzdem für
+    Athlet:innen sichtbar blieben (nur der spätere Sync-Push würde dann
+    scheitern). Löst über die bereits vorhandene, bislang ungenutzte
+    `state.js: isTrainerOrAdmin()` — blendet „Neuer Zyklus"/„Anwenden"/
+    „Bearbeiten"/„Löschen" für `athlete` clientseitig konsequent aus,
+    die Zyklus-Liste und -Details bleiben lesbar.
+- **`apps/web/js/modules/plans.js`** — Route-Weiche (`params[0] ===
+  'cycles'`) sowie neuer Button „Zyklen verwalten" in der Plan-Liste
+  (für alle Rollen sichtbar, analog zum Lesezugriff auf die
+  Zyklus-Liste).
+- Übersetzungsschlüssel (`plans.manageCycles`, kompletter neuer
+  Namespace `planCycles`) in `de-DE.js`/`en-US.js`; dabei
+  `i18n/de-DE.js`/`en-US.js: weekdays.*` erstmals genutzt — bislang
+  vorbereitete, aber ungenutzte Übersetzungseinträge.
+- `sw.js`: `planCycles.js` precacht, Cache-Version auf `lane1-v44`.
+- **Tests:** 4 neue `PlanCycleSchema`-Tests (`shared-types`), 1 neuer
+  Konfliktstrategie-Test (`sync-protocol`), 2 neue Autorisierungstests
+  (`apps/api`: Modul-Gating + Delegate-Mapping), 2 bestehende
+  `entityRegistry.test.ts`-Fälle an die neue Store-Anzahl (10 → 11)
+  angepasst, 5 neue Tests für `buildPlansFromCycle()`
+  (`apps/web/test/planCycles.test.js`, u. a. Wochenversatz,
+  Wochenanfang-Normalisierung, Snapshot-Isolation von der Vorlage,
+  fehlende Vorlage). Gesamte Monorepo-Suite bleibt grün: 1012 Tests, 0
+  Fehlschläge, `npm run lint` sauber in allen vier Workspaces.
 
 ## 2. Abschnitt 3.2 — Belastungssteuerung / Trainingsumfang-Auswertung
 

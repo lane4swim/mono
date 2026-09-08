@@ -15,6 +15,7 @@ describe('strategyForStore', () => {
   it('weist verschachtelten Dokument-Stores last-write-wins-document zu', () => {
     expect(strategyForStore('plans')).toBe('last-write-wins-document');
     expect(strategyForStore('templates')).toBe('last-write-wins-document');
+    expect(strategyForStore('planCycles')).toBe('last-write-wins-document');
   });
 });
 

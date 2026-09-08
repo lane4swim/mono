@@ -9,6 +9,7 @@ import { EQUIPMENT_ITEMS } from '../refdata.js';
 import { renderSetEditor, totalDistance, cloneItems, collectEquipment, equipmentForEntry, exerciseById } from './setEditor.js';
 import { renderCommentThread, commentsButton } from './comments.js';
 import { exportPlanToPdf, exportDayToPdf } from './planPdfExport.js';
+import { renderCyclesRoute } from './planCycles.js';
 import { navigate } from '../router.js';
 import { t, trLabel } from '../i18n.js';
 
@@ -19,6 +20,9 @@ export const plansModule = {
   async render(container, params) {
     const isCurrent = beginRender(container);
     clear(container);
+    // Vorlagen-Zyklen (Phase 1, Abschnitt 3.1) hängen an derselben Route
+    // statt an einem eigenen Paket — siehe planCycles.js.
+    if (params[0] === 'cycles') return renderCyclesRoute(container, isCurrent, params.slice(1));
     const [plans, groups, templates, exercises] = await Promise.all([getAll('plans'), getAll('groups'), getAll('templates'), getAll('exercises')]);
     if (!isCurrent()) return;
     if (params[0]) return renderDetail(container, params[0]);
@@ -30,7 +34,10 @@ function renderList(container, plans, groups, templates, exercises) {
   const wrap = el('div');
   wrap.appendChild(el('div', { class: 'page-head' }, [
     el('div', {}, [el('div', { class: 'page-eyebrow' }, t('plans.eyebrow', { count: plans.length })), el('h1', { class: 'mt-0' }, t('plans.title'))]),
-    el('div', { class: 'page-actions' }, [el('button', { class: 'btn btn-primary', onclick: () => openPlanModal(null, groups, templates, exercises, refresh) }, t('plans.createPlan'))]),
+    el('div', { class: 'page-actions' }, [
+      el('button', { class: 'btn btn-ghost', onclick: () => navigate('plans', 'cycles') }, t('plans.manageCycles')),
+      el('button', { class: 'btn btn-primary', onclick: () => openPlanModal(null, groups, templates, exercises, refresh) }, t('plans.createPlan')),
+    ]),
   ]));
   wrap.appendChild(laneWave());
 
