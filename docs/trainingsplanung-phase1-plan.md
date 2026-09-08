@@ -66,6 +66,11 @@ App legt automatisch vier `Plan`-Einträge mit korrekt versetztem
 
 **Prisma (`apps/api/prisma/schema.prisma`):**
 
+**Entscheidung: `PlanCycle` ist NICHT gruppengebunden** — analog zu
+`Template`, das ebenfalls keine `groupId` trägt und beliebig über Gruppen
+hinweg wiederverwendbar ist (Begründung siehe Abschnitt 7). Die Zielgruppe
+wird stattdessen bei jedem „Anwenden" explizit abgefragt (siehe 1.4).
+
 ```prisma
 model PlanCycle {
   id          String    @id @default(uuid())
@@ -73,8 +78,6 @@ model PlanCycle {
   club        Club      @relation(fields: [clubId], references: [id])
   name        String
   description String    @default("")
-  groupId     String?
-  group       Group?    @relation(fields: [groupId], references: [id])
   // Array von Wochen: [{ weekOffset, label, days: [{ dayOfWeek, templateId }] }]
   // — siehe CycleWeekSchema unten. weekOffset ist bewusst redundant zum
   // Array-Index (0-basiert), damit sich einzelne Wochen ohne Reindizierung
@@ -88,7 +91,6 @@ model PlanCycle {
   // Sync-Stores (Group, Template, Plan, …): bedient den Sync-Pull-Zugriff
   // (sync.gateway.ts: listChangedSince()) direkt ohne zusätzlichen Sortierschritt.
   @@index([clubId, updatedAt])
-  @@index([groupId])
   @@map("plan_cycles")
 }
 ```
@@ -115,7 +117,6 @@ export const PlanCycleSchema = z.object({
   clubId: z.string().uuid(),
   name: z.string().min(1).max(200),
   description: z.string().max(2000).default(''),
-  groupId: z.string().uuid().nullable(),
   weeks: z.array(CycleWeekSchema).max(52), // Obergrenze analog Plan.days (max 60)
   createdAt: isoDate,
   updatedAt: isoDate,
@@ -146,7 +147,9 @@ Plan.
 
 1. Trainer:in/Admin öffnet neuen Bereich „Zyklen" (siehe 1.5) → „Neuer
    Zyklus".
-2. Name, Beschreibung, optionale Gruppe.
+2. Name, Beschreibung — bewusst KEINE Gruppenauswahl an dieser Stelle
+   (siehe Entscheidung in Abschnitt 7): ein Zyklus ist gruppenunabhängig
+   und wiederverwendbar.
 3. Wochen hinzufügen: je Woche ein Label (z. B. „Woche 1 —
    Grundlagenausdauer") sowie für jeden gewünschten Wochentag eine
    Vorlagen-Auswahl (`selectInput` über die bestehenden `templates`,
@@ -164,16 +167,19 @@ Plan.
 1. In der Zyklus-Detailansicht: Button „Anwenden".
 2. Modal: Startdatum wählen (ein `dateInput`, wird intern auf
    `startOfWeek()` normalisiert — konsistent mit `Plan.weekStart`, das
-   ebenfalls immer ein Wochenanfang ist) sowie optional Zielgruppe
-   (vorbelegt mit `PlanCycle.groupId`, überschreibbar).
+   ebenfalls immer ein Wochenanfang ist) sowie **verpflichtend** eine
+   Zielgruppe (`selectInput`, keine Vorbelegung) — derselbe Pflichtschritt,
+   den auch das manuelle Anlegen eines einzelnen `Plan` heute schon verlangt
+   (`Plan.groupId`), hier nur einmal für alle N erzeugten Pläne des Zyklus
+   statt je Plan einzeln.
 3. Bestätigung → für jede `CycleWeek` in `weeks`:
    - `weekStart = isoAddDays(startDate, weekOffset * 7)`
    - für jeden `CycleDay`: `date = isoAddDays(weekStart, dayOfWeek)`,
      `sets = cloneItems(template.sets)` (identische Funktion wie
      bei „Vorlage anwenden" heute)
    - ein neuer `Plan`-Datensatz mit `name` (z. B. `"${cycle.name} —
-     ${week.label || 'Woche ' + (i+1)}"`), `status: 'aktiv'`, den
-     erzeugten `days`.
+     ${week.label || 'Woche ' + (i+1)}"`), `status: 'aktiv'`, der im
+     Modal gewählten `groupId`, den erzeugten `days`.
 4. Alle N Pläne werden per `put()` angelegt (Batch, aber kein neuer
    Endpunkt — dieselbe Sync-Push-API wie beim manuellen Einzelanlegen,
    nur mehrfach hintereinander aufgerufen).
@@ -241,9 +247,10 @@ für jede TrainingSession s mit s.planId != null:
     athleteVolume[a.athleteId] += volumeOfSession ?? 0
 ```
 
-**Eine optionale Modellerweiterung** wird trotzdem vorgeschlagen, für den
-Fall, dass eine Einheit *ohne* verknüpften Plan stattfand (Ad-hoc-Training)
-oder tatsächlich abweichend vom geplanten Umfang absolviert wurde:
+**Entscheidung (siehe Abschnitt 7): `actualDistance` wird in Phase 1
+aufgenommen**, für den Fall, dass eine Einheit *ohne* verknüpften Plan
+stattfand (Ad-hoc-Training) oder tatsächlich abweichend vom geplanten
+Umfang absolviert wurde:
 
 ```prisma
 model TrainingSession {
@@ -264,6 +271,14 @@ bekommen `null` (= „aus Plan berechnen", unverändertes Verhalten).
 
 Aggregationslogik damit: `volumeOfSession = s.actualDistance ??
 (day ? totalDistance(day.sets) : null)`.
+
+**UI:** `sessions.js: openSessionModal()` erlaubt bereits heute
+`planId: null` als Standardfall für neu angelegte Einheiten (Ad-hoc-Training
+ohne Vorlage ist also bereits ein regulär unterstützter, kein
+hypothetischer Fall) — das neue `actualDistance`-Feld (`numberInput`,
+Meter) erscheint im selben Modal, **nur sichtbar, wenn kein `planId`
+gewählt ist** (bei verknüpftem Plan bleibt die automatische Berechnung
+aus `day.sets` der Standardfall, ohne Zusatzeingabe).
 
 ### 2.3 Workflow / UI
 
@@ -310,17 +325,25 @@ Neuer Abschnitt „Anwesenheit" in `stats.js`:
    `anwesend / gesamt` in Prozent, geglättet über einen gleitenden
    4-Wochen-Durchschnitt (reduziert Rauschen durch einzelne
    Ausfalltermine).
-2. **Frühindikator-Liste** — Athlet:innen, deren Anwesenheitsquote der
-   letzten 4 Einheiten spürbar unter ihrem eigenen langfristigen
-   Durchschnitt liegt (z. B. Differenz ≥ 30 Prozentpunkte, exakter
-   Schwellenwert zur Diskussion) ODER absolut unter einem festen
-   Minimum (z. B. < 50 % in den letzten 4 Einheiten). Sortiert nach
-   größter Abweichung, mit Link zum Athlet:innen-Profil.
-   - Bewusst **kein** konfigurierbarer Schwellenwert in Phase 1 (anders
-     als z. B. die Erinnerungs-Schwellen bei Qualifikationen) — ein fest
-     verdrahteter, im Code dokumentierter Default hält die erste Version
-     einfach; Konfigurierbarkeit wäre ein natürlicher Ausbauschritt für
-     eine spätere Phase, sollte sich der Bedarf zeigen.
+2. **Frühindikator-Liste** — Athlet:innen mit auffällig gesunkener
+   Anwesenheit. **Entscheidung (siehe Abschnitt 7): fest im Code
+   hinterlegter Schwellenwert, kein Vereins-Setting in Phase 1.** Eine
+   Athlet:in wird markiert, wenn (a) sie mindestens 8 Einheiten seit
+   ihrem `Athlete.joinDate` absolviert hat UND ihre Anwesenheitsquote der
+   letzten 4 Einheiten mindestens 30 Prozentpunkte unter ihrer eigenen
+   Quote der 8 Einheiten davor liegt (relativer Abfall — der eigene
+   historische Schnitt ist die Vergleichsbasis, nicht ein
+   Gruppendurchschnitt, damit unterschiedlich verlässliche Athlet:innen
+   nicht gegeneinander verglichen werden), ODER (b) ihre Quote der
+   letzten 4 Einheiten absolut unter 50 % liegt — **Kriterium (b) gilt
+   unabhängig von der 8-Einheiten-Mindesthistorie**, damit auch neu
+   beigetretene Athlet:innen mit durchgehend schlechter Anwesenheit
+   erfasst werden, statt erst nach zwei Monaten. Sortiert nach größter
+   Abweichung, mit Link zum Athlet:innen-Profil. Beide Schwellenwerte
+   (30 Prozentpunkte, 50 %, 4/8 Einheiten Fenstergröße) stehen als
+   benannte Konstanten im Code (analog `MAX_SYNC_ATTEMPTS` in
+   `syncClient.js`), nicht hart inline verstreut — erleichtert eine
+   spätere Konfigurierbarkeit, ohne sie in Phase 1 bereits zu bauen.
 3. **Dashboard-Hinweis** (`dashboard.js`, das bereits `rpeAvg` je Einheit
    anzeigt): ein kompakter Hinweis „X Athlet:innen mit auffälliger
    Anwesenheit" für `trainer`/`admin`, verlinkt in die Detailansicht
@@ -377,16 +400,61 @@ Brainstorm-Dokument:
    3.3 test- und auslieferbar zu sein, aber am aufwendigsten, deshalb
    zuletzt.
 
-## 7. Offene Punkte zur Diskussion
+## 7. Entscheidungen
 
-- **Schwellenwerte für den Anwesenheits-Frühindikator (3.3):** fest im
-  Code oder von Anfang an konfigurierbar? Vorschlag oben: fest, mit
-  späterer Konfigurierbarkeit als Ausbau.
-- **`TrainingSession.actualDistance` (3.2):** wirklich nötig für Phase 1,
-  oder reicht „nur Sessions mit verknüpftem Plan zählen, alle anderen
-  ignorieren" als erste, einfachere Version? Reduziert Phase 1 um eine
-  Migration, kostet aber Ad-hoc-Einheiten in der Umfangs-Auswertung.
-- **Zyklen gruppen-übergreifend?** Aktuell `PlanCycle.groupId` optional
-  (nullable) — ein Zyklus ohne Gruppe müsste beim Anwenden die Zielgruppe
-  jedes Mal manuell abfragen. Zu klären, ob das der gewünschte
-  Standardfall ist oder ob `groupId` verpflichtend sein sollte.
+Die drei zuvor offenen Punkte sind wie folgt entschieden — die
+Datenmodelle/Workflows oben in Abschnitt 1–3 spiegeln bereits diese
+Entscheidungen wider.
+
+### 7.1 Schwellenwerte für den Anwesenheits-Frühindikator (3.3): fest im Code
+
+**Entscheidung:** fest im Code, kein Vereins-Setting in Phase 1.
+
+**Begründung:** Die konfigurierbaren Erinnerungs-Schwellen bei
+Qualifikationen (`docs/nutzer-qualifikationen-plan.md`, Abschnitt 2.4)
+sind dort gerechtfertigt, weil unterschiedliche Qualifikationsarten
+fachlich unterschiedliche, vom Verband/Verein vorgegebene Fristen haben
+(harte Anforderung, kein Ermessensspielraum). Der Anwesenheits-
+Frühindikator ist dagegen ein weiches, heuristisches Signal ohne
+externe Vorgabe — ein Konfigurationsdialog dafür wäre in Phase 1
+Overengineering, bevor überhaupt Erfahrungswerte vorliegen, ob 30
+Prozentpunkte/50 % die richtigen Werte sind. Die konkreten Werte (siehe
+Abschnitt 3.2 oben: 30 Prozentpunkte relativer Abfall bei ≥ 8 Einheiten
+Historie, 50 % absolute Untergrenze unabhängig von der Historie) stehen
+als benannte Konstanten im Code, damit eine spätere Konfigurierbarkeit
+(pro Verein) ohne Umbau der Berechnungslogik nachrüstbar bleibt.
+
+### 7.2 `TrainingSession.actualDistance` (3.2): wird in Phase 1 aufgenommen
+
+**Entscheidung:** ja, aufnehmen.
+
+**Begründung:** `sessions.js: openSessionModal()` erlaubt schon heute
+`planId: null` als Standardfall — Ad-hoc-Einheiten ohne Vorlage sind
+also kein hypothetischer Randfall, sondern bereits regulär unterstützt.
+Ohne `actualDistance` würden solche Einheiten in der neuen
+Umfangs-Auswertung (3.2) stillschweigend mit 0 Metern gezählt — das wäre
+kein neutrales „Feature fehlt noch", sondern eine **irreführende
+Auswertung** für genau die Zielgruppe (Trainer:innen), die sich auf die
+Zahl verlassen soll. Die Migration ist minimal-invasiv (ein nullable
+`INTEGER`, kein Backfill, kein Pflichtfeld), das Aufwand-/Risiko-
+Verhältnis rechtfertigt die Aufnahme in Phase 1.
+
+### 7.3 Zyklen gruppen-übergreifend: `PlanCycle` bekommt keine `groupId`
+
+**Entscheidung:** `PlanCycle` ist NICHT an eine Gruppe gebunden; die
+Zielgruppe wird bei jedem „Anwenden" verpflichtend abgefragt.
+
+**Begründung:** Konsistenz mit dem bestehenden Modell — `Template` (die
+nächstverwandte, bereits existierende Vorlagen-Ressource) hat ebenfalls
+keine `groupId` und ist frei über Gruppen hinweg wiederverwendbar. Ein
+Zyklus ist inhaltlich dieselbe Art Vorlage, nur auf Wochenebene statt auf
+Einzeltag-Ebene — er sollte sich also genauso verhalten. Das trifft
+zudem den naheliegenden Anwendungsfall besser: ein
+„Wettkampfvorbereitungs-Zyklus" ist z. B. für mehrere Leistungsgruppen
+gleichermaßen sinnvoll, oder wird über mehrere Saisons hinweg auf
+wechselnde Gruppen angewendet (Athlet:innen rücken zwischen Gruppen auf).
+Eine feste `groupId` hätte diese Wiederverwendung künstlich
+eingeschränkt, ohne einen Vorteil zu bieten — das verpflichtende
+Abfragen der Zielgruppe beim Anwenden kostet nur einen zusätzlichen
+Klick, den das manuelle Anlegen eines einzelnen `Plan` (`Plan.groupId`
+ist dort schon Pflichtfeld) ohnehin bereits verlangt.
