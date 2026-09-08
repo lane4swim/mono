@@ -241,10 +241,43 @@ bei Wettkämpfen anderer Vereine eingesetzt werden.
 
 ---
 
-**Priorisierung:** Diese Sammlung ist bewusst unpriorisiert. Anhand von
-Aufwand/Nutzen erscheinen 1.2 (Push, da Infrastruktur teilweise vorhanden),
-2.2 (Bestenlisten, da reine Auswertung ohne neue Schreibpfade) und 6.3
-(CSV-Export) als vergleichsweise kleine, schnell umsetzbare nächste
-Schritte; 4.2 (Eltern-Zugang) und 7.2 (verbandsübergreifende Freigabe) sind
-architektonisch am aufwendigsten, da sie jeweils ins bestehende
-Rollen- bzw. Mandantenmodell eingreifen.
+## Priorisierung: Phasenplanung
+
+Die folgende Reihenfolge legt fest, welche Abschnitte zuerst angegangen
+werden. Innerhalb eines Abschnitts sind alle Unterpunkte (z. B. 4.1 *und*
+4.2 innerhalb von Abschnitt 4) Teil derselben Phase, außer explizit nur ein
+Unterpunkt genannt ist (Abschnitt 1: nur 1.2, nicht 1.1/1.3; Abschnitt 2:
+nur 2.2, nicht 2.1/2.3).
+
+| Phase | Abschnitt(e) | Umfang |
+|---|---|---|
+| **Phase 1** | 3 | 3.1 Wiederkehrende Trainingspläne/Vorlagen-Zyklen, 3.2 Belastungssteuerung/Trainingsumfang-Auswertung, 3.3 Anwesenheitsstatistik & -prognose |
+| **Phase 2** | 1.2, 4 | 1.2 Push-Benachrichtigungen; 4.1 Vereinsinterne Nachrichten/Ankündigungen, 4.2 Eltern-/Erziehungsberechtigten-Zugang |
+| **Phase 3** | 5 | 5.1 Mehrere Gruppen-Trainer:innen/Vertretungsregelung, 5.2 Audit-Log für sicherheitsrelevante Aktionen |
+| **Phase 4** | 2.2, 6.3 | 2.2 Automatische Bestenlisten/Vereinsrekorde, 6.3 Datenexport für externe Auswertung (CSV/Excel) |
+
+**Begründung der Reihenfolge:**
+- **Phase 1 (Trainingsplanung)** zuerst, da sie den Kernalltag von
+  Trainer:innen betrifft (tägliche/wöchentliche Nutzung) und rein additiv
+  auf bestehenden `templates`/`plans`/`sessions`-Daten aufbaut — kein
+  Eingriff in Rollen-, Mandanten- oder Sync-Modell nötig.
+- **Phase 2 (Push + Kommunikation)** baut logisch auf Phase 1 auf: 1.2
+  liefert die Zustellinfrastruktur (Web-Push), die 4.1 (Ankündigungen)
+  erst wirksam macht — ein Ankündigungs-Modul ohne Benachrichtigung würde
+  seinen Zweck kaum erfüllen. 4.2 (Eltern-Zugang) ist architektonisch
+  aufwendiger (neue Rolle, DSGVO-Prüfung) und deshalb bewusst zusammen
+  mit, nicht vor der Push-Grundlage eingeordnet.
+- **Phase 3 (Vereinsverwaltung)** danach, da 5.1 auf dem in
+  `docs/kampfrichter-modul-plan.md` bereits gelegten
+  Mehrfachrollen-Fundament aufsetzt und 5.2 (Audit-Log) von den bis dahin
+  neu hinzugekommenen sicherheitsrelevanten Aktionen (Ankündigungen,
+  Push-Abos) mit profitiert, wenn es nach ihnen kommt.
+- **Phase 4 (Bestenlisten + CSV-Export)** bewusst abschließend: beides
+  sind reine, unabhängige Auswertungs-/Exportfunktionen auf bereits
+  bestehenden Daten (`Result`, `sessions`), ohne Abhängigkeit zu den
+  vorherigen Phasen — sie liefern sichtbaren Mehrwert, sind aber am
+  wenigsten dringlich für den Kernbetrieb.
+
+**Nicht in dieser Phasenplanung enthalten** (Abschnitte 1.1, 1.3, 2.1, 2.3,
+6.1, 6.2, 7.1, 7.2) sind für spätere, noch nicht terminierte Entwicklungen
+vorgesehen und werden erst nach Abschluss von Phase 4 erneut priorisiert.
