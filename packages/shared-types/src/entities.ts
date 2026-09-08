@@ -318,6 +318,9 @@ export const TrainingSessionSchema = z.object({
   planId: z.string().uuid().nullable(),
   trainerNote: z.string().max(5000).default(''),
   attendance: z.array(AttendanceRecordSchema).max(500),
+  // Manuelle Distanzangabe (Meter). null = aus dem verknüpften Plan-Tag
+  // berechnen (Standardfall) — siehe docs/trainingsplanung-phase1-plan.md.
+  actualDistance: z.number().int().nonnegative().nullable().default(null),
   createdAt: isoDate,
   updatedAt: isoDate,
 }).strict();

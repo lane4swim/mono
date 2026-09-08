@@ -75,6 +75,7 @@ async function renderDetail(container, sessionId) {
   ]));
   wrap.appendChild(laneWave());
   if (plan) wrap.appendChild(el('p', {}, t('sessions.basedOnPlan', { name: plan.name })));
+  else if (session.actualDistance != null) wrap.appendChild(el('p', {}, t('sessions.actualDistanceLine', { m: session.actualDistance })));
   if (session.trainerNote) wrap.appendChild(el('div', { class: 'card' }, [el('h3', { class: 'mt-0' }, t('sessions.trainerNoteTitle')), el('p', {}, session.trainerNote)]));
 
   const attCard = el('div', { class: 'card' }, [el('h3', { class: 'mt-0' }, t('sessions.attendanceTitle'))]);
@@ -134,6 +135,14 @@ function openSessionModal(session, groups, athletes, onSaved) {
   form.appendChild(el('div', { class: 'form-grid' }, [field(t('sessions.formDate'), fDate), field(t('sessions.formGroup'), fGroup)]));
   form.appendChild(field(t('sessions.formTrainerNote'), fNote, { hint: t('sessions.formTrainerNoteHint') }));
 
+  // Nur ohne verknüpften Plan relevant — sonst wird der Umfang aus dem
+  // Plan-Tag berechnet (siehe attendanceStats.js/trainingLoad.js).
+  let fActualDistance = null;
+  if (!data.planId) {
+    fActualDistance = el('input', { type: 'number', min: '0', value: data.actualDistance ?? '' });
+    form.appendChild(field(t('sessions.formActualDistance'), fActualDistance, { hint: t('sessions.formActualDistanceHint') }));
+  }
+
   const attWrap = el('div', { class: 'field' });
   attWrap.appendChild(el('label', {}, t('sessions.attendanceRpeLabel')));
   const attHost = el('div');
@@ -160,7 +169,8 @@ function openSessionModal(session, groups, athletes, onSaved) {
   form.appendChild(formActions({ onCancel: () => close(), submitLabel: isEdit ? t('common.save') : t('sessions.addSession').replace('+ ', ''), spanFull: false }).row);
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    await put('sessions', { ...data, date: toIsoDateTime(fDate.value), groupId: fGroup.value, trainerNote: fNote.value.trim(), attendance: data.attendance });
+    const actualDistance = fActualDistance ? (fActualDistance.value ? parseInt(fActualDistance.value, 10) : null) : (data.actualDistance ?? null);
+    await put('sessions', { ...data, date: toIsoDateTime(fDate.value), groupId: fGroup.value, trainerNote: fNote.value.trim(), attendance: data.attendance, actualDistance });
     toast(isEdit ? t('sessions.savedEdit') : t('sessions.savedCreate'));
     close(); onSaved?.();
   });

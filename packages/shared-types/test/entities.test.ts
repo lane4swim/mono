@@ -365,6 +365,22 @@ describe('TrainingSessionSchema', () => {
     expect(TrainingSessionSchema.safeParse({ ...base, attendance: Array(501).fill(entry) }).success).toBe(false);
     expect(TrainingSessionSchema.safeParse({ ...base, attendance: Array(500).fill(entry) }).success).toBe(true);
   });
+
+  // Phase 1, Abschnitt 3.2 (docs/trainingsplanung-phase1-plan.md).
+  it('actualDistance ist optional und defaultet auf null (Altbestand ohne dieses Feld)', () => {
+    const session = { id: ATHLETE_ID, clubId: CLUB_ID, date: now, groupId: null, planId: null, trainerNote: '', attendance: [], createdAt: now, updatedAt: now };
+    const parsed = TrainingSessionSchema.safeParse(session);
+    expect(parsed.success).toBe(true);
+    expect(parsed.success && parsed.data.actualDistance).toBeNull();
+  });
+  it('akzeptiert eine gesetzte actualDistance', () => {
+    const session = { id: ATHLETE_ID, clubId: CLUB_ID, date: now, groupId: null, planId: null, trainerNote: '', attendance: [], actualDistance: 3200, createdAt: now, updatedAt: now };
+    expect(TrainingSessionSchema.safeParse(session).success).toBe(true);
+  });
+  it('lehnt eine negative actualDistance ab', () => {
+    const session = { id: ATHLETE_ID, clubId: CLUB_ID, date: now, groupId: null, planId: null, trainerNote: '', attendance: [], actualDistance: -1, createdAt: now, updatedAt: now };
+    expect(TrainingSessionSchema.safeParse(session).success).toBe(false);
+  });
 });
 
 describe('ActionItemSchema', () => {

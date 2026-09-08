@@ -485,6 +485,11 @@ model TrainingSession {
   trainerNote String    @default("")
   // Array von { athleteId, present, rpe, note } — ein Eintrag je Athlet:in.
   attendance  Json
+  // Manuelle Distanzangabe (Meter) für Einheiten ohne planId (Ad-hoc-
+  // Training) oder bei Abweichung vom Plan-Tag. null = aus dem
+  // verknüpften Plan-Tag berechnen (Standardfall). Siehe
+  // docs/trainingsplanung-phase1-plan.md, Abschnitt 2.2.
+  actualDistance Int?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?

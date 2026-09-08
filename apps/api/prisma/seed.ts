@@ -145,6 +145,9 @@ export function buildDemoData() {
   };
   const session2 = {
     id: id(), clubId: club.id, date: addDays(wkStart, -7), groupId: groupA.id, planId: null as string | null, trainerNote: 'Eine Athletin krank gemeldet.',
+    // Ad-hoc-Einheit ohne Plan — actualDistance demonstriert den Fallback
+    // aus docs/trainingsplanung-phase1-plan.md, Abschnitt 2.2.
+    actualDistance: 1800,
     attendance: groupAAthletes.map((a, i) => ({ athleteId: a.id, present: i !== 2, rpe: i !== 2 ? 7 : null, note: i === 2 ? 'Krankheit' : '' })),
   };
   const sessions = [session1, session2];
@@ -231,7 +234,7 @@ async function main() {
     await prisma.exercise.createMany({ data: data.exercises });
     await prisma.template.createMany({ data: data.templates.map((t) => ({ id: t.id, clubId: t.clubId, name: t.name, description: t.description, tags: t.tags, sets: t.sets })) });
     await prisma.plan.createMany({ data: data.plans.map((p) => ({ id: p.id, clubId: p.clubId, name: p.name, weekStart: new Date(p.weekStart), groupId: p.groupId, status: p.status, days: p.days })) });
-    await prisma.trainingSession.createMany({ data: data.sessions.map((s) => ({ id: s.id, clubId: s.clubId, date: new Date(s.date), groupId: s.groupId, planId: s.planId, trainerNote: s.trainerNote, attendance: s.attendance })) });
+    await prisma.trainingSession.createMany({ data: data.sessions.map((s) => ({ id: s.id, clubId: s.clubId, date: new Date(s.date), groupId: s.groupId, planId: s.planId, trainerNote: s.trainerNote, attendance: s.attendance, actualDistance: s.actualDistance ?? null })) });
     await prisma.actionItem.createMany({ data: data.actionItems.map((a) => ({ ...a, createdDate: new Date(a.createdDate), dueDate: a.dueDate ? new Date(a.dueDate) : null })) });
     await prisma.competition.createMany({ data: data.competitions.map((c) => ({ ...c, date: new Date(c.date) })) });
 

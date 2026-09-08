@@ -15,7 +15,7 @@ noch vor jeder Implementierung als Diskussionsgrundlage gedacht.
 | Teil | Status |
 |---|---|
 | 3.1 Wiederkehrende Trainingspläne/Vorlagen-Zyklen | offen |
-| 3.2 Belastungssteuerung/Trainingsumfang-Auswertung | offen |
+| 3.2 Belastungssteuerung/Trainingsumfang-Auswertung | **umgesetzt** — siehe Abschnitt 2.5 |
 | 3.3 Anwesenheitsstatistik & -prognose | **umgesetzt** — siehe Abschnitt 3.4 |
 
 ## 0. Ausgangslage
@@ -273,9 +273,11 @@ model TrainingSession {
 
 Zod-Erweiterung: `TrainingSessionSchema` bekommt
 `actualDistance: z.number().int().nonnegative().nullable().default(null)`.
-Migration ist rein additiv (`ALTER TABLE sessions ADD COLUMN
-actual_distance INTEGER`), kein Backfill nötig — bestehende Zeilen
-bekommen `null` (= „aus Plan berechnen", unverändertes Verhalten).
+Migration ist rein additiv (`ALTER TABLE "sessions" ADD COLUMN
+"actualDistance" INTEGER` — camelCase, wie in dieser Codebasis für
+Spaltennamen üblich, siehe z. B. `nationalID`/`nationalIDType`), kein
+Backfill nötig — bestehende Zeilen bekommen `null` (= „aus Plan
+berechnen", unverändertes Verhalten).
 
 Aggregationslogik damit: `volumeOfSession = s.actualDistance ??
 (day ? totalDistance(day.sets) : null)`.
@@ -315,6 +317,71 @@ Reine Funktionen (`computeWeeklyVolume(sessions, plans)`,
 `athleteRpeTrend(sessions, athleteId)`) — unabhängig vom DOM in Vitest
 testbar, analog zum bestehenden Trennungsprinzip zwischen reiner
 Aggregationslogik und Rendering in `stats.js`.
+
+### 2.5 Umsetzungsstand: **umgesetzt**
+
+- `apps/api/prisma/schema.prisma` / neue Migration
+  `20260908090000_add_session_actual_distance` — `TrainingSession.
+  actualDistance Int?`. **Nicht gegen eine echte Postgres-Instanz
+  geprüft** (kein Docker-Zugriff in dieser Sandbox, analog zum bereits
+  bekannten Vorbehalt bei der Qualifikationen-Migration, siehe
+  `docs/todo.md`) — vor dem ersten Produktiv-Deployment `npx prisma
+  migrate deploy` gegen eine echte Datenbank verifizieren.
+- `packages/shared-types/src/entities.ts` — `TrainingSessionSchema`
+  bekommt `actualDistance` (nonnegative Int, nullable, Default `null`);
+  da kein Pflichtfeld, bleiben alle Alt-Datensätze ohne dieses Feld
+  gültig. Kein neuer REST-Endpunkt, keine neue Konfliktlogik nötig — der
+  Wert fließt automatisch über den bestehenden generischen Sync-Pfad
+  (`delegate.create({ data: payload })` in `sync.gateway.ts`), wie im
+  Plan vorgesehen.
+- `apps/api/src/modules/sync/sync.athleteScope.ts` — **keine Änderung
+  nötig**: die athletenseitige Redaktion von `sessions`-Payloads spread
+  bereits das gesamte Payload durch (nur `trainerNote`/`attendance`
+  werden gezielt überschrieben), `actualDistance` bleibt also automatisch
+  sichtbar — mit einem Regressionstest abgesichert
+  (`apps/api/test/sync/sync.service.test.ts`).
+- `apps/web/js/modules/trainingLoad.js` — die reinen Funktionen
+  `computeWeeklyVolume()`, `athleteWeeklyVolume()` (zusätzlich zur
+  ursprünglichen Planung, für die kombinierte Ansicht benötigt) und
+  `athleteRpeTrend()`.
+- `apps/web/js/modules/stats.js` — drei neue/erweiterte Karten:
+  „Trainingsumfang je Gruppe" (Gruppenauswahl + Balkendiagramm, m pro
+  Kopf), die bestehende RPE-Karte um eine optionale Athlet:innen-Auswahl
+  erweitert (leer = Team-Durchschnitt wie bisher), sowie „Umfang vs.
+  RPE" pro Athlet:in.
+  - **Abweichung von der ursprünglichen Planung:** die „Kombinierte
+    Ansicht" (Abschnitt 2.3, Punkt 3) ist als zwei untereinander
+    angeordnete Liniendiagramme umgesetzt (Umfang, RPE), nicht als ein
+    einzelnes Diagramm mit zwei Linien/Achsen — `charts.js: svgLineChart()`
+    unterstützt nur eine Datenreihe pro Aufruf; eine Mehrserien-/
+    Dual-Achsen-Erweiterung der gemeinsam genutzten Chart-Grundfunktion
+    wäre ein Eingriff mit Tragweite für alle bestehenden Aufrufer, für
+    diese eine Ansicht nicht gerechtfertigt.
+  - Die alte „Training volume"-Karte (Wettkampfzeiten pro Monat) bleibt
+    unverändert bestehen — ihr Name im Code-Kommentar war irreführend
+    (klang nach Trainingsumfang, zeigt aber Wettkampfaktivität); der
+    Kommentar wurde präzisiert, die Karte selbst ist unverändert
+    weiterhin nützlich und unabhängig von 3.2.
+- `apps/web/js/modules/sessions.js` — neues Formularfeld „Umfang (m)" im
+  Einheit-Erfassen-Modal, **nur sichtbar ohne verknüpften Plan**.
+  **Wichtiger Befund beim Umsetzen:** `planId` ist im gesamten Frontend
+  aktuell an KEINER Stelle über die UI setzbar (weder im Session-Modal
+  noch anderswo) — jede über die App angelegte Einheit hat `planId:
+  null`. `actualDistance` ist damit praktisch der einzige heute
+  erreichbare Pfad zu einem Trainingsumfangswert, nicht nur ein
+  Fallback für einen Randfall. Eine Plan-Verknüpfung im Session-Modal
+  nachzurüsten war nicht Teil dieses Plans und wurde bewusst nicht mit
+  erledigt — separate Entscheidung, falls gewünscht.
+- `apps/api/prisma/seed.ts` — `session2` (die bereits vorhandene
+  Ad-hoc-Einheit ohne Plan) bekommt `actualDistance: 1800`, damit die
+  Demo-Datenbank den neuen Fallback direkt zeigt.
+- Übersetzungsschlüssel in `de-DE.js`/`en-US.js` (Namespaces
+  `stats`/`sessions`); `sw.js`: `trainingLoad.js` precacht,
+  Cache-Version auf `lane1-v43`.
+- Tests: `apps/web/test/trainingLoad.test.js` (6 Fälle), drei neue
+  `TrainingSessionSchema`-Tests in `packages/shared-types`, ein neuer
+  Sync-Redaktionstest in `apps/api`. Gesamte Testsuite bleibt grün: 1001
+  Tests, 0 Fehlschläge.
 
 ## 3. Abschnitt 3.3 — Anwesenheitsstatistik & -prognose
 
