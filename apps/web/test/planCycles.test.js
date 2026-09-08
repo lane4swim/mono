@@ -59,4 +59,30 @@ describe('buildPlansFromCycle()', () => {
     const plans = buildPlansFromCycle(cycle, [], '2026-01-05', 'g1');
     expect(plans[0].days[0].sets).toEqual([]);
   });
+
+  // Regressionstest (Code-Review): Plan.name ist serverseitig auf 200
+  // Zeichen begrenzt (PlanSchema) — Zyklusname + Label konnten das bislang
+  // ungekappt überschreiten, wodurch der Sync-Push dauerhaft scheiterte.
+  it('kappt den generierten Plan-Namen auf 200 Zeichen', () => {
+    const cycle = { name: 'C'.repeat(200), weeks: [{ weekOffset: 0, label: 'W'.repeat(200), days: [] }] };
+    const plans = buildPlansFromCycle(cycle, [], '2026-01-05', 'g1');
+    expect(plans[0].name.length).toBeLessThanOrEqual(200);
+  });
+
+  // Regressionstest (Code-Review): isoAddDays()/startOfWeek() rundeten
+  // früher über toISOString() nach UTC, nachdem lokal gerechnet wurde —
+  // östlich von UTC verschob das jeden erzeugten Tag um bis zu einen Tag.
+  // Läuft bewusst unter einer nicht-UTC-Zeitzone, um das abzudecken.
+  it('bleibt unabhängig von der lokalen Zeitzone (Regression: Tagesverschiebung)', () => {
+    const originalTz = process.env.TZ;
+    process.env.TZ = 'Europe/Berlin';
+    try {
+      const cycle = { name: 'X', weeks: [{ weekOffset: 1, label: '', days: [{ dayOfWeek: 2, templateId: 'a' }] }] };
+      const plans = buildPlansFromCycle(cycle, [template('a', 1000)], '2026-01-08', 'g1'); // Donnerstag
+      expect(plans[0].weekStart).toBe('2026-01-12'); // Woche 2 -> Montag der Folgewoche
+      expect(plans[0].days[0].date).toBe('2026-01-14'); // Mittwoch derselben Woche
+    } finally {
+      process.env.TZ = originalTz;
+    }
+  });
 });

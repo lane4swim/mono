@@ -40,6 +40,27 @@ describe('computeWeeklyVolume()', () => {
     const sessions = [session({ date: '2026-01-05', groupId: 'g2', actualDistance: 1000, attendance: [['a', true]] })];
     expect(computeWeeklyVolume(sessions, [], 'g1')).toEqual([]);
   });
+
+  // Regressionstest (Code-Review): teilte vormals durch die Summe der
+  // Anwesenheits-EINTRÄGE über alle Einheiten der Woche statt durch die
+  // Anzahl distinkter Athlet:innen — bei mehreren Einheiten pro Woche kam
+  // dadurch der Schnitt PRO EINHEIT statt der Wochenumfang PRO KOPF heraus.
+  it('summiert mehrere Einheiten derselben Woche zum Wochenumfang pro Kopf (nicht Schnitt pro Einheit)', () => {
+    const att = [['a', true], ['b', true]];
+    const sessions = ['2026-01-05', '2026-01-07', '2026-01-09'].map(date => session({ date, actualDistance: 3000, attendance: att }));
+    expect(computeWeeklyVolume(sessions, [], 'g1')).toEqual([{ week: '2026-01-05', meters: 9000 }]);
+  });
+
+  // Deckt den Fall unterschiedlicher Anwesenheit je Einheit ab: das
+  // Ergebnis muss dem Mittel der athleteWeeklyVolume()-Werte entsprechen.
+  it('mittelt korrekt bei wechselnder Anwesenheit innerhalb derselben Woche', () => {
+    const sessions = [
+      session({ date: '2026-01-05', actualDistance: 2000, attendance: [['a', true], ['b', true]] }),
+      session({ date: '2026-01-07', actualDistance: 1000, attendance: [['a', true], ['b', false]] }),
+    ];
+    // a: 2000+1000=3000, b: 2000 -> Mittel (3000+2000)/2 = 2500
+    expect(computeWeeklyVolume(sessions, [], 'g1')).toEqual([{ week: '2026-01-05', meters: 2500 }]);
+  });
 });
 
 describe('athleteWeeklyVolume()', () => {

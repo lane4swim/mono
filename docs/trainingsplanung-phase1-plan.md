@@ -293,6 +293,28 @@ zugreifen (Erstellen/Anwenden ausschließlich `trainer`/`admin`, analog zu
   fehlende Vorlage). Gesamte Monorepo-Suite bleibt grün: 1012 Tests, 0
   Fehlschläge, `npm run lint` sauber in allen vier Workspaces.
 
+**Nachträglich behoben (unabhängiges Code-Review):**
+- **Zeitzonen-Fehler in `dates.js: isoAddDays()`/`startOfWeek()`** — beide
+  parsten als lokale Mitternacht, rechneten lokal weiter, gaben das
+  Ergebnis aber über `toISOString()` in UTC zurück. Östlich von UTC (z. B.
+  Europe/Berlin) verschob das jeden erzeugten Tag um bis zu einen Tag
+  zurück — `buildPlansFromCycle()` verkettet beide Funktionen und
+  vervielfachte den Effekt (Wochenanfang UND jeder Wochentag betroffen).
+  Behoben durch durchgehende UTC-Arithmetik; betrifft auch `plans.js`
+  (Default-Wochenbeginn) und `demoSeed.js`, die dieselben Helfer nutzen.
+  Neuer Test `apps/web/test/dates.test.js`, läuft unter vier Zeitzonen.
+- **Veraltete Anzeige nach dem Bearbeiten eines Zyklus** — der
+  Bearbeiten-Button reichte die beim Laden der Detailseite geladene
+  `cycles`-Kopie an den `onSaved`-Callback weiter, statt neu zu laden;
+  eine Umbenennung blieb bis zum nächsten Reload unsichtbar. Behoben
+  durch einen `refreshDetail()`-Callback (lädt neu aus der DB), analog
+  zu `plans.js: renderDetail()`.
+- **Generierter Plan-Name konnte `PlanSchema.name.max(200)` überschreiten**
+  — Zyklusname (≤ 200) und Wochen-Label (≤ 200) zusammen bis zu 403
+  Zeichen; ein solcher Plan wurde lokal angelegt, sein Sync-Push aber
+  dauerhaft abgelehnt. Behoben durch Kappung auf 200 Zeichen in
+  `planNameFor()`.
+
 ## 2. Abschnitt 3.2 — Belastungssteuerung / Trainingsumfang-Auswertung
 
 ### 2.1 Was schon da ist, was fehlt
@@ -450,6 +472,17 @@ Aggregationslogik und Rendering in `stats.js`.
   `TrainingSessionSchema`-Tests in `packages/shared-types`, ein neuer
   Sync-Redaktionstest in `apps/api`. Gesamte Testsuite bleibt grün: 1001
   Tests, 0 Fehlschläge.
+
+**Nachträglich behoben (unabhängiges Code-Review):**
+`computeWeeklyVolume()` teilte durch die Summe der Anwesenheits-EINTRÄGE
+über alle Einheiten einer Woche statt durch die Anzahl distinkter
+Athlet:innen — bei mehreren Einheiten pro Woche kam dadurch der Schnitt
+PRO EINHEIT heraus statt des Wochenumfangs PRO KOPF (3 Einheiten à 3000 m
+zeigten 3000 m statt 9000 m; `athleteWeeklyVolume()` auf derselben Seite
+zeigte für dieselbe Konstellation korrekt 9000 m). Die ursprünglichen
+Tests deckten nur Ein-Einheit-Wochen ab, wo beide Rechenwege zufällig
+dasselbe Ergebnis liefern. Behoben durch Zählen distinkter `athleteId`s
+statt Anwesenheits-Einträge; zwei neue Tests in `trainingLoad.test.js`.
 
 ## 3. Abschnitt 3.3 — Anwesenheitsstatistik & -prognose
 

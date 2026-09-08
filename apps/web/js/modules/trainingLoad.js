@@ -13,24 +13,29 @@ function sessionVolume(session, plans) {
   return day ? totalDistance(day.sets || []) : null;
 }
 
-// Wöchentlicher Umfang einer Gruppe, gemittelt pro anwesender Person
-// (damit Gruppengröße/Anwesenheitsschwankungen nicht verzerren).
+// Wöchentlicher Umfang einer Gruppe, gemittelt über die Athlet:innen, die
+// diese Woche mindestens einmal anwesend waren (nicht über die Summe der
+// Anwesenheits-EINTRÄGE — sonst verwässert eine Woche mit mehreren
+// Einheiten den Wert auf den Schnitt PRO EINHEIT statt den Wochenumfang
+// PRO KOPF zu liefern; Bug gefunden im Code-Review, athleteWeeklyVolume()
+// zeigte für dieselbe Woche einen höheren Wert). Rechnerisch äquivalent
+// zum Mittel der athleteWeeklyVolume()-Werte aller anwesenden Athlet:innen.
 export function computeWeeklyVolume(sessions, plans, groupId) {
   const byWeek = new Map();
   for (const s of sessions) {
     if (s.groupId !== groupId) continue;
     const volume = sessionVolume(s, plans);
-    const present = (s.attendance || []).filter(a => a.present).length;
-    if (volume == null || !present) continue;
+    const presentIds = (s.attendance || []).filter(a => a.present).map(a => a.athleteId);
+    if (volume == null || presentIds.length === 0) continue;
     const week = startOfWeek(s.date);
-    const tally = byWeek.get(week) || { meterHeads: 0, present: 0 };
-    tally.meterHeads += volume * present;
-    tally.present += present;
+    const tally = byWeek.get(week) || { athleteMeters: 0, athletes: new Set() };
+    tally.athleteMeters += volume * presentIds.length;
+    presentIds.forEach(id => tally.athletes.add(id));
     byWeek.set(week, tally);
   }
   return [...byWeek.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([week, t]) => ({ week, meters: Math.round(t.meterHeads / t.present) }));
+    .map(([week, t]) => ({ week, meters: Math.round(t.athleteMeters / t.athletes.size) }));
 }
 
 // Wöchentlicher Umfang einer einzelnen Athlet:in (Summe der Einheiten, an

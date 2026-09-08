@@ -136,7 +136,7 @@ function openSessionModal(session, groups, athletes, onSaved) {
   form.appendChild(field(t('sessions.formTrainerNote'), fNote, { hint: t('sessions.formTrainerNoteHint') }));
 
   // Nur ohne verknüpften Plan relevant — sonst wird der Umfang aus dem
-  // Plan-Tag berechnet (siehe attendanceStats.js/trainingLoad.js).
+  // Plan-Tag berechnet (siehe trainingLoad.js).
   let fActualDistance = null;
   if (!data.planId) {
     fActualDistance = el('input', { type: 'number', min: '0', value: data.actualDistance ?? '' });

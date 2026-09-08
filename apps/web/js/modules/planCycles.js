@@ -18,6 +18,16 @@ import { t } from '../i18n.js';
 // siehe dates.js: startOfWeek()).
 const WEEKDAY_KEYS = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
 
+// Plan.name ist serverseitig auf 200 Zeichen begrenzt
+// (packages/shared-types/src/entities.ts: PlanSchema) — Zyklusname und
+// Wochen-Label dürfen je bis zu 200 sein, ihre Kombination also bis zu 403.
+// Ohne diese Kappung würde ein solcher Plan lokal angelegt, aber sein
+// Sync-Push dauerhaft am Schema scheitern (Code-Review-Fund).
+const PLAN_NAME_MAX = 200;
+function planNameFor(cycleName, weekLabel) {
+  return `${cycleName} — ${weekLabel}`.slice(0, PLAN_NAME_MAX);
+}
+
 // Reine Funktion: erzeugt aus einem Zyklus konkrete Plan-Objekte
 // (Snapshot — kein Bezug zu Cycle/Template danach). Daten sind noch ohne
 // id/clubId/createdAt/updatedAt, das übernimmt put() beim Speichern.
@@ -29,7 +39,7 @@ export function buildPlansFromCycle(cycle, templates, startDateIso, groupId) {
       const tpl = templates.find(x => x.id === d.templateId);
       return { date: isoAddDays(weekStart, d.dayOfWeek), sets: tpl ? cloneItems(tpl.sets) : [] };
     });
-    return { name: `${cycle.name} — ${week.label || `Woche ${i + 1}`}`, weekStart, groupId, status: 'aktiv', days };
+    return { name: planNameFor(cycle.name, week.label || `Woche ${i + 1}`), weekStart, groupId, status: 'aktiv', days };
   });
 }
 
@@ -79,7 +89,7 @@ function renderCycleDetail(container, cycleId, cycles, templates, groups) {
     el('div', {}, [el('h1', { class: 'mt-0' }, cycle.name)]),
     el('div', { class: 'page-actions' }, canManage ? [
       el('button', { class: 'btn btn-accent', onclick: () => openApplyCycleModal(cycle, templates, groups) }, t('planCycles.apply')),
-      el('button', { class: 'btn btn-ghost', onclick: () => openCycleModal(cycle, templates, () => { clear(container); renderCycleDetail(container, cycleId, cycles, templates, groups); }) }, t('common.edit')),
+      el('button', { class: 'btn btn-ghost', onclick: () => openCycleModal(cycle, templates, refreshDetail) }, t('common.edit')),
       el('button', { class: 'btn btn-danger', onclick: () => confirmAction(t('planCycles.deleteConfirm'), async () => { await remove('planCycles', cycleId); toast(t('planCycles.deleted')); navigate('plans', 'cycles'); }) }, t('common.delete')),
     ] : []),
   ]));
@@ -102,6 +112,17 @@ function renderCycleDetail(container, cycleId, cycles, templates, groups) {
   });
 
   container.appendChild(wrap);
+
+  // Nach dem Speichern neu aus der DB laden statt die veraltete `cycles`-
+  // Kopie aus dem Aufrufer-Closure weiterzureichen (Code-Review-Fund: eine
+  // Umbenennung/Wochenänderung blieb sonst bis zum nächsten Reload
+  // unsichtbar) — analog zu plans.js: renderDetail(), das ebenfalls frisch
+  // lädt statt eine übergebene Liste wiederzuverwenden.
+  async function refreshDetail() {
+    const [cycles2, templates2, groups2] = await Promise.all(['planCycles', 'templates', 'groups'].map(getAll));
+    clear(container);
+    renderCycleDetail(container, cycleId, cycles2, templates2, groups2);
+  }
 }
 
 function openCycleModal(cycle, templates, onSaved) {
