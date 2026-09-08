@@ -154,6 +154,7 @@ export default {
     recentSessionsTitle: 'Letzte Trainingseinheiten', noSessions: 'Noch keine Einheiten erfasst.',
     attendanceLine: 'Anwesend {present}/{total}', avgRpe: ' · Ø RPE {rpe}',
     allSessions: 'Alle Einheiten →',
+    attendanceFlagsTitle: 'Auffällige Anwesenheit', attendanceFlagsMsg: '{count} Athlet:in(nen) mit gesunkener Anwesenheit — Details in den Statistiken.',
     statPBs: 'Persönliche Bestzeiten', disciplines: 'Disziplinen',
     statNextSession: 'Nächstes Training', statOpenGoals: 'Offene Ziele',
     currentPBsTitle: 'Aktuelle Bestzeiten', noTimesYet: 'Noch keine Zeiten erfasst.',
@@ -390,6 +391,10 @@ export default {
   stats: {
     eyebrow: 'Auswertungen', title: 'Statistiken',
     attendanceTitle: 'Anwesenheitsquote pro Gruppe (letzte Einheiten)', noSessions: 'Noch keine Trainingseinheiten erfasst.',
+    attendanceTrendTitle: 'Anwesenheitstrend über Zeit', filterGroup: 'Gruppe',
+    noAttendanceTrend: 'Noch nicht genug Daten für einen Anwesenheitstrend dieser Gruppe.',
+    attendanceFlagsTitle: 'Anwesenheits-Frühindikator', noAttendanceFlags: 'Aktuell keine Auffälligkeiten bei der Anwesenheit.',
+    attendanceFlagLine: 'Anwesenheit zuletzt {recent}%', attendanceFlagBadge: 'Auffällig',
     rpeTitle: 'Empfundene Belastung (Ø RPE je Einheit)', noRpeData: 'Noch nicht genug RPE-Daten für einen Trend.',
     volumeTitle: 'Erfasste Zeiten pro Monat', noTimes: 'Noch keine Zeiten erfasst.',
     exploreTitle: 'Leistungsentwicklung im Detail', filterAthlete: 'Athlet:in', filterEvent: 'Disziplin',

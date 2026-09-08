@@ -8,6 +8,8 @@ import { field, selectInput } from '../forms.js';
 import { svgBarChart, svgLineChart } from '../charts.js';
 import { EVENTS } from '../refdata.js';
 import { t, trOptionsFlat } from '../i18n.js';
+import { navigate } from '../router.js';
+import { attendanceTrend, flagLowAttendance } from './attendanceStats.js';
 
 export const statsModule = {
   id: 'stats',
@@ -49,6 +51,37 @@ function renderView(container, athletes, results, sessions, groups) {
   if (bars.every(b => b.value === 0) && sessions.length === 0) attCard.appendChild(el('p', {}, t('stats.noSessions')));
   else attCard.appendChild(svgBarChart({ bars, yFormat: (v) => v + '%', color: 'var(--c-petrol)' }));
   wrap.appendChild(attCard);
+
+  // -------- Anwesenheitstrend über Zeit je Gruppe (Phase 1, Abschnitt 3.3) --------
+  const trendCard = el('div', { class: 'card mb-16' }, [el('h3', { class: 'mt-0' }, t('stats.attendanceTrendTitle'))]);
+  let trendGroupId = groups[0]?.id;
+  if (groups.length > 0) {
+    trendCard.appendChild(field(t('stats.filterGroup'), selectInput(groups.map(g => ({ value: g.id, label: g.name })), trendGroupId, { onchange: (e) => { trendGroupId = e.target.value; drawTrend(); } })));
+  }
+  const trendHost = el('div');
+  trendCard.appendChild(trendHost);
+  wrap.appendChild(trendCard);
+
+  function drawTrend() {
+    clear(trendHost);
+    const points = attendanceTrend(sessions, trendGroupId).map(p => ({ y: p.rate, label: fmtDateShort(p.week) }));
+    if (points.length < 2) trendHost.appendChild(el('p', {}, t('stats.noAttendanceTrend')));
+    else trendHost.appendChild(svgLineChart({ points, yFormat: (v) => Math.round(v) + '%', color: 'var(--c-petrol)' }));
+  }
+  drawTrend();
+
+  // -------- Anwesenheits-Frühindikator (Phase 1, Abschnitt 3.3) --------
+  const flagCard = el('div', { class: 'card mb-16' }, [el('h3', { class: 'mt-0' }, t('stats.attendanceFlagsTitle'))]);
+  const flags = flagLowAttendance(sessions, athletes);
+  if (flags.length === 0) flagCard.appendChild(el('p', {}, t('stats.noAttendanceFlags')));
+  else flags.forEach(f => flagCard.appendChild(el('div', { class: 'list-row row-click', onclick: () => navigate('athletes', f.athlete.id) }, [
+    el('div', { style: 'flex:1' }, [
+      el('div', {}, fullName(f.athlete)),
+      el('div', { class: 'text-slate text-sm' }, t('stats.attendanceFlagLine', { recent: Math.round(f.recentRate) })),
+    ]),
+    badge(t('stats.attendanceFlagBadge'), 'open'),
+  ])));
+  wrap.appendChild(flagCard);
 
   // -------- RPE trend over time (team average per session) --------
   const rpeCard = el('div', { class: 'card mb-16' }, [el('h3', { class: 'mt-0' }, t('stats.rpeTitle'))]);

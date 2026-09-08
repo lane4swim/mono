@@ -131,6 +131,7 @@ export default {
     recentSessionsTitle: 'Recent Training Sessions', noSessions: 'No sessions recorded yet.',
     attendanceLine: 'Present {present}/{total}', avgRpe: ' · Avg. RPE {rpe}',
     allSessions: 'All sessions →',
+    attendanceFlagsTitle: 'Attendance Concerns', attendanceFlagsMsg: '{count} athlete(s) with declining attendance — see Statistics for details.',
     statPBs: 'Personal Bests', disciplines: 'events',
     statNextSession: 'Next Session', statOpenGoals: 'Open Goals',
     currentPBsTitle: 'Current Personal Bests', noTimesYet: 'No times recorded yet.',
@@ -367,6 +368,10 @@ export default {
   stats: {
     eyebrow: 'Analytics', title: 'Statistics',
     attendanceTitle: 'Attendance Rate by Group (recent sessions)', noSessions: 'No training sessions recorded yet.',
+    attendanceTrendTitle: 'Attendance Trend Over Time', filterGroup: 'Group',
+    noAttendanceTrend: 'Not enough data yet for an attendance trend in this group.',
+    attendanceFlagsTitle: 'Attendance Early Warning', noAttendanceFlags: 'No attendance concerns right now.',
+    attendanceFlagLine: 'Recent attendance {recent}%', attendanceFlagBadge: 'Flagged',
     rpeTitle: 'Perceived Exertion (Avg. RPE per Session)', noRpeData: 'Not enough RPE data yet for a trend.',
     volumeTitle: 'Times Recorded per Month', noTimes: 'No times recorded yet.',
     exploreTitle: 'Performance Development in Detail', filterAthlete: 'Athlete', filterEvent: 'Event',

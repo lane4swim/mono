@@ -10,6 +10,14 @@ dies ein konkreter Umsetzungsplan (analog zu
 `docs/kampfrichter-modul-plan.md`/`docs/nutzer-qualifikationen-plan.md`),
 noch vor jeder Implementierung als Diskussionsgrundlage gedacht.
 
+## Umsetzungsstand
+
+| Teil | Status |
+|---|---|
+| 3.1 Wiederkehrende Trainingspläne/Vorlagen-Zyklen | offen |
+| 3.2 Belastungssteuerung/Trainingsumfang-Auswertung | offen |
+| 3.3 Anwesenheitsstatistik & -prognose | **umgesetzt** — siehe Abschnitt 3.4 |
+
 ## 0. Ausgangslage
 
 Bevor neue Modelle entworfen werden, was bereits vorhanden ist und wofür
@@ -328,24 +336,25 @@ Neuer Abschnitt „Anwesenheit" in `stats.js`:
 2. **Frühindikator-Liste** — Athlet:innen mit auffällig gesunkener
    Anwesenheit. **Entscheidung (siehe Abschnitt 7): fest im Code
    hinterlegter Schwellenwert, kein Vereins-Setting in Phase 1.** Eine
-   Athlet:in wird markiert, wenn (a) sie mindestens 8 Einheiten seit
-   ihrem `Athlete.joinDate` absolviert hat UND ihre Anwesenheitsquote der
-   letzten 4 Einheiten mindestens 30 Prozentpunkte unter ihrer eigenen
-   Quote der 8 Einheiten davor liegt (relativer Abfall — der eigene
-   historische Schnitt ist die Vergleichsbasis, nicht ein
-   Gruppendurchschnitt, damit unterschiedlich verlässliche Athlet:innen
-   nicht gegeneinander verglichen werden), ODER (b) ihre Quote der
-   letzten 4 Einheiten absolut unter 50 % liegt — **Kriterium (b) gilt
-   unabhängig von der 8-Einheiten-Mindesthistorie**, damit auch neu
-   beigetretene Athlet:innen mit durchgehend schlechter Anwesenheit
-   erfasst werden, statt erst nach zwei Monaten. Sortiert nach größter
-   Abweichung, mit Link zum Athlet:innen-Profil. Beide Schwellenwerte
-   (30 Prozentpunkte, 50 %, 4/8 Einheiten Fenstergröße) stehen als
-   benannte Konstanten im Code (analog `MAX_SYNC_ATTEMPTS` in
+   Athlet:in wird markiert, wenn (a) sie insgesamt mindestens 12
+   Einheiten seit ihrem `Athlete.joinDate` absolviert hat (8 Baseline- +
+   4 aktuelle Einheiten) UND ihre Anwesenheitsquote der letzten 4
+   Einheiten mindestens 30 Prozentpunkte unter ihrer eigenen Quote der 8
+   Einheiten davor liegt (relativer Abfall — der eigene historische
+   Schnitt ist die Vergleichsbasis, nicht ein Gruppendurchschnitt, damit
+   unterschiedlich verlässliche Athlet:innen nicht gegeneinander
+   verglichen werden), ODER (b) ihre Quote der letzten 4 Einheiten
+   absolut unter 50 % liegt — **Kriterium (b) gilt unabhängig von der
+   12-Einheiten-Mindesthistorie** (ab 4 Einheiten anwendbar), damit auch
+   neu beigetretene Athlet:innen mit durchgehend schlechter Anwesenheit
+   erfasst werden, statt erst nach Monaten. Sortiert nach niedrigster
+   aktueller Quote zuerst, mit Link zum Athlet:innen-Profil. Beide
+   Schwellenwerte (30 Prozentpunkte, 50 %, 4/8 Einheiten Fenstergröße)
+   stehen als benannte Konstanten im Code (analog `MAX_SYNC_ATTEMPTS` in
    `syncClient.js`), nicht hart inline verstreut — erleichtert eine
    spätere Konfigurierbarkeit, ohne sie in Phase 1 bereits zu bauen.
 3. **Dashboard-Hinweis** (`dashboard.js`, das bereits `rpeAvg` je Einheit
-   anzeigt): ein kompakter Hinweis „X Athlet:innen mit auffälliger
+   anzeigt): ein kompakter Hinweis „X Athlet:in(nen) mit gesunkener
    Anwesenheit" für `trainer`/`admin`, verlinkt in die Detailansicht
    unter 2.
 
@@ -355,8 +364,30 @@ Neuer Abschnitt „Anwesenheit" in `stats.js`:
 athletes)` als reine, DOM-unabhängige Funktionen — Testfälle u. a.: leere
 Datenlage (keine Einheiten), Athlet:in erst kürzlich der Gruppe
 beigetreten (keine künstlich niedrige Quote durch Einheiten vor
-Beitritt — Filterung anhand `Athlete.joinDate`), Gruppenwechsel während
-des Beobachtungszeitraums.
+Beitritt — Filterung anhand `Athlete.joinDate`), stabile vs. auffällige
+Anwesenheit, Sortierreihenfolge bei mehreren markierten Athlet:innen.
+
+### 3.4 Umsetzungsstand: **umgesetzt**
+
+- `apps/web/js/modules/attendanceStats.js` — die reinen Funktionen
+  `attendanceTrend()`/`flagLowAttendance()`, wie oben spezifiziert.
+- `apps/web/js/modules/stats.js` — zwei neue Karten: „Anwesenheitstrend
+  über Zeit" (Gruppenauswahl + Liniendiagramm, gleitender
+  4-Wochen-Durchschnitt) und „Anwesenheits-Frühindikator" (Liste,
+  verlinkt zum Athlet:innen-Profil).
+- `apps/web/js/modules/dashboard.js` — kompakte Hinweiskarte für
+  `trainer`/`admin`, nur sichtbar bei mindestens einer Markierung,
+  verlinkt in die Statistik-Ansicht.
+- Übersetzungsschlüssel in `apps/web/js/i18n/de-DE.js` und `en-US.js`
+  (Namespaces `stats`/`dashboard`).
+- `apps/web/sw.js`: `attendanceStats.js` zur Precache-Liste ergänzt,
+  Cache-Version auf `lane1-v42` erhöht (jede neue/geänderte
+  Modul-Datei erfordert das, siehe Kommentar dort).
+- Tests: `apps/web/test/attendanceStats.test.js` (7 Fälle, DOM-frei).
+- Keine Datenmodell-/Migrations-/Sync-Änderung — wie geplant (Abschnitt
+  3.1 oben) reine Client-Auswertung auf bereits synchronisierten Daten.
+- Gesamte Testsuite des Monorepos (`npm test`, alle vier Workspaces)
+  bleibt grün: 991 Tests, 0 Fehlschläge.
 
 ## 4. Rollen & Berechtigungen (zusammenfassend)
 
