@@ -431,6 +431,7 @@ export default {
   },
   usermgmt: {
     eyebrow: 'Verwaltung', title: 'Nutzerverwaltung',
+    demoDisabled: 'Die Nutzerverwaltung ist in dieser Demo nicht verfügbar — sie läuft über echte Vereins-/Einladungsdaten, für die diese Demo kein Backend hat.',
     superadminIntro: 'Als Superadministrator:in legen Sie neue Vereine an und laden deren ersten Admin per zeitlich befristetem Link ein.',
     adminIntro: 'Laden Sie Trainer:innen und Athlet:innen Ihres Vereins per zeitlich befristetem Link ein.',
     clubsSection: 'Vereine', createClub: '+ Verein anlegen',
@@ -573,6 +574,7 @@ export default {
   },
   qualifications: {
     eyebrow: 'Qualifikationsmanagement', title: 'Qualifikationen',
+    demoDisabled: 'Das Qualifikationsmanagement ist in dieser Demo nicht verfügbar — es läuft über echte Vereinsdaten, für die diese Demo kein Backend hat.',
     introAdmin: 'Erfasse Trainerlizenzen, Rettungsschwimmscheine und weitere Nachweise mit Erwerbs- und Ablaufdatum für alle Vereinsmitglieder.',
     introSelf: 'Hier sehen Sie Ihre erfassten Qualifikationen. Nur Admins können neue Qualifikationen erfassen oder ändern.',
     ownSection: 'Meine Qualifikationen', noneYetOwn: 'Für Sie sind noch keine Qualifikationen erfasst.',
@@ -602,6 +604,7 @@ export default {
   },
   kampfrichter: {
     eyebrow: 'Kampfrichter-Modul', title: 'Kampfrichter',
+    demoDisabled: 'Das Kampfrichter-Modul ist in dieser Demo nicht verfügbar — es läuft über echte Vereinsdaten, für die diese Demo kein Backend hat.',
     introAdmin: 'Übersicht aller Kampfrichter:innen des Vereins mit ihrem Qualifikationsstatus und ihren Wettkampfeinsätzen.',
     introSelf: 'Hier siehst du deinen Kampfrichter-Qualifikationsstatus und kannst deine Wettkampfeinsätze verwalten.',
     ownQualificationsSection: 'Meine Kampfrichter-Qualifikationen',
