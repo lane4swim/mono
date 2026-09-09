@@ -51,7 +51,12 @@ function showLogin(errorMessage) {
 }
 
 async function handleAuthenticated(user) {
-  if (user.role !== 'superadmin') {
+  // `user.roles` (Array), nicht das transitionale Einzelrollenfeld
+  // `user.role` (Issue #57): `role` bleibt laut schema.prisma nur "vorerst
+  // als Sicherheitsnetz" bestehen, bis eine künftige Contract-Migration die
+  // Spalte entfernt — ab dann liefert die API kein `role`-Feld mehr, und
+  // `user.role !== 'superadmin'` würde JEDES Superadmin-Konto aussperren.
+  if (!user.roles?.includes('superadmin')) {
     // Kein Superadmin-Konto — diese Oberfläche ist ausschließlich für
     // diese Rolle gedacht. Sofort wieder abmelden statt Zugriff zu zeigen.
     //
