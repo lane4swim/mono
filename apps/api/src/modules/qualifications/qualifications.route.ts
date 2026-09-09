@@ -87,7 +87,10 @@ export async function qualificationsRoutes(app: FastifyInstance, opts: Qualifica
   }
 
   // Eigene, schreibgeschützte Ansicht — jede Rolle außer superadmin.
-  const selfGuard = [app.authenticate, requireAnyRole('admin', 'trainer', 'athlete'), requireQualificationsModule];
+  // `referee` ist Teil davon, weil die Kampfrichter-Seite (kampfrichter.js)
+  // GET /api/qualification-settings mitnutzt, um ihre eigenen
+  // Erinnerungs-Schwellen anzuzeigen (siehe Issue #54).
+  const selfGuard = [app.authenticate, requireAnyRole('admin', 'trainer', 'athlete', 'referee'), requireQualificationsModule];
   // Verwaltung von Mitgliedern + Einstellungen — ausschließlich admin
   // (Entscheidung zu Frage 2, Abschnitt 8 des Plans).
   const adminGuard = [app.authenticate, requireAnyRole('admin'), requireQualificationsModule];
