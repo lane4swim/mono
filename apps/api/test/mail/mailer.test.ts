@@ -10,9 +10,12 @@ import {
   buildAccountSecurityChangeSubject,
   buildAccountSecurityChangeTextBody,
   buildAccountSecurityChangeHtmlBody,
+  buildQualificationReminderSubject,
+  buildQualificationReminderTextBody,
   SmtpMailSender,
   ConsoleMailSender,
 } from '../../src/mail/mailer.js';
+import { REFEREE_QUALIFICATION_TYPES, QUALIFICATION_TYPES } from '@lane1/shared-types';
 
 // Fake statt echtem SMTP-Handshake: sendMail() als Spy, createTransport()
 // ebenfalls, damit die Tests zu Befund P4 unten prüfen können, WIE OFT der
@@ -438,5 +441,55 @@ describe('SmtpMailSender — requireTLS (Befund M4)', () => {
     });
     await mailer.sendInvitationEmail(payload);
     expect(createTransportMock).toHaveBeenCalledWith(expect.objectContaining({ secure: true, requireTLS: false }));
+  });
+});
+
+// Regression Issue #58: QUALIFICATION_TYPE_LABEL kannte für beide Sprachen
+// nur die ursprünglichen sieben Trainer:innen-/Rettungsschwimm-
+// Qualifikationstypen. Die sechs mit dem Kampfrichter-Modul eingeführten
+// Typen (REFEREE_QUALIFICATION_TYPES) fielen deshalb auf das generische
+// "Qualifikation"/"Qualification" zurück — die Erinnerungsmail verlor
+// dadurch genau die Information, die die betroffene Person zum Handeln
+// braucht (welche Lizenz ist gemeint?).
+describe('Erinnerungsmail — Qualifikationstyp im Betreff (Issue #58)', () => {
+  function payloadFor(type: string, locale?: string) {
+    return {
+      to: 'person@sv.de',
+      qualifiedPersonName: 'Petra Klein',
+      type,
+      expiresOn: new Date('2026-10-01T00:00:00.000Z'),
+      isExpired: false,
+      locale,
+    };
+  }
+
+  it('zeigt für jeden Kampfrichter-Qualifikationstyp den konkreten Namen statt "Qualifikation" (de-DE)', () => {
+    for (const type of REFEREE_QUALIFICATION_TYPES) {
+      const subject = buildQualificationReminderSubject(payloadFor(type, 'de-DE'));
+      expect(subject).not.toContain('Qualifikation läuft bald ab');
+      expect(subject.toLowerCase()).not.toBe('qualifikation läuft bald ab');
+    }
+  });
+
+  it('zeigt für jeden Kampfrichter-Qualifikationstyp den konkreten Namen statt "Qualification" (en-US)', () => {
+    for (const type of REFEREE_QUALIFICATION_TYPES) {
+      const subject = buildQualificationReminderSubject(payloadFor(type, 'en-US'));
+      expect(subject).not.toBe('Qualification is expiring soon');
+    }
+  });
+
+  it('trägt für JEDEN bekannten Qualifikationstyp (nicht nur Kampfrichter) ein eigenes Label in beiden Sprachen, kein Rückfall auf "sonstige"', () => {
+    const knownTypes = QUALIFICATION_TYPES.filter((t) => t !== 'sonstige');
+    for (const type of knownTypes) {
+      const deText = buildQualificationReminderTextBody(payloadFor(type, 'de-DE'));
+      const enText = buildQualificationReminderTextBody(payloadFor(type, 'en-US'));
+      expect(deText).not.toContain('Qualifikation von Petra Klein');
+      expect(enText).not.toContain('Qualification of Petra Klein');
+    }
+  });
+
+  it('behält den Fallback auf "Qualifikation"/"Qualification" für einen unbekannten Typ', () => {
+    expect(buildQualificationReminderSubject(payloadFor('irgendein-unbekannter-typ', 'de-DE'))).toContain('Qualifikation läuft bald ab');
+    expect(buildQualificationReminderSubject(payloadFor('irgendein-unbekannter-typ', 'en-US'))).toBe('Qualification is expiring soon');
   });
 });

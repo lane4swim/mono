@@ -3,6 +3,8 @@
 // Interface, gegen das invitations.service.ts arbeitet, plus austauschbare
 // Implementierungen — dadurch bleibt der E-Mail-Versand ohne echten
 // SMTP-Server testbar (siehe mailer.memory.ts).
+import type { QualificationType } from '@lane1/shared-types';
+
 export interface InvitationMailPayload {
   to: string;
   recipientName?: string | null;
@@ -314,12 +316,16 @@ export function buildAccountSecurityChangeHtmlBody(payload: AccountSecurityChang
 // Qualifikations-Ablauf-Erinnerung (docs/nutzer-qualifikationen-plan.md,
 // Abschnitt 5) — dieselbe Struktur (exportierte, einzeln testbare
 // Subject/Text/HTML-Builder) wie bei den übrigen E-Mail-Typen oben.
-// `& { sonstige: string }` zusätzlich zum Index-Signatur-Typ: unter
-// `noUncheckedIndexedAccess` (siehe tsconfig.base.json) wäre auch der
-// Zugriff auf den bekannten Schlüssel `sonstige` sonst `string | undefined`
-// — hier aber als GARANTIERTER Fallback gebraucht (siehe
-// resolveQualificationTypeLabel() unten).
-const QUALIFICATION_TYPE_LABEL: Record<SupportedLocale, Record<string, string> & { sonstige: string }> = {
+//
+// Als Record<QualificationType, string> (statt Record<string, string>)
+// getippt (Issue #58: die sechs Kampfrichter-Typen aus
+// REFEREE_QUALIFICATION_TYPES fehlten hier komplett, jede Erinnerungsmail
+// für eine Kampfrichter-Qualifikation zeigte deshalb nur das generische
+// "Qualifikation"/"Qualification") — dadurch erzwingt tsc, dass hier für
+// JEDEN Wert aus QualificationTypeSchema (packages/shared-types) ein Label
+// je Sprache gepflegt ist; ein künftig neu hinzukommender Typ fällt beim
+// Build sofort auf statt erst als generisches Label im Postfach.
+const QUALIFICATION_TYPE_LABEL: Record<SupportedLocale, Record<QualificationType, string>> = {
   'de-DE': {
     trainer_c: 'Trainer-C-Lizenz',
     trainer_b: 'Trainer-B-Lizenz',
@@ -328,6 +334,12 @@ const QUALIFICATION_TYPE_LABEL: Record<SupportedLocale, Record<string, string> &
     rettungsschwimmer_gold: 'Rettungsschwimmschein Gold',
     erste_hilfe: 'Erste-Hilfe-Kurs',
     kinderschutz: 'Kinderschutz-Schulung',
+    kampfrichter: 'Kampfrichter:in',
+    schiedsrichter: 'Schiedsrichter:in',
+    startrichter: 'Startrichter:in',
+    zeitnehmer: 'Zeitnehmer:in',
+    bahnrichter: 'Bahnrichter:in',
+    wettkampfsekretaer: 'Wettkampfsekretär:in (Protokoll)',
     sonstige: 'Qualifikation',
   },
   'en-US': {
@@ -338,12 +350,22 @@ const QUALIFICATION_TYPE_LABEL: Record<SupportedLocale, Record<string, string> &
     rettungsschwimmer_gold: 'Lifeguard Certificate (Gold)',
     erste_hilfe: 'First Aid Course',
     kinderschutz: 'Child Protection Training',
+    kampfrichter: 'Referee',
+    schiedsrichter: 'Referee-in-Chief',
+    startrichter: 'Starter',
+    zeitnehmer: 'Timekeeper',
+    bahnrichter: 'Turn Judge',
+    wettkampfsekretaer: 'Meet Secretary (Recorder)',
     sonstige: 'Qualification',
   },
 };
 
+// `type` bleibt bewusst `string` (siehe QualificationReminderMailPayload)
+// statt QualificationType — der Fallback auf "sonstige" fängt hier weiterhin
+// jeden zur Laufzeit unbekannten/unerwarteten Wert ab (Payload kommt aus der
+// DB, nicht direkt aus dem validierten Schema).
 function resolveQualificationTypeLabel(locale: SupportedLocale, type: string): string {
-  return QUALIFICATION_TYPE_LABEL[locale][type] ?? QUALIFICATION_TYPE_LABEL[locale].sonstige;
+  return QUALIFICATION_TYPE_LABEL[locale][type as QualificationType] ?? QUALIFICATION_TYPE_LABEL[locale].sonstige;
 }
 
 export function buildQualificationReminderSubject(payload: QualificationReminderMailPayload): string {
