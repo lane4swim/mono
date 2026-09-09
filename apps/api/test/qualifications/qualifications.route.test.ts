@@ -23,13 +23,14 @@ async function buildTestApp({ enabledModules = ['qualifications'] }: { enabledMo
 
   const admin = await users.create({ clubId: club.id, name: 'Admina Musterfrau', email: 'admin@sv.de', passwordHash: 'x', roles: ['admin'], consentGivenAt: new Date(), consentVersion: 'v1' });
   const trainer = await users.create({ clubId: club.id, name: 'Trainer Eins', email: 'trainer@sv.de', passwordHash: 'x', roles: ['trainer'], consentGivenAt: new Date(), consentVersion: 'v1' });
+  const referee = await users.create({ clubId: club.id, name: 'Rita Kampfrichterin', email: 'referee@sv.de', passwordHash: 'x', roles: ['referee'], consentGivenAt: new Date(), consentVersion: 'v1' });
 
   const qualifications = new InMemoryUserQualificationRepository();
   const reminderSettings = new InMemoryQualificationReminderSettingRepository();
   const qualificationsService = createQualificationsService({ qualifications, reminderSettings, users });
 
   const app = await buildApp(testEnv, { qualificationsService, clubs, keyPair });
-  return { app, keyPair, club, admin, trainer };
+  return { app, keyPair, club, admin, trainer, referee };
 }
 
 async function tokenFor(keyPair: KeyPair, sub: string, role: string, clubId: string | null) {
@@ -170,6 +171,31 @@ describe('Erinnerungs-Schwellen', () => {
       method: 'PUT',
       url: '/api/qualification-settings/trainer_a',
       headers: { authorization: `Bearer ${trainerToken}` },
+      payload: { thresholdsDays: [10] },
+    });
+    expect(write.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it('reine Referee-Konten dürfen die Schwellen lesen (Kampfrichter-Seite nutzt diesen Endpunkt mit, Issue #54), aber nicht ändern', async () => {
+    const { app, keyPair, admin, referee } = await buildTestApp();
+    const adminToken = await tokenFor(keyPair, admin.id, 'admin', admin.clubId);
+    await app.inject({
+      method: 'PUT',
+      url: '/api/qualification-settings/trainer_a',
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { thresholdsDays: [90, 30] },
+    });
+
+    const refereeToken = await tokenFor(keyPair, referee.id, 'referee', referee.clubId);
+    const read = await app.inject({ method: 'GET', url: '/api/qualification-settings', headers: { authorization: `Bearer ${refereeToken}` } });
+    expect(read.statusCode).toBe(200);
+    expect(read.json().settings).toEqual([{ type: 'trainer_a', thresholdsDays: [90, 30] }]);
+
+    const write = await app.inject({
+      method: 'PUT',
+      url: '/api/qualification-settings/trainer_a',
+      headers: { authorization: `Bearer ${refereeToken}` },
       payload: { thresholdsDays: [10] },
     });
     expect(write.statusCode).toBe(403);

@@ -13,6 +13,7 @@ import * as api from '../apiClient.js';
 import { describeError } from '../apiClient.js';
 import { t } from '../i18n.js';
 import { openCreateClubModal, openEditClubModulesModal } from './clubForm.js';
+import { IS_DEMO } from '../demoMode.js';
 
 export const userManagementModule = {
   id: 'usermgmt',
@@ -21,6 +22,11 @@ export const userManagementModule = {
   async render(container) {
     const isCurrent = beginRender(container);
     clear(container);
+    // Läuft ausschließlich über echte REST-Endpunkte (Club-/Einladungs-
+    // Verwaltung) — demo.html hat kein apps/api dahinter (Issue #56). Keine
+    // sinnvolle Demo-Ausweichlogik, daher bricht render() hier vollständig
+    // ab, analog qualifications.js.
+    if (IS_DEMO) { renderDemoDisabled(container); return; }
     try {
       const [clubs, invitationsResp, membersResp] = await Promise.all([
         isSuperAdmin() ? api.listClubs() : Promise.resolve({ clubs: [] }),
@@ -43,6 +49,13 @@ function renderError(container, err) {
     el('h3', {}, t('common.somethingWentWrong')),
     el('p', {}, describeError(err)),
   ]));
+}
+
+function renderDemoDisabled(container) {
+  container.appendChild(el('div', { class: 'page-head' }, [
+    el('div', {}, [el('div', { class: 'page-eyebrow' }, t('usermgmt.eyebrow')), el('h1', { class: 'mt-0' }, t('usermgmt.title'))]),
+  ]));
+  container.appendChild(emptyState(t('usermgmt.title'), t('usermgmt.demoDisabled'), null));
 }
 
 function statusOf(invitation) {

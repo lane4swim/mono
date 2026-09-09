@@ -408,6 +408,7 @@ export default {
   },
   usermgmt: {
     eyebrow: 'Administration', title: 'User Management',
+    demoDisabled: 'User management is not available in this demo — it runs on real club/invitation data that this demo has no backend for.',
     superadminIntro: 'As a super administrator, you create new clubs and invite their first admin via a time-limited link.',
     adminIntro: "Invite your club's coaches and athletes via a time-limited link.",
     clubsSection: 'Clubs', createClub: '+ Create club',
@@ -550,6 +551,7 @@ export default {
   },
   qualifications: {
     eyebrow: 'Qualification management', title: 'Qualifications',
+    demoDisabled: 'Qualification management is not available in this demo — it runs on real club data that this demo has no backend for.',
     introAdmin: 'Track coaching licenses, lifeguard certificates and other credentials with acquired/expiry dates for all club members.',
     introSelf: 'Here you can see your recorded qualifications. Only admins can add or change qualifications.',
     ownSection: 'My qualifications', noneYetOwn: 'No qualifications recorded for you yet.',
@@ -579,6 +581,7 @@ export default {
   },
   kampfrichter: {
     eyebrow: 'Officiating', title: 'Officiating',
+    demoDisabled: 'Officiating is not available in this demo — it runs on real club data that this demo has no backend for.',
     introAdmin: 'Overview of all club referees with their qualification status and competition assignments.',
     introSelf: 'Here you can see your referee qualification status and manage your competition assignments.',
     ownQualificationsSection: 'My Referee Qualifications',

@@ -8,7 +8,7 @@
 // Einstellungen für die Erinnerungs-Schwellen je Qualifikationstyp.
 import { el, clear, beginRender } from '../dom.js';
 import { fmtDateShort, dateOnly, toIsoDateTime, todayISO } from '../dates.js';
-import { badge, laneWave, toast } from '../ui.js';
+import { badge, emptyState, laneWave, toast } from '../ui.js';
 import { openModal, confirmAction } from '../modal.js';
 import { field, textInput, selectInput, dateInput, formActions } from '../forms.js';
 import { isAdmin } from '../state.js';
@@ -16,6 +16,7 @@ import { QUALIFICATION_TYPES } from '../refdata.js';
 import { t, trLabel } from '../i18n.js';
 import * as api from '../apiClient.js';
 import { describeError } from '../apiClient.js';
+import { IS_DEMO } from '../demoMode.js';
 
 export const qualificationsModule = {
   id: 'qualifications',
@@ -24,6 +25,12 @@ export const qualificationsModule = {
   async render(container) {
     const isCurrent = beginRender(container);
     clear(container);
+    // Läuft ausschließlich über echte REST-Endpunkte (siehe Moduldoku
+    // oben) — demo.html hat kein apps/api dahinter (Issue #56). Anders als
+    // syncQueue.js (das mit lokalen IndexedDB-Daten arbeitet und die
+    // Sync-Aktion selbst deaktiviert) gibt es hier keine sinnvolle
+    // Demo-Ausweichlogik, daher bricht render() hier vollständig ab.
+    if (IS_DEMO) { renderDemoDisabled(container); return; }
     try {
       const admin = isAdmin();
       // listQualificationSettings() ist lesend für JEDE Rolle erreichbar
@@ -52,6 +59,13 @@ function renderError(container, err) {
     el('h3', {}, t('common.somethingWentWrong')),
     el('p', {}, describeError(err)),
   ]));
+}
+
+function renderDemoDisabled(container) {
+  container.appendChild(el('div', { class: 'page-head' }, [
+    el('div', {}, [el('div', { class: 'page-eyebrow' }, t('qualifications.eyebrow')), el('h1', { class: 'mt-0' }, t('qualifications.title'))]),
+  ]));
+  container.appendChild(emptyState(t('qualifications.title'), t('qualifications.demoDisabled'), null));
 }
 
 // ---- Statusermittlung (Plan, Abschnitt 4.2) ----------------------------

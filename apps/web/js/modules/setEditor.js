@@ -279,8 +279,14 @@ function appendCatalogHint(container, s, exercises) {
 // Plan-/Vorlagenformulars mitgespeichert, kein eigener put() nötig.
 // `onChange` (optional) lässt den Aufrufer eine übergeordnete
 // Materialübersicht (z. B. die Tagessumme) sofort nachziehen.
-function appendEquipmentEditor(container, s, onChange) {
-  s.equipment = s.equipment || [];
+function appendEquipmentEditor(container, s, exercises, onChange) {
+  // Nur eine lokale Kopie für Anzeige/Editor-State — `s.equipment` wird
+  // erst im onclick-Handler unten tatsächlich gesetzt, wenn die Person das
+  // Feld aktiv ändert. Vorher (auch beim bloßen Rendern) bleibt `s`
+  // unangetastet, damit ein an eine Katalog-Übung geknüpfter Satz ohne
+  // eigenen Material-Wert weiterhin dessen Material erbt (equipmentForEntry())
+  // statt beim nächsten Speichern stillschweigend "kein Material" zu zeigen.
+  let equipment = equipmentForEntry(s, exercises);
   const display = el('div');
   const editorHost = el('div');
   container.appendChild(display);
@@ -293,7 +299,7 @@ function appendEquipmentEditor(container, s, onChange) {
   // ausgelösten onclick-Handlern aufgerufen werden).
   const drawDisplay = () => {
     clear(display);
-    const badges = s.equipment.map(eq => badge(trLabel(EQUIPMENT_ITEMS, eq, 'equipment'), 'pb'));
+    const badges = equipment.map(eq => badge(trLabel(EQUIPMENT_ITEMS, eq, 'equipment'), 'pb'));
     const editBtn = el('button', {
       type: 'button', class: 'btn btn-ghost btn-sm',
       onclick: () => { editorOpen = !editorOpen; drawEditor(); },
@@ -304,7 +310,7 @@ function appendEquipmentEditor(container, s, onChange) {
   const drawEditor = () => {
     clear(editorHost);
     if (!editorOpen) { drawDisplay(); return; }
-    const selected = new Set(s.equipment);
+    const selected = new Set(equipment);
     const pills = el('div', { class: 'pill-group', style: 'margin-top:4px' });
     EQUIPMENT_ITEMS.forEach(eq => {
       const pill = el('button', {
@@ -312,7 +318,8 @@ function appendEquipmentEditor(container, s, onChange) {
         onclick: () => {
           if (selected.has(eq.value)) selected.delete(eq.value); else selected.add(eq.value);
           pill.classList.toggle('active');
-          s.equipment = [...selected];
+          equipment = [...selected];
+          s.equipment = equipment;
           drawDisplay();
           onChange?.();
         },
@@ -356,7 +363,7 @@ function buildSetRow(s, exercises, controls, onEquipmentChange) {
   extra.appendChild(intensitySel);
 
   appendCatalogHint(extra, s, exercises);
-  appendEquipmentEditor(extra, s, onEquipmentChange);
+  appendEquipmentEditor(extra, s, exercises, onEquipmentChange);
 
   row.appendChild(extra);
   return row;

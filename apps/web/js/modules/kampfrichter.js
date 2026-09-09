@@ -29,6 +29,7 @@ import { statusBadge, thresholdsFor, typeLabel } from './qualifications.js';
 import { t, trLabel } from '../i18n.js';
 import * as api from '../apiClient.js';
 import { describeError } from '../apiClient.js';
+import { IS_DEMO } from '../demoMode.js';
 
 export const kampfrichterModule = {
   id: 'kampfrichter',
@@ -37,6 +38,11 @@ export const kampfrichterModule = {
   async render(container) {
     const isCurrent = beginRender(container);
     clear(container);
+    // Läuft ausschließlich über echte REST-Endpunkte — demo.html hat kein
+    // apps/api dahinter (Issue #56). Keine sinnvolle Demo-Ausweichlogik
+    // (echte Wettkampfeinsätze/Qualifikationen), daher bricht render() hier
+    // vollständig ab, analog qualifications.js.
+    if (IS_DEMO) { renderDemoDisabled(container); return; }
     try {
       const admin = isAdmin();
       const isReferee = hasRole('referee');
@@ -71,6 +77,13 @@ function renderError(container, err) {
     el('h3', {}, t('common.somethingWentWrong')),
     el('p', {}, describeError(err)),
   ]));
+}
+
+function renderDemoDisabled(container) {
+  container.appendChild(el('div', { class: 'page-head' }, [
+    el('div', {}, [el('div', { class: 'page-eyebrow' }, t('kampfrichter.eyebrow')), el('h1', { class: 'mt-0' }, t('kampfrichter.title'))]),
+  ]));
+  container.appendChild(emptyState(t('kampfrichter.title'), t('kampfrichter.demoDisabled'), null));
 }
 
 function functionLabel(fn) {

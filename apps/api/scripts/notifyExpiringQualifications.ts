@@ -31,9 +31,16 @@ async function main() {
 
     console.log(`[qualifications] ${new Date().toISOString()} — ${result.remindersSent} Erinnerung(en) versendet.`);
     if (result.failed.length > 0) {
-      console.error(`[qualifications] ${result.failed.length} Fehlschlag/-schläge (werden beim nächsten Lauf erneut versucht):`);
+      console.error(`[qualifications] ${result.failed.length} Fehlschlag/-schläge:`);
       for (const failure of result.failed) {
-        console.error(`  - qualificationId ${failure.qualificationId} (Schwelle ${failure.thresholdDays} Tage): ${failure.error}`);
+        // willRetry unterscheidet, ob der nächste Cron-Lauf das automatisch
+        // nachholt (Fehlschlag bei der qualifizierten Person selbst) oder
+        // nicht (ein einzelner Admin-Versand — die Schwelle gilt bereits als
+        // erledigt, siehe notifyExpiringQualifications.ts: NotifyResult).
+        const retryNote = failure.willRetry
+          ? 'wird beim nächsten Lauf erneut versucht'
+          : 'wird NICHT automatisch wiederholt — Schwelle bereits als erledigt markiert';
+        console.error(`  - qualificationId ${failure.qualificationId} (Schwelle ${failure.thresholdDays} Tage): ${failure.error} [${retryNote}]`);
       }
       process.exitCode = 1;
     }

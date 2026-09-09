@@ -3,6 +3,23 @@ import { notifyExpiringQualifications } from '../../src/jobs/notifyExpiringQuali
 import { InMemoryNotifyExpiringQualificationsGateway } from '../../src/jobs/qualificationReminder.repository.memory.js';
 import { InMemoryMailSender } from '../../src/mail/mailer.memory.js';
 import type { QualificationReminderCandidate } from '../../src/jobs/qualificationReminder.repository.js';
+import type { QualificationReminderMailPayload } from '../../src/mail/mailer.js';
+
+// Issue #59: ein Fehlschlag bei EINEM Empfänger (z. B. ein bouncendes
+// Admin-Postfach) durfte nicht dazu führen, dass die qualifizierte Person —
+// die ihre Erinnerung bereits erfolgreich erhalten hat — beim nächsten
+// Cron-Lauf erneut angeschrieben wird. Dieser Mailer lässt genau eine
+// konfigurierte Zieladresse dauerhaft fehlschlagen, alle anderen normal
+// durchlaufen (wie InMemoryMailSender).
+class PartiallyFailingMailSender extends InMemoryMailSender {
+  constructor(private readonly failingRecipient: string) {
+    super();
+  }
+  override async sendQualificationReminderEmail(payload: QualificationReminderMailPayload): Promise<void> {
+    if (payload.to === this.failingRecipient) throw new Error('SMTP: mailbox unavailable');
+    return super.sendQualificationReminderEmail(payload);
+  }
+}
 
 const NOW = new Date('2026-09-03T00:00:00.000Z');
 
@@ -113,5 +130,51 @@ describe('notifyExpiringQualifications()', () => {
     const mailer = new InMemoryMailSender();
     const result = await notifyExpiringQualifications(gateway, mailer, NOW);
     expect(result.remindersSent).toBeGreaterThan(0);
+  });
+
+  it('schreibt die bereits erfolgreich benachrichtigte Person NICHT erneut an, wenn nur der Versand an einen Admin scheitert (Issue #59)', async () => {
+    const gateway = new InMemoryNotifyExpiringQualificationsGateway(
+      [candidate()],
+      new Map([['club1:trainer_c', [60, 14]]]),
+      new Map([['club1', admins]]), // admins[0].email === 'admin@sv.de'
+    );
+    const mailer = new PartiallyFailingMailSender('admin@sv.de');
+
+    const first = await notifyExpiringQualifications(gateway, mailer, NOW);
+    // Die Schwelle gilt trotz des gescheiterten Admin-Versands als erledigt
+    // (die qualifizierte Person selbst hat ihre Mail erhalten) — der
+    // Fehlschlag wird protokolliert, bricht den Lauf aber nicht ab.
+    expect(first.remindersSent).toBe(1);
+    expect(first.failed).toHaveLength(1);
+    expect(first.failed[0]?.error).toContain('admin@sv.de');
+    // Ein Admin-Fehlschlag wird NICHT automatisch wiederholt (die Schwelle
+    // gilt bereits als erledigt, siehe NotifyResult.willRetry-Kommentar) —
+    // anders als ein Fehlschlag beim Versand an die Person selbst.
+    expect(first.failed[0]?.willRetry).toBe(false);
+    expect(mailer.sentQualificationReminderEmails.map((e) => e.to)).toEqual(['person@sv.de']);
+
+    const second = await notifyExpiringQualifications(gateway, mailer, NOW);
+    // Kein erneuter Lauf für diese Schwelle — insbesondere KEINE zweite
+    // Mail an die Person, nur weil der Admin-Versand einmal fehlschlug.
+    expect(second.remindersSent).toBe(0);
+    expect(mailer.sentQualificationReminderEmails.map((e) => e.to)).toEqual(['person@sv.de']);
+  });
+
+  it('markiert einen Fehlschlag beim Versand an die Person selbst als willRetry: true (Code-Review zu Issue #59)', async () => {
+    const gateway = new InMemoryNotifyExpiringQualificationsGateway(
+      [candidate()],
+      new Map([['club1:trainer_c', [60, 14]]]),
+      new Map([['club1', admins]]),
+    );
+    const mailer = new PartiallyFailingMailSender('person@sv.de');
+
+    const result = await notifyExpiringQualifications(gateway, mailer, NOW);
+    expect(result.remindersSent).toBe(0);
+    expect(result.failed).toHaveLength(1);
+    expect(result.failed[0]?.willRetry).toBe(true);
+    // Der Admin wird für diese Schwelle gar nicht erst angeschrieben — der
+    // Fehlschlag bei der Person (direktes await, VOR dem Promise.all über
+    // die Admins) wirft sofort in den äußeren catch.
+    expect(mailer.sentQualificationReminderEmails).toHaveLength(0);
   });
 });

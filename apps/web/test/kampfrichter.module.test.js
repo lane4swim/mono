@@ -17,6 +17,10 @@ import { describe, it, expect, vi } from 'vitest';
 // state.js nur isAdmin()/hasRole(), daher genügt dieser schlanke Stub statt
 // der dortigen vollen Mock-Kette (demoMode/apiClient/db/i18n).
 vi.mock('../js/state.js', () => ({ isAdmin: () => false, hasRole: () => false }));
+// kampfrichter.js importiert seit Issue #56 zusätzlich IS_DEMO direkt aus
+// demoMode.js (nicht mehr nur transitiv über state.js) — braucht denselben
+// Stub aus demselben Grund (kein globales `location` in Node).
+vi.mock('../js/demoMode.js', () => ({ IS_DEMO: false }));
 
 import { kampfrichterModule } from '../js/modules/kampfrichter.js';
 import { isModuleVisible, MODULE_KEYS, CORE_MODULE_IDS } from '../js/router.js';

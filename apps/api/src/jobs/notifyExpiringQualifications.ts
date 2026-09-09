@@ -26,7 +26,13 @@ function daysUntil(target: Date, now: Date): number {
 
 export interface NotifyResult {
   remindersSent: number;
-  failed: Array<{ qualificationId: string; thresholdDays: number; error: string }>;
+  // `willRetry` unterscheidet die zwei möglichen Fehlerquellen (Issue #59):
+  // ein Fehlschlag beim Versand an die qualifizierte Person selbst (äußerer
+  // catch, true — recordReminderSent() wurde NICHT aufgerufen, der nächste
+  // Cron-Lauf versucht die ganze Schwelle erneut) vs. ein Fehlschlag NUR bei
+  // einer Admin-Benachrichtigung (false — recordReminderSent() wurde bereits
+  // aufgerufen, dieser eine Admin-Versand wird NICHT automatisch wiederholt).
+  failed: Array<{ qualificationId: string; thresholdDays: number; error: string; willRetry: boolean }>;
 }
 
 export async function notifyExpiringQualifications(
@@ -67,13 +73,9 @@ export async function notifyExpiringQualifications(
           adminsCache.set(candidate.clubId, await gateway.findAdminsForClub(candidate.clubId));
         }
         const admins = adminsCache.get(candidate.clubId) ?? [];
-        const recipients: AdminContact[] = [
-          { email: candidate.userEmail, name: candidate.userName, locale: candidate.userLocale },
-          ...admins,
-        ];
         const isExpired = thresholdDays === EXPIRED_MARKER;
-        for (const recipient of recipients) {
-          await mailer.sendQualificationReminderEmail({
+        const send = (recipient: AdminContact) =>
+          mailer.sendQualificationReminderEmail({
             to: recipient.email,
             recipientName: recipient.name,
             qualifiedPersonName: candidate.userName,
@@ -82,15 +84,36 @@ export async function notifyExpiringQualifications(
             isExpired,
             locale: recipient.locale,
           });
-        }
+
+        // Die qualifizierte Person selbst (direktes await) entscheidet
+        // allein, ob recordReminderSent() unten aufgerufen wird — schlägt
+        // dieser Versand fehl, greift der äußere catch wie bisher und der
+        // nächste Cron-Lauf versucht die GESAMTE Schwelle erneut.
+        // Admin-Postfächer sind dagegen nur Kopie/Info: jeder Admin-Versand
+        // fängt seinen eigenen Fehler ab, statt ihn zu werfen — ein
+        // Fehlschlag dort darf NICHT dazu führen, dass die bereits
+        // erfolgreich benachrichtigte Person beim nächsten Lauf erneut
+        // angeschrieben wird (Issue #59), und ein einzelner Admin-Fehlschlag
+        // soll auch die übrigen Admin-Zustellungen nicht blockieren.
+        await send({ email: candidate.userEmail, name: candidate.userName, locale: candidate.userLocale });
+        await Promise.all(admins.map(async (admin) => {
+          try {
+            await send(admin);
+          } catch (err) {
+            const error = err instanceof Error ? err.message : String(err);
+            result.failed.push({ qualificationId: candidate.id, thresholdDays, error: `Admin-Benachrichtigung an ${admin.email} fehlgeschlagen: ${error}`, willRetry: false });
+          }
+        }));
+
         await gateway.recordReminderSent(candidate.id, thresholdDays);
         result.remindersSent += 1;
       } catch (err) {
-        // Ein einzelner Fehlschlag (z. B. vorübergehendes DB-/SMTP-Problem)
-        // soll nicht den gesamten Lauf abbrechen — der nächste Cron-Durchlauf
-        // versucht es erneut, da recordReminderSent() für diese Schwelle
-        // nicht aufgerufen wurde (analog purgeExpiredDeletions.ts).
-        result.failed.push({ qualificationId: candidate.id, thresholdDays, error: err instanceof Error ? err.message : String(err) });
+        // Ein Fehlschlag beim Versand an die qualifizierte Person selbst
+        // (z. B. vorübergehendes DB-/SMTP-Problem) soll nicht den gesamten
+        // Lauf abbrechen — der nächste Cron-Durchlauf versucht es erneut, da
+        // recordReminderSent() für diese Schwelle nicht aufgerufen wurde
+        // (analog purgeExpiredDeletions.ts).
+        result.failed.push({ qualificationId: candidate.id, thresholdDays, error: err instanceof Error ? err.message : String(err), willRetry: true });
       }
     }
   }
