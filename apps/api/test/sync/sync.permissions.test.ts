@@ -38,6 +38,13 @@ describe('canRead()/canWrite() — Modul-Gating', () => {
     expect(canWrite('entries', ['trainer'], ['times'])).toBe(false);
   });
 
+  it('"planCycles" hängt am selben Paket wie "plans" (Phase 1, Abschnitt 3.1)', () => {
+    expect(canRead('planCycles', ['athlete'], ['plans'])).toBe(true);
+    expect(canWrite('planCycles', ['trainer'], ['plans'])).toBe(true);
+    expect(canWrite('planCycles', ['athlete'], ['plans'])).toBe(false); // nur trainer/admin, analog templates
+    expect(canWrite('planCycles', ['trainer'], [])).toBe(false); // Paket nicht gebucht
+  });
+
   it('"results" ist der Sonderfall: times ODER competitions reicht (von beiden Modulen genutzt)', () => {
     expect(canRead('results', ['trainer'], ['times'])).toBe(true);
     expect(canRead('results', ['trainer'], ['competitions'])).toBe(true);

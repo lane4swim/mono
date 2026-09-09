@@ -27,11 +27,12 @@ const DB_NAME = IS_DEMO ? 'lane1-demo-db' : 'lane1-db';
 // JavaScript nach status zu filtern. pendingSyncCount() läuft nach jedem
 // Render, jedem Sync-Zyklus (alle 60 s) und beim Logout — ein Index macht
 // diesen häufigsten Pfad der App billig.
-const DB_VERSION = 3;
+// v4: neuer Store 'planCycles' (Phase 1, Abschnitt 3.1 — Vorlagen-Zyklen).
+const DB_VERSION = 4;
 
 export const STORES = [
   'users', 'athletes', 'groups', 'competitions', 'entries', 'results',
-  'exercises', 'templates', 'plans', 'sessions', 'actionItems', 'meta', 'syncQueue',
+  'exercises', 'templates', 'plans', 'planCycles', 'sessions', 'actionItems', 'meta', 'syncQueue',
   'clubs', 'invitations'
 ];
 
@@ -168,7 +169,7 @@ const SYNC_EXCLUDED = new Set(['syncQueue', 'meta']);
 // clubId (seine id IST die clubId).
 export const CLUB_SCOPED_STORES = new Set([
   'athletes', 'groups', 'competitions', 'entries', 'results',
-  'exercises', 'templates', 'plans', 'sessions', 'actionItems',
+  'exercises', 'templates', 'plans', 'planCycles', 'sessions', 'actionItems',
 ]);
 
 // Liefert die clubId der aktuell eingeloggten Person, für put() unten —

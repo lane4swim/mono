@@ -56,6 +56,7 @@ model Club {
   exercises                     Exercise[]
   templates                     Template[]
   plans                         Plan[]
+  planCycles                    PlanCycle[]
   sessions                      TrainingSession[]
   actionItems                   ActionItem[]
   qualificationReminderSettings ClubQualificationReminderSetting[]
@@ -471,6 +472,27 @@ model Plan {
   @@map("plans")
 }
 
+// Wiederkehrende Trainingspläne (Phase 1, Abschnitt 3.1 —
+// docs/trainingsplanung-phase1-plan.md). Bewusst OHNE groupId (analog
+// Template): ein Zyklus ist gruppenunabhängig wiederverwendbar, die
+// Zielgruppe wird erst beim "Anwenden" abgefragt. "Anwenden" erzeugt
+// Plan-Datensätze als Snapshot — keine Relation zu Plan.
+model PlanCycle {
+  id          String    @id @default(uuid())
+  clubId      String
+  club        Club      @relation(fields: [clubId], references: [id])
+  name        String
+  description String    @default("")
+  // Array von { weekOffset, label, days: [{ dayOfWeek, templateId }] }.
+  weeks       Json
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  @@index([clubId, updatedAt])
+  @@map("plan_cycles")
+}
+
 // Heißt "TrainingSession" (nicht "Session"), um Verwechslung mit
 // Auth-/HTTP-Session-Konzepten zu vermeiden — Tabelle bleibt "sessions".
 model TrainingSession {
@@ -485,6 +507,11 @@ model TrainingSession {
   trainerNote String    @default("")
   // Array von { athleteId, present, rpe, note } — ein Eintrag je Athlet:in.
   attendance  Json
+  // Manuelle Distanzangabe (Meter) für Einheiten ohne planId (Ad-hoc-
+  // Training) oder bei Abweichung vom Plan-Tag. null = aus dem
+  // verknüpften Plan-Tag berechnen (Standardfall). Siehe
+  // docs/trainingsplanung-phase1-plan.md, Abschnitt 2.2.
+  actualDistance Int?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?

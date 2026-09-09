@@ -7,6 +7,7 @@ import { fullName, statCard, badge, laneWave, groupBy, average } from '../ui.js'
 import { isAthleteScoped, getCurrentUser } from '../state.js';
 import { navigate } from '../router.js';
 import { totalDistance } from './setEditor.js';
+import { flagLowAttendance } from './attendanceStats.js';
 import { t, trCode } from '../i18n.js';
 
 export const dashboardModule = {
@@ -127,6 +128,16 @@ async function renderTrainerDashboard(container, isCurrent) {
   }
   sessionCard.appendChild(el('button', { class: 'btn btn-ghost btn-sm', style: 'margin-top:8px', onclick: () => navigate('sessions') }, t('dashboard.allSessions')));
   grid.appendChild(sessionCard);
+
+  // Anwesenheits-Frühindikator (Phase 1, Abschnitt 3.3) — nur als Hinweis,
+  // Details liefert das Statistik-Modul.
+  const attendanceFlags = flagLowAttendance(sessions, athletes);
+  if (attendanceFlags.length > 0) {
+    grid.appendChild(el('div', { class: 'card row-click', onclick: () => navigate('stats') }, [
+      el('h3', { class: 'mt-0' }, t('dashboard.attendanceFlagsTitle')),
+      el('p', {}, t('dashboard.attendanceFlagsMsg', { count: attendanceFlags.length })),
+    ]));
+  }
 
   wrap.appendChild(grid);
   container.appendChild(wrap);

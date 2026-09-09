@@ -17,6 +17,7 @@ function makeFakePrismaClient(): PrismaClient {
     exercise: makeDelegate('exercise'),
     template: makeDelegate('template'),
     plan: makeDelegate('plan'),
+    planCycle: makeDelegate('planCycle'),
     trainingSession: makeDelegate('trainingSession'),
     actionItem: makeDelegate('actionItem'),
   } as unknown as PrismaClient;
@@ -46,6 +47,11 @@ describe('getEntityDelegate', () => {
     expect(delegate.__name).toBe('athlete');
   });
 
+  it('bildet "planCycles" korrekt auf das planCycle-Delegate ab', () => {
+    const delegate = getEntityDelegate(prisma, 'planCycles') as unknown as { __name: string };
+    expect(delegate.__name).toBe('planCycle');
+  });
+
   it('liefert für jeden Store ein Delegate mit den erwarteten CRUD-Methoden', () => {
     ENTITY_STORE_NAMES.forEach((store) => {
       const delegate = getEntityDelegate(prisma, store);
@@ -58,8 +64,8 @@ describe('getEntityDelegate', () => {
 });
 
 describe('ENTITY_STORE_NAMES', () => {
-  it('enthält genau die zehn fachlichen Stores (ohne "users")', () => {
-    expect(ENTITY_STORE_NAMES).toHaveLength(10);
+  it('enthält genau die elf fachlichen Stores (ohne "users")', () => {
+    expect(ENTITY_STORE_NAMES).toHaveLength(11);
     expect(ENTITY_STORE_NAMES).not.toContain('users');
   });
 });

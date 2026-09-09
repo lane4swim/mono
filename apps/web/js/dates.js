@@ -47,15 +47,24 @@ export function fmtDateTime(iso) {
   const d = new Date(iso);
   return d.toLocaleString(getLocale(), { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
+// Bewusst durchgehend UTC-Arithmetik (Parsen mit "Z"-Suffix, `getUTCDate`/
+// `setUTCDate`/`getUTCDay`): eine reine Kalenderdatumsangabe wie "YYYY-MM-DD"
+// hat keine Zeitzone. Der vorherige Code parste als LOKALE Mitternacht,
+// rechnete lokal weiter, konvertierte das Ergebnis aber über toISOString()
+// zurück nach UTC — östlich von UTC (z. B. Europe/Berlin) lag lokale
+// Mitternacht bereits im VORTAG in UTC, wodurch das Ergebnis systematisch
+// einen Tag zu früh war (bei isoAddDays(iso, 0) sogar ganz ohne Addition).
+// Bug gefunden beim Code-Review von planCycles.js, das isoAddDays/
+// startOfWeek verkettet und den Fehler dadurch vervielfachte.
 export function isoAddDays(iso, n) {
-  const d = new Date(dateOnly(iso) + 'T00:00:00');
-  d.setDate(d.getDate() + n);
+  const d = new Date(dateOnly(iso) + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
 }
 export function startOfWeek(iso) {
-  const d = new Date(dateOnly(iso) + 'T00:00:00');
-  const day = (d.getDay() + 6) % 7; // Montag = 0
-  d.setDate(d.getDate() - day);
+  const d = new Date(dateOnly(iso) + 'T00:00:00Z');
+  const day = (d.getUTCDay() + 6) % 7; // Montag = 0
+  d.setUTCDate(d.getUTCDate() - day);
   return d.toISOString().slice(0, 10);
 }
 export function ageFromBirthdate(iso){

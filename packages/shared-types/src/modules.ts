@@ -41,7 +41,9 @@ export const MODULE_PACKAGES = {
   athletes: { routeIds: ['athletes'], stores: ['athletes', 'groups'] },
   competitions: { routeIds: ['competitions'], stores: ['competitions', 'entries'] },
   times: { routeIds: ['times'], stores: [] },
-  plans: { routeIds: ['plans'], stores: ['plans'] },
+  // Vorlagen-Zyklen (Phase 1, Abschnitt 3.1) leben in derselben Route
+  // 'plans' (siehe apps/web/js/modules/plans.js), kein eigenes Paket.
+  plans: { routeIds: ['plans'], stores: ['plans', 'planCycles'] },
   templates: { routeIds: ['templates'], stores: ['templates'] },
   catalog: { routeIds: ['catalog'], stores: ['exercises'] },
   sessions: { routeIds: ['sessions'], stores: ['sessions'] },

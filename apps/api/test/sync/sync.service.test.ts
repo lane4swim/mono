@@ -1265,6 +1265,19 @@ describe('syncService — Rollen-Scopierung für "athlete" (Sicherheitsregressio
     expect((result.changes[0]!.payload as Record<string, unknown>).trainerNote).toBe('Gute Energie heute');
   });
 
+  // "actualDistance" (Phase 1, Abschnitt 3.2 — docs/trainingsplanung-
+  // phase1-plan.md) ist im Gegensatz zu "trainerNote" kein internes
+  // Notizfeld, sondern der Gesamtumfang der Einheit — bleibt daher auch
+  // für Rolle "athlete" sichtbar.
+  it('PULL für Rolle "athlete": "actualDistance" bleibt unredigiert', async () => {
+    const { service, gateway } = makeService();
+    const payload = makeSessionPayload({ actualDistance: 2400 });
+    gateway.seed('sessions', { ...payload, updatedAt: new Date(payload.updatedAt), createdAt: new Date(payload.createdAt), deletedAt: null });
+
+    const result = await service.pull({}, asAthlete(CLUB_A, '55555555-5555-5555-5555-555555555555'));
+    expect((result.changes[0]!.payload as Record<string, unknown>).actualDistance).toBe(2400);
+  });
+
   it('PULL für Rolle "athlete": eine "sessions"-Einheit, an der die Person gar nicht teilnahm, wird komplett ausgeblendet', async () => {
     const { service, gateway } = makeService();
     const payload = makeSessionPayload({
