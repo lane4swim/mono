@@ -26,7 +26,13 @@ function daysUntil(target: Date, now: Date): number {
 
 export interface NotifyResult {
   remindersSent: number;
-  failed: Array<{ qualificationId: string; thresholdDays: number; error: string }>;
+  // `willRetry` unterscheidet die zwei möglichen Fehlerquellen (Issue #59):
+  // ein Fehlschlag beim Versand an die qualifizierte Person selbst (äußerer
+  // catch, true — recordReminderSent() wurde NICHT aufgerufen, der nächste
+  // Cron-Lauf versucht die ganze Schwelle erneut) vs. ein Fehlschlag NUR bei
+  // einer Admin-Benachrichtigung (false — recordReminderSent() wurde bereits
+  // aufgerufen, dieser eine Admin-Versand wird NICHT automatisch wiederholt).
+  failed: Array<{ qualificationId: string; thresholdDays: number; error: string; willRetry: boolean }>;
 }
 
 export async function notifyExpiringQualifications(
@@ -95,7 +101,7 @@ export async function notifyExpiringQualifications(
             await send(admin);
           } catch (err) {
             const error = err instanceof Error ? err.message : String(err);
-            result.failed.push({ qualificationId: candidate.id, thresholdDays, error: `Admin-Benachrichtigung an ${admin.email} fehlgeschlagen: ${error}` });
+            result.failed.push({ qualificationId: candidate.id, thresholdDays, error: `Admin-Benachrichtigung an ${admin.email} fehlgeschlagen: ${error}`, willRetry: false });
           }
         }));
 
@@ -107,7 +113,7 @@ export async function notifyExpiringQualifications(
         // Lauf abbrechen — der nächste Cron-Durchlauf versucht es erneut, da
         // recordReminderSent() für diese Schwelle nicht aufgerufen wurde
         // (analog purgeExpiredDeletions.ts).
-        result.failed.push({ qualificationId: candidate.id, thresholdDays, error: err instanceof Error ? err.message : String(err) });
+        result.failed.push({ qualificationId: candidate.id, thresholdDays, error: err instanceof Error ? err.message : String(err), willRetry: true });
       }
     }
   }

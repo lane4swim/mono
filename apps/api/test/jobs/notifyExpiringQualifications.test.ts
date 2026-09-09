@@ -147,6 +147,10 @@ describe('notifyExpiringQualifications()', () => {
     expect(first.remindersSent).toBe(1);
     expect(first.failed).toHaveLength(1);
     expect(first.failed[0]?.error).toContain('admin@sv.de');
+    // Ein Admin-Fehlschlag wird NICHT automatisch wiederholt (die Schwelle
+    // gilt bereits als erledigt, siehe NotifyResult.willRetry-Kommentar) —
+    // anders als ein Fehlschlag beim Versand an die Person selbst.
+    expect(first.failed[0]?.willRetry).toBe(false);
     expect(mailer.sentQualificationReminderEmails.map((e) => e.to)).toEqual(['person@sv.de']);
 
     const second = await notifyExpiringQualifications(gateway, mailer, NOW);
@@ -154,5 +158,23 @@ describe('notifyExpiringQualifications()', () => {
     // Mail an die Person, nur weil der Admin-Versand einmal fehlschlug.
     expect(second.remindersSent).toBe(0);
     expect(mailer.sentQualificationReminderEmails.map((e) => e.to)).toEqual(['person@sv.de']);
+  });
+
+  it('markiert einen Fehlschlag beim Versand an die Person selbst als willRetry: true (Code-Review zu Issue #59)', async () => {
+    const gateway = new InMemoryNotifyExpiringQualificationsGateway(
+      [candidate()],
+      new Map([['club1:trainer_c', [60, 14]]]),
+      new Map([['club1', admins]]),
+    );
+    const mailer = new PartiallyFailingMailSender('person@sv.de');
+
+    const result = await notifyExpiringQualifications(gateway, mailer, NOW);
+    expect(result.remindersSent).toBe(0);
+    expect(result.failed).toHaveLength(1);
+    expect(result.failed[0]?.willRetry).toBe(true);
+    // Der Admin wird für diese Schwelle gar nicht erst angeschrieben — der
+    // Fehlschlag bei der Person (direktes await, VOR dem Promise.all über
+    // die Admins) wirft sofort in den äußeren catch.
+    expect(mailer.sentQualificationReminderEmails).toHaveLength(0);
   });
 });

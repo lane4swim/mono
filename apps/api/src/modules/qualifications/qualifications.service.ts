@@ -4,8 +4,8 @@
 //     bearbeitet/löscht sie (Entscheidung zu Frage 2) — jede Person sieht
 //     über listOwn() nur lesend die eigenen.
 //   - `superadmin` kommt hier nie an (kein eigener Verein, siehe
-//     requireRole('admin', 'trainer', 'athlete') in qualifications.route.ts
-//     — Entscheidung zu Frage 5).
+//     requireAnyRole('admin', 'trainer', 'athlete', 'referee') in
+//     qualifications.route.ts — Entscheidung zu Frage 5).
 //   - Erinnerungs-Schwellen sind je Verein/Typ konfigurierbar (Abschnitt 2.4).
 import type {
   UserQualificationRepository,
