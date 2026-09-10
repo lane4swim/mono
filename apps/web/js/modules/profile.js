@@ -204,10 +204,15 @@ function buildNotificationsCard() {
   // Checkbox startet deaktiviert, bis der tatsächliche Abo-Status (async,
   // browserseitig) feststeht — verhindert einen falschen Zwischenzustand
   // (z. B. sichtbar "aktiviert", obwohl noch kein Abo besteht).
-  getExistingPushSubscription().then((sub) => {
-    checkbox.checked = !!sub;
-    checkbox.disabled = false;
-  });
+  // Code-Review-Korrektur: ohne .catch() blieb die Checkbox dauerhaft
+  // deaktiviert (nie wieder bedienbar), sobald getExistingPushSubscription()
+  // ablehnte oder registration.ready nie auflöste (z. B. Service Worker
+  // in diesem Kontext nie aktiv geworden) — ohne jeden Hinweis für die
+  // Person, dass etwas schiefging.
+  getExistingPushSubscription()
+    .then((sub) => { checkbox.checked = !!sub; })
+    .catch(() => { checkbox.checked = false; })
+    .finally(() => { checkbox.disabled = false; });
 
   checkbox.addEventListener('change', async () => {
     const wantsEnabled = checkbox.checked;

@@ -40,7 +40,7 @@ export async function notifyUpcomingSessions(
       // zeitlich überschneiden (z. B. ein sehr langer vorheriger Lauf).
       if (await gateway.hasReminderBeenSent(candidate.id)) continue;
 
-      const recipientIds = await gateway.findRecipientUserIds(candidate.clubId, candidate.groupId);
+      const recipientIds = await gateway.findRecipientUserIds(candidate.clubId, candidate.athleteIds);
       if (recipientIds.length > 0) {
         const subscriptionsByUser = await pushSubscriptions.listByUserIds(recipientIds);
         const allSubscriptions = [...subscriptionsByUser.values()].flat();

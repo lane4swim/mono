@@ -4,6 +4,7 @@
 // der vollen sync.gateway.ts-Interfaces — analog zu
 // jobs/sessionReminder.repository.ts.
 import type { PrismaClient } from '@prisma/client';
+import { findClubStaffUserIds } from '../../db/clubStaff.js';
 
 export interface AnnouncementRecipientsGateway {
   // null groupId = an den gesamten Verein gerichtet -> ALLE aktiven
@@ -22,16 +23,13 @@ export class PrismaAnnouncementRecipientsGateway implements AnnouncementRecipien
       const rows = await this.prisma.user.findMany({ where: { clubId, deletedAt: null }, select: { id: true } });
       return rows.map((r) => r.id).filter((id) => id !== excludeUserId);
     }
-    const [staff, athleteAccounts] = await Promise.all([
-      this.prisma.user.findMany({
-        where: { clubId, deletedAt: null, OR: [{ roles: { has: 'trainer' } }, { roles: { has: 'admin' } }] },
-        select: { id: true },
-      }),
+    const [staffIds, athleteAccounts] = await Promise.all([
+      findClubStaffUserIds(this.prisma, clubId),
       this.prisma.user.findMany({
         where: { clubId, deletedAt: null, athlete: { groupId, deletedAt: null } },
         select: { id: true },
       }),
     ]);
-    return [...new Set([...staff, ...athleteAccounts].map((u) => u.id))].filter((id) => id !== excludeUserId);
+    return [...new Set([...staffIds, ...athleteAccounts.map((u) => u.id)])].filter((id) => id !== excludeUserId);
   }
 }

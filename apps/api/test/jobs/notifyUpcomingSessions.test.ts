@@ -6,9 +6,10 @@ import { InMemoryPushSubscriptionRepository } from '../../src/modules/push/push.
 import type { UpcomingSessionCandidate } from '../../src/jobs/sessionReminder.repository.js';
 
 const NOW = new Date('2026-09-10T08:00:00.000Z');
+const ATHLETE1_ID = 'athlete1-id';
 
 function session(overrides: Partial<UpcomingSessionCandidate> = {}): UpcomingSessionCandidate {
-  return { id: 's1', clubId: 'club1', groupId: 'group1', date: new Date('2026-09-10T18:00:00.000Z'), ...overrides };
+  return { id: 's1', clubId: 'club1', athleteIds: [ATHLETE1_ID], date: new Date('2026-09-10T18:00:00.000Z'), ...overrides };
 }
 
 async function buildSubscriptions(userId: string, count = 1): Promise<InMemoryPushSubscriptionRepository> {
@@ -21,7 +22,11 @@ async function buildSubscriptions(userId: string, count = 1): Promise<InMemoryPu
 
 describe('notifyUpcomingSessions()', () => {
   it('verschickt eine Push-Erinnerung an alle Empfänger:innen mit aktivem Abo', async () => {
-    const gateway = new InMemoryNotifyUpcomingSessionsGateway([session()], new Map([['club1:group1', ['athlete1', 'trainer1']]]));
+    const gateway = new InMemoryNotifyUpcomingSessionsGateway(
+      [session()],
+      new Map([['club1', ['trainer1']]]),
+      new Map([[ATHLETE1_ID, 'athlete1']]),
+    );
     const pusher = new InMemoryPushSender();
     const subs = await buildSubscriptions('athlete1');
     await subs.upsert('trainer1', 'https://push.example/trainer1/0', { p256dh: 'p', auth: 'a' });
@@ -34,9 +39,34 @@ describe('notifyUpcomingSessions()', () => {
     expect(await gateway.hasReminderBeenSent('s1')).toBe(true);
   });
 
+  // Code-Review-Korrektur: die Empfänger:innen-Ermittlung nutzte zuvor
+  // die AKTUELLE Gruppen-Mitgliedschaft (groupId) statt der tatsächlichen
+  // Teilnehmer:innen-Liste dieser Einheit — eine Ad-hoc-Einheit OHNE
+  // Gruppe (TrainingSession.groupId ist nullable, siehe schema.prisma)
+  // bekam dadurch NIE eine Athlet:innen-Benachrichtigung, obwohl
+  // `attendance` die teilnehmenden Athlet:innen längst kennt.
+  it('verschickt eine Erinnerung an die Athlet:innen einer Ad-hoc-Einheit ohne Gruppe', async () => {
+    const gateway = new InMemoryNotifyUpcomingSessionsGateway(
+      [session({ athleteIds: [ATHLETE1_ID] })], // keine groupId auf UpcomingSessionCandidate mehr — athleteIds kommt aus attendance
+      new Map(),
+      new Map([[ATHLETE1_ID, 'athlete1']]),
+    );
+    const pusher = new InMemoryPushSender();
+    const subs = await buildSubscriptions('athlete1');
+
+    const result = await notifyUpcomingSessions(gateway, pusher, subs, NOW);
+    expect(result.remindersSent).toBe(1);
+    expect(pusher.sent).toHaveLength(1);
+    expect(pusher.sent[0]?.subscriptions).toHaveLength(1);
+  });
+
   it('lässt eine Einheit außerhalb des Erinnerungsfensters unberührt', async () => {
     const farAway = new Date(NOW.getTime() + (UPCOMING_SESSION_REMINDER_HOURS + 5) * 60 * 60 * 1000);
-    const gateway = new InMemoryNotifyUpcomingSessionsGateway([session({ date: farAway })], new Map([['club1:group1', ['athlete1']]]));
+    const gateway = new InMemoryNotifyUpcomingSessionsGateway(
+      [session({ date: farAway })],
+      new Map(),
+      new Map([[ATHLETE1_ID, 'athlete1']]),
+    );
     const pusher = new InMemoryPushSender();
     const subs = await buildSubscriptions('athlete1');
 
@@ -46,7 +76,7 @@ describe('notifyUpcomingSessions()', () => {
   });
 
   it('markiert eine Einheit ohne Empfänger:innen trotzdem als erledigt (kein endloser Nachhol-Versuch)', async () => {
-    const gateway = new InMemoryNotifyUpcomingSessionsGateway([session()], new Map());
+    const gateway = new InMemoryNotifyUpcomingSessionsGateway([session({ athleteIds: [] })], new Map(), new Map());
     const pusher = new InMemoryPushSender();
     const subs = new InMemoryPushSubscriptionRepository();
 
@@ -56,7 +86,7 @@ describe('notifyUpcomingSessions()', () => {
   });
 
   it('löscht abgelaufene Abos, die der Pusher als 404/410 meldet', async () => {
-    const gateway = new InMemoryNotifyUpcomingSessionsGateway([session()], new Map([['club1:group1', ['athlete1']]]));
+    const gateway = new InMemoryNotifyUpcomingSessionsGateway([session()], new Map(), new Map([[ATHLETE1_ID, 'athlete1']]));
     const pusher = new InMemoryPushSender();
     const subs = await buildSubscriptions('athlete1');
     const [sub] = await subs.listByUserId('athlete1');

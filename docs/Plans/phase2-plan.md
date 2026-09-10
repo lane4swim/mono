@@ -704,3 +704,50 @@ Ansatz („eigene, stark eingeschränkte Sicht auf bestehende Endpunkte")
 ist zugleich der pragmatischere UND der sicherere Weg: ein einzelner,
 klar auditierbarer Lesepfad statt eines um eine neue Dimension
 erweiterten generischen Schreibpfads.
+
+## 6. Nachträglich behoben (unabhängiges Code-Review)
+
+- **SSRF über den Push-Subscribe-Endpunkt** — `PushSubscribeRequestSchema.endpoint`
+  prüfte bislang nur `.url()`, ohne den Host einzuschränken. Da
+  `apps/api/src/push/pusher.webpush.ts` diesen Wert später serverseitig
+  als Ziel einer echten HTTP-Anfrage verwendet (ausgelöst zeitversetzt
+  durch einen Cron-Job oder den Announcement-Push-Hook, nicht durch die
+  anfragende Person selbst), konnte JEDES authentifizierte Konto —
+  einschließlich der Rolle `athlete` — eine beliebige interne/private
+  Adresse registrieren und den Server damit zu einem SSRF-Werkzeug
+  machen. Behoben durch eine Allowlist der tatsächlichen Web-Push-
+  Dienst-Hosts der Browser-Hersteller (FCM, Mozilla Autopush, Apple,
+  WNS) direkt im Zod-Schema (`packages/shared-types/src/push.ts`) —
+  `PushUnsubscribeRequestSchema` bleibt bewusst unverändert (löst nur
+  einen DB-Delete aus, keine HTTP-Anfrage). Neue Tests in
+  `push.test.ts`/`push.route.test.ts`.
+- **Erinnerung an bevorstehende Einheiten erreichte Athlet:innen einer
+  Ad-hoc-Einheit ohne Gruppe nie** — `findRecipientUserIds()`
+  (`jobs/sessionReminder.repository.ts`) ermittelte die Athlet:innen
+  bislang über die AKTUELLE Gruppen-Mitgliedschaft (`groupId`); eine
+  Einheit ohne Gruppe (`TrainingSession.groupId` ist nullable) bekam
+  dadurch nie eine Athlet:innen-Benachrichtigung, nur Trainer:innen/
+  Admins. Behoben durch Ableitung der Empfänger:innen aus
+  `TrainingSession.attendance` (die tatsächliche Teilnehmer:innen-Liste
+  DIESER Einheit) statt einer erneuten Gruppen-Abfrage — trifft
+  zusätzlich den allgemeineren Fall, dass sich die Gruppen-Mitgliedschaft
+  zwischen Anlegen der Einheit und Fälligkeit der Erinnerung geändert
+  haben kann. `UpcomingSessionCandidate.groupId` ersetzt durch
+  `athleteIds`.
+- **`GET /api/parents/overview` zeigte gelöschte Wettkämpfe weiter an** —
+  `buildChildOverview()` filterte `StartlistEntry.deletedAt`, aber nicht
+  das per `include` geladene `Competition.deletedAt` — ein soft-
+  gelöschter/abgesagter Wettkampf blieb dadurch dauerhaft (solange sein
+  Datum in der Zukunft lag) in der Eltern-Übersicht sichtbar. Ergänzt.
+- **Checkbox „Push-Benachrichtigungen aktivieren" blieb dauerhaft
+  deaktiviert ohne Rückmeldung** — `profile.js` rief
+  `getExistingPushSubscription()` ohne `.catch()` auf; lehnte das
+  Promise ab (z. B. Service Worker in diesem Kontext nie aktiv), blieb
+  die Checkbox für die gesamte Sitzung deaktiviert, ohne dass die Person
+  einen Grund dafür sah. Ergänzt (`.catch()` setzt einen definierten
+  Zustand, `.finally()` aktiviert die Checkbox in jedem Fall wieder).
+- **Duplizierte „Staff eines Vereins"-Abfrage** —
+  `announcementRecipients.repository.ts` und `sessionReminder.repository.ts`
+  wiederholten dieselbe Prisma-Abfrage für „trainer/admin-Konten eines
+  Vereins" fast wortgleich. In `apps/api/src/db/clubStaff.ts`
+  (`findClubStaffUserIds()`) zusammengeführt.

@@ -7,7 +7,11 @@ export class InMemoryNotifyUpcomingSessionsGateway implements NotifyUpcomingSess
 
   constructor(
     private readonly sessions: UpcomingSessionCandidate[] = [],
-    private readonly recipientsByClubAndGroup: Map<string, string[]> = new Map(),
+    // Staff-Konten je Verein (trainer/admin) — bekommen JEDE Erinnerung
+    // dieses Vereins, unabhängig von der Teilnehmer:innen-Liste.
+    private readonly staffByClub: Map<string, string[]> = new Map(),
+    // athleteId -> Konto-ID, analog dem echten User.athleteId-Fremdschlüssel.
+    private readonly userIdByAthleteId: Map<string, string> = new Map(),
   ) {}
 
   async findUpcomingSessionsNeedingReminder(now: Date, windowEnd: Date): Promise<UpcomingSessionCandidate[]> {
@@ -16,8 +20,10 @@ export class InMemoryNotifyUpcomingSessionsGateway implements NotifyUpcomingSess
     );
   }
 
-  async findRecipientUserIds(clubId: string, groupId: string | null): Promise<string[]> {
-    return this.recipientsByClubAndGroup.get(`${clubId}:${groupId ?? ''}`) ?? [];
+  async findRecipientUserIds(clubId: string, athleteIds: readonly string[]): Promise<string[]> {
+    const staff = this.staffByClub.get(clubId) ?? [];
+    const athleteUsers = athleteIds.map((id) => this.userIdByAthleteId.get(id)).filter((id): id is string => !!id);
+    return [...new Set([...staff, ...athleteUsers])];
   }
 
   async hasReminderBeenSent(sessionId: string): Promise<boolean> {

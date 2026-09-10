@@ -40,7 +40,7 @@ export class PrismaParentOverviewGateway implements ParentOverviewGateway {
           })
         : Promise.resolve([]),
       this.prisma.startlistEntry.findMany({
-        where: { athleteId, deletedAt: null, competition: { date: { gte: now } } },
+        where: { athleteId, deletedAt: null, competition: { date: { gte: now }, deletedAt: null } },
         include: { competition: true },
         orderBy: { competition: { date: 'asc' } },
         take: OVERVIEW_ITEM_LIMIT,

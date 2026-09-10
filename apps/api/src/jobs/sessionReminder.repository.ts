@@ -2,11 +2,22 @@
 // qualificationReminder.repository.ts: eine schlanke Gateway-Schnittstelle,
 // zugeschnitten genau auf das, was der Job braucht.
 import type { PrismaClient } from '@prisma/client';
+import { findClubStaffUserIds } from '../db/clubStaff.js';
 
 export interface UpcomingSessionCandidate {
   id: string;
   clubId: string;
-  groupId: string | null;
+  // athleteIds statt groupId: aus TrainingSession.attendance abgeleitet
+  // (Code-Review-Korrektur) — die tatsächliche Teilnehmer:innen-Liste
+  // dieser EINEN Einheit ist die genauere, verlässlichere Quelle für "wer
+  // soll erinnert werden" als eine erneute Abfrage des AKTUELLEN
+  // Gruppen-Rosters: Athletenrollen können sich zwischen Anlegen der
+  // Einheit und Fälligkeit der Erinnerung ändern (siehe sessions.js:
+  // attendanceFor() — die Anwesenheitsliste wird beim Anlegen aus dem
+  // damaligen Gruppen-Stand befüllt, danach unabhängig davon gepflegt).
+  // Erfasst zusätzlich Ad-hoc-Einheiten OHNE groupId, für die die
+  // vorherige gruppenbasierte Abfrage überhaupt keine Athlet:innen fand.
+  athleteIds: string[];
   date: Date;
 }
 
@@ -15,12 +26,24 @@ export interface NotifyUpcomingSessionsGateway {
   // innerhalb des Erinnerungsfensters, ohne bestehenden
   // SessionReminderLog-Eintrag (siehe schema.prisma: SessionReminderLog).
   findUpcomingSessionsNeedingReminder(now: Date, windowEnd: Date): Promise<UpcomingSessionCandidate[]>;
-  // Konto-IDs der Athlet:innen einer Gruppe PLUS aller trainer/admin-Konten
-  // des Vereins — eine gemeinsame Abfrage statt zwei getrennter, da beide
-  // Empfänger:innen-Mengen dieselbe Benachrichtigung bekommen.
-  findRecipientUserIds(clubId: string, groupId: string | null): Promise<string[]>;
+  // Konto-IDs der an dieser Einheit teilnehmenden Athlet:innen (siehe
+  // UpcomingSessionCandidate.athleteIds-Kommentar) PLUS aller
+  // trainer/admin-Konten des Vereins — eine gemeinsame Abfrage statt zwei
+  // getrennter, da beide Empfänger:innen-Mengen dieselbe Benachrichtigung
+  // bekommen.
+  findRecipientUserIds(clubId: string, athleteIds: readonly string[]): Promise<string[]>;
   hasReminderBeenSent(sessionId: string): Promise<boolean>;
   recordReminderSent(sessionId: string): Promise<void>;
+}
+
+// TrainingSession.attendance ist ein ungetyptes Json-Feld (siehe
+// AttendanceRecordSchema in packages/shared-types/src/entities.ts) — hier
+// defensiv statt mit einem `as`-Cast gelesen, analog sync.athleteScope.ts.
+function extractAthleteIds(attendance: unknown): string[] {
+  if (!Array.isArray(attendance)) return [];
+  return attendance
+    .map((entry) => (entry as { athleteId?: unknown } | null)?.athleteId)
+    .filter((id): id is string => typeof id === 'string');
 }
 
 export class PrismaNotifyUpcomingSessionsGateway implements NotifyUpcomingSessionsGateway {
@@ -34,25 +57,22 @@ export class PrismaNotifyUpcomingSessionsGateway implements NotifyUpcomingSessio
         club: { enabledModules: { has: 'sessions' } },
         reminderLog: null,
       },
-      select: { id: true, clubId: true, groupId: true, date: true },
+      select: { id: true, clubId: true, attendance: true, date: true },
     });
-    return rows;
+    return rows.map((row) => ({ id: row.id, clubId: row.clubId, athleteIds: extractAthleteIds(row.attendance), date: row.date }));
   }
 
-  async findRecipientUserIds(clubId: string, groupId: string | null): Promise<string[]> {
-    const [staff, athleteAccounts] = await Promise.all([
-      this.prisma.user.findMany({
-        where: { clubId, deletedAt: null, OR: [{ roles: { has: 'trainer' } }, { roles: { has: 'admin' } }] },
-        select: { id: true },
-      }),
-      groupId
+  async findRecipientUserIds(clubId: string, athleteIds: readonly string[]): Promise<string[]> {
+    const [staffIds, athleteAccounts] = await Promise.all([
+      findClubStaffUserIds(this.prisma, clubId),
+      athleteIds.length > 0
         ? this.prisma.user.findMany({
-            where: { clubId, deletedAt: null, athlete: { groupId, deletedAt: null } },
+            where: { clubId, deletedAt: null, athleteId: { in: [...athleteIds] } },
             select: { id: true },
           })
         : Promise.resolve([]),
     ]);
-    return [...new Set([...staff, ...athleteAccounts].map((u) => u.id))];
+    return [...new Set([...staffIds, ...athleteAccounts.map((u) => u.id)])];
   }
 
   async hasReminderBeenSent(sessionId: string): Promise<boolean> {

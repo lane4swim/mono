@@ -46,7 +46,7 @@ describe('Push-Abos — REST-Endpunkte', () => {
       method: 'POST',
       url: '/api/push/subscriptions',
       headers: { authorization: `Bearer ${token}` },
-      payload: { endpoint: 'https://push.example/abc', keys: { p256dh: 'p', auth: 'a' } },
+      payload: { endpoint: 'https://fcm.googleapis.com/fcm/send/abc', keys: { p256dh: 'p', auth: 'a' } },
     });
     expect(response.statusCode).toBe(204);
     expect(await pushSubscriptions.listByUserId(athlete.id)).toHaveLength(1);
@@ -78,6 +78,26 @@ describe('Push-Abos — REST-Endpunkte', () => {
       payload: { endpoint: 'not-a-url' },
     });
     expect(response.statusCode).toBe(400);
+    await app.close();
+  });
+
+  // Sicherheitsregression (Code-Review): PushSubscribeRequestSchema
+  // beschränkt "endpoint" auf bekannte Web-Push-Dienst-Hosts — ohne diese
+  // Prüfung könnte JEDES Konto (auch "athlete", das schwächste hier
+  // getestete) eine interne/private Adresse registrieren, an die der
+  // Server später (asynchron, über einen Cron-Job oder Push-Auslöser)
+  // eine echte HTTP-Anfrage schickt (SSRF).
+  it('lehnt einen Endpoint bei einem unbekannten Host mit 400 ab (SSRF-Schutz)', async () => {
+    const { app, keyPair, athlete, pushSubscriptions } = await buildTestApp();
+    const token = await tokenFor(keyPair, athlete.id, 'athlete', athlete.clubId);
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/push/subscriptions',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { endpoint: 'http://169.254.169.254/latest/meta-data/', keys: { p256dh: 'p', auth: 'a' } },
+    });
+    expect(response.statusCode).toBe(400);
+    expect(await pushSubscriptions.listByUserId(athlete.id)).toHaveLength(0);
     await app.close();
   });
 
