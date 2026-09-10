@@ -530,6 +530,14 @@ export default {
     newEmailLabel: 'New email address',
     changeEmailButton: 'Change email address',
     emailChanged: 'Email address changed successfully.',
+    // Push notifications (Phase 2, section 1.6).
+    notificationsSectionTitle: 'Notifications',
+    notificationsHint: 'Push notifications for e.g. expiring qualifications, upcoming training sessions and new announcements — directly on this device.',
+    notificationsToggleLabel: 'Enable push notifications',
+    notificationsEnabled: 'Push notifications enabled.',
+    notificationsDisabled: 'Push notifications disabled.',
+    notificationsUnsupported: 'Push notifications are not supported by this browser.',
+    notificationsError: 'Could not enable push notifications: {message}',
   },
   setEditor: {
     colDistance: 'Dist. (m)', colDescription: 'Description', colReps: 'Reps', colRest: 'Rest (s)',

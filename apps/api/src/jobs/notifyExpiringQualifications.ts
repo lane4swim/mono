@@ -8,6 +8,8 @@
 // purgeExpiredDeletions.ts.
 import type { NotifyExpiringQualificationsGateway, AdminContact } from './qualificationReminder.repository.js';
 import type { MailSender } from '../mail/mailer.js';
+import type { PushSender } from '../push/pusher.js';
+import type { PushSubscriptionRepository } from '../modules/push/push.repository.js';
 import { DEFAULT_QUALIFICATION_REMINDER_THRESHOLDS_DAYS } from '@lane1/shared-types';
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -35,10 +37,23 @@ export interface NotifyResult {
   failed: Array<{ qualificationId: string; thresholdDays: number; error: string; willRetry: boolean }>;
 }
 
+// Push (Phase 2, Abschnitt 1.5.1 — docs/Plans/phase2-plan.md): optionaler
+// Zusatzkanal, NUR an die qualifizierte Person selbst (nicht an Admins —
+// die E-Mail-Kopie an Admins bleibt der einzige Kanal für sie). Fehlt
+// `push` (kein VAPID-Schlüssel konfiguriert) oder hat die Person kein
+// aktives Abo, bleibt E-Mail unverändert der verlässliche Kanal — ein
+// fehlgeschlagener/ausbleibender Push-Versand lässt recordReminderSent()
+// unberührt (siehe Aufrufstelle unten: nach, nicht statt des E-Mail-Versands).
+export interface PushDeps {
+  pusher: PushSender;
+  pushSubscriptions: PushSubscriptionRepository;
+}
+
 export async function notifyExpiringQualifications(
   gateway: NotifyExpiringQualificationsGateway,
   mailer: MailSender,
   now: Date = new Date(),
+  push?: PushDeps,
 ): Promise<NotifyResult> {
   const [candidates, thresholdsByClubAndType] = await Promise.all([
     gateway.findActiveQualificationsForModuleClubs(),
@@ -104,6 +119,25 @@ export async function notifyExpiringQualifications(
             result.failed.push({ qualificationId: candidate.id, thresholdDays, error: `Admin-Benachrichtigung an ${admin.email} fehlgeschlagen: ${error}`, willRetry: false });
           }
         }));
+
+        if (push) {
+          try {
+            const subs = await push.pushSubscriptions.listByUserId(candidate.userId);
+            if (subs.length > 0) {
+              const { expiredSubscriptionIds } = await push.pusher.send(subs, {
+                title: isExpired ? 'Qualifikation abgelaufen' : 'Qualifikation läuft bald ab',
+                body: `${candidate.type} von ${candidate.userName}`,
+                url: '#/qualifications',
+              });
+              if (expiredSubscriptionIds.length > 0) await push.pushSubscriptions.deleteByIds(expiredSubscriptionIds);
+            }
+          } catch {
+            // Push ist ein reiner Zusatzkanal (siehe PushDeps-Kommentar
+            // oben) — ein Fehlschlag hier darf den E-Mail-Erfolg dieses
+            // Laufs nicht zunichtemachen (recordReminderSent() unten läuft
+            // unverändert weiter).
+          }
+        }
 
         await gateway.recordReminderSent(candidate.id, thresholdDays);
         result.remindersSent += 1;

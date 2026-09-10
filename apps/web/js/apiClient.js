@@ -441,3 +441,16 @@ export function syncPull(cursor) {
   const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
   return request(`/api/sync/pull${query}`);
 }
+
+// ---- Web-Push-Benachrichtigungen (Phase 2, Abschnitt 1.2 —
+// docs/Plans/phase2-plan.md) — nicht zu verwechseln mit syncPush() oben
+// (Offline-Sync), hier geht es um Browser-Benachrichtigungen.
+export function getPushPublicKey() {
+  return request('/api/push/public-key');
+}
+export function subscribePush({ endpoint, keys }) {
+  return request('/api/push/subscriptions', { method: 'POST', body: JSON.stringify({ endpoint, keys }) });
+}
+export function unsubscribePush(endpoint) {
+  return request('/api/push/subscriptions', { method: 'DELETE', body: JSON.stringify({ endpoint }) });
+}

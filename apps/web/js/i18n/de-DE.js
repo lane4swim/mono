@@ -553,6 +553,14 @@ export default {
     newEmailLabel: 'Neue E-Mail-Adresse',
     changeEmailButton: 'E-Mail-Adresse ändern',
     emailChanged: 'E-Mail-Adresse erfolgreich geändert.',
+    // Push-Benachrichtigungen (Phase 2, Abschnitt 1.6).
+    notificationsSectionTitle: 'Benachrichtigungen',
+    notificationsHint: 'Push-Benachrichtigungen für z. B. ablaufende Qualifikationen, bevorstehende Trainingseinheiten und neue Ankündigungen — direkt an dieses Gerät.',
+    notificationsToggleLabel: 'Push-Benachrichtigungen aktivieren',
+    notificationsEnabled: 'Push-Benachrichtigungen aktiviert.',
+    notificationsDisabled: 'Push-Benachrichtigungen deaktiviert.',
+    notificationsUnsupported: 'Push-Benachrichtigungen werden von diesem Browser nicht unterstützt.',
+    notificationsError: 'Push-Benachrichtigungen konnten nicht aktiviert werden: {message}',
   },
   setEditor: {
     colDistance: 'Dist. (m)', colDescription: 'Beschreibung', colReps: 'Wdh.', colRest: 'Pause (s)',

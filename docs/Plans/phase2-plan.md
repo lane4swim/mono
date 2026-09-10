@@ -13,8 +13,8 @@ aktualisiertem Umsetzungsstand je Abschnitt.
 | Teil | Status |
 |---|---|
 | 1.2 Push-Benachrichtigungen | **umgesetzt** — siehe Abschnitt 1.7 (Kern-Infrastruktur + zwei zeitgesteuerte Auslöser; zwei ereignisgesteuerte Auslöser bewusst zurückgestellt, siehe Abschnitt 5.1) |
-| 4.1 Vereinsinterne Nachrichten/Ankündigungen | **umgesetzt** — siehe Abschnitt 2.6 |
-| 4.2 Eltern-/Erziehungsberechtigten-Zugang | **umgesetzt** — siehe Abschnitt 3.7 |
+| 4.1 Vereinsinterne Nachrichten/Ankündigungen | offen — siehe Abschnitt 2.6 |
+| 4.2 Eltern-/Erziehungsberechtigten-Zugang | offen — siehe Abschnitt 3.7 |
 
 ## 0. Ausgangslage
 
@@ -378,11 +378,17 @@ Icon im Nav, `plansModule`-artiger Rollen-Eintrag `roles: ['trainer',
 'admin', 'athlete']`. Dashboard-Karte (`dashboard.js`): die 3 neuesten
 Announcements, analog zum bestehenden Anwesenheits-Hinweis aus Phase 1.
 
-### 2.6 Umsetzungsstand: **umgesetzt**
+### 2.6 Umsetzungsstand: offen
 
-- Datenmodell wie geplant, `authorId` mit `onDelete: SetNull` (siehe
-  Abschnitt 2.2, finale Entscheidung) — Migration
-  `20260910093000_add_announcements`.
+Noch nicht umgesetzt — nur das Datenmodell ist bereits vorgezogen worden
+(zusammen mit 1.2 und 4.2 in einem Zug angelegt, um wiederholte
+`prisma format`-Neuausrichtungen des gesamten Schemas über mehrere
+Commits zu vermeiden; siehe schema.prisma: `Announcement`, Migration
+`20260910093000_add_announcements`). Anwendungscode (Zod-Schema, Sync-
+Registrierung, Frontend-Modul, Push-Hook) folgt wie unten geplant:
+
+- `authorId` mit `onDelete: SetNull` (siehe Abschnitt 2.2, finale
+  Entscheidung).
 - `AnnouncementSchema` in `entities.ts`, Registry-Eintrag; an den fünf in
   Abschnitt 0 genannten Stellen verankert (`STORE_PERMISSIONS`,
   `MODULE_PACKAGES`, `STRATEGY_BY_STORE: 'last-write-wins-document'`,
@@ -531,12 +537,17 @@ wäre ein fünfter Auslösertyp mit eigener Empfänger:innen-Logik
 Abschnitt 1.5 bewusst begrenzten Umfang hinaus. Zurückgestellt für eine
 spätere Erweiterung (siehe Abschnitt 5.1).
 
-### 3.7 Umsetzungsstand: **umgesetzt**
+### 3.7 Umsetzungsstand: offen
+
+Noch nicht umgesetzt — das Datenmodell (`ParentLink`, Migration
+`20260910096000_add_parent_role`) ist bereits vorgezogen worden (siehe
+Abschnitt 2.6-Kommentar zum selben Vorgehen). **Nicht gegen eine echte
+Postgres-Instanz geprüft** (siehe wiederkehrender Vorbehalt oben).
+Anwendungscode (Rolle, Einladungsfluss, REST-Endpunkte, Frontend) folgt
+wie unten geplant:
 
 - `RoleSchema`/`UserRolesSchema`/`InvitationRoleSchema` um `'parent'`
-  erweitert; `ParentLink`-Modell + Migration
-  `20260910096000_add_parent_role`. **Nicht gegen eine echte
-  Postgres-Instanz geprüft** (siehe wiederkehrender Vorbehalt oben).
+  erweitert.
 - `acceptInvitation()` (`auth.service.ts`/`invitations.service.ts`):
   legt bei `role === 'parent'` und gesetztem `invitation.athleteId`
   automatisch die erste `ParentLink`-Zeile an.

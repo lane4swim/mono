@@ -29,6 +29,11 @@ import { refereesRoutes } from './modules/referees/referees.route.js';
 import { createRefereesService, type RefereesService } from './modules/referees/referees.service.js';
 import { PrismaRefereeAssignmentRepository, PrismaCompetitionRepository } from './modules/referees/referees.repository.js';
 import { SmtpMailSender, ConsoleMailSender, type MailSender } from './mail/mailer.js';
+import { pushRoutes } from './modules/push/push.route.js';
+import { PrismaPushSubscriptionRepository, type PushSubscriptionRepository } from './modules/push/push.repository.js';
+import { WebPushSender } from './push/pusher.webpush.js';
+import { ConsolePushSender } from './push/pusher.console.js';
+import type { PushSender } from './push/pusher.js';
 import { resolveKeyPair } from './auth/keys.js';
 import { getPrisma } from './db/prisma.js';
 
@@ -44,6 +49,8 @@ export interface BuildAppOverrides {
   qualificationsService?: QualificationsService;
   refereesService?: RefereesService;
   mailer?: MailSender;
+  pusher?: PushSender;
+  pushSubscriptions?: PushSubscriptionRepository;
   keyPair?: ReturnType<typeof resolveKeyPair>;
 }
 
@@ -83,6 +90,19 @@ export function resolveMailer(env: Env): MailSender {
     password: env.SMTP_PASSWORD,
     fromEmail: env.SMTP_FROM_EMAIL,
     fromName: env.SMTP_FROM_NAME,
+  });
+}
+
+// Exportiert (statt modulintern), analog resolveMailer() oben, damit
+// scripts/notifyExpiringQualifications.ts und
+// scripts/notifyUpcomingSessions.ts dieselbe VAPID-vs.-Konsole-
+// Entscheidung treffen wie die eigentliche App.
+export function resolvePushSender(env: Env): PushSender {
+  if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY) return new ConsolePushSender();
+  return new WebPushSender({
+    publicKey: env.VAPID_PUBLIC_KEY,
+    privateKey: env.VAPID_PRIVATE_KEY,
+    subject: env.VAPID_SUBJECT || `mailto:${env.SMTP_FROM_EMAIL}`,
   });
 }
 
@@ -209,12 +229,15 @@ export async function buildApp(env: Env, overrides: BuildAppOverrides = {}): Pro
       competitions: new PrismaCompetitionRepository(getPrisma()),
     });
 
+  const pushSubscriptions = overrides.pushSubscriptions ?? new PrismaPushSubscriptionRepository(getPrisma());
+
   await app.register(healthRoutes);
   await app.register(authRoutes, { authService });
   await app.register(syncRoutes, { syncService, clubs: clubModulesLookup });
   await app.register(invitationsRoutes, { invitationsService });
   await app.register(qualificationsRoutes, { qualificationsService, clubs: clubModulesLookup });
   await app.register(refereesRoutes, { refereesService, clubs: clubModulesLookup });
+  await app.register(pushRoutes, { subscriptions: pushSubscriptions, vapidPublicKey: env.VAPID_PUBLIC_KEY ?? null });
 
   return app;
 }

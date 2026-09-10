@@ -79,6 +79,17 @@ const EnvSchema = z.object({
   // jobs/syncBookkeeping.repository.ts, ausgeführt mit dem DSGVO-Hard-Purge.
   SYNC_EVENT_RETENTION_DAYS: z.coerce.number().int().positive().default(90),
   SYNC_TOMBSTONE_RETENTION_DAYS: z.coerce.number().int().positive().default(180),
+
+  // Web-Push (Phase 2, Abschnitt 1.2 — docs/Plans/phase2-plan.md), VAPID-
+  // Schlüsselpaar. Einmalig erzeugt über `npx web-push generate-vapid-keys`
+  // (im Ordner apps/api, das Paket ist bereits Abhängigkeit). Bleiben beide
+  // leer, greift ConsolePushSender (protokolliert statt zu versenden,
+  // analog zu SMTP_HOST/ConsoleMailSender) — kein Startabbruch, da Push nur
+  // ein Zusatzkanal ist. VAPID_SUBJECT ist laut Spezifikation ein
+  // "mailto:"- oder "https://"-Kontakt; Default nutzt SMTP_FROM_EMAIL.
+  VAPID_PUBLIC_KEY: z.string().optional(),
+  VAPID_PRIVATE_KEY: z.string().optional(),
+  VAPID_SUBJECT: z.string().optional(),
 });
 
 export type Env = z.infer<typeof EnvSchema>;
