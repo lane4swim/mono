@@ -292,6 +292,19 @@ else
   chmod 600 "$JWT_PRIVATE_KEY_FILE"
   chmod 644 "$JWT_PUBLIC_KEY_FILE"
 
+  # Web-Push (Phase 2, Abschnitt 1.2 — docs/Plans/phase2-plan.md), VAPID-
+  # Schlüsselpaar. Anders als das JWT-Schlüsselpaar oben landet dieses
+  # NICHT in eigenen Dateien, sondern (wie DATABASE_URL/SMTP) direkt als
+  # Wert in $ENV_FILE — VAPID-Schlüssel sind kein Geheimnis auf demselben
+  # Schutzniveau wie der JWT-Signaturschlüssel (der öffentliche Teil wird
+  # ohnehin an jeden Browser ausgeliefert, siehe GET /api/push/public-key);
+  # $ENV_FILE bekommt unten ohnehin `chmod 600`. `web-push` ist bereits
+  # eine Abhängigkeit von apps/api (siehe apps/api/package.json), `npx`
+  # findet es dort ohne Netzzugriff.
+  VAPID_JSON="$(cd "${REPO_ROOT}/apps/api" && npx web-push generate-vapid-keys --json)"
+  VAPID_PUBLIC_KEY="$(node -e 'console.log(JSON.parse(process.argv[1]).publicKey)' "$VAPID_JSON")"
+  VAPID_PRIVATE_KEY="$(node -e 'console.log(JSON.parse(process.argv[1]).privateKey)' "$VAPID_JSON")"
+
   DATABASE_URL="postgresql://${DB_USER}:${DB_PASSWORD}@localhost:5432/${DB_NAME}"
 
   # SMTP — optionales Geheimnis: ohne SMTP_HOST wird eine Einladung nur ins
@@ -351,6 +364,13 @@ SMTP_FROM_EMAIL="${SMTP_FROM_EMAIL:-postversand@${DOMAIN}}"
 SMTP_FROM_NAME="${SMTP_FROM_NAME}"
 
 DATA_ERASURE_RETENTION_DAYS=30
+
+# Web-Push (Phase 2, Abschnitt 1.2) — Push-Benachrichtigungen. Ohne diese
+# beiden Schlüssel protokolliert der Server Push-Versuche nur, statt sie
+# zu versenden (kein Startabbruch, siehe apps/api/src/config/env.ts).
+VAPID_PUBLIC_KEY="${VAPID_PUBLIC_KEY}"
+VAPID_PRIVATE_KEY="${VAPID_PRIVATE_KEY}"
+VAPID_SUBJECT="mailto:${SMTP_FROM_EMAIL:-postversand@${DOMAIN}}"
 EOF
   )
 
@@ -573,6 +593,7 @@ if [[ "$ENV_WAS_CREATED" == "1" ]]; then
   echo "Das erzeugte DB-Passwort (Laufzeitrolle lane1_app) steht in apps/api/.env unter DATABASE_URL."
   echo "Das erzeugte DB-Migrationspasswort (lane1_migrator, nur für künftige 'prisma migrate deploy'-Läufe, siehe Abschnitt 13) steht in apps/api/.env.migrate."
   echo "Das erzeugte JWT-Schlüsselpaar liegt unter apps/api/keys/ (chmod 600/644, referenziert per JWT_PRIVATE_KEY_FILE/JWT_PUBLIC_KEY_FILE in apps/api/.env)."
+  echo "Das erzeugte VAPID-Schlüsselpaar (Web-Push) steht in apps/api/.env unter VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY."
 fi
 echo "Öffentliche Adresse (noch ohne HTTPS): http://${DOMAIN}"
 echo "Weiter geht es manuell mit Schritt 10 (HTTPS mit Let's Encrypt) in docs/deployment/deployment-netcup.md:"
