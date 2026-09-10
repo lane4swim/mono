@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Automatisiert die Schritte 4–10 aus docs/deployment-github-codespaces.md
+# Automatisiert die Schritte 4–10 aus docs/deployment/deployment-github-codespaces.md
 # (Software installieren, npm-Abhängigkeiten, apps/api/.env konfigurieren,
 # Datenbank-Schema anlegen, Backend bauen, PM2 starten, ersten Superadmin
 # anlegen, Nginx konfigurieren) für einen frisch erstellten GitHub Codespace.
@@ -7,7 +7,7 @@
 # öffnen) sind keine Kommandos — hier geht es erst ab Schritt 4 los.
 # Schritte 11+ (Port veröffentlichen, Testen, Anhalten/Fortsetzen, …) sind
 # bewusst NICHT Teil dieses Scripts — dafür weiterhin
-# docs/deployment-github-codespaces.md befolgen.
+# docs/deployment/deployment-github-codespaces.md befolgen.
 #
 # Nutzung:
 #   bash scripts/setup-codespace.sh
@@ -151,7 +151,7 @@ if [[ "$MIGRATOR_ROLE_CREATED" == "1" ]]; then
 # automatisch gelesen (nur "apps/api/.env" wird automatisch geladen).
 # Ausschließlich zum manuellen Nachschlagen für ein künftiges
 # "prisma migrate deploy" gedacht, siehe scripts/setup-codespace.sh
-# Schritt 7 bzw. docs/deployment-github-codespaces.md, Abschnitt 7.
+# Schritt 7 bzw. docs/deployment/deployment-github-codespaces.md, Abschnitt 7.
 MIGRATE_DATABASE_URL="${MIGRATE_DATABASE_URL}"
 EOF
   chmod 600 "$MIGRATOR_ENV_FILE"
@@ -439,10 +439,10 @@ server {
     index index.html;
 
     # Content-Security-Policy für das Frontend (Code-Review, Befund S3) —
-    # siehe docs/deployment.md, Abschnitt 9 für die ausführliche Begründung.
+    # siehe docs/deployment/deployment.md, Abschnitt 9 für die ausführliche Begründung.
 
     # Sicherheitsreview 2026-08-29, Befund N2: HSTS/nosniff/Referrer-Policy
-    # ergänzt — siehe docs/deployment.md, Abschnitt 9 für die ausführliche
+    # ergänzt — siehe docs/deployment/deployment.md, Abschnitt 9 für die ausführliche
     # Begründung (Helmet in apps/api deckt nur die JSON-Antworten der API
     # ab, nicht die hier statisch ausgelieferte Weboberfläche).
     set \$csp "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; worker-src 'self'; manifest-src 'self'";
@@ -520,4 +520,4 @@ if [[ "$ENV_WAS_CREATED" == "1" ]]; then
   echo "Das erzeugte JWT-Schlüsselpaar liegt unter apps/api/keys/ (chmod 600/644, referenziert per JWT_PRIVATE_KEY_FILE/JWT_PUBLIC_KEY_FILE in apps/api/.env)."
   echo "Öffentliche Adresse (CORS_ORIGIN/FRONTEND_BASE_URL): ${PUBLIC_URL}"
 fi
-echo "Weiter geht es manuell mit Schritt 11 (Port veröffentlichen) in docs/deployment-github-codespaces.md."
+echo "Weiter geht es manuell mit Schritt 11 (Port veröffentlichen) in docs/deployment/deployment-github-codespaces.md."

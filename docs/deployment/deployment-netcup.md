@@ -2,7 +2,7 @@
 
 **Für wen ist diese Anleitung?** Für jemanden ohne (oder mit sehr wenig) Erfahrung in Serveradministration. Jeder Schritt wird erklärt — auch *warum* er nötig ist, nicht nur *wie*. Es wird nichts vorausgesetzt außer: ein Computer, eine Internetverbindung und die Bereitschaft, Befehle in ein schwarzes Textfenster ("Terminal") einzutippen.
 
-**Verhältnis zu `docs/deployment.md`:** Diese Anleitung ist die netcup-Variante der bestehenden Hetzner-Anleitung (`docs/deployment.md`) — auf Betriebssystemebene (Node.js, PostgreSQL, Nginx, PM2, Let's Encrypt) sind beide identisch, da Lane 1 dort keine Hoster-spezifischen Eigenheiten hat. Unterschiede gibt es ausschließlich bei **Abschnitt 1–2** (Produktwahl, Konto/Firewall im netcup-Kundenpanel statt Hetzner Cloud Console) sowie den Backup-/Monitoring-Hinweisen in Abschnitt 12/14. Wer bereits die Hetzner-Anleitung kennt, kann direkt zu diesen Abschnitten springen.
+**Verhältnis zu `docs/deployment/deployment.md`:** Diese Anleitung ist die netcup-Variante der bestehenden Hetzner-Anleitung (`docs/deployment/deployment.md`) — auf Betriebssystemebene (Node.js, PostgreSQL, Nginx, PM2, Let's Encrypt) sind beide identisch, da Lane 1 dort keine Hoster-spezifischen Eigenheiten hat. Unterschiede gibt es ausschließlich bei **Abschnitt 1–2** (Produktwahl, Konto/Firewall im netcup-Kundenpanel statt Hetzner Cloud Console) sowie den Backup-/Monitoring-Hinweisen in Abschnitt 12/14. Wer bereits die Hetzner-Anleitung kennt, kann direkt zu diesen Abschnitten springen.
 
 **Basis dieser Anleitung:** der zuvor erstellte `backend-plan.md` (Monorepo mit `apps/web` = Frontend, `apps/api` = Node.js-Backend, JWT-Auth, Sync-API). Diese Anleitung beschreibt die **Veröffentlichung** dieses Monorepos. Das Frontend (die PWA, die bereits fertig vorliegt) lässt sich schon **heute** eigenständig veröffentlichen — Backend-Schritte sind so markiert, dass klar ist, was erst nach dessen Umsetzung nötig ist.
 
@@ -20,7 +20,7 @@ Am Ende dieser Anleitung ist unter einer eigenen Adresse (z. B. `https://trainin
 
 ### 0.1 Schritte 6–9 automatisiert per Script
 
-Wer die Befehle aus den Abschnitten 6–9 nicht Schritt für Schritt von Hand eintippen möchte, kann stattdessen `scripts/setup-netcup.sh` ausführen — es fasst alles von der Softwareinstallation bis zur Nginx-Konfiguration in einem Lauf zusammen (analog zu `scripts/setup-codespace.sh` für die Codespaces-Variante, siehe `docs/deployment-github-codespaces.md`, Abschnitt 0.2):
+Wer die Befehle aus den Abschnitten 6–9 nicht Schritt für Schritt von Hand eintippen möchte, kann stattdessen `scripts/setup-netcup.sh` ausführen — es fasst alles von der Softwareinstallation bis zur Nginx-Konfiguration in einem Lauf zusammen (analog zu `scripts/setup-codespace.sh` für die Codespaces-Variante, siehe `docs/deployment/deployment-github-codespaces.md`, Abschnitt 0.2):
 
 ```bash
 bash scripts/setup-netcup.sh

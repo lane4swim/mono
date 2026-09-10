@@ -283,7 +283,7 @@ describe('CLUB_SCOPED_STORES', () => {
 // `id: z.string().uuid()` — der frühere Ausweichwert ("id-<timestamp>-
 // <random>") ohne `crypto.randomUUID` (kein secure context, z. B. ein
 // dokumentierter Zwischenzustand vor der HTTPS-Einrichtung, siehe
-// docs/deployment-raspberry-pi.md) erfüllte das nicht und machte jeden so
+// docs/deployment/deployment-raspberry-pi.md) erfüllte das nicht und machte jeden so
 // angelegten Datensatz dauerhaft nicht synchronisierbar. Beide
 // Ausweichzweige (mit und ohne `crypto.getRandomValues`) müssen daher
 // selbst eine gültige v4-UUID liefern.

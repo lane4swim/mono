@@ -218,7 +218,7 @@ npm run prisma:migrate -- --name <kurze-beschreibung>
 
 (erzeugt eine neue Datei unter `prisma/migrations/`, die committet wird);
 CI (`.github/workflows/ci.yml`) und jedes Deployment
-(`docs/deployment*.md`) wenden die Historie stattdessen nicht-interaktiv
+(`docs/deployment/*.md`) wenden die Historie stattdessen nicht-interaktiv
 per `npx prisma migrate deploy` an.
 
 **Seed-Daten:** `apps/api/prisma/seed.ts` spiegelt inhaltlich
@@ -475,6 +475,6 @@ Tests, siehe „Bekannte offene Punkte" oben) und Phase 6 (optionale
 Erweiterungen, z. B. Echtzeit-Sync).
 
 Für die Veröffentlichung auf einem Hetzner-Server siehe die separat
-erstellte `docs/deployment.md` (sowie die Varianten für andere Umgebungen:
-`docs/deployment-netcup.md`, `docs/deployment-raspberry-pi.md`,
-`docs/deployment-macos.md`, `docs/deployment-github-codespaces.md`).
+erstellte `docs/deployment/deployment.md` (sowie die Varianten für andere Umgebungen:
+`docs/deployment/deployment-netcup.md`, `docs/deployment/deployment-raspberry-pi.md`,
+`docs/deployment/deployment-macos.md`, `docs/deployment/deployment-github-codespaces.md`).

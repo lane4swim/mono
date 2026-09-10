@@ -74,7 +74,7 @@ jobs:
           echo "Geänderte ausgelieferte Dateien unterhalb apps/web/:"
           echo "$CHANGED_WEB_FILES"
           if ! git diff "$BASE_SHA" HEAD -- apps/web/sw.js | grep -q '^[+-]const CACHE_VERSION'; then
-            echo "::error::apps/web/ wurde geändert, aber CACHE_VERSION in apps/web/sw.js nicht angehoben (siehe docs/review-sicherheit-effizienz-usability-2026-08-30.md, Befund U5)."
+            echo "::error::apps/web/ wurde geändert, aber CACHE_VERSION in apps/web/sw.js nicht angehoben (siehe docs/reviews-handled/review-sicherheit-effizienz-usability-2026-08-30.md, Befund U5)."
             exit 1
           fi
           echo "CACHE_VERSION wurde angehoben."
@@ -140,7 +140,7 @@ jobs:
         # `migrate deploy` statt `db push` (Code-Review, Befund W5): wendet
         # exakt die committeten, reviewbaren Migrationsdateien aus
         # prisma/migrations/ an (dieselben, die auch das Produktions-
-        # Deployment ausführt, siehe docs/deployment.md, Abschnitt 7.3) —
+        # Deployment ausführt, siehe docs/deployment/deployment.md, Abschnitt 7.3) —
         # nicht-interaktiv, ohne Rückfrage bei potenziell datenverlierenden
         # Änderungen, und schlägt bei einer von der Historie abweichenden
         # schema.prisma fehl statt sie stillschweigend zu übernehmen. Damit

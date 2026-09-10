@@ -40,7 +40,7 @@ export interface SyncRoutesOptions {
 // leeren Cache, ohne dass Tests ihn manuell zurücksetzen müssten oder
 // zwischen ihnen veraltete Werte eines anderen Tests sehen könnten.
 // Unproblematisch für den dokumentierten Produktivbetrieb (PM2 ohne
-// Cluster-Modus, siehe docs/deployment.md — GENAU EIN Node-Prozess, kein
+// Cluster-Modus, siehe docs/deployment/deployment.md — GENAU EIN Node-Prozess, kein
 // Mehrprozess-Konsistenzproblem).
 const CLUB_MODULES_CACHE_TTL_MS = 45_000;
 
