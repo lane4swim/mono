@@ -47,6 +47,11 @@ import {
   RefereeAssignmentForbiddenError,
   ForeignCompetitionError,
 } from '../modules/referees/referees.service.js';
+import {
+  ParentNotInClubError,
+  AthleteNotInClubError,
+  UserNotParentError,
+} from '../modules/parents/parents.service.js';
 
 interface HttpErrorMapping {
   status: number;
@@ -106,6 +111,11 @@ const HTTP_ERROR_REGISTRY = new Map<abstract new (...args: never[]) => Error, Ht
   [RefereeAssignmentNotFoundError, { status: 404, code: 'not_found' }],
   [RefereeAssignmentForbiddenError, { status: 403, code: 'forbidden' }],
   [ForeignCompetitionError, { status: 400, code: 'foreign_competition' }],
+  // Phase 2, Abschnitt 4.2 (docs/Plans/phase2-plan.md) — Eltern-Kind-
+  // Verknüpfungsverwaltung.
+  [ParentNotInClubError, { status: 404, code: 'not_found' }],
+  [AthleteNotInClubError, { status: 400, code: 'athlete_club_mismatch' }],
+  [UserNotParentError, { status: 400, code: 'user_not_parent' }],
 ]);
 
 function sendMappedError(err: Error, mapping: HttpErrorMapping, reply: FastifyReply) {

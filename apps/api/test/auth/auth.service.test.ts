@@ -18,6 +18,7 @@ import { createInvitationsService } from '../../src/modules/invitations/invitati
 import { InMemoryClubRepository, InMemoryInvitationRepository, InMemoryAthleteRepository } from '../../src/modules/invitations/invitations.repository.memory.js';
 import { InMemoryMailSender } from '../../src/mail/mailer.memory.js';
 import { InMemoryProfileDataGateway } from '../../src/modules/profile/profile.repository.memory.js';
+import { InMemoryParentLinkRepository } from '../../src/modules/parents/parents.repository.memory.js';
 import { generateFreshKeyPair } from '../../src/auth/keys.js';
 import { verifyAccessToken } from '../../src/auth/tokens.js';
 import { generateInvitationToken, hashRefreshToken } from '../../src/auth/tokens.js';
@@ -59,12 +60,14 @@ function makeService() {
   // passwordResetTokens.findByHash()).
   const passwordResetTokens = new InMemoryPasswordResetTokenRepository();
   const mailer = new InMemoryMailSender();
+  const parentLinks = new InMemoryParentLinkRepository();
   const service = createAuthService({
+    parentLinks,
     users, refreshTokens, invitations: invitationsService, profileGateway, clubs, dataErasureRetentionDays: 30,
     passwordResetTokens, mailer, frontendBaseUrl: 'https://app.example.org', passwordResetTtlMinutes: 60,
     keyPair, accessTtlSeconds: 900, refreshTtlDays: 30,
   });
-  return { service, users, refreshTokens, invitations, clubs, keyPair, profileDb, passwordResetTokens, mailer };
+  return { service, users, refreshTokens, invitations, clubs, keyPair, profileDb, passwordResetTokens, mailer, parentLinks };
 }
 
 // Erzeugt eine gültige Trainer-Einladung und liefert das Klartext-Token,
@@ -73,7 +76,7 @@ function makeService() {
 // ausstellt (siehe invitations.service.test.ts für dessen eigene Tests).
 async function seedInvitation(
   invitations: InMemoryInvitationRepository,
-  overrides: Partial<{ email: string; role: string; clubId: string | null; expiresAt: Date; usedAt: Date | null; revokedAt: Date | null }> = {},
+  overrides: Partial<{ email: string; role: string; clubId: string | null; athleteId: string | null; expiresAt: Date; usedAt: Date | null; revokedAt: Date | null }> = {},
 ) {
   const { plainToken, tokenHash, expiresAt } = generateInvitationToken(7);
   const clubId = 'clubId' in overrides ? overrides.clubId! : CLUB_ID;
@@ -82,7 +85,7 @@ async function seedInvitation(
     email: overrides.email ?? 'sabine.reuter@example.org',
     role: overrides.role ?? 'trainer',
     clubId,
-    athleteId: null,
+    athleteId: overrides.athleteId ?? null,
     invitedById: INVITER_ID,
     expiresAt: overrides.expiresAt ?? expiresAt,
   });
@@ -104,6 +107,31 @@ describe('authService.acceptInvitation', () => {
     const claims = await verifyAccessToken(result.accessToken, keyPair);
     expect(claims.roles).toEqual(['trainer']);
     expect(claims.clubId).toBe(CLUB_ID);
+  });
+
+  it('legt bei einer "parent"-Einladung mit athleteId automatisch die erste ParentLink-Zeile an, OHNE User.athleteId zu setzen (Phase 2, Abschnitt 4.2)', async () => {
+    const { service, invitations, parentLinks } = makeService();
+    const childId = '55555555-5555-5555-5555-555555555555';
+    const token = await seedInvitation(invitations, { role: 'parent', clubId: CLUB_ID, athleteId: childId });
+
+    const result = await service.acceptInvitation({ token, name: 'Petra Vogel', password: 'ein-sicheres-passwort', consent: true });
+
+    expect(result.user.roles).toEqual(['parent']);
+    // Entscheidend: athleteId bedeutet hier "erstes Kind", NICHT "eigenes
+    // Athletenprofil" — ein Elternkonto ist selbst kein Athletenprofil.
+    expect(result.user.athleteId).toBeNull();
+    const links = await parentLinks.listByUser(result.user.id);
+    expect(links).toHaveLength(1);
+    expect(links[0]!.athleteId).toBe(childId);
+  });
+
+  it('legt bei einer "parent"-Einladung OHNE athleteId keine ParentLink-Zeile an', async () => {
+    const { service, invitations, parentLinks } = makeService();
+    const token = await seedInvitation(invitations, { role: 'parent', clubId: CLUB_ID });
+
+    const result = await service.acceptInvitation({ token, name: 'Petra Vogel', password: 'ein-sicheres-passwort', consent: true });
+
+    expect(await parentLinks.listByUser(result.user.id)).toHaveLength(0);
   });
 
   it('übernimmt E-Mail/Rolle/Verein IMMER aus der Einladung, niemals aus dem Client-Body', async () => {

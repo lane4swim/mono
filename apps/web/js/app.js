@@ -31,7 +31,7 @@
 import { pendingSyncCount } from './db.js';
 import { wipeDemoDataIfPresent } from './seed.js';
 import { registerServiceWorker } from './swUpdate.js';
-import { restoreSession, getCurrentUser, setUserLocale, logout, onUserChange, isLoggedIn } from './state.js';
+import { restoreSession, getCurrentUser, setUserLocale, logout, onUserChange, isLoggedIn, isParentOnly } from './state.js';
 import { currentRoute, onRouteChange } from './router.js';
 import { toast } from './ui.js';
 import { confirmAction } from './modal.js';
@@ -129,7 +129,11 @@ async function startAuthenticatedApp() {
   onLocaleChange(() => { populateCurrentUserLabel(); populateLanguageSelect(setUserLocale); buildNav(); updateNetStatus(); render(currentRoute()); });
   render(currentRoute());
 
-  startBackgroundSync();
+  // Phase 2, Abschnitt 4.2: ein reines Eltern-Konto hat KEINEN generellen
+  // Sync-Zugriff (sync.route.ts lehnt die Rolle strukturell mit 403 ab) —
+  // ein automatischer Hintergrund-Sync-Versuch wäre für dieses Konto
+  // garantiert wirkungslos und bloß unnötiger Netzwerkverkehr/Log-Rauschen.
+  if (!isParentOnly()) startBackgroundSync();
 }
 
 // Startet die automatische Hintergrund-Synchronisation für die laufende

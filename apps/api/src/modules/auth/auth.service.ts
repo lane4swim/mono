@@ -12,6 +12,7 @@ import type { LoginRequest, AcceptInvitationRequest, AccessTokenClaims } from '@
 import { CURRENT_CONSENT_VERSION } from '@lane1/shared-types';
 import type { UserRepository, RefreshTokenRepository, UserRecord, PasswordResetTokenRepository } from './auth.repository.js';
 import type { InvitationRecord } from '../invitations/invitations.repository.js';
+import type { ParentLinkRepository } from '../parents/parents.repository.js';
 import {
   InvitationNotFoundError,
   InvitationRevokedError,
@@ -164,6 +165,9 @@ export interface AuthServiceDeps {
   mailer: MailSender;
   frontendBaseUrl: string;
   passwordResetTtlMinutes: number;
+  // Phase 2, Abschnitt 4.2 (docs/Plans/phase2-plan.md) — Eltern-Kind-
+  // Erstverknüpfung bei Einladungsannahme, siehe acceptInvitation() unten.
+  parentLinks: ParentLinkRepository;
 }
 
 // Analog zu buildInviteUrl() in invitations.service.ts: die Annahme-/
@@ -262,6 +266,19 @@ export function createAuthService(deps: AuthServiceDeps) {
       const existingUser = await deps.users.findByEmail(invitation.email);
       if (existingUser) throw new EmailAlreadyRegisteredError();
 
+      // Phase 2, Abschnitt 4.2: `invitation.athleteId` bedeutet bei
+      // role === 'parent' etwas ANDERES als bei role === 'athlete' — dort
+      // verknüpft es das neue Konto als das eigene Athletenprofil
+      // (User.athleteId, @unique), hier benennt es das ERSTE Kind, mit
+      // dem das neue Elternkonto verknüpft werden soll (ParentLink,
+      // n:m — ein Elternkonto ist selbst kein Athletenprofil). Ohne diese
+      // Unterscheidung würde `athleteId` unten fälschlich als
+      // User.athleteId gespeichert (Identitätsverwechslung: das
+      // Elternkonto würde als DAS Athletenprofil des Kindes gelten) und
+      // schlüge zudem am @unique-Constraint fehl, sobald das Kind bereits
+      // ein eigenes Konto hat.
+      const isParentInvitation = invitation.role === 'parent';
+
       const passwordHash = await hashPassword(input.password);
       let user: UserRecord;
       try {
@@ -275,7 +292,7 @@ export function createAuthService(deps: AuthServiceDeps) {
           // direkt bei der Registrierung (docs/Plans/kampfrichter-modul-plan.md,
           // Abschnitt 1.4).
           roles: [invitation.role],
-          athleteId: invitation.athleteId,
+          athleteId: isParentInvitation ? null : invitation.athleteId,
           // input.consent ist an dieser Stelle bereits durch
           // AcceptInvitationRequestSchema (consent: z.literal(true)) erzwungen —
           // wird hier dennoch nicht blind angenommen, sondern explizit als
@@ -308,6 +325,14 @@ export function createAuthService(deps: AuthServiceDeps) {
         throw err;
       }
       await deps.invitations.markUsed(invitation.id);
+
+      // Phase 2, Abschnitt 4.2: automatische Erstverknüpfung mit dem
+      // ersten Kind (siehe isParentInvitation-Kommentar oben). Weitere
+      // Geschwister werden nachträglich über die Admin-
+      // Verknüpfungsverwaltung ergänzt (parents.route.ts).
+      if (isParentInvitation && invitation.athleteId) {
+        await deps.parentLinks.create(user.id, invitation.athleteId);
+      }
 
       const tokens = await issueTokens(user);
       const clubContext = await resolveClubContext(deps.clubs, user.clubId);

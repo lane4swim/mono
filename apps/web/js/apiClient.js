@@ -454,3 +454,20 @@ export function subscribePush({ endpoint, keys }) {
 export function unsubscribePush(endpoint) {
   return request('/api/push/subscriptions', { method: 'DELETE', body: JSON.stringify({ endpoint }) });
 }
+
+// ---- Eltern-/Erziehungsberechtigten-Zugang (Phase 2, Abschnitt 4.2 —
+// docs/Plans/phase2-plan.md) — eigene, stark eingeschränkte REST-Sicht,
+// KEIN Sync-Store.
+export function getParentOverview() {
+  return request('/api/parents/overview');
+}
+// Admin-Verwaltung der Eltern-Kind-Verknüpfungen.
+export function listParentLinks(userId) {
+  return request(`/api/parents/${encodeURIComponent(userId)}/links`);
+}
+export function addParentLink(userId, athleteId) {
+  return request(`/api/parents/${encodeURIComponent(userId)}/links`, { method: 'POST', body: JSON.stringify({ athleteId }) });
+}
+export function removeParentLink(userId, athleteId) {
+  return request(`/api/parents/${encodeURIComponent(userId)}/links/${encodeURIComponent(athleteId)}`, { method: 'DELETE' });
+}

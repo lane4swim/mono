@@ -69,6 +69,13 @@ describe('CreateInvitationRequestSchema', () => {
   it('akzeptiert eine referee-Einladung', () => {
     expect(CreateInvitationRequestSchema.safeParse({ email: 'kampfrichter@example.org', role: 'referee' }).success).toBe(true);
   });
+  // Phase 2, Abschnitt 4.2 (docs/Plans/phase2-plan.md): "parent" lässt sich
+  // wie athlete mit athleteId (hier: erstes Kind) direkt per Einladung
+  // vergeben.
+  it('akzeptiert eine parent-Einladung mit athleteId (erstes Kind)', () => {
+    const req = { email: 'elternteil@example.org', role: 'parent', athleteId: '11111111-1111-1111-1111-111111111111' };
+    expect(CreateInvitationRequestSchema.safeParse(req).success).toBe(true);
+  });
 });
 
 describe('AcceptInvitationRequestSchema', () => {

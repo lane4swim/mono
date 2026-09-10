@@ -21,10 +21,12 @@ export interface PushRoutesOptions {
   vapidPublicKey: string | null;
 }
 
-// Wird in Abschnitt 4.2 um "parent" ergänzt, sobald diese Rolle existiert
-// — Push-Abo ist für jede Konto-Rolle gleichermaßen sinnvoll, unabhängig
-// vom (dort stark eingeschränkten) Datenzugriff dieser Rolle.
-const PUSH_ROLES = ['trainer', 'admin', 'athlete'] as const;
+// "parent" (Phase 2, Abschnitt 4.2) ist mit aufgeführt — Push-Abo ist für
+// jede Konto-Rolle gleichermaßen sinnvoll, unabhängig vom (dort stark
+// eingeschränkten) Datenzugriff dieser Rolle. Kein aktiver Push-Auslöser
+// für "parent" in Phase 2 (siehe Plan Abschnitt 3.6), aber die
+// Abo-Infrastruktur selbst bleibt rollenoffen für eine spätere Erweiterung.
+const PUSH_ROLES = ['trainer', 'admin', 'athlete', 'parent'] as const;
 
 export async function pushRoutes(app: FastifyInstance, opts: PushRoutesOptions) {
   const { subscriptions, vapidPublicKey } = opts;

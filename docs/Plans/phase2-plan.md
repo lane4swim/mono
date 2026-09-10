@@ -10,11 +10,15 @@ aktualisiertem Umsetzungsstand je Abschnitt.
 
 ## Umsetzungsstand
 
+**Phase 2 ist damit vollständig umgesetzt** (alle drei Teile) — mit der
+bewusst zurückgestellten Ausnahme der beiden ereignisgesteuerten
+Push-Auslöser (siehe Abschnitt 5.1).
+
 | Teil | Status |
 |---|---|
 | 1.2 Push-Benachrichtigungen | **umgesetzt** — siehe Abschnitt 1.7 (Kern-Infrastruktur + zwei zeitgesteuerte Auslöser; zwei ereignisgesteuerte Auslöser bewusst zurückgestellt, siehe Abschnitt 5.1) |
 | 4.1 Vereinsinterne Nachrichten/Ankündigungen | **umgesetzt** — siehe Abschnitt 2.6 |
-| 4.2 Eltern-/Erziehungsberechtigten-Zugang | offen — siehe Abschnitt 3.7 |
+| 4.2 Eltern-/Erziehungsberechtigten-Zugang | **umgesetzt** — siehe Abschnitt 3.7 |
 
 ## 0. Ausgangslage
 
@@ -558,39 +562,76 @@ wäre ein fünfter Auslösertyp mit eigener Empfänger:innen-Logik
 Abschnitt 1.5 bewusst begrenzten Umfang hinaus. Zurückgestellt für eine
 spätere Erweiterung (siehe Abschnitt 5.1).
 
-### 3.7 Umsetzungsstand: offen
-
-Noch nicht umgesetzt — das Datenmodell (`ParentLink`, Migration
-`20260910096000_add_parent_role`) ist bereits vorgezogen worden (siehe
-Abschnitt 2.6-Kommentar zum selben Vorgehen). **Nicht gegen eine echte
-Postgres-Instanz geprüft** (siehe wiederkehrender Vorbehalt oben).
-Anwendungscode (Rolle, Einladungsfluss, REST-Endpunkte, Frontend) folgt
-wie unten geplant:
+### 3.7 Umsetzungsstand: **umgesetzt**
 
 - `RoleSchema`/`UserRolesSchema`/`InvitationRoleSchema` um `'parent'`
-  erweitert.
-- `acceptInvitation()` (`auth.service.ts`/`invitations.service.ts`):
-  legt bei `role === 'parent'` und gesetztem `invitation.athleteId`
-  automatisch die erste `ParentLink`-Zeile an.
+  erweitert; `ParentLink`-Modell + Migration
+  `20260910096000_add_parent_role` (bereits mit 1.2/4.1 zusammen angelegt,
+  siehe Abschnitt 2.6-Kommentar). **Nicht gegen eine echte
+  Postgres-Instanz geprüft** (siehe wiederkehrender Vorbehalt oben).
+- `acceptInvitation()` (`auth.service.ts`): legt bei `role === 'parent'`
+  und gesetztem `invitation.athleteId` automatisch die erste `ParentLink`-
+  Zeile an — **wichtige Abgrenzung, die der Plan noch nicht explizit
+  machte**: `invitation.athleteId` bedeutet bei `role === 'athlete'` "das
+  eigene Athletenprofil" (`User.athleteId`), bei `role === 'parent'`
+  dagegen "erstes Kind" (`ParentLink`) — beides denselben Feldwert direkt
+  weiterzureichen hätte ein Elternkonto fälschlich als Athletenprofil
+  markiert (und wäre am `User.athleteId`-`@unique`-Constraint
+  gescheitert, sobald das Kind bereits ein eigenes Konto hat).
+- `packages/shared-types/src/parent.ts` (neu) — `ParentOverviewResponseSchema`/
+  `ParentLinksResponseSchema`/`CreateParentLinkRequestSchema`. **Nicht
+  Teil der ursprünglichen Planung**, aber notwendig: der Plan skizzierte
+  die Antwortform nur als TS-`interface` in der Beschreibung, ohne
+  eigenes Zod-Schema/eigene Datei vorzusehen.
 - `apps/api/src/modules/parents/` — `parents.route.ts` (Übersicht +
-  Admin-Verknüpfungsverwaltung), `parents.repository.ts` (Prisma +
-  Memory).
+  Admin-Verknüpfungsverwaltung), `parents.service.ts` (Vereins-/Rollen-
+  Scoping, drei neue Fehlerklassen in `httpErrorHandler.ts` registriert),
+  `parents.repository.ts` (`ParentLink`-CRUD, Prisma + Memory),
+  `parents.overview.repository.ts` (Übersichts-Berechnung aus
+  `TrainingSession`/`StartlistEntry`/`Result`, je Kategorie auf 10
+  Einträge begrenzt).
 - `sync.route.ts`: `requireAnyRole('trainer', 'admin', 'athlete')`
-  **unverändert** — `parent` bewusst NICHT ergänzt (siehe 3.4); Test
-  bestätigt 403 für ein `parent`-Konto gegen `/api/sync/push` und
+  **unverändert** — `parent` bewusst NICHT ergänzt (siehe 3.4); Tests
+  bestätigen 403 für ein `parent`-Konto gegen `/api/sync/push` und
   `/pull`.
+- `push.route.ts`: `parent` zu den push-fähigen Rollen ergänzt (siehe
+  Abschnitt 1.3) — Push-Abo bleibt rollenoffen, auch ohne aktiven
+  Auslöser für diese Rolle (Abschnitt 3.6).
 - Frontend: neues, eigenständiges Modul `apps/web/js/modules/parentView.js`
-  (kein Router-Eintrag über die generische `MODULES`-Liste mit
-  Sync-Store-Anbindung, sondern ein eigener, schlanker Bereich, der
-  direkt `GET /api/parents/overview` aufruft — **kein** IndexedDB-Store,
-  da keine Offline-Synchronisation für diese rein lesende, seltene
-  Nutzung nötig ist, Netzwerkfehler zeigen einen einfachen
-  Wiederholen-Hinweis). `userManagement.js`: Verknüpfungs-UI für Admins.
-- Übersetzungen, `sw.js`-Precache-Eintrag.
-- Tests: Rollen-/Schema-Tests, Route-Tests (eigene Kinder sichtbar,
-  fremde nicht; kein Sync-Zugriff), ein Test für die automatische
-  Erstverknüpfung bei Einladungsannahme.
-- **Abweichung von der ursprünglichen Planung:** keine.
+  — als Router-Modul registriert (`roles: ['parent']`, in
+  `router.js: CORE_MODULE_IDS` wie `dashboard`, da unabhängig von
+  `enabledModules`), aber **kein** IndexedDB-Store: lädt direkt per
+  `GET /api/parents/overview`, keine Offline-Synchronisation für diese
+  seltene, rein lesende Nutzung. `state.js: isParentOnly()` (neu) hält
+  ein reines Eltern-Konto vom generischen, sync-basierten Teil der App
+  fern: `app.js` startet für ein solches Konto keinen Hintergrund-Sync
+  (wäre ohnehin nur 403), `shell.js: DEFAULT_ROUTE_BY_ROLE`/
+  `preferredRole` route ein Konto mit ausschließlich `parent` direkt auf
+  `#/parent`, analog zum bestehenden `referee`-Sonderfall.
+  `userManagement.js`: Verknüpfungs-UI für Admins (Mehrfachauswahl der
+  Vereins-Athlet:innen, direkt gegen die drei Verwaltungsendpunkte).
+- **Abweichung von der ursprünglichen Planung:** `ClubMemberCountsSchema`
+  (Superadmin-Übersicht) bekommt **keinen** `parent`-Zähler — das hätte
+  zusätzlich `invitations.repository.ts: countMembersByClub()` und
+  `admin/admin.js` angefasst, für eine reine Zusatzinformation ohne
+  Bezug zur Kernfunktion dieses Abschnitts; bewusst nicht mitgezogen.
+  Der generische Einladungsdialog (`userManagement.js: openInviteModal()`)
+  sammelt für `role === 'parent'` (wie bereits zuvor für `role ===
+  'athlete'`) keine `athleteId` ein — dieser Dialog verknüpfte auch vor
+  dieser Änderung nie ein Athletenprofil bei der Einladung; die
+  Erstverknüpfung ist damit über diesen Weg aktuell nicht erreichbar,
+  bewusst nicht im Rahmen dieses Abschnitts nachgerüstet (vorbestehende
+  Lücke). Ein Admin verknüpft ein Kind stattdessen nach der
+  Einladungsannahme über die neue Verknüpfungsverwaltung — funktional
+  gleichwertig, nur ein zusätzlicher Schritt.
+- Tests: Rollen-/Schema-Tests (`RoleSchema`/`InvitationRoleSchema`/
+  `parent.ts`-Schemas), `parents.service.test.ts` (Vereins-/Rollen-
+  Scoping, verwaiste Verknüpfungen), `parents.route.test.ts` (eigene
+  Kinder sichtbar, andere Rolle abgelehnt, Admin-Verwaltung admin-only),
+  zwei Sync-Route-Tests (403 für `parent` gegen push/pull), zwei
+  `acceptInvitation()`-Tests (automatische Erstverknüpfung mit/ohne
+  `athleteId`, `User.athleteId` bleibt `null`). Gesamte Monorepo-Suite
+  bleibt grün (597 Backend-, 271 Web-, 220 shared-types-Tests).
 
 ## 4. Rollen & Berechtigungen (zusammenfassend)
 

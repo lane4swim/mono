@@ -23,12 +23,13 @@ import { userManagementModule } from './modules/userManagement.js';
 import { infoModule } from './modules/info.js';
 import { qualificationsModule } from './modules/qualifications.js';
 import { kampfrichterModule } from './modules/kampfrichter.js';
+import { parentViewModule } from './modules/parentView.js';
 
 const ALL_MODULES = [
   dashboardModule, athletesModule, competitionsModule, timesModule, plansModule,
   templatesModule, catalogModule, sessionsModule, actionItemsModule, announcementsModule, statsModule,
   syncQueueModule, profileModule, userManagementModule, infoModule, qualificationsModule,
-  kampfrichterModule,
+  kampfrichterModule, parentViewModule,
 ];
 
 export function registerAllModules() {
