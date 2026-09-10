@@ -19,8 +19,10 @@ nachvollzogen. Ergebnis dieser Nachprüfung:
   (Zeilenscoping für `results`), N2/N7 (`.max(200)` durchgängig), N3
   (Origin-Gating des API-Base-URL-Overrides), N5
   (`Comment.authorName`-Anonymisierung).
-* **Weiterhin offen:** N6 (Superadmin-Passwort als CLI-Argument) — siehe
-  N2 unten.
+* **Weiterhin offen zum Analysezeitpunkt:** N6 (Superadmin-Passwort als
+  CLI-Argument) — siehe N2 unten, seit
+  `docs/reviews-handled/security-review-2026-08-28.md` (Befund M1)
+  behoben.
 * **Nicht sauber behoben:** H2. Die Korrektur (`trustProxy: true`) hat den
   ursprünglichen Befund beseitigt, dabei aber eine neue, gravierendere
   Lücke geöffnet — siehe **H1** unten. Der zugehörige Regressionstest
@@ -35,8 +37,10 @@ zusammen mit **N3** (N3s Fix wandert wie in dessen ursprünglicher
 Empfehlung vorgesehen direkt in den für H2 neu geschaffenen Endpunkt) und
 **N4**, danach **M1**, danach **M2** zusammen mit **N6**, zuletzt **N1**
 und **N5**. Damit sind beide Hoch-Befunde, beide Mittel-Befunde sowie
-sechs der sieben Niedrig-Befunde behoben; lediglich **N2** ist zum
-Zeitpunkt dieses Updates weiterhin offen.
+sechs der sieben Niedrig-Befunde behoben; lediglich **N2** war zum
+Zeitpunkt dieses Updates weiterhin offen — inzwischen ebenfalls behoben,
+siehe dortiger **Fix**-Abschnitt und
+`docs/reviews-handled/security-review-2026-08-28.md` (Befund M1).
 
 **Nachtrag (Gegenprüfung der Korrekturen).** Die umgesetzten Fixes wurden
 anschließend noch einmal unabhängig gegengelesen. Dabei fielen drei Mängel
@@ -93,7 +97,7 @@ Schweregrade: **Hoch** = vor dem nächsten Produktivbetrieb beheben,
 | M1 | Art.-17-Hard-Purge lässt die E-Mail-Adresse in `invitations` stehen | `jobs/erasure.repository.ts:43-217` | Mittel — **behoben** |
 | M2 | `Comment.authorName` ist reine Client-Angabe — Identitätsvortäuschung im Verein | `entities.ts:47`, `sync.permissions.ts:91` | Mittel — **behoben** |
 | N1 | Frisch erzeugtes DB-Passwort landet im Klartext im Terminal/CI-Log | `scripts/setup-codespace.sh:296` | Niedrig — **behoben** |
-| N2 | Superadmin-Passwort als Kommandozeilenargument (**offen aus Vorreview N6**) | `scripts/createSuperAdmin.ts`, `setup-codespace.sh:221` | Niedrig |
+| N2 | Superadmin-Passwort als Kommandozeilenargument (**offen aus Vorreview N6**) | `scripts/createSuperAdmin.ts`, `setup-codespace.sh:221` | Niedrig — **behoben** |
 | N3 | E-Mail-Wechsel auf die Adresse eines soft-gelöschten Kontos → 500 statt 409 (Existenz-Orakel) | `auth.service.ts:486-488` | Niedrig — **behoben** |
 | N4 | `resetPassword()` invalidiert weitere offene Reset-Tokens desselben Kontos nicht | `auth.service.ts:427-445` | Niedrig — **behoben** |
 | N5 | Abbestelltes Modul entfernt bereits synchronisierte Daten nicht vom Gerät | `sync.service.ts:439`, `syncClient.js` | Niedrig — **behoben** |
@@ -633,29 +637,32 @@ zusätzliche Ausgabe bringt keinen Nutzen, den ein Hinweis auf die
 **Empfehlung.** Zeile 296 durch einen Verweis ersetzen („Das erzeugte
 DB-Passwort steht in `apps/api/.env` unter `DATABASE_URL`.").
 
-### N2 — Superadmin-Passwort als Kommandozeilenargument (**offen aus Vorreview N6**)
+### N2 — Superadmin-Passwort als Kommandozeilenargument (**offen aus Vorreview N6**) — **behoben**
 
 `apps/api/scripts/createSuperAdmin.ts:18-40`, `scripts/setup-codespace.sh:221`
 
-Unverändert offen. `--password=...` landet in `process.argv` und ist für
-jeden Prozess auf demselben Host über `ps aux` sichtbar. Neu hinzugekommen
-ist, dass `setup-codespace.sh` das interaktiv (und korrekt verdeckt)
-eingelesene Passwort anschließend genau so weiterreicht:
+Zum Analysezeitpunkt unverändert offen. `--password=...` landete in
+`process.argv` und war für jeden Prozess auf demselben Host über `ps aux`
+sichtbar. Neu hinzugekommen war, dass `setup-codespace.sh` das interaktiv
+(und korrekt verdeckt) eingelesene Passwort anschließend genau so
+weiterreichte:
 
 ```bash
 npm run create-superadmin -- --email="${SUPERADMIN_EMAIL}" --password="${SUPERADMIN_PASSWORD}" ...
 ```
 
-Die sorgfältige `read -s`-Eingabe wird dadurch am letzten Meter wieder
-entwertet. Zusätzlich schiebt `npm run -- …` das Argument durch eine
-weitere Prozessebene, die es ebenfalls in ihrer Argumentliste trägt.
+Die sorgfältige `read -s`-Eingabe wurde dadurch am letzten Meter wieder
+entwertet. Zusätzlich schob `npm run -- …` das Argument durch eine
+weitere Prozessebene, die es ebenfalls in ihrer Argumentliste trug.
 
-**Empfehlung.** `createSuperAdmin.ts` das Passwort aus einer
-Umgebungsvariablen (`SUPERADMIN_PASSWORD`) oder von `stdin` lesen lassen —
-beides ist in `ps aux` unsichtbar — und `--password=` als Fallback mit
-einer Warnung beibehalten oder ganz entfernen. Im Skript entsprechend
-`SUPERADMIN_PASSWORD="…" npm run create-superadmin -- --email=… --name=…`
-aufrufen.
+**Fix.** Blieb zum Zeitpunkt dieses Reviews offen und wurde erst in
+`docs/reviews-handled/security-review-2026-08-28.md` (Befund M1)
+tatsächlich behoben, wie dort empfohlen: `createSuperAdmin.ts` nimmt kein
+`--password=`-Argument mehr entgegen, liest stattdessen `SUPERADMIN_PASSWORD`
+aus der Umgebung oder fragt interaktiv ohne Terminal-Echo ab; beide
+Setup-Skripte reichen das Passwort entsprechend per Umgebungsvariable durch
+(`scripts/setup-codespace.sh:423`, `scripts/setup-netcup.sh:479`). Am
+aktuellen Code nachvollzogen (10.09.2026).
 
 ### N3 — E-Mail-Wechsel auf die Adresse eines soft-gelöschten Kontos → 500 statt 409 — **behoben**
 
@@ -1066,6 +1073,7 @@ und sind sauber:
 7. ~~**N5** — lokale Stores eines abbestellten Pakets leeren, Sync-Cursor
    zurücksetzen.~~ **Behoben** (`applyEnabledModules()` in `state.js`,
    siehe dortiger **Fix**-Abschnitt).
-8. **N2** bei nächster Berührung — letzter verbleibender Befund.
-   ~~**N3**~~/~~**N4**~~/~~**N7**~~ **Behoben** (siehe jeweiliger
-   **Fix**-Abschnitt).
+8. ~~**N2**~~ **Behoben** — in
+   `docs/reviews-handled/security-review-2026-08-28.md` (Befund M1), siehe
+   dortiger **Fix**-Abschnitt. ~~**N3**~~/~~**N4**~~/~~**N7**~~ **Behoben**
+   (siehe jeweiliger **Fix**-Abschnitt).
