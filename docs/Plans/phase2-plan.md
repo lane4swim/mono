@@ -751,3 +751,24 @@ erweiterten generischen Schreibpfads.
   wiederholten dieselbe Prisma-Abfrage für „trainer/admin-Konten eines
   Vereins" fast wortgleich. In `apps/api/src/db/clubStaff.ts`
   (`findClubStaffUserIds()`) zusammengeführt.
+- **Gelöschte Athlet:innen hinterließen dauerhafte `ParentLink`-Leichen**
+  (Nutzerfrage) — `ParentLink.athlete` trägt zwar `onDelete: Cascade`
+  (`schema.prisma`), das greift aber ausschließlich bei einer echten
+  SQL-`DELETE` (z. B. dem harten DSGVO-Purge in
+  `jobs/erasure.repository.ts`), nicht beim regulären Löschen einer
+  Athletin/eines Athleten aus der Athlet:innen-Liste — das ist ein reines
+  Soft-Delete (`deletedAt`-`UPDATE`) über die generische Sync-API und löst
+  keine Fremdschlüssel-Kaskade aus. Ein Elternkonto behielt dadurch eine
+  Verknüpfung zu einem für alle anderen bereits unsichtbaren
+  Athletenprofil (wurde zwar bereits vorher schadlos herausgefiltert,
+  siehe `parents.service.ts: getOverview()`, blieb aber als tote Zeile in
+  der Datenbank stehen). Behoben in
+  `sync.gateway.ts: applyAndMarkProcessed()` — beim Soft-Delete des Stores
+  `athletes` werden verknüpfte `ParentLink`-Zeilen in DERSELBEN
+  Transaktion mitgelöscht (atomar, store-spezifische Ausnahme in dieser
+  sonst generischen Methode). Das Elternkonto selbst bleibt unberührt —
+  es sieht danach schlicht keine verknüpften Kinder mehr. Zwei neue
+  Integrationstests in `test-integration/syncGateway.integration.test.ts`
+  (Aufräumung greift bei `athletes`, bleibt bei jedem anderen Store aus)
+  — **nicht gegen eine echte Postgres-Instanz geprüft** (siehe
+  wiederkehrender Vorbehalt oben).
