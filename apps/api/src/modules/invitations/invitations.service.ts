@@ -352,7 +352,7 @@ export function createInvitationsService(deps: InvitationsServiceDeps) {
     },
 
     // Setzt/ändert die externe Vereinskennung (DSV-Vereinskennzahl o. ä.)
-    // für den Ergebnisimport, siehe docs/dsv7-lenex-import-plan.md
+    // für den Ergebnisimport, siehe docs/Plans/dsv7-lenex-import-plan.md
     // Abschnitt 3.1. Ein Admin darf nur den EIGENEN Verein bearbeiten
     // (analog zur clubId-Scoping-Prüfung in assertCanIssueRole() oben),
     // ein Superadmin jeden Verein.

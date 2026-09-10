@@ -816,7 +816,7 @@ describe('GET /api/users (Nutzerverwaltung: bestehende Vereinsmitglieder)', () =
   });
 });
 
-// docs/kampfrichter-modul-plan.md, Abschnitt 1.4 — bislang ungetestet,
+// docs/Plans/kampfrichter-modul-plan.md, Abschnitt 1.4 — bislang ungetestet,
 // nachgeholt im Zuge von Phase B (Rolle "referee").
 describe('PATCH /api/users/:userId/roles', () => {
   it('liefert 401 ohne Authentifizierung', async () => {

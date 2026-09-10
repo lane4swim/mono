@@ -83,7 +83,7 @@ export const AuthTokensResponseSchema = z.object({
   enabledModules: z.array(ModuleKeySchema),
   // Externe Vereinskennung für den Ergebnisimport (DSV7/Lenex) — null für
   // "superadmin" oder wenn der Verein keine hinterlegt hat. Siehe
-  // docs/dsv7-lenex-import-plan.md Abschnitt 3.1 und
+  // docs/Plans/dsv7-lenex-import-plan.md Abschnitt 3.1 und
   // apps/web/js/modules/resultsImportUI.js (automatische Vereinserkennung).
   clubNationalID: z.string().nullable(),
   clubNationalIDType: z.string().nullable(),
@@ -188,7 +188,7 @@ export const ChangeEmailRequestSchema = z.object({
 export type ChangeEmailRequest = z.infer<typeof ChangeEmailRequestSchema>;
 
 // Claims im Access Token (siehe Abschnitt 5.3 des Backend-Entwicklungsplans).
-// docs/kampfrichter-modul-plan.md, Abschnitt 1.4: "roles" statt "role" —
+// docs/Plans/kampfrichter-modul-plan.md, Abschnitt 1.4: "roles" statt "role" —
 // ein Konto kann mehrere Rollen gleichzeitig haben.
 export const AccessTokenClaimsSchema = z.object({
   sub: z.string().uuid(),
@@ -214,12 +214,12 @@ export const MyDataExportSchema = z.object({
   actionItems: z.array(z.record(z.unknown())),
   attendance: z.array(z.record(z.unknown())),
   // An userId gehängt, nicht athleteId — gilt für jede Person mit Konto
-  // (docs/nutzer-qualifikationen-plan.md, Abschnitt 6). Nachträglich hier
+  // (docs/Plans/nutzer-qualifikationen-plan.md, Abschnitt 6). Nachträglich hier
   // ergänzt (dieses Schema war bislang unabhängig von der tatsächlichen
   // Export-Antwort auseinandergelaufen, siehe profile.repository.ts:
   // PersonalDataExport, das dieses Feld schon lange liefert).
   qualifications: z.array(z.record(z.unknown())),
-  // docs/kampfrichter-modul-plan.md, Abschnitt 5.7 — ebenfalls an userId
+  // docs/Plans/kampfrichter-modul-plan.md, Abschnitt 5.7 — ebenfalls an userId
   // gehängt: gilt für jede Person mit Konto und der Rolle "referee",
   // unabhängig von einer Athletenverknüpfung.
   refereeAssignments: z.array(z.record(z.unknown())),

@@ -7,7 +7,7 @@ Phasenplanung"): Abschnitt 3, bestehend aus drei Einzelfeatures —
 Belastungssteuerung/Trainingsumfang-Auswertung, 3.3
 Anwesenheitsstatistik & -prognose. Anders als das Brainstorm-Dokument ist
 dies ein konkreter Umsetzungsplan (analog zu
-`docs/kampfrichter-modul-plan.md`/`docs/nutzer-qualifikationen-plan.md`),
+`docs/Plans/kampfrichter-modul-plan.md`/`docs/Plans/nutzer-qualifikationen-plan.md`),
 noch vor jeder Implementierung als Diskussionsgrundlage gedacht.
 
 ## Umsetzungsstand
@@ -610,7 +610,7 @@ Entscheidungen wider.
 **Entscheidung:** fest im Code, kein Vereins-Setting in Phase 1.
 
 **Begründung:** Die konfigurierbaren Erinnerungs-Schwellen bei
-Qualifikationen (`docs/nutzer-qualifikationen-plan.md`, Abschnitt 2.4)
+Qualifikationen (`docs/Plans/nutzer-qualifikationen-plan.md`, Abschnitt 2.4)
 sind dort gerechtfertigt, weil unterschiedliche Qualifikationsarten
 fachlich unterschiedliche, vom Verband/Verein vorgegebene Fristen haben
 (harte Anforderung, kein Ermessensspielraum). Der Anwesenheits-

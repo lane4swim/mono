@@ -11,7 +11,7 @@ eigenständiges, **je Verein zubuchbares Modul** ausgeliefert (siehe Abschnitt 1
 nicht jeder Verein braucht diese Verwaltung, analog zum bereits bestehenden
 Wettkampfmodul.
 
-Stand: Greenfield-Feature, kein bestehender Code. `docs/backend-plan.md` (Phasen 0–4)
+Stand: Greenfield-Feature, kein bestehender Code. `docs/Plans/backend-plan.md` (Phasen 0–4)
 und eine Code-Recherche in `apps/api`/`apps/web`/`packages/*` bilden die Grundlage für
 die Architekturentscheidungen unten (Fastify/Prisma-Backend, Vanilla-JS-PWA-Frontend mit
 IndexedDB-Offline-Cache, Sync-API als Schreibpfad für die zehn fachlichen Stores unter
@@ -359,7 +359,7 @@ auch dieser Hinweis nur, wenn `qualifications` gebucht ist.
 ## 6. DSGVO
 
 Qualifikationsdaten sind personenbezogen und gehören in die bestehenden
-Auskunfts-/Löschmechanismen (`docs/backend-plan.md`, Abschnitt 14) — unabhängig von der
+Auskunfts-/Löschmechanismen (`docs/Plans/backend-plan.md`, Abschnitt 14) — unabhängig von der
 Rolle der betroffenen Person und unabhängig davon, ob der Verein das Modul aktuell
 gebucht hat (bereits erfasste Daten bleiben auskunfts-/löschpflichtig):
 
@@ -443,5 +443,5 @@ getroffen und oben in den jeweiligen Abschnitten eingearbeitet.
 8. Erinnerungsjob `notifyExpiringQualifications.ts` + Registrierung im Cron-Setup
    (analog `purgeExpiredDeletions.ts`) + Dashboard-Hinweis.
 9. Tests je Schicht (Abschnitt 7).
-10. `docs/backend-plan.md` Abschnitt „6 — Erweiterungen" bzw. `docs/todo.md` um den
+10. `docs/Plans/backend-plan.md` Abschnitt „6 — Erweiterungen" bzw. `docs/todo.md` um den
     erledigten/laufenden Stand ergänzen, sobald die Umsetzung beginnt.

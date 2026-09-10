@@ -1,5 +1,5 @@
 // Testet die reinen Auswertungsfunktionen aus js/modules/attendanceStats.js
-// (Phase 1, Abschnitt 3.3 — docs/trainingsplanung-phase1-plan.md).
+// (Phase 1, Abschnitt 3.3 — docs/Plans/trainingsplanung-phase1-plan.md).
 import { describe, it, expect } from 'vitest';
 import { attendanceTrend, flagLowAttendance } from '../js/modules/attendanceStats.js';
 

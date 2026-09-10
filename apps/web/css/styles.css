@@ -220,7 +220,7 @@ tr:hover td{ background: var(--c-foam-2); }
 .badge-done{ background:#E3F5EF; color: var(--c-chlorine-d); }
 .badge-neutral{ background: var(--c-foam-2); color: var(--c-slate); }
 .badge-pb{ background: var(--c-chlorine); color: var(--c-deep-2); }
-/* Qualifikationsmanagement (docs/nutzer-qualifikationen-plan.md, Abschnitt
+/* Qualifikationsmanagement (docs/Plans/nutzer-qualifikationen-plan.md, Abschnitt
    4.2) — eigener Zustand "Verlängerung bereits organisiert", bewusst von
    badge-progress (gelb, "läuft bald ab, nichts unternommen") unterschieden. */
 .badge-scheduled{ background:#DCEEF2; color: var(--c-petrol); }

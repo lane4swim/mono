@@ -1,7 +1,7 @@
 // Parser für DSV7-Wettkampfergebnislisten
 // ("DSV Standard", Format 7, DSV, gültig ab 01.01.2023) in das
 // gemeinsame Zwischenformat ImportedResult (siehe
-// docs/dsv7-lenex-import-plan.md Abschnitt 4).
+// docs/Plans/dsv7-lenex-import-plan.md Abschnitt 4).
 //
 // DSV7 ist eine reine, zeilenbasierte, UTF-8-Textdatei — KEIN XML. Jede
 // Datenzeile hat die Form "ELEMENT:Attribut1;Attribut2;...;", das
@@ -293,7 +293,7 @@ export function parseDsv7WettkampfergebnisListe(text) {
         // athleteMatchHint, damit jedes Teammitglied dieses Ergebnis im
         // eigenen Ergebnisverlauf sieht (Result.athleteId ist im lokalen
         // Datenmodell zwingend genau eine Person, siehe
-        // docs/dsv7-lenex-import-plan.md — es gibt kein Team-Result).
+        // docs/Plans/dsv7-lenex-import-plan.md — es gibt kein Team-Result).
         // `splits` wird bewusst NICHT pro Bein aufgeteilt, sondern jedem
         // Teammitglied identisch als volle Team-Zwischenzeiten-Liste
         // mitgegeben (STZWISCHENZEIT liefert kumulierte Team-Distanzen,

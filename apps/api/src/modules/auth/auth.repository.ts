@@ -11,7 +11,7 @@ export interface UserRecord {
   name: string;
   email: string;
   passwordHash: string;
-  // docs/kampfrichter-modul-plan.md, Abschnitt 1: ein Konto kann mehrere
+  // docs/Plans/kampfrichter-modul-plan.md, Abschnitt 1: ein Konto kann mehrere
   // Rollen gleichzeitig haben. Die transitionelle, einzelne "role"-Spalte
   // (schema.prisma) ist bewusst NICHT Teil dieses Interfaces mehr — sie
   // wird ausschließlich innerhalb von PrismaUserRepository (unten) als
@@ -46,7 +46,7 @@ export interface UpdateUserInput {
   consentGivenAt?: Date;
   consentVersion?: string;
   deletedAt?: Date | null;
-  // PATCH /api/users/:userId/roles (docs/kampfrichter-modul-plan.md,
+  // PATCH /api/users/:userId/roles (docs/Plans/kampfrichter-modul-plan.md,
   // Abschnitt 1.4) — ersetzt die vollständige Rollenmenge, kein
   // Add/Remove-Diff.
   roles?: string[];

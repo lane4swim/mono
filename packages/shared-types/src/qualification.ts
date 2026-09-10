@@ -1,4 +1,4 @@
-// Vertrag für das Qualifikationsmanagement (docs/nutzer-qualifikationen-plan.md).
+// Vertrag für das Qualifikationsmanagement (docs/Plans/nutzer-qualifikationen-plan.md).
 // Bewusst NICHT Teil von entities.ts/ENTITY_SCHEMAS — UserQualification ist
 // kein Sync-Store (User selbst ist keiner, siehe Plan Abschnitt 1.1), diese
 // Schemas werden stattdessen vom eigenständigen qualifications-Modul im
@@ -15,7 +15,7 @@ const nullableIsoDate = z.string().datetime().nullable();
 // Reporting möglich bleibt. Eine je Verein frei konfigurierbare Werteliste
 // ist bewusst nicht Teil dieses ersten Umsetzungsschritts.
 //
-// Kampfrichter-Typen (docs/kampfrichter-modul-plan.md, Abschnitt 3.1,
+// Kampfrichter-Typen (docs/Plans/kampfrichter-modul-plan.md, Abschnitt 3.1,
 // Entscheidung 2026-09-05): DSV-Standardbegriffe, bewusst OHNE C/B/A-
 // Stufung wie bei den Trainerscheinen oben — im DSV-Kampfrichterwesen
 // gibt es je Amt genau eine Lizenz. Dieselbe Wiederverwendung bestehender
@@ -42,7 +42,7 @@ export type QualificationType = z.infer<typeof QualificationTypeSchema>;
 export const QUALIFICATION_TYPES = QualificationTypeSchema.options;
 
 // Teilmenge von QualificationTypeSchema, die fachlich zu einer
-// Kampfrichter:in gehört (docs/kampfrichter-modul-plan.md, Abschnitt 3.2)
+// Kampfrichter:in gehört (docs/Plans/kampfrichter-modul-plan.md, Abschnitt 3.2)
 // — wird vom künftigen Kampfrichter-Modul (Phase C) verwendet, um die
 // allgemeine Qualifikationsliste einer Person auf die für Kampfrichter:innen
 // relevanten Typen zu filtern, ohne diese Liste ein zweites Mal an anderer

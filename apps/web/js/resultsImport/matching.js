@@ -2,7 +2,7 @@
 // Ergebnisimport (DSV7/Lenex), formatunabhängig: nimmt ImportedResult[]
 // (siehe resultsImport/dsv7Parser.js) entgegen und baut daraus einen
 // Vorschau-/Ausführungsplan gegen die lokalen Athlet:innen/Ergebnisse.
-// Siehe docs/dsv7-lenex-import-plan.md Abschnitt 5.
+// Siehe docs/Plans/dsv7-lenex-import-plan.md Abschnitt 5.
 //
 // Bewusst als reine, seiteneffektfreie Funktionen implementiert (keine
 // IndexedDB-Zugriffe hier) — resultsImport/importRunner.js verbindet das

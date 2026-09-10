@@ -42,7 +42,7 @@ export const STORE_PERMISSIONS: Record<EntityStoreName, StoreAccess> = {
   results: shared,
   plans: shared,
   // Wie "templates": Athlet:innen lesen mit, anlegen/bearbeiten/anwenden
-  // bleibt trainer/admin vorbehalten (docs/trainingsplanung-phase1-plan.md,
+  // bleibt trainer/admin vorbehalten (docs/Plans/trainingsplanung-phase1-plan.md,
   // Abschnitt 1.5).
   planCycles: coachManaged,
   athletes: adminManaged,
@@ -79,7 +79,7 @@ const STORE_MODULE_MAP: Record<EntityStoreName, readonly ModuleKey[]> = (() => {
   return map;
 })();
 
-// Ein Konto kann mehrere Rollen tragen (docs/kampfrichter-modul-plan.md,
+// Ein Konto kann mehrere Rollen tragen (docs/Plans/kampfrichter-modul-plan.md,
 // Abschnitt 1.4/1.5): es genügt, wenn EINE davon berechtigt ist
 // (Vereinigung, nicht Gleichheit).
 export function canRead(store: SyncStore, roles: readonly Role[], enabledModules: readonly string[]): boolean {

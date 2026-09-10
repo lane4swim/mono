@@ -1,6 +1,6 @@
 // timeToSec() wurde um dreisegmentige Zeiten (hh:mm:ss.cc) erweitert, damit
 // der DSV7-Ergebnisimport (Zeitformat HH:MM:SS,hh, siehe
-// docs/dsv7-lenex-import-plan.md Abschnitt 1.1) sie wiederverwenden kann,
+// docs/Plans/dsv7-lenex-import-plan.md Abschnitt 1.1) sie wiederverwenden kann,
 // statt einen eigenen Zeit-Parser mitzubringen. Vormals griff `const [m, s]
 // = str.split(':')` bei drei Segmenten stillschweigend daneben (die
 // Sekunden gingen verloren) — dieser Test hält das fest.

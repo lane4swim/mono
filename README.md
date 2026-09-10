@@ -2,7 +2,7 @@
 
 Trainingsmanagement für Schwimmteams. Dieses Repository enthält das
 Frontend (offline-first PWA) und das Node.js-Backend als gemeinsames
-Monorepo (npm Workspaces), gemäß `docs/backend-plan.md`.
+Monorepo (npm Workspaces), gemäß `docs/Plans/backend-plan.md`.
 
 **Aktueller Umsetzungsstand:** Alle vier Phasen des Backend-Entwicklungsplans
 sind umgesetzt. `apps/api` bietet **einladungsbasierte** Registrierung
@@ -41,7 +41,8 @@ packages/
   sync-protocol/   Konfliktregeln für die künftige Sync-API
   shared-config/   gemeinsame ESLint-/Prettier-/tsconfig-Basis
 docs/
-  backend-plan.md  vollständiger Backend-Entwicklungs- und Integrationsplan
+  Plans/
+    backend-plan.md  vollständiger Backend-Entwicklungs- und Integrationsplan
 ```
 
 ## Voraussetzungen
@@ -177,7 +178,7 @@ Wegwerf-Schlüsselpaar pro Prozessstart erzeugt; in `production` **Pflicht**
 ## Fachliches Datenmodell (Phase 2)
 
 Vollständiges Prisma-Schema für alle in `apps/web/js/db.js` bereits
-verwendeten Stores — Mapping siehe `docs/backend-plan.md`, Abschnitt 4:
+verwendeten Stores — Mapping siehe `docs/Plans/backend-plan.md`, Abschnitt 4:
 
 | IndexedDB-Store (Frontend) | Prisma-Modell | Server-Tabelle |
 |---|---|---|
@@ -468,7 +469,7 @@ npm run build      # baut alle Workspaces (packages zuerst, dann apps/api)
 
 ## Nächste Schritte
 
-Phasen 0–4 des Plans (`docs/backend-plan.md`, Abschnitt 11) sind
+Phasen 0–4 des Plans (`docs/Plans/backend-plan.md`, Abschnitt 11) sind
 umgesetzt, ebenso die DSGVO-Auskunfts-/Löschfunktion (Art. 15 + 17) und
 `GET /api/users`. Es verbleiben: Phase 5 (weitere Sicherheitshärtung &
 Tests, siehe „Bekannte offene Punkte" oben) und Phase 6 (optionale

@@ -26,7 +26,7 @@ export interface AdminContact {
 
 export interface NotifyExpiringQualificationsGateway {
   // Nur Zeilen aus Vereinen, die das Modul 'qualifications' gebucht haben
-  // (siehe docs/nutzer-qualifikationen-plan.md, Abschnitt 5 — ein Verein,
+  // (siehe docs/Plans/nutzer-qualifikationen-plan.md, Abschnitt 5 — ein Verein,
   // der das Modul nachträglich deaktiviert, soll keine Erinnerungen mehr
   // auslösen, auch wenn die Datenzeilen bestehen bleiben), mit `expiresOn`
   // gesetzt (unbefristete Qualifikationen sind nie Kandidaten).
@@ -73,7 +73,7 @@ export class PrismaNotifyExpiringQualificationsGateway implements NotifyExpiring
     return new Map(rows.map((row) => [`${row.clubId}:${row.type}`, row.thresholdsDays]));
   }
 
-  // docs/kampfrichter-modul-plan.md, Abschnitt 1: prüft die tatsächliche
+  // docs/Plans/kampfrichter-modul-plan.md, Abschnitt 1: prüft die tatsächliche
   // Mehrfachrollen-Spalte ("has: 'admin'"), nicht mehr die transitionelle
   // Einzelrollen-Spalte — eine Person mit z. B. roles: ['athlete','admin']
   // bekäme über die alte Spalte (dort nur roles[0], hier 'athlete')

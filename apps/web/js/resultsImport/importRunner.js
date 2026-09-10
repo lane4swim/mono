@@ -1,7 +1,7 @@
 // verbindet resultsImport/matching.js
 // (reine Logik) mit db.js/syncClient.js (IndexedDB + Sync), für den
 // tatsächlichen Schreibvorgang eines Ergebnisimports. Siehe
-// docs/dsv7-lenex-import-plan.md Abschnitt 5/6.
+// docs/Plans/dsv7-lenex-import-plan.md Abschnitt 5/6.
 import { getAll, put } from '../db.js';
 import { pull, push } from '../syncClient.js';
 import { isPersonalBest } from '../swimTime.js';

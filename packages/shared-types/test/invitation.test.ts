@@ -64,7 +64,7 @@ describe('CreateInvitationRequestSchema', () => {
     const req = { email: 'mara@example.org', role: 'athlete', athleteId: '11111111-1111-1111-1111-111111111111' };
     expect(CreateInvitationRequestSchema.safeParse(req).success).toBe(true);
   });
-  // docs/kampfrichter-modul-plan.md, Abschnitt 2: "referee" lässt sich wie
+  // docs/Plans/kampfrichter-modul-plan.md, Abschnitt 2: "referee" lässt sich wie
   // trainer/athlete direkt per Einladung vergeben.
   it('akzeptiert eine referee-Einladung', () => {
     expect(CreateInvitationRequestSchema.safeParse({ email: 'kampfrichter@example.org', role: 'referee' }).success).toBe(true);

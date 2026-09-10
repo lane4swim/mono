@@ -30,7 +30,7 @@ export interface CreateRefereeAssignmentInput {
   function: string;
   note: string;
   // null bei Selbsterfassung, sonst die id der erfassenden admin-Person
-  // (docs/kampfrichter-modul-plan.md, Abschnitt 5.5).
+  // (docs/Plans/kampfrichter-modul-plan.md, Abschnitt 5.5).
   createdByAdminId: string | null;
 }
 

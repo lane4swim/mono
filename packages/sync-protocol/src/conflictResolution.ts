@@ -60,7 +60,7 @@ export function resolveConflict(
       // Eine Zeitmessung darf nie stillschweigend verschwinden — statt zu
       // überschreiben, wird ein zusätzlicher Datensatz angelegt.
       //
-      // Ergebnisimport (DSV7/Lenex, siehe docs/dsv7-lenex-import-plan.md
+      // Ergebnisimport (DSV7/Lenex, siehe docs/Plans/dsv7-lenex-import-plan.md
       // Abschnitt 3.6): bewusst KEINE eigene Konfliktstrategie für den
       // Import eingeführt. Der Import-Client pullt unmittelbar vor dem
       // Schreiben den aktuellsten Stand (siehe apps/web/js/resultsImport/*),

@@ -49,7 +49,7 @@ export const MODULE_PACKAGES = {
   sessions: { routeIds: ['sessions'], stores: ['sessions'] },
   actionitems: { routeIds: ['actionitems'], stores: ['actionItems'] },
   stats: { routeIds: ['stats'], stores: [] },
-  // Qualifikationsmanagement (docs/nutzer-qualifikationen-plan.md, Abschnitt
+  // Qualifikationsmanagement (docs/Plans/nutzer-qualifikationen-plan.md, Abschnitt
   // 1.2): `stores: []` wie bei times/stats — kein Sync-Store, da
   // UserQualification über eigene REST-Endpunkte verwaltet wird (User ist
   // selbst kein Sync-Store, siehe entities.ts). Dieses Paket steuert
@@ -58,7 +58,7 @@ export const MODULE_PACKAGES = {
   // qualifications-Modul, da dessen Endpunkte NICHT über die generische
   // Sync-API laufen — den Zugriff auf dessen REST-Endpunkte.
   qualifications: { routeIds: ['qualifications'], stores: [] },
-  // Kampfrichter-Modul (docs/kampfrichter-modul-plan.md, Abschnitt 4.1):
+  // Kampfrichter-Modul (docs/Plans/kampfrichter-modul-plan.md, Abschnitt 4.1):
   // `stores: []` wie bei `qualifications` — kein Sync-Store, da
   // RefereeAssignment über eigene REST-Endpunkte verwaltet wird (analog
   // UserQualification). Steuert die Sichtbarkeit der Frontend-Route

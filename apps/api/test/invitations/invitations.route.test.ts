@@ -194,7 +194,7 @@ describe('POST /api/invitations (admin/superadmin)', () => {
     await app.close();
   });
 
-  // docs/kampfrichter-modul-plan.md, Abschnitt 2: "referee" lässt sich wie
+  // docs/Plans/kampfrichter-modul-plan.md, Abschnitt 2: "referee" lässt sich wie
   // trainer/athlete direkt per Einladung vergeben.
   it('admin kann eine referee-Einladung für den eigenen Verein ausstellen (201)', async () => {
     const { app, keyPair, clubs } = await buildTestApp();

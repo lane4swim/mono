@@ -1,7 +1,7 @@
 // dsv7EventLabel() bildet DSV7-WETTKAMPF-Attribute (Technik, Einzelstrecke,
 // AnzahlStarter) auf einen EVENTS-String ab — Grundlage für das
 // Event-Matching beim Ergebnisimport (siehe
-// docs/dsv7-lenex-import-plan.md Abschnitt 3.5). Ungemapptes soll `null`
+// docs/Plans/dsv7-lenex-import-plan.md Abschnitt 3.5). Ungemapptes soll `null`
 // liefern statt eines erfundenen Strings, damit die Importvorschau es
 // zuverlässig als "nicht zuordenbar" erkennt.
 import { describe, it, expect } from 'vitest';

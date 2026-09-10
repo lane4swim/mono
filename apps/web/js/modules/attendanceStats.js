@@ -1,5 +1,5 @@
 // Anwesenheitsstatistik & -prognose (Phase 1, Abschnitt 3.3 —
-// docs/trainingsplanung-phase1-plan.md). Reine, DOM-freie Auswertungen
+// docs/Plans/trainingsplanung-phase1-plan.md). Reine, DOM-freie Auswertungen
 // über TrainingSession.attendance; Rendering übernehmen stats.js/dashboard.js.
 import { dateOnly, startOfWeek } from '../dates.js';
 

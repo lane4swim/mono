@@ -157,7 +157,7 @@ export function markActive(routeId) {
 // demoMode.js: DEMO_USERS) — der Eintrag greift dort schlicht nie.
 const DEFAULT_ROUTE_BY_ROLE = { superadmin: 'usermgmt', referee: 'kampfrichter' };
 
-// `roles` statt eines Einzelwerts (docs/kampfrichter-modul-plan.md,
+// `roles` statt eines Einzelwerts (docs/Plans/kampfrichter-modul-plan.md,
 // Abschnitt 1) — "superadmin" ist die einzige Rolle mit einem eigenen
 // Standard-Ziel und bleibt exklusiv (nie mit einer anderen Rolle
 // kombiniert, siehe UserRolesSchema), ein einfaches `.includes()` genügt

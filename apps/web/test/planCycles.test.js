@@ -1,6 +1,6 @@
 // Testet die reine Funktion buildPlansFromCycle() aus
 // js/modules/planCycles.js (Phase 1, Abschnitt 3.1 —
-// docs/trainingsplanung-phase1-plan.md).
+// docs/Plans/trainingsplanung-phase1-plan.md).
 import { describe, it, expect } from 'vitest';
 import { vi } from 'vitest';
 

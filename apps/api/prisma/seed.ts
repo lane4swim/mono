@@ -1,4 +1,4 @@
-// Seed-Skript "analog seed.js" (Phase-2-Auftrag, siehe docs/backend-plan.md
+// Seed-Skript "analog seed.js" (Phase-2-Auftrag, siehe docs/Plans/backend-plan.md
 // Abschnitt 11). Spiegelt bewusst dieselben Demo-Daten wie
 // apps/web/js/seed.js, damit Frontend-Demo und Backend-Demo inhaltlich
 // zueinander passen, sobald Phase 4 (Frontend-Integration) beide verbindet.
@@ -146,7 +146,7 @@ export function buildDemoData() {
   const session2 = {
     id: id(), clubId: club.id, date: addDays(wkStart, -7), groupId: groupA.id, planId: null as string | null, trainerNote: 'Eine Athletin krank gemeldet.',
     // Ad-hoc-Einheit ohne Plan — actualDistance demonstriert den Fallback
-    // aus docs/trainingsplanung-phase1-plan.md, Abschnitt 2.2.
+    // aus docs/Plans/trainingsplanung-phase1-plan.md, Abschnitt 2.2.
     actualDistance: 1800,
     attendance: groupAAthletes.map((a, i) => ({ athleteId: a.id, present: i !== 2, rpe: i !== 2 ? 7 : null, note: i === 2 ? 'Krankheit' : '' })),
   };

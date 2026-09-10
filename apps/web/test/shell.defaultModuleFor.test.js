@@ -1,5 +1,5 @@
 // Regressionstest für shell.js: defaultModuleFor() — deckt eine beim
-// Anpassen des Rollenhandbuchs (docs/kampfrichter-modul-plan.md) entdeckte
+// Anpassen des Rollenhandbuchs (docs/Plans/kampfrichter-modul-plan.md) entdeckte
 // Lücke ab: ein reines Kampfrichter-Konto (roles: ['referee'], keine
 // weitere Rolle) hat kein sichtbares Dashboard (dashboard.js: roles
 // ['trainer','admin','athlete'] — referee fehlt dort bewusst) und wäre

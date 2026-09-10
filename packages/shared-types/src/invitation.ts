@@ -16,7 +16,7 @@ export const ClubSchema = z.object({
   // MODULE_PACKAGES. Steuert Frontend-Sichtbarkeit und Sync-Zugriff.
   enabledModules: z.array(ModuleKeySchema),
   // Externe Vereinskennung für den Ergebnisimport (DSV7/Lenex) — generisch
-  // statt DSV-spezifisch, siehe docs/dsv7-lenex-import-plan.md Abschnitt 3.1.
+  // statt DSV-spezifisch, siehe docs/Plans/dsv7-lenex-import-plan.md Abschnitt 3.1.
   // z. B. nationalIDType = "DSV", nationalID = die 4-stellige
   // DSV-Vereinskennzahl.
   nationalID: z.string().max(50).nullable(),
@@ -34,7 +34,7 @@ export const ClubMemberCountsSchema = z.object({
   admin: z.number().int().nonnegative(),
   trainer: z.number().int().nonnegative(),
   athlete: z.number().int().nonnegative(),
-  // docs/kampfrichter-modul-plan.md, Abschnitt 2 — eine Person mit
+  // docs/Plans/kampfrichter-modul-plan.md, Abschnitt 2 — eine Person mit
   // mehreren Rollen (z. B. trainer + referee) zählt seit Phase A in
   // JEDEM passenden Zähler mit, die Summe kann also die Zahl der
   // tatsächlichen Konten übersteigen.
@@ -78,7 +78,7 @@ export type UpdateClubRequest = z.infer<typeof UpdateClubRequestSchema>;
 // oben), damit Admins ihre eigene Vereinskennung pflegen können, ohne die
 // Superadmin-only-Modulverwaltung mitzubenötigen — siehe
 // invitations.service.ts: updateClubIdentity() und
-// docs/dsv7-lenex-import-plan.md Abschnitt 3.1. Leerstring wird serverseitig
+// docs/Plans/dsv7-lenex-import-plan.md Abschnitt 3.1. Leerstring wird serverseitig
 // als "löschen" (→ null) behandelt, damit eine einmal gesetzte Kennung im
 // Formular auch wieder entfernt werden kann.
 export const UpdateClubIdentityRequestSchema = z.object({
@@ -89,7 +89,7 @@ export type UpdateClubIdentityRequest = z.infer<typeof UpdateClubIdentityRequest
 
 // Nur diese vier Rollen lassen sich per Einladung vergeben — "superadmin"
 // wird bewusst nie über die API vergeben (siehe scripts/createSuperAdmin.ts).
-// "referee" (Kampfrichter:in, docs/kampfrichter-modul-plan.md, Abschnitt 2)
+// "referee" (Kampfrichter:in, docs/Plans/kampfrichter-modul-plan.md, Abschnitt 2)
 // kann wie jede andere Rolle direkt per Einladung vergeben werden — z. B.
 // für eine Person, die im Verein ausschließlich als Kampfrichter:in aktiv
 // ist, ohne selbst zu trainieren/zu schwimmen. Weitere Rollen kommen

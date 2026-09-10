@@ -3,7 +3,7 @@
 // WER es ist. Muss immer NACH app.authenticate als preHandler stehen, da es
 // sich auf request.user verlässt.
 //
-// docs/kampfrichter-modul-plan.md, Abschnitt 1.4: vormals requireRole() mit
+// docs/Plans/kampfrichter-modul-plan.md, Abschnitt 1.4: vormals requireRole() mit
 // Gleichheitsprüfung ("die eine Rolle") — ein Konto kann jetzt mehrere
 // Rollen gleichzeitig haben (request.user.roles: Role[]), die Prüfung ist
 // daher eine Mengen-Überschneidung ("mindestens eine der Rollen"). Bewusst
