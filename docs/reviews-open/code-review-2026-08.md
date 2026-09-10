@@ -15,11 +15,68 @@ Lücken *zwischen* bereits gut gebauten Teilen, nicht um grundlegende Mängel.
 Schweregrade: **Hoch** = jetzt beheben, **Mittel** = einplanen, **Niedrig** =
 bei nächster Berührung mitnehmen.
 
+**Update (10.09.2026, nachträgliche Verifikation).** Dieses Dokument trug nie
+eigene Status-Vermerke; die 43 Befunde wurden daher jetzt einzeln gegen den
+aktuellen Code nachvollzogen. Ergebnis: **42 von 43 sind behoben** —
+durchgängig im Code selbst mit `// Code-Review, Befund <ID>` verankert
+(dieselbe Kommentar-Konvention, die **W1** unten kritisiert). Belegstellen je
+Befund:
+
+| Befund | Belegstelle |
+|---|---|
+| S1 | `apps/api/src/plugins/security.ts:76-93` (`hook: 'preHandler'` statt Default `onRequest`) |
+| S2 | `apps/api/src/modules/auth/auth.service.ts:382-384` (Reuse löst `revokeAllForUser()` aus) |
+| S3 | CSP im Reverse-Proxy aller Deployment-Anleitungen, z. B. `scripts/setup-codespace.sh:441` |
+| S4 | `apps/web/js/apiClient.js:231-237` (`refreshInFlight`) |
+| S5 | `apps/api/src/modules/auth/auth.repository.ts:171` (`update()` jetzt mit `deletedAt`-Filter) |
+| S6 | `apps/web/admin/admin.js:63` |
+| S7 | `packages/shared-types/src/entities.ts:18` (Array-`.max()` ergänzt) |
+| S8 | `apps/api/src/mail/mailer.ts:434` (`escapeHtml()` escaped jetzt `'`) |
+| C1 | `apps/web/js/syncClient.js:98-110` (`PUSH_BATCH_SIZE`-Chunking) |
+| C2 | `apps/web/js/syncClient.js:29,157-161` (`MAX_SYNC_ATTEMPTS`, Status `'failed'`) |
+| C3 | `apps/api/src/modules/sync/sync.gateway.memory.ts:222`, Tests in `sync.service.test.ts:264` |
+| C4 | `apps/api/src/modules/profile/profile.repository.ts:102`, Tests in `profileErasure.integration.test.ts:317-329` |
+| C5 | `apps/web/js/syncClient.js:37,192-194` (`MAX_PULL_ITERATIONS`) |
+| C6 | `apps/web/js/i18n.js:89` (Ersetzungs-Funktion statt -String) |
+| P1 | `apps/api/src/auth/tokens.ts:13` |
+| P2 | Tests `apps/api/test-integration/syncGateway.integration.test.ts:153-160` |
+| P3 | `apps/api/src/modules/profile/profile.repository.ts:102` |
+| P4 | `apps/api/src/mail/mailer.ts:464` |
+| P5 | `apps/web/js/db.js:24,275,456,477` (Indizes, `count()`) |
+| P6 | `apps/web/js/syncClient.js:111` (`Map` statt `find()`) |
+| P7 | `apps/web/js/modules/libraryTransfer.js:132`, `apps/web/js/db.js:317` |
+| P8 | `apps/web/js/i18n.js:84` |
+| R1 | `apps/web/js/shell.js` (neu) |
+| R2 | `apps/web/js/modules/profile.js:323` |
+| R3 | `packages/shared-types/src/syncEvent.ts:36` |
+| R4 | `packages/shared-types/src/auth.ts:18` |
+| R5/R6 | `esc()` in `apps/web/js/charts.js` nicht mehr exportiert; `accessTokenExpiresAt` wird jetzt für proaktives Refresh gelesen (`apps/web/js/apiClient.js:26`) |
+| R7 | `apps/api/src/auth/tokens.ts:72` |
+| R8 | `apps/api/src/modules/profile/profile.repository.ts:30`, `packages/shared-types/src/auth.ts:229` |
+| R9 | `apps/web/js/modules/syncQueue.js:106` |
+| W2 | keine deutschen Bezeichner mehr in `sync.service.ts` |
+| W3 | `apps/web/package.json:10` (`"lint": "eslint ."`) |
+| W4 | `package.json:24` (`"eslint": "^10.9.1"`) |
+| W5 | `apps/api/Dockerfile:70`, `.github/workflows/ci.yml:140`, committete `apps/api/prisma/migrations/` |
+| W6 | `docker-compose.yml` (kein `JWT_SIGNING_KEY` mehr, `FRONTEND_BASE_URL` ergänzt) |
+| W7 | `apps/api/Dockerfile` (`npm ci`, keine `node_modules_root`-Kopie, eigene `prod-deps`-Stage, `USER node`) |
+| W8 | `apps/web/sw.js` (vollständige `PRECACHE_URLS`, `scopePath`-relative Pfadprüfung) |
+| W9 | `getLocale()` durchgängig in `admin.js`, `profile.js`, `mailer.ts` |
+| W10 | `apps/api/src/modules/invitations/invitations.service.ts:296` (`findValidByToken(deps, plainToken)` statt `this.findValidByToken`) |
+| W11 | `apps/web/js/dom.js:39-43` (eigener `icon()`-Helfer statt generischem `html:`-Attribut) |
+| W12 | `.github/workflows/ci.yml`/`static.yml` (`actions/checkout@v7` in beiden) |
+
+**W1 bleibt offen** — als fortlaufende Aufgabe, nicht als Einzelbefund: von
+`docs/code-review-wartbarkeit-2026-08.md` (dortiges **W3**, „Kommentar-Diät")
+und `docs/code-review-doku-kommentare-2026-09-06.md` (dortige „Restarbeit:
+226 Verweise in 56 Dateien") aufgegriffen und dort weitergeführt, siehe deren
+jeweiligen Status statt eines eigenen Trackings hier.
+
 ---
 
 ## 1. Sicherheit
 
-### S1 — Login-Rate-Limit: `keyGenerator` liest einen Body, den es noch nicht gibt (Hoch)
+### S1 — Login-Rate-Limit: `keyGenerator` liest einen Body, den es noch nicht gibt (Hoch) — **behoben**
 
 `apps/api/src/modules/auth/auth.route.ts:60-71`
 
@@ -53,7 +110,7 @@ geparst vorliegt — global bei der Registrierung in `plugins/security.ts` oder
 per Route. Zusätzlich einen Test ergänzen, der zwei verschiedene E-Mails von
 derselben IP verwendet und erwartet, dass beide ihr eigenes Budget haben.
 
-### S2 — Refresh-Token-Rotation ohne Reuse-Detection (Mittel)
+### S2 — Refresh-Token-Rotation ohne Reuse-Detection (Mittel) — **behoben**
 
 `apps/api/src/modules/auth/auth.service.ts:refresh()`
 
@@ -69,7 +126,7 @@ ein normaler Sitzungsablauf aussieht.
 dieses Nutzers widerrufen (`revokeAllForUser()` existiert bereits) und den
 Vorfall loggen. Kostet ~3 Zeilen.
 
-### S3 — Frontend: keine CSP, Refresh-Token in `localStorage` (Mittel)
+### S3 — Frontend: keine CSP, Refresh-Token in `localStorage` (Mittel) — **behoben**
 
 `apps/web/index.html`, `apps/web/admin/index.html`, `apps/web/demo.html`
 enthalten **keinen** `Content-Security-Policy`-Header und kein entsprechendes
@@ -94,7 +151,7 @@ Der Blast-Radius eines XSS ist dadurch maximal: dauerhafte Sitzungsübernahme
 `base-uri 'none'`, `frame-ancestors 'none'`) und im Deployment-Dokument als
 Reverse-Proxy-Header verankern.
 
-### S4 — Client-Refresh ohne Single-Flight → unerwartete Abmeldungen (Mittel)
+### S4 — Client-Refresh ohne Single-Flight → unerwartete Abmeldungen (Mittel) — **behoben**
 
 `apps/web/js/apiClient.js:request()`
 
@@ -113,7 +170,7 @@ mit dem alten Token ankommende Anfrage sähe dann wie ein Diebstahl aus und wür
 alle Sitzungen des Nutzers widerrufen. **S3/S4 müssen zusammen mit S2 behoben
 werden.**
 
-### S5 — `PrismaUserRepository.update()` ohne `deletedAt`-Filter (Niedrig)
+### S5 — `PrismaUserRepository.update()` ohne `deletedAt`-Filter (Niedrig) — **behoben**
 
 `apps/api/src/modules/auth/auth.repository.ts`
 
@@ -123,7 +180,7 @@ ausnutzbar, weil jeder Aufrufer vorher über `findById()` geht — aber die
 Invariante steht nur im Kommentar, nicht im Code. Ein `updateMany` mit
 `{ id, deletedAt: null }` schließt die Lücke strukturell.
 
-### S6 — `/admin`: Nicht-Superadmin behält gültiges Refresh-Token (Niedrig)
+### S6 — `/admin`: Nicht-Superadmin behält gültiges Refresh-Token (Niedrig) — **behoben**
 
 `apps/web/admin/admin.js:handleAuthenticated()`
 
@@ -133,7 +190,7 @@ nicht `api.logoutRemote()`. Das Refresh-Token bleibt serverseitig bis zum Ablauf
 kein Rechteproblem — aber es widerspricht dem sonst konsequenten Muster
 „abmelden heißt serverseitig widerrufen".
 
-### S7 — Zod: Strings begrenzt, Arrays unbegrenzt (Niedrig)
+### S7 — Zod: Strings begrenzt, Arrays unbegrenzt (Niedrig) — **behoben**
 
 `packages/shared-types/src/entities.ts`
 
@@ -147,7 +204,7 @@ zudem bei jedem Purge-Lauf und bei jedem Athleten-Pull vollständig durchlaufen.
 Inkonsistent zur erklärten Absicht — die Grenzen gehören dorthin, wo die
 Textgrenzen schon stehen.
 
-### S8 — `escapeHtml()` im Mailer escaped keine einfachen Anführungszeichen (Niedrig)
+### S8 — `escapeHtml()` im Mailer escaped keine einfachen Anführungszeichen (Niedrig) — **behoben**
 
 `apps/api/src/mail/mailer.ts`
 
@@ -161,7 +218,7 @@ dass sie nur für Element-Inhalte gedacht sind.
 
 ## 2. Korrektheit und Verfügbarkeit
 
-### C1 — Sync-Deadlock ab 500 offenen Events (Hoch)
+### C1 — Sync-Deadlock ab 500 offenen Events (Hoch) — **behoben**
 
 `apps/web/js/syncClient.js:push()` gegen
 `packages/shared-types/src/syncEvent.ts:SyncPushRequestSchema`
@@ -191,7 +248,7 @@ selben 400.
 **Fix:** In `push()` in Blöcken zu z. B. 200 Events senden (die Schleife über
 `results` ist bereits blockfähig). Der Server ist damit unverändert nutzbar.
 
-### C2 — Fehlerhafte Events werden unbegrenzt wiederholt (Hoch)
+### C2 — Fehlerhafte Events werden unbegrenzt wiederholt (Hoch) — **behoben**
 
 `apps/web/js/syncClient.js:push()`
 
@@ -213,7 +270,7 @@ gibt — es kann per Definition nie erfolgreich werden.
 Push-Filter nehmen und in der Sync-Warteschlangen-Ansicht sichtbar machen — die
 UI hat dort bereits einen „Erneut versuchen"-Button, der genau dafür da wäre.
 
-### C3 — `push()` ist nicht transaktional (Mittel)
+### C3 — `push()` ist nicht transaktional (Mittel) — **behoben**
 
 `apps/api/src/modules/sync/sync.service.ts`
 
@@ -238,7 +295,7 @@ Retry-Fall, den der Ledger adressiert) laufen beide durch.
 auf `SyncedEvent.id` als Konflikterkennung nutzen (P2002 → als bereits
 verarbeitet werten), statt sich auf das vorherige `findFirst` zu verlassen.
 
-### C4 — DSGVO-Hard-Purge kann am Transaktions-Timeout scheitern (Mittel)
+### C4 — DSGVO-Hard-Purge kann am Transaktions-Timeout scheitern (Mittel) — **behoben**
 
 `apps/api/src/jobs/erasure.repository.ts:purgeUserAndDependents()`
 
@@ -266,7 +323,7 @@ Dieselbe Vollabfrage steht ohne Transaktion auch in
 `groupId`/Zeitraum eingrenzen statt clubweit zu laden. Mindestens `timeout` und
 `maxWait` der Transaktion explizit hochsetzen.
 
-### C5 — `pull()`-Schleife ohne Abbruchsicherung (Niedrig)
+### C5 — `pull()`-Schleife ohne Abbruchsicherung (Niedrig) — **behoben**
 
 `apps/web/js/syncClient.js:pull()`
 
@@ -282,7 +339,7 @@ nicht leer war) — aber der Client verlässt sich auf eine Invariante des Serve
 die er nicht prüft. Eine Iterationsobergrenze und ein `break` bei fehlendem
 Cursor kosten zwei Zeilen.
 
-### C6 — `t()` interpretiert `$&` in eingesetzten Werten (Niedrig)
+### C6 — `t()` interpretiert `$&` in eingesetzten Werten (Niedrig) — **behoben**
 
 `apps/web/js/i18n.js`
 
@@ -298,7 +355,7 @@ wird falsch gerendert. Fix: Ersetzungs-*Funktion* verwenden (`() => v`).
 
 ## 3. Ineffizienzen
 
-### P1 — RSA-Schlüsselimport bei jedem Sign/Verify
+### P1 — RSA-Schlüsselimport bei jedem Sign/Verify — **behoben**
 
 `apps/api/src/auth/tokens.ts`
 
@@ -311,7 +368,7 @@ Schlüsselpaar ist prozessweit konstant (`resolveKeyPair()` cacht es bereits).
 **Fix:** Die importierten `KeyLike`-Objekte einmal (lazy, in einer `Map` über den
 PEM-String) cachen.
 
-### P2 — Pull-Query holt 11× so viele Zeilen wie nötig
+### P2 — Pull-Query holt 11× so viele Zeilen wie nötig — **behoben**
 
 `apps/api/src/modules/sync/sync.gateway.ts:listChangedSince()`
 
@@ -329,7 +386,7 @@ inklusive vollständiger Payloads in einem Prozess-Heap.
 Zeitfenster-Grenze aus einer ersten, schlanken Abfrage (nur `updatedAt`)
 bestimmen und erst dann die Payloads laden.
 
-### P3 — Vereinsweite Vollabfragen für Einzelpersonen-Daten
+### P3 — Vereinsweite Vollabfragen für Einzelpersonen-Daten — **behoben**
 
 `profile.repository.ts:exportUserData()` und `erasure.repository.ts` (siehe C4)
 laden beide `trainingSession.findMany({ where: { clubId } })` — *alle*
@@ -337,7 +394,7 @@ Trainingseinheiten des Vereins — um daraus die Anwesenheitszeilen **einer**
 Person herauszufiltern. Bei Postgres wäre das ein einzelnes
 `jsonb`-Filter-Statement.
 
-### P4 — Neuer SMTP-Transport pro E-Mail, nie geschlossen
+### P4 — Neuer SMTP-Transport pro E-Mail, nie geschlossen — **behoben**
 
 `apps/api/src/mail/mailer.ts:SmtpMailSender.sendInvitationEmail()`
 
@@ -347,7 +404,7 @@ eine eigene SMTP-Verbindung auf, die anschließend offen im Verbindungspool des
 Prozesses verbleibt. Der Transport ist zustandslos konfiguriert — er gehört
 einmal in den Konstruktor, idealerweise mit `pool: true`.
 
-### P5 — IndexedDB ohne Indizes, `getAll()` als einziges Zugriffsmuster
+### P5 — IndexedDB ohne Indizes, `getAll()` als einziges Zugriffsmuster — **behoben**
 
 `apps/web/js/db.js`
 
@@ -366,13 +423,13 @@ vollständigen `getAll()`. Konkrete Auswirkungen:
 Ein Index auf `syncQueue.status` und die Nutzung von `count()` würde den
 häufigsten Pfad der App billig machen.
 
-### P6 — `O(n²)` in der Push-Ergebnisverarbeitung
+### P6 — `O(n²)` in der Push-Ergebnisverarbeitung — **behoben**
 
 `apps/web/js/syncClient.js:push()` — `toSend.find(e => e.id === result.eventId)`
 innerhalb der Schleife über `results`. Bei 500 Events sind das 250.000
 Vergleiche. Eine `Map` vorab kostet eine Zeile.
 
-### P7 — Import der Übungsbibliothek: zwei IDB-Transaktionen pro Datensatz
+### P7 — Import der Übungsbibliothek: zwei IDB-Transaktionen pro Datensatz — **behoben**
 
 `apps/web/js/modules/libraryTransfer.js:importLibrary()` ruft `put()` sequenziell
 pro Übung und pro Vorlage auf. Jedes `put()` öffnet eine eigene Transaktion —
@@ -380,7 +437,7 @@ pro Übung und pro Vorlage auf. Jedes `put()` öffnet eine eigene Transaktion �
 Transaktion) an. Ein Bundle mit 200 Übungen erzeugt 400 Transaktionen. `bulkPut()`
 existiert bereits im selben Modul; der Sync-Enqueue könnte gesammelt erfolgen.
 
-### P8 — Regex-Kompilierung im Übersetzungs-Hotpath
+### P8 — Regex-Kompilierung im Übersetzungs-Hotpath — **behoben**
 
 `apps/web/js/i18n.js:t()` erzeugt pro Variable und pro Aufruf ein neues
 `RegExp`-Objekt. `t()` ist die meistgerufene Funktion der Anwendung (jedes Label,
@@ -391,7 +448,7 @@ Lookup-Funktion erledigt das in einem Durchlauf.
 
 ## 4. Redundanter Code
 
-### R1 — `app.js` und `app-demo.js`: ~130 Zeilen Duplikat
+### R1 — `app.js` und `app-demo.js`: ~130 Zeilen Duplikat — **behoben**
 
 Byte-identisch in beiden Dateien:
 
@@ -415,7 +472,7 @@ unangenehmes Ziel.
 `app-demo.js` behalten nur ihre tatsächlichen Unterschiede (Session-Boot vs.
 Demo-Konten-Umschalter, Hintergrund-Sync vs. keiner).
 
-### R2 — `eraseMyAccountAndData()` ist vollständig überflüssig — und schädlich
+### R2 — `eraseMyAccountAndData()` ist vollständig überflüssig — und schädlich — **behoben**
 
 `apps/web/js/modules/profile.js:233-253`
 
@@ -441,7 +498,7 @@ Pfad ist eine offene Falle, sobald jemand die Reihenfolge ändert.
 
 **Fix:** Ersatzlos streichen und sich auf `logout()` verlassen.
 
-### R3 — Doppelte Sync-Validierung mit unerreichbarem Fehlerpfad
+### R3 — Doppelte Sync-Validierung mit unerreichbarem Fehlerpfad — **behoben**
 
 `sync.route.ts` validiert den gesamten Batch gegen `SyncPushRequestSchema` und
 antwortet bei Verstoß mit einer 400 für **alle** Events. `sync.service.ts`
@@ -464,7 +521,7 @@ Per-Event-Prüfung im Service wirklich greifen lassen (das wäre die robustere
 Variante, und sie entschärft C1 deutlich), **oder** die tote Prüfung im Service
 entfernen.
 
-### R4 — `consentField`: wirkungsloses `.refine()`
+### R4 — `consentField`: wirkungsloses `.refine()` — **behoben**
 
 `packages/shared-types/src/auth.ts`
 
@@ -476,7 +533,7 @@ z.literal(true).refine((v) => v === true, { message: … })
 seine Fehlermeldung nie erscheinen. Wenn die deutsche Meldung gewünscht ist,
 gehört sie als `errorMap`/`message` an `z.literal()`.
 
-### R5/R6 — Toter Export, tote Zustandsvariable
+### R5/R6 — Toter Export, tote Zustandsvariable — **behoben**
 
 - `esc()` in `apps/web/js/utils.js` ist exportiert, wird aber außerhalb der
   Datei nirgends verwendet (nur intern von den beiden SVG-Chart-Buildern).
@@ -487,7 +544,7 @@ gehört sie als `errorMap`/`message` an `z.literal()`.
   Ablauf erneuern, statt auf den 401 zu warten; das würde S4 zusätzlich
   entschärfen) oder entfernen.
 
-### R7 — Vier fast identische Token-Funktionen
+### R7 — Vier fast identische Token-Funktionen — **behoben**
 
 `apps/api/src/auth/tokens.ts` — `generateRefreshToken`/`generateInvitationToken`
 und `hashRefreshToken`/`hashInvitationToken` unterscheiden sich ausschließlich in
@@ -497,7 +554,7 @@ Parameter. Eine Funktion `generateOpaqueToken(bytes, ttlDays)` plus ein
 `hashOpaqueToken()` deckt beides ab; die semantische Unterscheidung lässt sich
 über Typ-Aliase erhalten.
 
-### R8 — `DataDeletionRequest.status = 'purged'` wird nie gesetzt
+### R8 — `DataDeletionRequest.status = 'purged'` wird nie gesetzt — **behoben**
 
 Der Purge löscht den `User`, und der `DataDeletionRequest` verschwindet per
 `onDelete: Cascade` mit. Der Zustand `'purged'` ist damit unerreichbar — im
@@ -507,7 +564,7 @@ Entweder den Request als Nachweis behalten (dann Cascade lösen und `status`
 tatsächlich setzen — für die DSGVO-Rechenschaftspflicht durchaus sinnvoll) oder
 beide Felder streichen.
 
-### R9 — „Existiert der Übersetzungsschlüssel?" per Doppelaufruf
+### R9 — „Existiert der Übersetzungsschlüssel?" per Doppelaufruf — **behoben**
 
 `apps/web/js/modules/syncQueue.js`
 
@@ -561,7 +618,7 @@ wäre" reduzieren; alles mit „vormals", „Befund N", „Code-Review" in die
 Git-Historie verschieben. Das Dokument `docs/backend-plan.md` ist bereits der
 richtige Ort für Design-Begründungen.
 
-### W2 — Uneinheitliche Sprache
+### W2 — Uneinheitliche Sprache — **behoben**
 
 Innerhalb einzelner Dateien wird zwischen Deutsch und Englisch gewechselt
 (`utils.js`: englische Abschnittsüberschriften, deutsche Fließtexte; `db.js`,
@@ -573,7 +630,7 @@ stehen direkt daneben.
 Eine Konvention festlegen (naheliegend: Bezeichner englisch, Kommentare und
 nutzersichtbare Texte deutsch) und durchziehen.
 
-### W3 — `apps/web` wird nie gelintet
+### W3 — `apps/web` wird nie gelintet — **behoben**
 
 `apps/web/package.json` hat kein `lint`-Script. Der CI-Schritt
 `npm run lint --workspaces --if-present` überspringt das Paket dadurch
@@ -582,7 +639,7 @@ Einzelkomponente und der gesamte browserseitige Angriffsvektor, laufen ohne jede
 statische Prüfung. Einige der oben genannten Befunde (R5, R6, ungenutzte Importe)
 hätte `no-unused-vars` gefunden.
 
-### W4 — ESLint 8 (End-of-Life) mit Legacy-Konfiguration
+### W4 — ESLint 8 (End-of-Life) mit Legacy-Konfiguration — **behoben**
 
 `package.json` pinnt `eslint: ^8.57.1`. ESLint 8 erhält seit Oktober 2024 keine
 Updates mehr — für ein Dev-Tool weniger dramatisch als für eine
@@ -594,7 +651,7 @@ bindet dies in der eigenen `eslint.config.js` ein" — eine solche Datei existie
 in keinem Workspace; tatsächlich lädt ausschließlich die Root-`.eslintrc.cjs`
 das Preset. Der Kommentar beschreibt eine Struktur, die es nicht gibt.
 
-### W5 — Keine versionierte Migrationshistorie
+### W5 — Keine versionierte Migrationshistorie — **behoben**
 
 `.gitignore` enthält `/apps/api/prisma/migrations/`. Sowohl CI als auch das
 Deployment (`docs/deployment.md`, Abschnitt 7.3, im CI-Kommentar zitiert) nutzen
@@ -615,7 +672,7 @@ Einzelbefund dieses Reviews:
 **Empfehlung:** Auf `prisma migrate` umstellen, `migrations/` committen, im
 Deployment `migrate deploy` verwenden.
 
-### W6 — `docker-compose.yml` setzt eine Variable, die es nicht gibt
+### W6 — `docker-compose.yml` setzt eine Variable, die es nicht gibt — **behoben**
 
 ```yaml
 JWT_SIGNING_KEY: "local-dev-only-key-not-for-production-use-12345"
@@ -628,7 +685,7 @@ Wegwerf-Schlüssel aus `auth/keys.ts`. Umgekehrt fehlen `FRONTEND_BASE_URL` und
 die `SMTP_*`-Variablen, sodass Einladungslinks im Docker-Setup auf
 `http://localhost:5173` zeigen, obwohl die API auf 3000 läuft.
 
-### W7 — Dockerfile
+### W7 — Dockerfile — **behoben**
 
 `apps/api/Dockerfile`:
 
@@ -644,7 +701,7 @@ die `SMTP_*`-Variablen, sodass Einladungslinks im Docker-Setup auf
   enthält nur das Nötigste".
 - Kein `USER node`: der Container läuft als root.
 
-### W8 — Service Worker: handgepflegte Precache-Liste, all-or-nothing
+### W8 — Service Worker: handgepflegte Precache-Liste, all-or-nothing — **behoben**
 
 `apps/web/sw.js`
 
@@ -662,7 +719,7 @@ Ebenfalls fragil: die Pfadprüfungen `url.pathname.startsWith('/admin')` und
 `'/api/'` sind absolut. Unter GitHub Pages (siehe `.github/workflows/static.yml`)
 läuft die App in einem Unterpfad — dort greifen beide nicht.
 
-### W9 — Hartcodierte Locale trotz vorhandener i18n
+### W9 — Hartcodierte Locale trotz vorhandener i18n — **behoben**
 
 - `apps/web/admin/admin.js`: `new Date(club.createdAt).toLocaleDateString('de-DE')`
 - `apps/web/js/modules/profile.js`: `new Date(result.purgeAfter).toLocaleDateString('de-DE')`
@@ -673,7 +730,7 @@ läuft die App in einem Unterpfad — dort greifen beide nicht.
 
 `getLocale()` steht in beiden Frontend-Fällen bereits importierbar bereit.
 
-### W10 — `preview()` nutzt `this` in einem Factory-Objekt
+### W10 — `preview()` nutzt `this` in einem Factory-Objekt — **behoben**
 
 `apps/api/src/modules/invitations/invitations.service.ts`
 
@@ -688,7 +745,7 @@ oder eine Weitergabe der Methode als Callback bricht das stumm. Die Funktion
 lässt sich trivial vor das `return`-Objekt ziehen und von beiden Stellen
 aufrufen.
 
-### W11 — `innerHTML`-Hintertüren im DOM-Builder
+### W11 — `innerHTML`-Hintertüren im DOM-Builder — **behoben**
 
 `apps/web/js/utils.js:el()` unterstützt ein `html:`-Attribut, das direkt auf
 `node.innerHTML` schreibt; `app.js`/`app-demo.js` setzen den Ladezustand per
@@ -700,7 +757,7 @@ Datei, die ansonsten vorbildlich mit `createTextNode`/`textContent` arbeitet.
 Für die SVG-Icons wäre ein eigener, klar benannter `icon(svgString)`-Helfer
 ehrlicher als ein generisches `html`-Attribut; der Ladezustand gehört nach `el()`.
 
-### W12 — Inkonsistente Action-Versionen in den Workflows
+### W12 — Inkonsistente Action-Versionen in den Workflows — **behoben**
 
 `ci.yml` nutzt `actions/checkout@v7` und `actions/setup-node@v7`,
 `static.yml` `actions/checkout@v4`, `configure-pages@v5`, `deploy-pages@v5`.
@@ -737,6 +794,13 @@ Der Vollständigkeit halber, weil es das Bild sonst verzerrt:
 ---
 
 ## 7. Vorgeschlagene Reihenfolge
+
+Alle neun Punkte unten sind erledigt — siehe die Belegstellen-Tabelle im
+Update oben. Nur der letzte Halbsatz von Punkt 9 (**W3**, Frontend-Linting)
+zählt hier separat: das war nur der „ohne jede statische Prüfung"-Teil von
+W3, der jetzt durch `apps/web/package.json`s `lint`-Script behoben ist —
+nicht zu verwechseln mit dem gleichnamigen, weiterhin offenen **W3** aus
+`docs/code-review-wartbarkeit-2026-08.md` (Kommentar-Diät).
 
 1. **C1** (Sync-Chunking) und **C2** (Fehler-Backoff) — echter Datenverlust,
    kleiner Fix.

@@ -1,5 +1,5 @@
 // Wiederkehrende Trainingspläne / Vorlagen-Zyklen (Phase 1, Abschnitt 3.1
-// — docs/trainingsplanung-phase1-plan.md). Kein eigenes registriertes
+// — docs/Plans/trainingsplanung-phase1-plan.md). Kein eigenes registriertes
 // Modul: die UI hängt an der bestehenden 'plans'-Route
 // (navigate('plans', 'cycles', ...), siehe plans.js), das Paket bleibt
 // 'plans' (packages/shared-types/src/modules.ts).

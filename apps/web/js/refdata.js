@@ -16,7 +16,7 @@ export const EVENTS = [
   '200 Lagen', '400 Lagen',
   // Staffeln (Format "<Anzahl>x<Strecke je Schwimmer:in> <Technik>") — bis
   // hierhin fehlten diese, DSV7-Wettkampfergebnislisten enthalten aber
-  // regelmäßig Staffelwettbewerbe (siehe docs/dsv7-lenex-import-plan.md
+  // regelmäßig Staffelwettbewerbe (siehe docs/Plans/dsv7-lenex-import-plan.md
   // Abschnitt 3.5). Reine Freistil- und Lagenstaffeln, die bei
   // DSV-Wettkämpfen üblichen Kombinationen — Rücken-/Brust-/
   // Schmetterlingsstaffeln sind im deutschen Wettkampfbetrieb unüblich.
@@ -57,7 +57,7 @@ export const DSV7_STROKE_TO_NAME = { F: 'Freistil', R: 'Rücken', B: 'Brust', S:
 // Entsprechung existiert (unbekannter Technik-Code, oder eine
 // Streckenlänge/Staffelgröße, die nicht in EVENTS geführt wird — dann
 // entscheidet die Importvorschau interaktiv, siehe
-// docs/dsv7-lenex-import-plan.md Abschnitt 3.5).
+// docs/Plans/dsv7-lenex-import-plan.md Abschnitt 3.5).
 export function dsv7EventLabel({ technik, distanzM, isRelay, relaySize }) {
   const strokeName = DSV7_STROKE_TO_NAME[technik];
   if (!strokeName || !distanzM) return null;
@@ -117,7 +117,7 @@ export const ACTION_STATUS = [
   { value: 'done', label: 'Erledigt' },
 ];
 
-// Qualifikationsmanagement (docs/nutzer-qualifikationen-plan.md, Abschnitt
+// Qualifikationsmanagement (docs/Plans/nutzer-qualifikationen-plan.md, Abschnitt
 // 2.2) — MUSS mit QualificationTypeSchema in
 // packages/shared-types/src/qualification.ts übereinstimmen (apps/web läuft
 // ohne Build-Schritt und kann dieses Backend-Paket nicht importieren, siehe
@@ -130,7 +130,7 @@ export const QUALIFICATION_TYPES = [
   { value: 'rettungsschwimmer_gold', label: 'Rettungsschwimmschein Gold' },
   { value: 'erste_hilfe', label: 'Erste-Hilfe-Kurs' },
   { value: 'kinderschutz', label: 'Kinderschutz-Schulung' },
-  // Kampfrichter-Ämter (docs/kampfrichter-modul-plan.md, Abschnitt 3.1) —
+  // Kampfrichter-Ämter (docs/Plans/kampfrichter-modul-plan.md, Abschnitt 3.1) —
   // siehe REFEREE_QUALIFICATION_TYPES für die Teilmenge dieser sechs Werte.
   { value: 'kampfrichter', label: 'Kampfrichter:in' },
   { value: 'schiedsrichter', label: 'Schiedsrichter:in' },
@@ -142,7 +142,7 @@ export const QUALIFICATION_TYPES = [
 ];
 
 // Teilmenge von QUALIFICATION_TYPES, die fachlich zu einer Kampfrichter:in
-// gehört (docs/kampfrichter-modul-plan.md, Abschnitt 3.2) — MUSS mit
+// gehört (docs/Plans/kampfrichter-modul-plan.md, Abschnitt 3.2) — MUSS mit
 // REFEREE_QUALIFICATION_TYPES in packages/shared-types/src/qualification.ts
 // übereinstimmen (apps/web kann dieses Backend-Paket nicht importieren,
 // siehe Kommentar bei QUALIFICATION_TYPES oben). Wird vom Kampfrichter-
@@ -151,7 +151,7 @@ export const QUALIFICATION_TYPES = [
 export const REFEREE_QUALIFICATION_TYPES = ['kampfrichter', 'schiedsrichter', 'startrichter', 'zeitnehmer', 'bahnrichter', 'wettkampfsekretaer'];
 
 // Funktion, in der eine Kampfrichter:in bei EINEM konkreten Wettkampf
-// eingesetzt war (docs/kampfrichter-modul-plan.md, Abschnitt 5.3) — MUSS
+// eingesetzt war (docs/Plans/kampfrichter-modul-plan.md, Abschnitt 5.3) — MUSS
 // mit RefereeFunctionSchema in packages/shared-types/src/referee.ts
 // übereinstimmen. Bewusst eine eigene Liste, getrennt von
 // QUALIFICATION_TYPES/REFEREE_QUALIFICATION_TYPES oben (siehe dortiger

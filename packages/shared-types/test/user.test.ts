@@ -50,7 +50,7 @@ describe('UserSchema', () => {
     expect(UserSchema.safeParse({ ...validUser, roles: ['moderator'] }).success).toBe(false);
   });
 
-  it('akzeptiert mehrere gleichzeitige Rollen (docs/kampfrichter-modul-plan.md, Abschnitt 1)', () => {
+  it('akzeptiert mehrere gleichzeitige Rollen (docs/Plans/kampfrichter-modul-plan.md, Abschnitt 1)', () => {
     expect(UserSchema.safeParse({ ...validUser, roles: ['trainer', 'athlete'] }).success).toBe(true);
   });
 

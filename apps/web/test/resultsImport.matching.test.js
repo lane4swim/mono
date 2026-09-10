@@ -1,5 +1,5 @@
 // Unit-Tests für resultsImport/matching.js — siehe
-// docs/dsv7-lenex-import-plan.md Abschnitt 5 für die fachlichen Regeln,
+// docs/Plans/dsv7-lenex-import-plan.md Abschnitt 5 für die fachlichen Regeln,
 // die hier abgesichert werden.
 import { describe, it, expect } from 'vitest';
 import { matchOwnClub, filterResultsForClub, matchAthlete, resolveEventLabel, buildImportPlan } from '../js/resultsImport/matching.js';

@@ -16,12 +16,12 @@ export interface PersonalDataExport {
   entries: Array<Record<string, unknown>>;
   actionItems: Array<Record<string, unknown>>;
   attendance: Array<Record<string, unknown>>;
-  // Qualifikationsmanagement (docs/nutzer-qualifikationen-plan.md,
+  // Qualifikationsmanagement (docs/Plans/nutzer-qualifikationen-plan.md,
   // Abschnitt 6) — an `userId` gehängt, nicht an `athleteId`: anders als
   // athlete/results/entries/actionItems gilt das für JEDE Person mit
   // Konto, nicht nur für mit einem Athletenprofil verknüpfte.
   qualifications: Array<Record<string, unknown>>;
-  // Kampfrichter-Modul (docs/kampfrichter-modul-plan.md, Abschnitt 5.7) —
+  // Kampfrichter-Modul (docs/Plans/kampfrichter-modul-plan.md, Abschnitt 5.7) —
   // ebenfalls an `userId` gehängt, aus demselben Grund wie qualifications
   // oben.
   refereeAssignments: Array<Record<string, unknown>>;

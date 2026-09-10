@@ -37,7 +37,7 @@ interface CachedClubModules {
 }
 
 // Bewusst als eigene, kleine Cache-Closure dupliziert statt aus
-// sync.route.ts extrahiert (siehe docs/nutzer-qualifikationen-plan.md,
+// sync.route.ts extrahiert (siehe docs/Plans/nutzer-qualifikationen-plan.md,
 // Abschnitt 1.2: "bei einem dritten Verwendungsfall lohnt sich ein
 // gemeinsamer Helper") — bislang genau EIN Vorbild (sync.route.ts:
 // resolveEnabledModules()), eine vorzeitige Extraktion wäre hier

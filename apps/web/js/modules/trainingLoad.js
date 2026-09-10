@@ -1,5 +1,5 @@
 // Belastungssteuerung / Trainingsumfang-Auswertung (Phase 1, Abschnitt
-// 3.2 — docs/trainingsplanung-phase1-plan.md). Reine, DOM-freie
+// 3.2 — docs/Plans/trainingsplanung-phase1-plan.md). Reine, DOM-freie
 // Auswertungen; Rendering übernimmt stats.js.
 import { dateOnly, startOfWeek } from '../dates.js';
 import { totalDistance } from './setEditor.js';

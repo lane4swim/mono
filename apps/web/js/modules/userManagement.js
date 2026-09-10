@@ -142,7 +142,7 @@ function renderMembersGroupedByRole(members, onRolesChanged) {
     { role: 'athlete', label: t('usermgmt.groupAthletes') },
   ];
   groups.forEach(({ role, label }) => {
-    // docs/kampfrichter-modul-plan.md, Abschnitt 1: eine Person mit
+    // docs/Plans/kampfrichter-modul-plan.md, Abschnitt 1: eine Person mit
     // mehreren Rollen (z. B. trainer + athlete) erscheint dadurch in JEDER
     // passenden Gruppe — anders als die serverseitige Sortierung (die nur
     // die jeweils höchste Rolle für die Reihenfolge nutzt), weil hier jede
@@ -214,7 +214,7 @@ function openManageRolesModal(member, onChanged) {
 }
 
 // Externe Vereinskennung für den DSV7/Lenex-Ergebnisimport (siehe
-// docs/dsv7-lenex-import-plan.md Abschnitt 3.1) — nur für Admins des
+// docs/Plans/dsv7-lenex-import-plan.md Abschnitt 3.1) — nur für Admins des
 // eigenen Vereins editierbar (siehe invitations.service.ts:
 // updateClubIdentity()), daher hier statt in renderClubsSection()
 // (Superadmin-Bearbeitung der Modul-Buchung anderer Vereine).

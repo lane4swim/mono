@@ -619,7 +619,7 @@ betroffenen `comments`-Arrays anonymisieren (`authorName` → „Gelöschtes
 Konto"), statt sie zu entfernen — der fachliche Kommentartext bleibt so
 erhalten.
 
-### N6 — Superadmin-Passwort als Kommandozeilenargument
+### N6 — Superadmin-Passwort als Kommandozeilenargument — **behoben**
 
 `apps/api/scripts/createSuperAdmin.ts:18-40`
 
@@ -627,6 +627,15 @@ erhalten.
 demselben Host über `ps aux` sichtbar sowie in der Shell-History. Für ein
 Bootstrapping-Skript vertretbar, aber eine Abfrage über `stdin` (verdeckt) oder
 eine Umgebungsvariable wäre sauberer.
+
+**Fix.** Blieb über die Vorreviews (`security-review-2026-08-27.md`, N2) hinweg
+offen und wurde erst in `docs/reviews-handled/security-review-2026-08-28.md`
+(Befund M1) tatsächlich behoben: `createSuperAdmin.ts` nimmt kein
+`--password=`-Argument mehr entgegen, liest stattdessen `SUPERADMIN_PASSWORD`
+aus der Umgebung oder fragt interaktiv ohne Terminal-Echo ab; beide
+Setup-Skripte reichen das Passwort entsprechend per Umgebungsvariable durch
+(`scripts/setup-codespace.sh:423`, `scripts/setup-netcup.sh:479`). Am
+aktuellen Code nachvollzogen (10.09.2026).
 
 ### N7 — Passwortrichtlinie nur über die Mindestlänge — **behoben**
 
@@ -740,6 +749,8 @@ sind sauber:
 5. ~~**M5** — Passwortwechsel nachziehen.~~ **Behoben** (siehe dortiger
    **Fix**-Abschnitt).
 6. ~~Niedrig eingestufte Befunde bei nächster Berührung.~~ **N1, N2, N3
-   (teilweise), N5, N7 behoben; N4 bewusst akzeptiert und dokumentiert**
-   (siehe jeweiliger **Fix**-/**Entscheidung**-Abschnitt). Noch offen:
-   **N6** (Superadmin-Passwort als CLI-Argument).
+   (teilweise), N5, N6, N7 behoben; N4 bewusst akzeptiert und dokumentiert**
+   (siehe jeweiliger **Fix**-/**Entscheidung**-Abschnitt). N6 blieb über die
+   Vorreviews hinweg offen und wurde erst in
+   `docs/reviews-handled/security-review-2026-08-28.md` (Befund M1)
+   tatsächlich behoben.

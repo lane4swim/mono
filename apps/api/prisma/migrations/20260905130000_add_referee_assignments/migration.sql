@@ -1,5 +1,5 @@
 -- CreateTable
--- docs/kampfrichter-modul-plan.md, Abschnitt 5.2.
+-- docs/Plans/kampfrichter-modul-plan.md, Abschnitt 5.2.
 CREATE TABLE "referee_assignments" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,

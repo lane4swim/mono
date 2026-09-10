@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Automatisiert die Schritte 6–9 aus docs/deployment-netcup.md (Software
+# Automatisiert die Schritte 6–9 aus docs/deployment/deployment-netcup.md (Software
 # installieren, npm-Abhängigkeiten, apps/api/.env konfigurieren, Datenbank-
 # Schema anlegen, Backend bauen, PM2 starten samt Autostart, ersten
 # Superadmin anlegen, Nginx konfigurieren) für einen bereits eingerichteten
@@ -14,7 +14,7 @@
 # als `deploy`-Benutzer mit sudo-Rechten ausgeführt wird.
 # Schritt 10+ (HTTPS mit Let's Encrypt/certbot, Testen, Backups, künftige
 # Updates, laufende Wartung) sind bewusst NICHT Teil dieses Scripts — dafür
-# weiterhin docs/deployment-netcup.md ab Abschnitt 10 befolgen. Grund: DNS
+# weiterhin docs/deployment/deployment-netcup.md ab Abschnitt 10 befolgen. Grund: DNS
 # muss zu diesem Zeitpunkt bereits auf den Server zeigen (Abschnitt 5),
 # sonst schlägt certbot fehl — das lässt sich von hier aus nicht prüfen.
 #
@@ -77,7 +77,7 @@ if [[ -z "${DOMAIN:-}" ]]; then
   read -rp "Domain (muss bereits per DNS-A-Record auf diesen Server zeigen, z. B. training.mein-verein.de): " DOMAIN
 fi
 if [[ -z "${DOMAIN}" ]]; then
-  echo "Fehler: Domain darf nicht leer sein (siehe docs/deployment-netcup.md, Abschnitt 5)." >&2
+  echo "Fehler: Domain darf nicht leer sein (siehe docs/deployment/deployment-netcup.md, Abschnitt 5)." >&2
   exit 1
 fi
 PUBLIC_URL="https://${DOMAIN}"
@@ -183,7 +183,7 @@ if [[ "$MIGRATOR_ROLE_CREATED" == "1" ]]; then
 # automatisch gelesen (nur "apps/api/.env" wird automatisch geladen).
 # Ausschließlich zum manuellen Nachschlagen für ein künftiges
 # "prisma migrate deploy" gedacht, siehe scripts/setup-netcup.sh
-# bzw. docs/deployment-netcup.md, Abschnitt 7.3 und 13.
+# bzw. docs/deployment/deployment-netcup.md, Abschnitt 7.3 und 13.
 MIGRATE_DATABASE_URL="${MIGRATE_DATABASE_URL}"
 EOF
   chmod 600 "$MIGRATOR_ENV_FILE"
@@ -496,7 +496,7 @@ server {
 
     # Content-Security-Policy + Sicherheitsheader für das Frontend
     # (Code-Review, Befund S3; Sicherheitsreview 2026-08-29, Befund N2) —
-    # siehe docs/deployment-netcup.md, Abschnitt 9 für die ausführliche
+    # siehe docs/deployment/deployment-netcup.md, Abschnitt 9 für die ausführliche
     # Begründung (u. a. warum style-src 'unsafe-inline' ein bewusster,
     # dokumentierter Kompromiss ist, und warum HSTS trotz aktuell nur
     # HTTP hier bereits gesetzt wird — certbot in Schritt 10 ergänzt die
@@ -575,6 +575,6 @@ if [[ "$ENV_WAS_CREATED" == "1" ]]; then
   echo "Das erzeugte JWT-Schlüsselpaar liegt unter apps/api/keys/ (chmod 600/644, referenziert per JWT_PRIVATE_KEY_FILE/JWT_PUBLIC_KEY_FILE in apps/api/.env)."
 fi
 echo "Öffentliche Adresse (noch ohne HTTPS): http://${DOMAIN}"
-echo "Weiter geht es manuell mit Schritt 10 (HTTPS mit Let's Encrypt) in docs/deployment-netcup.md:"
+echo "Weiter geht es manuell mit Schritt 10 (HTTPS mit Let's Encrypt) in docs/deployment/deployment-netcup.md:"
 echo "  sudo apt install -y certbot python3-certbot-nginx"
 echo "  sudo certbot --nginx -d ${DOMAIN}"

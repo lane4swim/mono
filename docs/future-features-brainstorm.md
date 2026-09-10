@@ -2,12 +2,12 @@
 
 Dieses Dokument sammelt und beschreibt mögliche künftige Erweiterungen von
 Lane 1, ausgehend vom aktuellen Funktionsumfang (siehe `README.md` und
-`docs/backend-plan.md`) sowie den bereits vorgemerkten, aber noch offenen
+`docs/Plans/backend-plan.md`) sowie den bereits vorgemerkten, aber noch offenen
 Punkten in `docs/todo.md` (Abschnitt „Zukünftige Entwicklungen"). Die Ideen
 sind nach Themenbereich gruppiert; keine ist bereits entschieden oder
 geplant — dies ist eine Ideensammlung als Diskussionsgrundlage, kein
-Umsetzungsplan wie `docs/kampfrichter-modul-plan.md` oder
-`docs/nutzer-qualifikationen-plan.md` es für ihre jeweiligen Themen sind.
+Umsetzungsplan wie `docs/Plans/kampfrichter-modul-plan.md` oder
+`docs/Plans/nutzer-qualifikationen-plan.md` es für ihre jeweiligen Themen sind.
 
 Zu jedem Feature: kurze Beschreibung, Nutzen, grobe Einschätzung zum Bezug
 zur bestehenden Architektur (Sync-API, Rollen-/Mandantenmodell, zubuchbare
@@ -32,7 +32,7 @@ PWA (Header, Login-Bildschirm, ggf. exportierte PDFs) angezeigt werden.
 Web-Push (Service Worker ist bereits vorhanden) für Ereignisse wie: neue
 Kommentare, bevorstehende Trainingseinheiten, ablaufende Qualifikationen
 (ergänzt den bestehenden E-Mail-Erinnerungsjob aus
-`docs/nutzer-qualifikationen-plan.md`), neue Wettkampf-Startlisten.
+`docs/Plans/nutzer-qualifikationen-plan.md`), neue Wettkampf-Startlisten.
 - **Nutzen:** Aktive Rückholung von Nutzer:innen in die App, ohne dass sie
   aktiv nachschauen müssen — gerade für Athlet:innen/Eltern relevant.
 - **Bezug zur Architektur:** `sw.js` registriert bereits einen Service
@@ -45,7 +45,7 @@ Kommentare, bevorstehende Trainingseinheiten, ablaufende Qualifikationen
   anhängen.
 
 ### 1.3 Lenex-Import ergänzen
-`docs/dsv7-lenex-import-plan.md` stellt Lenex bewusst zurück (Abschnitt
+`docs/Plans/dsv7-lenex-import-plan.md` stellt Lenex bewusst zurück (Abschnitt
 1.5) und implementiert zunächst nur DSV7. Lenex ist das international
 verbreitete XML-Format (auch für FINA/LEN-Wettkämpfe und viele
 europäische Verbände), DSV7 ist DSV-spezifisch.
@@ -158,7 +158,7 @@ diese Gruppe) würde Urlaubs-/Krankheitsvertretung erleichtern.
 - **Nutzen:** Kein Datenzugriffsverlust bei Abwesenheit der Haupt-
   Trainer:in.
 - **Bezug zur Architektur:** Analog zum bereits umgesetzten Mehrfachrollen-
-  Modell (`docs/kampfrichter-modul-plan.md`, Phase A) — dort wurde bereits
+  Modell (`docs/Plans/kampfrichter-modul-plan.md`, Phase A) — dort wurde bereits
   gelöst, dass eine Person mehrere Rollen gleichzeitig tragen kann; eine
   n:m-Beziehung `Group` ↔ `User` (statt aktuell vermutlich 1:n) wäre der
   naheliegende nächste Schritt in derselben Richtung.
@@ -176,7 +176,7 @@ Konto gelöscht, welche Rolle geändert) für Admins/Superadmins einsehbar.
 ## 6. Technik / Plattform
 
 ### 6.1 Echtzeit-Sync (WebSocket/SSE statt Pull-Intervall)
-In README/`docs/backend-plan.md` bereits als „Phase 6, optionale
+In README/`docs/Plans/backend-plan.md` bereits als „Phase 6, optionale
 Erweiterung" genannt: bisher holt `syncClient.js` Änderungen per
 Pull-Zyklus ab; ein Push-Kanal (WebSocket oder Server-Sent Events) würde
 Änderungen anderer Geräte nahezu sofort anzeigen — relevant z. B. im
@@ -214,7 +214,7 @@ Trainer:innen in Excel/Google Sheets weiterverarbeiten können.
 
 ## 7. Kampfrichter-Modul (Ausbau)
 
-Das Kampfrichter-Modul (`docs/kampfrichter-modul-plan.md`) ist noch jung
+Das Kampfrichter-Modul (`docs/Plans/kampfrichter-modul-plan.md`) ist noch jung
 (Phasen A–C gerade umgesetzt). Naheliegende Erweiterungen:
 
 ### 7.1 Kampfrichter-Einsatzplanung über mehrere Wettkämpfe
@@ -251,7 +251,7 @@ nur 2.2, nicht 2.1/2.3).
 
 | Phase | Abschnitt(e) | Umfang |
 |---|---|---|
-| **Phase 1** | 3 | **Vollständig umgesetzt** — 3.1 Wiederkehrende Trainingspläne/Vorlagen-Zyklen, 3.2 Belastungssteuerung/Trainingsumfang-Auswertung, 3.3 Anwesenheitsstatistik & -prognose — detaillierter Umsetzungsplan inkl. Umsetzungsstand: `docs/trainingsplanung-phase1-plan.md` |
+| **Phase 1** | 3 | **Vollständig umgesetzt** — 3.1 Wiederkehrende Trainingspläne/Vorlagen-Zyklen, 3.2 Belastungssteuerung/Trainingsumfang-Auswertung, 3.3 Anwesenheitsstatistik & -prognose — detaillierter Umsetzungsplan inkl. Umsetzungsstand: `docs/Plans/trainingsplanung-phase1-plan.md` |
 | **Phase 2** | 1.2, 4 | 1.2 Push-Benachrichtigungen; 4.1 Vereinsinterne Nachrichten/Ankündigungen, 4.2 Eltern-/Erziehungsberechtigten-Zugang |
 | **Phase 3** | 5 | 5.1 Mehrere Gruppen-Trainer:innen/Vertretungsregelung, 5.2 Audit-Log für sicherheitsrelevante Aktionen |
 | **Phase 4** | 2.2, 6.3 | 2.2 Automatische Bestenlisten/Vereinsrekorde, 6.3 Datenexport für externe Auswertung (CSV/Excel) |
@@ -268,7 +268,7 @@ nur 2.2, nicht 2.1/2.3).
   aufwendiger (neue Rolle, DSGVO-Prüfung) und deshalb bewusst zusammen
   mit, nicht vor der Push-Grundlage eingeordnet.
 - **Phase 3 (Vereinsverwaltung)** danach, da 5.1 auf dem in
-  `docs/kampfrichter-modul-plan.md` bereits gelegten
+  `docs/Plans/kampfrichter-modul-plan.md` bereits gelegten
   Mehrfachrollen-Fundament aufsetzt und 5.2 (Audit-Log) von den bis dahin
   neu hinzugekommenen sicherheitsrelevanten Aktionen (Ankündigungen,
   Push-Abos) mit profitiert, wenn es nach ihnen kommt.

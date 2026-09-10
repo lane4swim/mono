@@ -37,7 +37,7 @@ model Club {
   // die Sync-Durchsetzung (apps/api/src/modules/sync/sync.permissions.ts).
   enabledModules String[]     @default([])
   // Externe Vereinskennung für den Ergebnisimport (DSV7/Lenex, siehe
-  // docs/dsv7-lenex-import-plan.md Abschnitt 3.1) — generisch statt
+  // docs/Plans/dsv7-lenex-import-plan.md Abschnitt 3.1) — generisch statt
   // DSV-spezifisch, damit auch andere Verbands-IDs (FINA, SwimRankings, …)
   // erfasst werden können. nationalIDType benennt das Format, z. B. "DSV"
   // für die 4-stellige DSV-Vereinskennzahl in nationalID.
@@ -89,7 +89,7 @@ model User {
   // blockiert, ohne den Purge-Ablauf selbst ändern zu müssen.
   athleteId           String?              @unique
   athlete             Athlete?             @relation(fields: [athleteId], references: [id], onDelete: SetNull)
-  // docs/kampfrichter-modul-plan.md, Abschnitt 1: ein Konto kann mehrere
+  // docs/Plans/kampfrichter-modul-plan.md, Abschnitt 1: ein Konto kann mehrere
   // Rollen gleichzeitig haben (z. B. Trainer:in UND Athlet:in). Löst
   // schrittweise "role" oben ab (expand -> migrate -> contract, siehe
   // Plan Abschnitt 1.3) — Anwendungscode liest/schreibt ab sofort
@@ -117,7 +117,7 @@ model User {
   assignedActionItems ActionItem[]         @relation("ActionItemAssignedTrainer")
   passwordResetTokens PasswordResetToken[]
   qualifications      UserQualification[]
-  // docs/kampfrichter-modul-plan.md, Abschnitt 5.2: eigene Wettkampfeinsätze
+  // docs/Plans/kampfrichter-modul-plan.md, Abschnitt 5.2: eigene Wettkampfeinsätze
   // dieser Person (Rolle "referee").
   refereeAssignments  RefereeAssignment[]
   // Gegenstück zu RefereeAssignment.createdByAdminId — Einsätze, die diese
@@ -226,7 +226,7 @@ model Invitation {
 
 // ============================================================
 // Fachliches Datenmodell (Phase 2) — Mapping siehe Tabelle in
-// docs/backend-plan.md, Abschnitt 4.
+// docs/Plans/backend-plan.md, Abschnitt 4.
 // ============================================================
 
 model Group {
@@ -271,7 +271,7 @@ model Athlete {
   active         Boolean   @default(true)
   notes          String    @default("")
   // Externe Athletenkennung für den Ergebnisimport (DSV7/Lenex, siehe
-  // docs/dsv7-lenex-import-plan.md Abschnitt 3.1) — generisch, analog zu
+  // docs/Plans/dsv7-lenex-import-plan.md Abschnitt 3.1) — generisch, analog zu
   // Club.nationalID/nationalIDType. Erlaubt robusteres Matching gegen
   // Importzeilen als reiner Namensabgleich (z. B. bei Namensgleichheit).
   nationalID     String?
@@ -309,7 +309,7 @@ model Competition {
 
   entries StartlistEntry[]
   results Result[]
-  // docs/kampfrichter-modul-plan.md, Abschnitt 5.2: optionaler Verweis von
+  // docs/Plans/kampfrichter-modul-plan.md, Abschnitt 5.2: optionaler Verweis von
   // Wettkampfeinsätzen auf einen vereinseigenen Wettkampf-Datensatz.
   refereeAssignments RefereeAssignment[]
 
@@ -368,12 +368,12 @@ model Result {
   laps          Json?
   // Zwischenzeiten aus dem DSV7/Lenex-Ergebnisimport (Distanz + Zeit, ggf.
   // Staffel-Ablöser-Bezug) — bewusst getrennt von `laps` (Stoppuhr-Funktion,
-  // andere Semantik). Siehe docs/dsv7-lenex-import-plan.md Abschnitt 3.3.
+  // andere Semantik). Siehe docs/Plans/dsv7-lenex-import-plan.md Abschnitt 3.3.
   splits        Json?
   // "OK" | "DS" (Disqualifikation) | "NA" (nicht angetreten) |
   // "AB" (abgemeldet) | "AU" (aufgegeben) | "ZU" (Zeitüberschreitung) —
   // direkte Übernahme der DSV7-Codes für "Grund der Nichtwertung", siehe
-  // docs/dsv7-lenex-import-plan.md Abschnitt 3.4. Bei status !== "OK" ist
+  // docs/Plans/dsv7-lenex-import-plan.md Abschnitt 3.4. Bei status !== "OK" ist
   // `time` bedeutungslos (Platzhalter aus der Importdatei wird nicht
   // übernommen).
   status        String       @default("OK")
@@ -381,7 +381,7 @@ model Result {
   // Diskussions-/Hinweiskommentare zum Ergebnis — Struktur siehe
   // CommentSchema in packages/shared-types/src/entities.ts. Bleibt bei
   // einem Ergebnisimport (Überschreiben von time/place/splits/status)
-  // unangetastet erhalten, siehe docs/dsv7-lenex-import-plan.md Abschnitt 5.
+  // unangetastet erhalten, siehe docs/Plans/dsv7-lenex-import-plan.md Abschnitt 5.
   comments      Json         @default("[]")
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
@@ -473,7 +473,7 @@ model Plan {
 }
 
 // Wiederkehrende Trainingspläne (Phase 1, Abschnitt 3.1 —
-// docs/trainingsplanung-phase1-plan.md). Bewusst OHNE groupId (analog
+// docs/Plans/trainingsplanung-phase1-plan.md). Bewusst OHNE groupId (analog
 // Template): ein Zyklus ist gruppenunabhängig wiederverwendbar, die
 // Zielgruppe wird erst beim "Anwenden" abgefragt. "Anwenden" erzeugt
 // Plan-Datensätze als Snapshot — keine Relation zu Plan.
@@ -510,7 +510,7 @@ model TrainingSession {
   // Manuelle Distanzangabe (Meter) für Einheiten ohne planId (Ad-hoc-
   // Training) oder bei Abweichung vom Plan-Tag. null = aus dem
   // verknüpften Plan-Tag berechnen (Standardfall). Siehe
-  // docs/trainingsplanung-phase1-plan.md, Abschnitt 2.2.
+  // docs/Plans/trainingsplanung-phase1-plan.md, Abschnitt 2.2.
   actualDistance Int?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -597,7 +597,7 @@ model SyncTombstone {
 }
 
 // ============================================================
-// Qualifikationsmanagement (docs/nutzer-qualifikationen-plan.md).
+// Qualifikationsmanagement (docs/Plans/nutzer-qualifikationen-plan.md).
 // Bewusst KEIN Sync-Store (siehe Plan, Abschnitt 1.1): User ist selbst
 // kein Sync-Store, Qualifikationen sind Metadaten dazu und werden über
 // eigene REST-Endpunkte im qualifications-Modul verwaltet, nicht über
@@ -677,7 +677,7 @@ model ClubQualificationReminderSetting {
 }
 
 // ============================================================
-// Kampfrichter-Modul (docs/kampfrichter-modul-plan.md, Abschnitt 5) —
+// Kampfrichter-Modul (docs/Plans/kampfrichter-modul-plan.md, Abschnitt 5) —
 // Wettkampfeinsätze einer Kampfrichter:in.
 // ============================================================
 

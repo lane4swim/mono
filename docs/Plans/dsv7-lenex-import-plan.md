@@ -171,7 +171,7 @@ werden, ohne dass Matching/UI angefasst werden müssen.
   (`apps/web`). Kein Bundler → npm-Pakete lassen sich im Browser nicht ohne Weiteres
   einbinden; für DSV7 auch nicht nötig (reiner Text-Parser), für Lenex per nativer
   Browser-API statt npm-Paket (siehe 1.5).
-- **Sync-API ist der einzige Schreibpfad** (`docs/backend-plan.md:306`): Es gibt keine
+- **Sync-API ist der einzige Schreibpfad** (`docs/Plans/backend-plan.md:306`): Es gibt keine
   granularen REST-Endpunkte pro Ressource. `POST /api/sync/push` /
   `GET /api/sync/pull`, validiert gegen `ENTITY_SCHEMAS` (Zod, `.strict()`) in
   `packages/shared-types/src/entities.ts`. Der Import sollte **client-seitig parsen**

@@ -1,4 +1,4 @@
-// Vertrag für das Kampfrichter-Modul (docs/kampfrichter-modul-plan.md,
+// Vertrag für das Kampfrichter-Modul (docs/Plans/kampfrichter-modul-plan.md,
 // Abschnitt 5: Wettkampfeinsätze). Bewusst NICHT Teil von entities.ts/
 // ENTITY_SCHEMAS — RefereeAssignment ist kein Sync-Store (User selbst ist
 // keiner, siehe qualification.ts-Kommentar für dieselbe Begründung), diese

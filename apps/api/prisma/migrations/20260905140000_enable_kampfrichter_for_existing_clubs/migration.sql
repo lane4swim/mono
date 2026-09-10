@@ -1,4 +1,4 @@
--- Datenmigration (docs/kampfrichter-modul-plan.md, Abschnitt 6,
+-- Datenmigration (docs/Plans/kampfrichter-modul-plan.md, Abschnitt 6,
 -- Entscheidung 4): das neue Kampfrichter-Modul wird bestehenden Vereinen
 -- automatisch zugebucht, analog zum Standardverhalten neuer Vereine
 -- (enabledModules: input.enabledModules ?? [...MODULE_KEYS]). Ein

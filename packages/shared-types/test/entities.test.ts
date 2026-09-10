@@ -341,7 +341,7 @@ describe('PlanSchema', () => {
   });
 });
 
-// Phase 1, Abschnitt 3.1 (docs/trainingsplanung-phase1-plan.md).
+// Phase 1, Abschnitt 3.1 (docs/Plans/trainingsplanung-phase1-plan.md).
 describe('PlanCycleSchema', () => {
   it('akzeptiert einen Zyklus mit mehreren Wochen', () => {
     const cycle = {
@@ -395,7 +395,7 @@ describe('TrainingSessionSchema', () => {
     expect(TrainingSessionSchema.safeParse({ ...base, attendance: Array(500).fill(entry) }).success).toBe(true);
   });
 
-  // Phase 1, Abschnitt 3.2 (docs/trainingsplanung-phase1-plan.md).
+  // Phase 1, Abschnitt 3.2 (docs/Plans/trainingsplanung-phase1-plan.md).
   it('actualDistance ist optional und defaultet auf null (Altbestand ohne dieses Feld)', () => {
     const session = { id: ATHLETE_ID, clubId: CLUB_ID, date: now, groupId: null, planId: null, trainerNote: '', attendance: [], createdAt: now, updatedAt: now };
     const parsed = TrainingSessionSchema.safeParse(session);

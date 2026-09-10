@@ -11,7 +11,7 @@ export function secToTime(sec) {
 // Dezimaltrennzeichen) — die letzte Form kommt in der App selbst nicht vor
 // (Eingabefelder erwarten mm:ss.cc), aber im DSV7-Ergebnisimport, dessen
 // "Zeit"-Datentyp als HH:MM:SS,hh mit führenden Nullen spezifiziert ist
-// (siehe docs/dsv7-lenex-import-plan.md Abschnitt 1.1) — reale Exporte
+// (siehe docs/Plans/dsv7-lenex-import-plan.md Abschnitt 1.1) — reale Exporte
 // lassen führende Nullen/Segmente bei kurzen Zeiten aber teils weg
 // (z. B. "1:01,44" oder "0:30,00"), daher hier bewusst für 1-3 Segmente statt
 // nur exakt zwei.
@@ -25,7 +25,7 @@ export function timeToSec(str) {
 
 // Code-Review 2026-09-02, Befund K2: `time` in `Result` kann `null` sein
 // (DS/NA/AB/AU/ZU — Ergebnisse ohne gewertete Zeit, siehe
-// docs/dsv7-lenex-import-plan.md Abschnitt 3.4). Ein direkter Vergleich
+// docs/Plans/dsv7-lenex-import-plan.md Abschnitt 3.4). Ein direkter Vergleich
 // `neueZeit < r.time` wertet `neueZeit < null` als `neueZeit < 0` aus
 // (JavaScript wandelt `null` dafür in `0` um) — praktisch immer `false`,
 // wodurch `others.every(...)` bei JEDEM ergebnislosen Datensatz in der

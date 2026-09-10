@@ -17,7 +17,7 @@ baut darauf auf.
 
 Stand: Greenfield-Feature für Kampfrichter, aber auf bereits **produktivem
 Code** aufbauend — anders als beim ursprünglichen
-`docs/nutzer-qualifikationen-plan.md` (der inzwischen vollständig umgesetzt
+`docs/Plans/nutzer-qualifikationen-plan.md` (der inzwischen vollständig umgesetzt
 ist, siehe `apps/api/src/modules/qualifications/`,
 `apps/web/js/modules/qualifications.js`) ist die Qualifikationsverwaltung
 bereits fertige Infrastruktur, die dieser Plan bewusst **wiederverwendet**
@@ -251,7 +251,7 @@ nachträglich per Rollen-Zuweisung (Abschnitt 1.4) angelegt.
 
 Die Anforderung „Qualifikationen (Kampfrichter, Protokoll, etc.) inklusive
 Requalifikationsdaten" beschreibt **exakt** die Datenform, die
-`UserQualification` (`docs/nutzer-qualifikationen-plan.md`, inzwischen
+`UserQualification` (`docs/Plans/nutzer-qualifikationen-plan.md`, inzwischen
 produktiv: `apps/api/prisma/schema.prisma: model UserQualification`,
 `packages/shared-types/src/entities.ts` o. ä.) bereits liefert:
 `type`, `acquiredOn`, `expiresOn`, `renewalCourseOrganizedOn`
@@ -751,7 +751,7 @@ getroffen und oben in den jeweiligen Abschnitten bereits eingearbeitet:
     Verifikation: `shared-types` 194/194, `sync-protocol` 9/9, `apps/api`
     556/556 (inkl. Typecheck & Lint fehlerfrei), `apps/web` 228/228 (inkl.
     Lint fehlerfrei), Prisma-Schema valide.
-16. ⏳ `docs/backend-plan.md` Abschnitt „6 — Erweiterungen" um den
+16. ⏳ `docs/Plans/backend-plan.md` Abschnitt „6 — Erweiterungen" um den
     Umsetzungsstand ergänzen — bislang nicht nachgezogen, kein Blocker für
     diese Umsetzung.
 

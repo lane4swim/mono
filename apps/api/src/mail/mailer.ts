@@ -313,7 +313,7 @@ export function buildAccountSecurityChangeHtmlBody(payload: AccountSecurityChang
   `.trim();
 }
 
-// Qualifikations-Ablauf-Erinnerung (docs/nutzer-qualifikationen-plan.md,
+// Qualifikations-Ablauf-Erinnerung (docs/Plans/nutzer-qualifikationen-plan.md,
 // Abschnitt 5) — dieselbe Struktur (exportierte, einzeln testbare
 // Subject/Text/HTML-Builder) wie bei den übrigen E-Mail-Typen oben.
 //

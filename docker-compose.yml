@@ -45,7 +45,7 @@ services:
       # Kein JWT_*-Schlüsselpaar gesetzt: config/env.ts kennt in
       # development/test ohnehin nur JWT_PRIVATE_KEY/JWT_PUBLIC_KEY (RS256,
       # PEM) — ein Wegwerf-Schlüsselpaar wird dann automatisch erzeugt
-      # (siehe auth/keys.ts). Für Produktion siehe docs/deployment.md,
+      # (siehe auth/keys.ts). Für Produktion siehe docs/deployment/deployment.md,
       # Abschnitt 7.2.
       CORS_ORIGIN: "http://localhost:5173"
       # Sicherheitsreview 2026-08-27, Befund H1: TRUSTED_PROXY_IPS bleibt

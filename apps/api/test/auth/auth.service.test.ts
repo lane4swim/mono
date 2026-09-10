@@ -400,7 +400,7 @@ describe('authService.getMe / updateMe', () => {
   });
 
   // Regressionstest für den DSV7/Lenex-Ergebnisimport (siehe
-  // docs/dsv7-lenex-import-plan.md Abschnitt 3.1): getMe() muss die
+  // docs/Plans/dsv7-lenex-import-plan.md Abschnitt 3.1): getMe() muss die
   // externe Vereinskennung mitliefern, damit
   // apps/web/js/modules/resultsImportUI.js den eigenen Verein automatisch
   // gegen eine Importdatei abgleichen kann.
@@ -964,7 +964,7 @@ describe('E-Mail-Abgleich ohne Rücksicht auf Groß-/Kleinschreibung (Befund M2)
   });
 });
 
-// PATCH /api/users/:userId/roles (docs/kampfrichter-modul-plan.md,
+// PATCH /api/users/:userId/roles (docs/Plans/kampfrichter-modul-plan.md,
 // Abschnitt 1.4) — bislang ungetestet, nachgeholt im Zuge von Phase B
 // (Rolle "referee").
 describe('authService.updateUserRoles', () => {

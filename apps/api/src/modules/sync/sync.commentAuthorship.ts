@@ -47,7 +47,7 @@ import type { EntityStoreName } from '@lane1/shared-types';
 // Plan.days[].sets als auch über Template.sets erreichbar — sowie
 // ResultSchema.comments, seit dem DSV7/Lenex-Ergebnisimport: ein Import
 // überschreibt time/place/splits/status, muss bestehende Kommentare aber
-// unangetastet lassen, siehe docs/dsv7-lenex-import-plan.md Abschnitt 3.2).
+// unangetastet lassen, siehe docs/Plans/dsv7-lenex-import-plan.md Abschnitt 3.2).
 export const COMMENT_BEARING_STORES: ReadonlySet<EntityStoreName> = new Set(['exercises', 'plans', 'templates', 'results']);
 
 function isRecord(value: unknown): value is Record<string, unknown> {

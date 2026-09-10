@@ -1,14 +1,14 @@
 // Vertrag für einen Nutzer-Datensatz, wie er zwischen Client und Server
 // ausgetauscht wird.
 //
-// Rollenmodell (siehe docs/backend-plan.md, jetzt erweitert um den
+// Rollenmodell (siehe docs/Plans/backend-plan.md, jetzt erweitert um den
 // einladungsbasierten Registrierungsprozess):
 //   - superadmin: legt neue Vereine an und lädt deren erste:n Admin ein.
 //                 Gehört selbst zu keinem Verein (clubId: null).
 //   - admin:      verwaltet genau einen Verein, lädt Trainer:innen und
 //                 Athlet:innen dieses Vereins ein.
 //   - trainer / athlete: wie bisher, jeweils genau einem Verein zugehörig.
-//   - referee:    Kampfrichter:in (docs/kampfrichter-modul-plan.md,
+//   - referee:    Kampfrichter:in (docs/Plans/kampfrichter-modul-plan.md,
 //                 Abschnitt 2) — einem Verein zugehörig, wie trainer/
 //                 athlete kombinierbar mit jeder anderen Nicht-superadmin-
 //                 Rolle (siehe UserRolesSchema unten).
@@ -17,7 +17,7 @@ import { z } from 'zod';
 export const RoleSchema = z.enum(['superadmin', 'admin', 'trainer', 'athlete', 'referee']);
 export type Role = z.infer<typeof RoleSchema>;
 
-// docs/kampfrichter-modul-plan.md, Abschnitt 1.2: ein Konto kann künftig
+// docs/Plans/kampfrichter-modul-plan.md, Abschnitt 1.2: ein Konto kann künftig
 // mehrere Rollen GLEICHZEITIG haben (z. B. Trainer:in UND Athlet:in),
 // nicht nur genau eine. "superadmin" bleibt Sonderfall — exklusiv, nie mit
 // einer anderen Rolle kombiniert (kein eigener Verein, siehe
@@ -89,7 +89,7 @@ export type User = z.infer<typeof UserSchema>;
 
 // PATCH /api/users/:userId/roles (admin, eigener Verein) — ersetzt die
 // vollständige Rollenmenge einer Person, siehe
-// docs/kampfrichter-modul-plan.md Abschnitt 1.4. Bewusst kein Add/Remove-
+// docs/Plans/kampfrichter-modul-plan.md Abschnitt 1.4. Bewusst kein Add/Remove-
 // Diff-Endpunkt (Race-Condition-Vermeidung bei zwei gleichzeitigen
 // Änderungen) — der Client schickt immer die vollständige Zielmenge.
 export const UpdateUserRolesRequestSchema = z.object({

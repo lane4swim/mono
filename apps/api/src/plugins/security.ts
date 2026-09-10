@@ -33,7 +33,7 @@ export async function registerSecurityPlugins(app: FastifyInstance, env: Env) {
     // auch nicht "self". Die Policy ist bewusst maximal restriktiv
     // (Default-Deny), nicht auf das Frontend zugeschnitten: apps/web wird
     // separat ausgeliefert (eigener Webserver/Hosting, siehe
-    // docs/backend-plan.md) und bekommt seine eigene, für sein Markup
+    // docs/Plans/backend-plan.md) und bekommt seine eigene, für sein Markup
     // passende CSP von dort — nicht von dieser API. Diese Policy schützt
     // lediglich diese API-Antworten selbst (z. B. falls durch einen
     // Fehlerfall doch einmal HTML statt JSON ausgeliefert würde) als

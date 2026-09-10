@@ -1,5 +1,5 @@
 // Testet die reinen Auswertungsfunktionen aus js/modules/trainingLoad.js
-// (Phase 1, Abschnitt 3.2 — docs/trainingsplanung-phase1-plan.md).
+// (Phase 1, Abschnitt 3.2 — docs/Plans/trainingsplanung-phase1-plan.md).
 import { describe, it, expect } from 'vitest';
 import { vi } from 'vitest';
 

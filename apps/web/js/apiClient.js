@@ -320,7 +320,7 @@ export function updateClub(clubId, { enabledModules }) {
 // Eigener Endpunkt statt updateClub() oben — Admins dürfen die
 // Vereinskennung des eigenen Vereins pflegen, ohne die Superadmin-only-
 // Modulverwaltung mitzubenötigen (siehe invitations.route.ts:
-// PATCH /api/clubs/:id/identity und docs/dsv7-lenex-import-plan.md
+// PATCH /api/clubs/:id/identity und docs/Plans/dsv7-lenex-import-plan.md
 // Abschnitt 3.1).
 export function updateClubIdentity(clubId, { nationalID, nationalIDType }) {
   return request(`/api/clubs/${encodeURIComponent(clubId)}/identity`, { method: 'PATCH', body: JSON.stringify({ nationalID, nationalIDType }) });
@@ -349,14 +349,14 @@ export function listAssignableTrainers() {
   return request('/api/users/trainers');
 }
 // Ersetzt die vollständige Rollenmenge einer Person im eigenen Verein
-// (admin, docs/kampfrichter-modul-plan.md, Abschnitt 1.4) — kein
+// (admin, docs/Plans/kampfrichter-modul-plan.md, Abschnitt 1.4) — kein
 // Add/Remove-Diff, der Aufrufer schickt immer die Zielmenge. Antwort:
 // der aktualisierte öffentliche Nutzer-Datensatz.
 export function updateUserRoles(userId, roles) {
   return request(`/api/users/${encodeURIComponent(userId)}/roles`, { method: 'PATCH', body: JSON.stringify({ roles }) });
 }
 
-// ---- Qualifikationsmanagement (docs/nutzer-qualifikationen-plan.md) ---
+// ---- Qualifikationsmanagement (docs/Plans/nutzer-qualifikationen-plan.md) ---
 // Läuft NICHT über die generische Sync-API (siehe dortiger Abschnitt 1.1)
 // — eigene REST-Endpunkte, analog Einladungen/Vereinen oben. Antwort:
 // { qualifications }.

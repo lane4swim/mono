@@ -104,7 +104,7 @@ export const AthleteSchema = z.object({
   active: z.boolean(),
   notes: z.string().max(10000).default(''),
   // Externe Athletenkennung für den Ergebnisimport (DSV7/Lenex) — generisch
-  // statt DSV-spezifisch, siehe docs/dsv7-lenex-import-plan.md Abschnitt 3.1.
+  // statt DSV-spezifisch, siehe docs/Plans/dsv7-lenex-import-plan.md Abschnitt 3.1.
   nationalID: z.string().max(50).nullable().optional(),
   nationalIDType: z.string().max(50).nullable().optional(),
   createdAt: isoDate,
@@ -144,7 +144,7 @@ export type StartlistEntry = z.infer<typeof StartlistEntrySchema>;
 
 // "OK" = gewertetes Ergebnis mit echter Zeit. Die übrigen Werte sind die
 // DSV7-Codes für "Grund der Nichtwertung" (siehe
-// docs/dsv7-lenex-import-plan.md Abschnitt 3.4): DS = Disqualifikation,
+// docs/Plans/dsv7-lenex-import-plan.md Abschnitt 3.4): DS = Disqualifikation,
 // NA = nicht angetreten, AB = abgemeldet, AU = aufgegeben,
 // ZU = Zeitüberschreitung.
 export const ResultStatusSchema = z.enum(['OK', 'DS', 'NA', 'AB', 'AU', 'ZU']);
@@ -166,7 +166,7 @@ export const ResultSchema = z.object({
   athleteId: z.string().uuid(),
   event: z.string().min(1).max(200),
   // Bei status !== "OK" gibt es keine gewertete Zeit (siehe
-  // docs/dsv7-lenex-import-plan.md Abschnitt 3.4/5).
+  // docs/Plans/dsv7-lenex-import-plan.md Abschnitt 3.4/5).
   time: z.number().positive().nullable(),
   date: isoDate,
   course: CourseSchema,
@@ -303,7 +303,7 @@ export const PlanSchema = z.object({
 export type Plan = z.infer<typeof PlanSchema>;
 
 // Wiederkehrende Trainingspläne (Phase 1, Abschnitt 3.1 —
-// docs/trainingsplanung-phase1-plan.md). Ein Zyklus ist eine Vorlage für
+// docs/Plans/trainingsplanung-phase1-plan.md). Ein Zyklus ist eine Vorlage für
 // eine Abfolge von Wochen; "Zyklus anwenden" erzeugt daraus konkrete
 // Plan-Datensätze (Snapshot, keine dauerhafte Beziehung).
 export const CycleDaySchema = z.object({
@@ -347,7 +347,7 @@ export const TrainingSessionSchema = z.object({
   trainerNote: z.string().max(5000).default(''),
   attendance: z.array(AttendanceRecordSchema).max(500),
   // Manuelle Distanzangabe (Meter). null = aus dem verknüpften Plan-Tag
-  // berechnen (Standardfall) — siehe docs/trainingsplanung-phase1-plan.md.
+  // berechnen (Standardfall) — siehe docs/Plans/trainingsplanung-phase1-plan.md.
   actualDistance: z.number().int().nonnegative().nullable().default(null),
   createdAt: isoDate,
   updatedAt: isoDate,

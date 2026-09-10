@@ -79,7 +79,7 @@ setClubIdProvider(() => getCurrentUser()?.clubId);
 // rollenbeschränkten werden nun korrekt ausgeblendet statt fälschlich
 // gezeigt.
 //
-// docs/kampfrichter-modul-plan.md, Abschnitt 1: ein Konto kann mehrere
+// docs/Plans/kampfrichter-modul-plan.md, Abschnitt 1: ein Konto kann mehrere
 // Rollen gleichzeitig haben — getRoles() ersetzt das frühere getRole().
 export function getRoles() { return current?.roles ?? []; }
 export function hasRole(role) { return getRoles().includes(role); }
@@ -374,7 +374,7 @@ export function isAdminOrSuperAdmin() { return getRoles().some((r) => ['admin', 
 // "athlete" hat UND KEINE Staff-Rolle ("trainer"/"admin") — sonst würde
 // z. B. ein Konto mit roles: ['trainer','athlete'] fälschlich auf die
 // eingeschränkte Athlet:innen-Ansicht verwiesen, obwohl die Trainer-Rolle
-// vollen Zugriff verleiht (docs/kampfrichter-modul-plan.md, Abschnitt 1.5).
+// vollen Zugriff verleiht (docs/Plans/kampfrichter-modul-plan.md, Abschnitt 1.5).
 export function isAthleteScoped() {
   return hasRole('athlete') && !isTrainerOrAdmin();
 }

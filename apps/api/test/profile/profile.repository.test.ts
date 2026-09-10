@@ -76,7 +76,7 @@ describe('InMemoryProfileDataGateway.exportUserData', () => {
     expect(result.qualifications).toEqual([]);
   });
 
-  // docs/nutzer-qualifikationen-plan.md, Abschnitt 6: Qualifikationsdaten
+  // docs/Plans/nutzer-qualifikationen-plan.md, Abschnitt 6: Qualifikationsdaten
   // gehören in die DSGVO-Auskunft — an userId gehängt, nicht an athleteId
   // (gilt auch für eine Trainer:in ohne Athletenprofil).
   it('bündelt eigene Qualifikationen, gescopt auf userId (nicht die einer anderen Person)', async () => {
@@ -93,7 +93,7 @@ describe('InMemoryProfileDataGateway.exportUserData', () => {
     expect(result.qualifications[0]).toMatchObject({ id: 'q1', type: 'trainer_c' });
   });
 
-  // docs/kampfrichter-modul-plan.md, Abschnitt 5.7: Wettkampfeinsätze
+  // docs/Plans/kampfrichter-modul-plan.md, Abschnitt 5.7: Wettkampfeinsätze
   // gehören ebenfalls in die DSGVO-Auskunft — an userId gehängt, analog
   // Qualifikationen oben.
   it('bündelt eigene Wettkampfeinsätze, gescopt auf userId (nicht die einer anderen Person)', async () => {

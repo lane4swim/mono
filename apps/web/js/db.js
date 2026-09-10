@@ -110,7 +110,7 @@ function reqPromise(req, map = (r) => r){
 // permanent als "invalid_payload" ab, syncClient.js gibt nach
 // MAX_SYNC_ATTEMPTS auf). `crypto.randomUUID` braucht einen secure context
 // (HTTPS) — genau der bei einer frisch eingerichteten Installation
-// dokumentierte Zwischenzustand (siehe docs/deployment-raspberry-pi.md:
+// dokumentierte Zwischenzustand (siehe docs/deployment/deployment-raspberry-pi.md:
 // "noch ohne Schloss-Symbol/HTTPS") lässt ihn fehlen, obwohl `crypto`
 // selbst (und `crypto.getRandomValues`, das KEINEN secure context braucht)
 // bereits vorhanden ist. Baut daraus eine formgerechte Version-4-UUID von

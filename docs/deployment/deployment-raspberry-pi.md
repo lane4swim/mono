@@ -540,7 +540,7 @@ server {
     # dokumentierter Kompromiss ist).
 
     # Sicherheitsreview 2026-08-29, Befund N2: HSTS/nosniff/Referrer-Policy
-    # ergänzt — siehe docs/deployment.md, Abschnitt 9 für die ausführliche
+    # ergänzt — siehe docs/deployment/deployment.md, Abschnitt 9 für die ausführliche
     # Begründung (Helmet in apps/api deckt nur die JSON-Antworten der API
     # ab, nicht die hier statisch ausgelieferte Weboberfläche).
     set $csp "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; worker-src 'self'; manifest-src 'self'";

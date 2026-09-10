@@ -366,7 +366,7 @@ describe('invitationsService.listClubs — Mitgliederzahlen', () => {
     expect(result[0]!.memberCounts).toEqual({ admin: 1, trainer: 2, athlete: 1, referee: 0 });
   });
 
-  // docs/kampfrichter-modul-plan.md, Abschnitt 2: eine Person mit mehreren
+  // docs/Plans/kampfrichter-modul-plan.md, Abschnitt 2: eine Person mit mehreren
   // Rollen gleichzeitig (z. B. trainer + referee) erhöht JEDEN passenden
   // Zähler — die Rollen schließen sich seit Phase A nicht mehr gegenseitig
   // aus.

@@ -38,7 +38,7 @@ describe('QualificationTypeSchema', () => {
   });
 });
 
-// docs/kampfrichter-modul-plan.md, Abschnitt 3.2: die Teilmenge, die das
+// docs/Plans/kampfrichter-modul-plan.md, Abschnitt 3.2: die Teilmenge, die das
 // künftige Kampfrichter-Modul (Phase C) nutzt, um die allgemeine
 // Qualifikationsliste einer Person auf die Kampfrichter-relevanten Typen
 // zu filtern.

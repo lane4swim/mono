@@ -35,11 +35,11 @@ const ROUTE_TO_PACKAGE = {
   sessions: 'sessions',
   actionitems: 'actionitems',
   stats: 'stats',
-  // Qualifikationsmanagement (docs/nutzer-qualifikationen-plan.md, Abschnitt
+  // Qualifikationsmanagement (docs/Plans/nutzer-qualifikationen-plan.md, Abschnitt
   // 1.2) — MUSS mit packages/shared-types/src/modules.ts: MODULE_PACKAGES.
   // qualifications übereinstimmen.
   qualifications: 'qualifications',
-  // Kampfrichter-Modul (docs/kampfrichter-modul-plan.md, Abschnitt 4.1) —
+  // Kampfrichter-Modul (docs/Plans/kampfrichter-modul-plan.md, Abschnitt 4.1) —
   // MUSS mit packages/shared-types/src/modules.ts: MODULE_PACKAGES.
   // kampfrichter übereinstimmen.
   kampfrichter: 'kampfrichter',

@@ -36,7 +36,7 @@ export interface SyncRequester {
   // Athlet:innen-Konto darf zwar denselben Verein sehen wie
   // Trainer:innen/Admins, aber nicht dieselbe Datentiefe (siehe
   // sync.permissions.ts: STORE_PERMISSIONS-Kommentar). Ein Konto kann
-  // mehrere Rollen gleichzeitig haben (docs/kampfrichter-modul-plan.md,
+  // mehrere Rollen gleichzeitig haben (docs/Plans/kampfrichter-modul-plan.md,
   // Abschnitt 1) — canRead()/canWrite()/isAthleteScoped() werten die
   // gesamte Menge aus, nicht nur einen Einzelwert.
   roles: readonly Role[];

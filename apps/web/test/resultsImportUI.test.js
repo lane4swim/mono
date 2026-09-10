@@ -3,7 +3,7 @@
 // apps/web/test/resultsImportUI.test.js
 //
 // End-to-End-Rauchtest für den DSV7-Import-UI-Flow (siehe
-// docs/dsv7-lenex-import-plan.md Abschnitt 6): Datei auswählen ->
+// docs/Plans/dsv7-lenex-import-plan.md Abschnitt 6): Datei auswählen ->
 // Vereinsauswahl (kein automatischer Treffer, da keine nationalID
 // hinterlegt) -> Vorschau -> Bestätigen -> Ergebnis landet in
 // IndexedDB. Die Parser-/Matching-Logik selbst ist bereits in

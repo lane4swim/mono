@@ -149,7 +149,7 @@ describe('AccessTokenClaimsSchema', () => {
     expect(AccessTokenClaimsSchema.safeParse(claims).success).toBe(true);
   });
 
-  it('akzeptiert mehrere gleichzeitige Rollen (docs/kampfrichter-modul-plan.md, Abschnitt 1)', () => {
+  it('akzeptiert mehrere gleichzeitige Rollen (docs/Plans/kampfrichter-modul-plan.md, Abschnitt 1)', () => {
     const claims = {
       sub: '11111111-1111-1111-1111-111111111111',
       roles: ['trainer', 'athlete'],

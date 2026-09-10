@@ -1,5 +1,5 @@
 -- AlterTable
--- Phase A (docs/kampfrichter-modul-plan.md, Abschnitt 1.3, Schritt 1
+-- Phase A (docs/Plans/kampfrichter-modul-plan.md, Abschnitt 1.3, Schritt 1
 -- "Expand"): neue Mehrfachrollen-Spalte, alte "role"-Spalte bleibt vorerst
 -- unverändert bestehen (siehe Plan für die spätere "Contract"-Migration,
 -- die "role" entfernt).

@@ -153,7 +153,7 @@ export class PrismaClubRepository implements ClubRepository {
     return this.prisma.club.update({ where: { id: clubId }, data: identity });
   }
 
-  // docs/kampfrichter-modul-plan.md, Abschnitt 2: `roles` ist eine
+  // docs/Plans/kampfrichter-modul-plan.md, Abschnitt 2: `roles` ist eine
   // Array-Spalte — ein einzelnes `groupBy(['clubId', 'role'])` (frühere
   // Fassung, gegen die inzwischen nur noch transitionell mitgepflegte
   // Einzelrollen-Spalte) zählt eine Person NUR unter ihrer "primären"

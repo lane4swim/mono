@@ -75,7 +75,7 @@ export class ClubIdRequiredError extends Error {
   }
 }
 
-// PATCH /api/users/:userId/roles (docs/kampfrichter-modul-plan.md,
+// PATCH /api/users/:userId/roles (docs/Plans/kampfrichter-modul-plan.md,
 // Abschnitt 1.4) — Ziel-Konto gehört nicht zum eigenen Verein. Bewusst wie
 // bei qualifications.service.ts (QualificationForbiddenError) statt 404,
 // analog dem dort bereits etablierten Muster für :userId-Routen.
@@ -183,7 +183,7 @@ export function toPublicUser(user: UserRecord) {
 // leere/null-Werte statt eines Fehlers.
 //
 // `clubNationalID`/`clubNationalIDType` sind die externe Vereinskennung für
-// den Ergebnisimport (docs/dsv7-lenex-import-plan.md, Abschnitt 3.1): sie
+// den Ergebnisimport (docs/Plans/dsv7-lenex-import-plan.md, Abschnitt 3.1): sie
 // reisen in der Session-Antwort mit, damit das Frontend den eigenen Verein
 // gegen die Importdatei abgleichen kann, ohne einen eigenen Endpunkt zu
 // brauchen.
@@ -272,7 +272,7 @@ export function createAuthService(deps: AuthServiceDeps) {
           passwordHash,
           // Startmenge mit genau einer Rolle — weitere Rollen kommen
           // ausschließlich über PATCH /api/users/:userId/roles hinzu, nie
-          // direkt bei der Registrierung (docs/kampfrichter-modul-plan.md,
+          // direkt bei der Registrierung (docs/Plans/kampfrichter-modul-plan.md,
           // Abschnitt 1.4).
           roles: [invitation.role],
           athleteId: invitation.athleteId,
@@ -663,7 +663,7 @@ export function createAuthService(deps: AuthServiceDeps) {
       // Gruppierungslogik, keine Berechtigung. Ein Konto mit mehreren
       // Rollen (z. B. trainer + athlete) erscheint dadurch in derselben
       // Gruppe wie ein reiner Trainer.
-      // docs/kampfrichter-modul-plan.md, Abschnitt 1.4: "referee" reiht
+      // docs/Plans/kampfrichter-modul-plan.md, Abschnitt 1.4: "referee" reiht
       // sich zwischen trainer und athlete ein (admin > trainer > referee >
       // athlete).
       const rolePriority: Record<string, number> = { admin: 0, trainer: 1, referee: 2, athlete: 3, superadmin: 4 };
