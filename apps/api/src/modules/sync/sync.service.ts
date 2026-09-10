@@ -388,6 +388,25 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
           }
         }
 
+        // Analog zur Kommentar-Autor:innen-Prüfung oben, aber für das
+        // Top-Level-Feld "authorId" von Announcement (Phase 2, Abschnitt
+        // 4.1 — docs/Plans/phase2-plan.md): eine NEU angelegte Ankündigung
+        // muss der eigenen Identität zugeordnet sein (verhindert, dass
+        // eine Ankündigung fälschlich im Namen einer anderen Person
+        // erscheint), eine BESTEHENDE behält ihre ursprüngliche
+        // Autor:innen-Zuordnung, unabhängig davon, wer sie gerade
+        // bearbeitet (Team-Dokument, wie "plans" — jede:r trainer/admin
+        // darf den Inhalt ändern, nicht aber die angezeigte Urheberschaft).
+        if (store === 'announcements' && event.action !== 'delete') {
+          const payloadAuthorId = (validatedPayload as { authorId?: unknown } | null)?.authorId;
+          const existingAuthorId = (existing as { authorId?: unknown } | null)?.authorId;
+          const expectedAuthorId = existing ? existingAuthorId : requester.userId;
+          if (payloadAuthorId !== expectedAuthorId) {
+            results.push({ eventId: event.id, status: 'error', message: 'Ankündigungen können nur im eigenen Namen erstellt werden und behalten ihre ursprüngliche Urheberschaft.', code: 'announcement_author_mismatch' });
+            continue;
+          }
+        }
+
         const decision = resolveConflict(
           store,
           { clientUpdatedAt: event.clientUpdatedAt },

@@ -13,7 +13,7 @@ aktualisiertem Umsetzungsstand je Abschnitt.
 | Teil | Status |
 |---|---|
 | 1.2 Push-Benachrichtigungen | **umgesetzt** — siehe Abschnitt 1.7 (Kern-Infrastruktur + zwei zeitgesteuerte Auslöser; zwei ereignisgesteuerte Auslöser bewusst zurückgestellt, siehe Abschnitt 5.1) |
-| 4.1 Vereinsinterne Nachrichten/Ankündigungen | offen — siehe Abschnitt 2.6 |
+| 4.1 Vereinsinterne Nachrichten/Ankündigungen | **umgesetzt** — siehe Abschnitt 2.6 |
 | 4.2 Eltern-/Erziehungsberechtigten-Zugang | offen — siehe Abschnitt 3.7 |
 
 ## 0. Ausgangslage
@@ -378,30 +378,51 @@ Icon im Nav, `plansModule`-artiger Rollen-Eintrag `roles: ['trainer',
 'admin', 'athlete']`. Dashboard-Karte (`dashboard.js`): die 3 neuesten
 Announcements, analog zum bestehenden Anwesenheits-Hinweis aus Phase 1.
 
-### 2.6 Umsetzungsstand: offen
-
-Noch nicht umgesetzt — nur das Datenmodell ist bereits vorgezogen worden
-(zusammen mit 1.2 und 4.2 in einem Zug angelegt, um wiederholte
-`prisma format`-Neuausrichtungen des gesamten Schemas über mehrere
-Commits zu vermeiden; siehe schema.prisma: `Announcement`, Migration
-`20260910093000_add_announcements`). Anwendungscode (Zod-Schema, Sync-
-Registrierung, Frontend-Modul, Push-Hook) folgt wie unten geplant:
+### 2.6 Umsetzungsstand: **umgesetzt**
 
 - `authorId` mit `onDelete: SetNull` (siehe Abschnitt 2.2, finale
-  Entscheidung).
+  Entscheidung) — Migration `20260910093000_add_announcements` (Modell
+  bereits mit 1.2/4.2 zusammen angelegt, siehe Abschnitt 1.7-Kommentar).
 - `AnnouncementSchema` in `entities.ts`, Registry-Eintrag; an den fünf in
   Abschnitt 0 genannten Stellen verankert (`STORE_PERMISSIONS`,
-  `MODULE_PACKAGES`, `STRATEGY_BY_STORE: 'last-write-wins-document'`,
-  `db.js`, `entityRegistry.ts`).
+  `MODULE_PACKAGES`, `db.js`, `entityRegistry.ts`).
+  **Abweichung von der ursprünglichen Planung:** `STRATEGY_BY_STORE` erhält
+  `'last-write-wins'` statt `'last-write-wins-document'` — Announcement
+  ist (anders als `plans`/`templates`/`planCycles`) ein flaches Dokument
+  ohne eingebettete Kommentar-/Sets-Struktur, für die die
+  „document"-Variante gedacht ist; einfaches last-write-wins (wie
+  `sessions`/`actionItems`) ist die inhaltlich zutreffende Strategie.
+- **Über die ursprüngliche Planung hinaus ergänzt:** eine
+  Autorschafts-Prüfung in `sync.service.ts` (analog
+  `sync.commentAuthorship.ts`, aber für das Top-Level-Feld `authorId`
+  statt eingebetteter Kommentare) — eine NEU angelegte Ankündigung muss
+  `authorId === requester.userId` tragen (verhindert Identitätsvortäuschung),
+  eine BESTEHENDE behält beim Bearbeiten ihre ursprüngliche Urheberschaft
+  unabhängig davon, wer den Inhalt ändert (Team-Dokument, wie `plans`).
+  War im Plan nicht vorgesehen, aber dieselbe Lücke, die
+  `sync.commentAuthorship.ts` für eingebettete Kommentare bereits
+  schließt — ohne diese Prüfung könnte jede:r Trainer:in eine Ankündigung
+  im Namen einer anderen Person verfassen. Zusätzlich `groupId` als
+  Fremdschlüssel-Referenz in `sync.foreignKeys.ts` verankert (Vereins-
+  Scoping, analog `sessions.groupId`).
 - `sync.route.ts`: `notifyAnnouncementCreated()`-Hook wie in 2.4
   beschrieben, fire-and-forget (`.catch(err => app.log.error(...))`,
-  blockiert die Sync-Antwort nicht).
-- `apps/web/js/modules/announcements.js`, Dashboard-Karte, Übersetzungen,
-  `sw.js`-Precache-Eintrag.
-- Tests: Schema-Test, Registry-Vollständigkeit, Autorisierungstest
-  (Modul-Gating + Rollenschreibrecht), ein Test für den
-  Push-Auslöse-Hook (Memory-Pusher empfängt genau eine Nachricht je
-  betroffenem Vereinsmitglied mit Abo).
+  blockiert die Sync-Antwort nicht) — Empfänger:innen-Ermittlung über das
+  neue `AnnouncementRecipientsGateway` (`announcementRecipients.repository.ts`).
+- `apps/web/js/modules/announcements.js` — Liste + Erstellen/Bearbeiten-
+  Modal (`trainer`/`admin`), Löschen, Gruppen-/Vereinsweit-Badge; neuer
+  Nav-Eintrag unter der Gruppe „Team" (`shell.js: NAV_GROUPS`). Dashboard-
+  Karte „Neueste Ankündigungen" (`trainer`- UND `athlete`-Ansicht).
+  Demo-Daten in `demoSeed.js` ergänzt. Übersetzungen (`nav.announcements`,
+  Namespace `announcements`, `dashboard.announcementsTitle`),
+  `sw.js`-Precache-Eintrag (Cache-Version `lane1-v46`), `db.js`:
+  `DB_VERSION` 4 → 5.
+- Tests: Schema-Test (`AnnouncementSchema`, inkl. `.strict()`),
+  Registry-Vollständigkeit (generisch, deckt `announcements` automatisch
+  ab), Autorisierungstest (Modul-Gating + Rollenschreibrecht), vier neue
+  Tests für die Autorschafts-Prüfung in `sync.service.test.ts`, fünf neue
+  Tests für den Push-Auslöse-Hook (`sync.announcementNotify.test.ts`,
+  Memory-Pusher/-Repository). Gesamte Monorepo-Suite bleibt grün.
 
 ## 3. Abschnitt 4.2 — Eltern-/Erziehungsberechtigten-Zugang
 

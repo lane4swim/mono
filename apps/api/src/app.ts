@@ -14,6 +14,7 @@ import authenticatePlugin from './plugins/authenticate.js';
 import { healthRoutes } from './modules/health/health.route.js';
 import { authRoutes } from './modules/auth/auth.route.js';
 import { syncRoutes, type ClubModulesLookup } from './modules/sync/sync.route.js';
+import { PrismaAnnouncementRecipientsGateway } from './modules/sync/announcementRecipients.repository.js';
 import { invitationsRoutes } from './modules/invitations/invitations.route.js';
 import { createAuthService, type AuthService } from './modules/auth/auth.service.js';
 import { PrismaUserRepository, PrismaRefreshTokenRepository, PrismaPasswordResetTokenRepository } from './modules/auth/auth.repository.js';
@@ -230,10 +231,16 @@ export async function buildApp(env: Env, overrides: BuildAppOverrides = {}): Pro
     });
 
   const pushSubscriptions = overrides.pushSubscriptions ?? new PrismaPushSubscriptionRepository(getPrisma());
+  const pusher = overrides.pusher ?? resolvePushSender(env);
 
   await app.register(healthRoutes);
   await app.register(authRoutes, { authService });
-  await app.register(syncRoutes, { syncService, clubs: clubModulesLookup });
+  await app.register(syncRoutes, {
+    syncService,
+    clubs: clubModulesLookup,
+    // Phase 2, Abschnitt 2.4: Push-Auslöser für ein neues Announcement.
+    announcementNotify: { pusher, pushSubscriptions, recipients: new PrismaAnnouncementRecipientsGateway(getPrisma()) },
+  });
   await app.register(invitationsRoutes, { invitationsService });
   await app.register(qualificationsRoutes, { qualificationsService, clubs: clubModulesLookup });
   await app.register(refereesRoutes, { refereesService, clubs: clubModulesLookup });

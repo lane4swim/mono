@@ -34,6 +34,10 @@ const ROUTE_TO_PACKAGE = {
   catalog: 'catalog',
   sessions: 'sessions',
   actionitems: 'actionitems',
+  // Vereinsinterne Nachrichten/Ankündigungen (Phase 2, Abschnitt 4.1) —
+  // MUSS mit packages/shared-types/src/modules.ts: MODULE_PACKAGES.
+  // announcements übereinstimmen.
+  announcements: 'announcements',
   stats: 'stats',
   // Qualifikationsmanagement (docs/Plans/nutzer-qualifikationen-plan.md, Abschnitt
   // 1.2) — MUSS mit packages/shared-types/src/modules.ts: MODULE_PACKAGES.

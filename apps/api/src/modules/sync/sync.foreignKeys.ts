@@ -99,6 +99,9 @@ const FOREIGN_KEY_REFS: Partial<Record<EntityStoreName, ForeignKeyRef[]>> = {
     { kind: 'entity', field: 'groupId', store: 'groups' },
     { kind: 'entity', field: 'planId', store: 'plans' },
   ],
+  announcements: [
+    { kind: 'entity', field: 'groupId', store: 'groups' },
+  ],
 };
 
 // Bewusst dieselbe Formulierung wie describeSyncError() (sync.errors.ts)

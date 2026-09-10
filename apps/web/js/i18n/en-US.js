@@ -97,6 +97,7 @@ export default {
     dashboard: 'Dashboard', athletes: 'Athletes & Team', competitions: 'Competitions',
     times: 'Times & Performance', plans: 'Training Plans', templates: 'Templates',
     catalog: 'Exercise Catalog', sessions: 'Sessions & Feedback', actionitems: 'Focus Areas',
+    announcements: 'Announcements',
     stats: 'Statistics', syncqueue: 'Sync Queue', profile: 'My Profile', usermgmt: 'User Management',
     info: 'Legal & Privacy', qualifications: 'Qualifications', kampfrichter: 'Officiating',
     groups: {
@@ -132,6 +133,7 @@ export default {
     attendanceLine: 'Present {present}/{total}', avgRpe: ' · Avg. RPE {rpe}',
     allSessions: 'All sessions →',
     attendanceFlagsTitle: 'Attendance Concerns', attendanceFlagsMsg: '{count} athlete(s) with declining attendance — see Statistics for details.',
+    announcementsTitle: 'Latest Announcements',
     statPBs: 'Personal Bests', disciplines: 'events',
     statNextSession: 'Next Session', statOpenGoals: 'Open Goals',
     currentPBsTitle: 'Current Personal Bests', noTimesYet: 'No times recorded yet.',
@@ -386,6 +388,17 @@ export default {
     formAssignedTrainer: 'Responsible coach', unknownTrainerOption: '— no longer in the club —',
     formDue: 'Due date', formDescription: 'Description',
     validationTitle: 'Please enter a title.', savedEdit: 'Changes saved', savedCreate: 'Focus area added',
+  },
+  announcements: {
+    eyebrow: '{count} announcements', title: 'Announcements', addAnnouncement: '+ Create announcement',
+    intro: 'Organizational messages from coaches/admins to a group or the whole club.',
+    noneYet: 'No announcements yet.',
+    wholeClub: 'Whole club',
+    deleteConfirm: 'Delete this announcement?', deleted: 'Deleted',
+    modalEdit: 'Edit announcement', modalCreate: 'Create announcement',
+    formTitle: 'Title', formScope: 'Audience', formBody: 'Text',
+    validationTitle: 'Please enter a title.', validationBody: 'Please enter a text.',
+    savedEdit: 'Changes saved', savedCreate: 'Announcement created',
   },
   stats: {
     eyebrow: 'Analytics', title: 'Statistics',

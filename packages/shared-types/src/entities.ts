@@ -378,6 +378,23 @@ export const ActionItemSchema = z.object({
 }).strict();
 export type ActionItem = z.infer<typeof ActionItemSchema>;
 
+// Vereinsinterne Nachrichten/Ankündigungen (Phase 2, Abschnitt 4.1 —
+// docs/Plans/phase2-plan.md). authorId nullable: ein gelöschtes
+// Autor:innen-Konto reißt die Ankündigung nicht mit (siehe schema.prisma:
+// Announcement.authorId, onDelete: SetNull).
+export const AnnouncementSchema = z.object({
+  id: z.string().uuid(),
+  clubId: z.string().uuid(),
+  // null = an den gesamten Verein gerichtet; gesetzt = nur an diese Gruppe.
+  groupId: z.string().uuid().nullable(),
+  authorId: z.string().uuid().nullable(),
+  title: z.string().min(1).max(200),
+  body: z.string().min(1).max(5000),
+  createdAt: isoDate,
+  updatedAt: isoDate,
+}).strict();
+export type Announcement = z.infer<typeof AnnouncementSchema>;
+
 // ---- Registry: SyncStore -> Zod-Schema -------------------------------
 // Zentrale Zuordnung, welches Schema zu welchem Store-Namen gehört. Wird
 // in Phase 3 direkt von der generischen Sync-API (`POST /api/sync/push`)
@@ -397,6 +414,7 @@ export const ENTITY_SCHEMAS = {
   planCycles: PlanCycleSchema,
   sessions: TrainingSessionSchema,
   actionItems: ActionItemSchema,
+  announcements: AnnouncementSchema,
 } satisfies Partial<Record<z.infer<typeof SyncStoreSchema>, z.ZodTypeAny>>;
 
 export type EntityStoreName = keyof typeof ENTITY_SCHEMAS;

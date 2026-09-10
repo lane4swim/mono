@@ -53,6 +53,10 @@ export const STORE_PERMISSIONS: Record<EntityStoreName, StoreAccess> = {
   entries: coachManaged,
   actionItems: coachManaged,
   sessions: coachManaged,
+  // Vereinsinterne Nachrichten/Ankündigungen (Phase 2, Abschnitt 4.1):
+  // wie "templates"/"planCycles" — alle drei Team-Rollen lesen,
+  // anlegen/bearbeiten bleibt trainer/admin vorbehalten.
+  announcements: coachManaged,
 };
 
 // Nimmt den weiteren Wire-Typ `SyncStore` entgegen, nicht nur

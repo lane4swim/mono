@@ -22,6 +22,10 @@ const STRATEGY_BY_STORE: Record<SyncStore, ConflictStrategy> = {
   planCycles: 'last-write-wins-document',
   sessions: 'last-write-wins',
   actionItems: 'last-write-wins',
+  // Vereinsinterne Nachrichten/Ankündigungen (Phase 2, Abschnitt 4.1):
+  // flaches Dokument ohne eingebettete Kommentar-/Sets-Struktur — wie
+  // "sessions"/"actionItems" genügt einfaches last-write-wins.
+  announcements: 'last-write-wins',
 };
 
 export function strategyForStore(store: SyncStore): ConflictStrategy {

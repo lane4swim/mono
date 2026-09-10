@@ -1878,6 +1878,82 @@ describe('syncService.push — Kommentar-Autor:innen-Prüfung (Sicherheitsreview
   });
 });
 
+describe('syncService.push — Announcement-Urheberschaft (Phase 2, Abschnitt 4.1)', () => {
+  function makeAnnouncementPayload(overrides: Partial<Record<string, unknown>> = {}) {
+    const now = new Date().toISOString();
+    return {
+      id: '99999999-7777-7777-7777-777777777771',
+      clubId: CLUB_A,
+      groupId: null,
+      authorId: TRAINER_USER_ID,
+      title: 'Training fällt aus',
+      body: 'Mittwoch fällt das Training aus.',
+      createdAt: now,
+      updatedAt: now,
+      ...overrides,
+    };
+  }
+
+  it('akzeptiert eine neue Ankündigung, deren authorId der eigenen Identität entspricht', async () => {
+    const { service, gateway } = makeService();
+    const payload = makeAnnouncementPayload();
+    const results = await service.push(
+      [{ id: 'evt-ann-own', store: 'announcements', entityId: payload.id, action: 'create', payload, clientUpdatedAt: payload.updatedAt }],
+      asTrainer(CLUB_A),
+    );
+    expect(results[0]!.status).toBe('applied');
+    expect(await gateway.findById('announcements', payload.id)).not.toBeNull();
+  });
+
+  it('lehnt eine neue Ankündigung ab, deren authorId auf eine fremde Identität zeigt (Identitätsvortäuschung)', async () => {
+    const { service, gateway } = makeService();
+    const payload = makeAnnouncementPayload({ authorId: ADMIN_USER_ID });
+    const results = await service.push(
+      [{ id: 'evt-ann-spoof', store: 'announcements', entityId: payload.id, action: 'create', payload, clientUpdatedAt: payload.updatedAt }],
+      asTrainer(CLUB_A),
+    );
+    expect(results[0]!.status).toBe('error');
+    expect(results[0]!.code).toBe('announcement_author_mismatch');
+    expect(await gateway.findById('announcements', payload.id)).toBeNull();
+  });
+
+  it('lehnt es ab, eine bestehende Ankündigung einer anderen Person zuzuschreiben', async () => {
+    const { service, gateway } = makeService();
+    const original = makeAnnouncementPayload();
+    await service.push(
+      [{ id: 'evt-ann-create', store: 'announcements', entityId: original.id, action: 'create', payload: original, clientUpdatedAt: original.updatedAt }],
+      asTrainer(CLUB_A),
+    );
+    const edited = { ...original, authorId: ADMIN_USER_ID, title: 'Geänderter Titel', updatedAt: new Date(Date.now() + 60_000).toISOString() };
+    const results = await service.push(
+      [{ id: 'evt-ann-reassign', store: 'announcements', entityId: edited.id, action: 'update', payload: edited, clientUpdatedAt: edited.updatedAt }],
+      asAdmin(CLUB_A),
+    );
+    expect(results[0]!.status).toBe('error');
+    expect(results[0]!.code).toBe('announcement_author_mismatch');
+    const stored = await gateway.findById('announcements', original.id);
+    expect((stored as Record<string, unknown>).authorId).toBe(TRAINER_USER_ID);
+  });
+
+  it('erlaubt einer ANDEREN Person, den Inhalt zu bearbeiten, solange authorId unverändert bleibt (Team-Dokument, analog "plans")', async () => {
+    const { service, gateway } = makeService();
+    const original = makeAnnouncementPayload();
+    await service.push(
+      [{ id: 'evt-ann-create-2', store: 'announcements', entityId: original.id, action: 'create', payload: original, clientUpdatedAt: original.updatedAt }],
+      asTrainer(CLUB_A),
+    );
+    const edited = { ...original, title: 'Geänderter Titel', updatedAt: new Date(Date.now() + 60_000).toISOString() };
+    const results = await service.push(
+      [{ id: 'evt-ann-edit-content', store: 'announcements', entityId: edited.id, action: 'update', payload: edited, clientUpdatedAt: edited.updatedAt }],
+      asAdmin(CLUB_A),
+    );
+    expect(results[0]!.status).toBe('applied');
+    const stored = await gateway.findById('announcements', original.id);
+    expect((stored as Record<string, unknown>).title).toBe('Geänderter Titel');
+    expect((stored as Record<string, unknown>).authorId).toBe(TRAINER_USER_ID);
+  });
+});
+
 // Review 30.08.2026, Befund E3: `pull()` entscheidet seitdem VOR der
 // Datenbankabfrage, welche Stores überhaupt abgefragt werden
 // (`readableStores`), statt den gesamten Vereinsbestand zu laden und erst

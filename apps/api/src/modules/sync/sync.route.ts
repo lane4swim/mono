@@ -6,6 +6,7 @@
 import type { FastifyInstance } from 'fastify';
 import { SyncPushRequestSchema, SyncPullQuerySchema } from '@lane1/shared-types';
 import type { SyncService, SyncRequester } from './sync.service.js';
+import { notifyAnnouncementCreated, type AnnouncementNotifyDeps } from './sync.announcementNotify.js';
 import { requireAnyRole } from '../../plugins/authorize.js';
 import { parseInput } from '../../plugins/parseInput.js';
 
@@ -20,6 +21,10 @@ export interface ClubModulesLookup {
 export interface SyncRoutesOptions {
   syncService: SyncService;
   clubs: ClubModulesLookup;
+  // Phase 2, Abschnitt 2.4 (docs/Plans/phase2-plan.md): optional, damit
+  // Tests, die den Announcement-Push-Hook nicht brauchen, ihn weglassen
+  // können (dann ein No-op, siehe requestHandler unten).
+  announcementNotify?: AnnouncementNotifyDeps;
 }
 
 // Review 30.08.2026, Befund E1: requesterFrom() rief clubs.findById() bei
@@ -74,7 +79,7 @@ export function sweepExpiredClubModules(cache: Map<string, CachedClubModules>, n
 // akzeptiert (siehe ausführliche Begründung in plugins/authenticate.ts,
 // direkt über app.authenticate), nicht übersehen.
 export async function syncRoutes(app: FastifyInstance, opts: SyncRoutesOptions) {
-  const { syncService, clubs } = opts;
+  const { syncService, clubs, announcementNotify } = opts;
   const syncGuard = [app.authenticate, requireAnyRole('trainer', 'admin', 'athlete')];
 
   const clubModulesCache = new Map<string, CachedClubModules>();
@@ -134,7 +139,19 @@ export async function syncRoutes(app: FastifyInstance, opts: SyncRoutesOptions) 
   app.post('/api/sync/push', { preHandler: syncGuard }, async (request, reply) => {
     const body = parseInput(SyncPushRequestSchema, request.body, reply);
     if (!body) return;
-    const results = await syncService.push(body.events, await requesterFrom(request));
+    const requester = await requesterFrom(request);
+    const results = await syncService.push(body.events, requester);
+
+    // Phase 2, Abschnitt 2.4: fire-and-forget — läuft NACH dem Senden der
+    // Sync-Antwort (siehe .then() statt await) und blockiert diese daher
+    // nicht; ein Fehler hier darf einen ansonsten erfolgreichen Sync-Push
+    // nicht scheitern lassen (nur geloggt).
+    if (announcementNotify) {
+      notifyAnnouncementCreated(announcementNotify, body.events, results, requester.clubId, requester.userId).catch((err) => {
+        app.log.error({ err }, 'Push-Benachrichtigung für neues Announcement fehlgeschlagen');
+      });
+    }
+
     return reply.code(200).send({ results });
   });
 

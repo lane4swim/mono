@@ -17,6 +17,9 @@ describe('strategyForStore', () => {
     expect(strategyForStore('templates')).toBe('last-write-wins-document');
     expect(strategyForStore('planCycles')).toBe('last-write-wins-document');
   });
+  it('weist "announcements" last-write-wins zu (flaches Dokument, Phase 2, Abschnitt 4.1)', () => {
+    expect(strategyForStore('announcements')).toBe('last-write-wins');
+  });
 });
 
 describe('resolveConflict', () => {

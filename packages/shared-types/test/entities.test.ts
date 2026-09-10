@@ -12,6 +12,7 @@ import {
   PlanCycleSchema,
   TrainingSessionSchema,
   ActionItemSchema,
+  AnnouncementSchema,
   CommentSchema,
   ENTITY_SCHEMAS,
 } from '../src/entities.js';
@@ -425,6 +426,28 @@ describe('ActionItemSchema', () => {
   });
   it('lehnt eine ungültige assignedTrainerId ab', () => {
     expect(ActionItemSchema.safeParse({ ...valid, assignedTrainerId: 'nicht-uuid' }).success).toBe(false);
+  });
+});
+
+describe('AnnouncementSchema', () => {
+  const valid = { id: ATHLETE_ID, clubId: CLUB_ID, groupId: null, authorId: TRAINER_ID, title: 'Training fällt aus', body: 'Mittwoch fällt das Training aus.', createdAt: now, updatedAt: now };
+  it('akzeptiert eine vollständige, vereinsweite Ankündigung', () => {
+    expect(AnnouncementSchema.safeParse(valid).success).toBe(true);
+  });
+  it('akzeptiert eine gruppenspezifische Ankündigung', () => {
+    expect(AnnouncementSchema.safeParse({ ...valid, groupId: ATHLETE_ID }).success).toBe(true);
+  });
+  it('akzeptiert authorId=null (z. B. nach Löschung des verfassenden Kontos)', () => {
+    expect(AnnouncementSchema.safeParse({ ...valid, authorId: null }).success).toBe(true);
+  });
+  it('lehnt einen leeren title ab', () => {
+    expect(AnnouncementSchema.safeParse({ ...valid, title: '' }).success).toBe(false);
+  });
+  it('lehnt einen leeren body ab', () => {
+    expect(AnnouncementSchema.safeParse({ ...valid, body: '' }).success).toBe(false);
+  });
+  it('lehnt zusätzliche, nicht im Schema vorgesehene Felder ab (.strict())', () => {
+    expect(AnnouncementSchema.safeParse({ ...valid, extra: 'x' }).success).toBe(false);
   });
 });
 

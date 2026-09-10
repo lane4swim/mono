@@ -120,6 +120,7 @@ export default {
     dashboard: 'Dashboard', athletes: 'Athleten & Team', competitions: 'Wettkämpfe',
     times: 'Zeiten & Leistung', plans: 'Trainingspläne', templates: 'Vorlagen',
     catalog: 'Übungskatalog', sessions: 'Einheiten & Feedback', actionitems: 'Handlungsfelder',
+    announcements: 'Ankündigungen',
     stats: 'Statistiken', syncqueue: 'Sync-Warteschlange', profile: 'Mein Profil', usermgmt: 'Nutzerverwaltung',
     info: 'Rechtliches & Datenschutz', qualifications: 'Qualifikationen', kampfrichter: 'Kampfrichter',
     groups: {
@@ -155,6 +156,7 @@ export default {
     attendanceLine: 'Anwesend {present}/{total}', avgRpe: ' · Ø RPE {rpe}',
     allSessions: 'Alle Einheiten →',
     attendanceFlagsTitle: 'Auffällige Anwesenheit', attendanceFlagsMsg: '{count} Athlet:in(nen) mit gesunkener Anwesenheit — Details in den Statistiken.',
+    announcementsTitle: 'Neueste Ankündigungen',
     statPBs: 'Persönliche Bestzeiten', disciplines: 'Disziplinen',
     statNextSession: 'Nächstes Training', statOpenGoals: 'Offene Ziele',
     currentPBsTitle: 'Aktuelle Bestzeiten', noTimesYet: 'Noch keine Zeiten erfasst.',
@@ -409,6 +411,17 @@ export default {
     formAssignedTrainer: 'Zuständige:r Trainer:in', unknownTrainerOption: '— nicht mehr im Verein —',
     formDue: 'Fällig am', formDescription: 'Beschreibung',
     validationTitle: 'Bitte einen Titel angeben.', savedEdit: 'Änderungen gespeichert', savedCreate: 'Handlungsfeld angelegt',
+  },
+  announcements: {
+    eyebrow: '{count} Ankündigungen', title: 'Ankündigungen', addAnnouncement: '+ Ankündigung erstellen',
+    intro: 'Organisatorische Mitteilungen von Trainer:innen/Admins an die Gruppe oder den gesamten Verein.',
+    noneYet: 'Noch keine Ankündigungen vorhanden.',
+    wholeClub: 'Ganzer Verein',
+    deleteConfirm: 'Diese Ankündigung löschen?', deleted: 'Gelöscht',
+    modalEdit: 'Ankündigung bearbeiten', modalCreate: 'Ankündigung erstellen',
+    formTitle: 'Titel', formScope: 'Zielgruppe', formBody: 'Text',
+    validationTitle: 'Bitte einen Titel angeben.', validationBody: 'Bitte einen Text angeben.',
+    savedEdit: 'Änderungen gespeichert', savedCreate: 'Ankündigung erstellt',
   },
   stats: {
     eyebrow: 'Auswertungen', title: 'Statistiken',

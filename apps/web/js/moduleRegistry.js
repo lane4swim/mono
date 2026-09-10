@@ -15,6 +15,7 @@ import { templatesModule } from './modules/templates.js';
 import { catalogModule } from './modules/catalog.js';
 import { sessionsModule } from './modules/sessions.js';
 import { actionItemsModule } from './modules/actionItems.js';
+import { announcementsModule } from './modules/announcements.js';
 import { statsModule } from './modules/stats.js';
 import { syncQueueModule } from './modules/syncQueue.js';
 import { profileModule } from './modules/profile.js';
@@ -25,7 +26,7 @@ import { kampfrichterModule } from './modules/kampfrichter.js';
 
 const ALL_MODULES = [
   dashboardModule, athletesModule, competitionsModule, timesModule, plansModule,
-  templatesModule, catalogModule, sessionsModule, actionItemsModule, statsModule,
+  templatesModule, catalogModule, sessionsModule, actionItemsModule, announcementsModule, statsModule,
   syncQueueModule, profileModule, userManagementModule, infoModule, qualificationsModule,
   kampfrichterModule,
 ];

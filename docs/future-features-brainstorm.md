@@ -252,7 +252,7 @@ nur 2.2, nicht 2.1/2.3).
 | Phase | Abschnitt(e) | Umfang |
 |---|---|---|
 | **Phase 1** | 3 | **Vollständig umgesetzt** — 3.1 Wiederkehrende Trainingspläne/Vorlagen-Zyklen, 3.2 Belastungssteuerung/Trainingsumfang-Auswertung, 3.3 Anwesenheitsstatistik & -prognose — detaillierter Umsetzungsplan inkl. Umsetzungsstand: `docs/Plans/trainingsplanung-phase1-plan.md` |
-| **Phase 2** | 1.2, 4 | 1.2 Push-Benachrichtigungen (**umgesetzt**); 4.1 Vereinsinterne Nachrichten/Ankündigungen (offen), 4.2 Eltern-/Erziehungsberechtigten-Zugang (offen) — detaillierter Umsetzungsplan inkl. Umsetzungsstand: `docs/Plans/phase2-plan.md` |
+| **Phase 2** | 1.2, 4 | 1.2 Push-Benachrichtigungen (**umgesetzt**); 4.1 Vereinsinterne Nachrichten/Ankündigungen (**umgesetzt**), 4.2 Eltern-/Erziehungsberechtigten-Zugang (offen) — detaillierter Umsetzungsplan inkl. Umsetzungsstand: `docs/Plans/phase2-plan.md` |
 | **Phase 3** | 5 | 5.1 Mehrere Gruppen-Trainer:innen/Vertretungsregelung, 5.2 Audit-Log für sicherheitsrelevante Aktionen |
 | **Phase 4** | 2.2, 6.3 | 2.2 Automatische Bestenlisten/Vereinsrekorde, 6.3 Datenexport für externe Auswertung (CSV/Excel) |
 
