@@ -441,3 +441,33 @@ export function syncPull(cursor) {
   const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
   return request(`/api/sync/pull${query}`);
 }
+
+// ---- Web-Push-Benachrichtigungen (Phase 2, Abschnitt 1.2 —
+// docs/Plans/phase2-plan.md) — nicht zu verwechseln mit syncPush() oben
+// (Offline-Sync), hier geht es um Browser-Benachrichtigungen.
+export function getPushPublicKey() {
+  return request('/api/push/public-key');
+}
+export function subscribePush({ endpoint, keys }) {
+  return request('/api/push/subscriptions', { method: 'POST', body: JSON.stringify({ endpoint, keys }) });
+}
+export function unsubscribePush(endpoint) {
+  return request('/api/push/subscriptions', { method: 'DELETE', body: JSON.stringify({ endpoint }) });
+}
+
+// ---- Eltern-/Erziehungsberechtigten-Zugang (Phase 2, Abschnitt 4.2 —
+// docs/Plans/phase2-plan.md) — eigene, stark eingeschränkte REST-Sicht,
+// KEIN Sync-Store.
+export function getParentOverview() {
+  return request('/api/parents/overview');
+}
+// Admin-Verwaltung der Eltern-Kind-Verknüpfungen.
+export function listParentLinks(userId) {
+  return request(`/api/parents/${encodeURIComponent(userId)}/links`);
+}
+export function addParentLink(userId, athleteId) {
+  return request(`/api/parents/${encodeURIComponent(userId)}/links`, { method: 'POST', body: JSON.stringify({ athleteId }) });
+}
+export function removeParentLink(userId, athleteId) {
+  return request(`/api/parents/${encodeURIComponent(userId)}/links/${encodeURIComponent(athleteId)}`, { method: 'DELETE' });
+}

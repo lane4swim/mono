@@ -45,6 +45,13 @@ describe('canRead()/canWrite() — Modul-Gating', () => {
     expect(canWrite('planCycles', ['trainer'], [])).toBe(false); // Paket nicht gebucht
   });
 
+  it('"announcements" ist ein eigenes, zubuchbares Paket (Phase 2, Abschnitt 4.1)', () => {
+    expect(canRead('announcements', ['athlete'], ['announcements'])).toBe(true);
+    expect(canWrite('announcements', ['trainer'], ['announcements'])).toBe(true);
+    expect(canWrite('announcements', ['athlete'], ['announcements'])).toBe(false); // nur trainer/admin
+    expect(canRead('announcements', ['athlete'], ['plans'])).toBe(false); // eigenes Paket, nicht in "plans" gebündelt
+  });
+
   it('"results" ist der Sonderfall: times ODER competitions reicht (von beiden Modulen genutzt)', () => {
     expect(canRead('results', ['trainer'], ['times'])).toBe(true);
     expect(canRead('results', ['trainer'], ['competitions'])).toBe(true);

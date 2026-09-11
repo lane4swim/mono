@@ -24,6 +24,7 @@ import { getCurrentUser, updateProfile, setUserLocale, logout, changePassword, c
 import * as api from '../apiClient.js';
 import { NetworkError, describeError } from '../apiClient.js';
 import { t, getLocale, getAvailableLocales } from '../i18n.js';
+import { isPushSupported, getExistingPushSubscription, subscribeToPush, unsubscribeFromPush } from '../push.js';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -183,6 +184,58 @@ function buildChangeEmailCard() {
   return card;
 }
 
+// Push-Benachrichtigungen (Phase 2, Abschnitt 1.6 — docs/Plans/phase2-plan.md).
+// Gibt `null` zurück, wenn der Browser keine Web-Push-Unterstützung hat
+// (z. B. iOS-Safari außerhalb "Zum Home-Bildschirm") — die Karte
+// erscheint dann gar nicht erst, statt einen wirkungslosen Umschalter zu
+// zeigen.
+function buildNotificationsCard() {
+  if (!isPushSupported()) return null;
+
+  const card = el('div', { class: 'card mb-16' }, [
+    el('h3', { class: 'mt-0' }, t('profile.notificationsSectionTitle')),
+    el('p', { class: 'text-sm' }, t('profile.notificationsHint')),
+  ]);
+
+  const checkbox = el('input', { type: 'checkbox', disabled: true });
+  const label = el('label', { class: 'flex gap-8', style: 'align-items:center' }, [checkbox, t('profile.notificationsToggleLabel')]);
+  card.appendChild(label);
+
+  // Checkbox startet deaktiviert, bis der tatsächliche Abo-Status (async,
+  // browserseitig) feststeht — verhindert einen falschen Zwischenzustand
+  // (z. B. sichtbar "aktiviert", obwohl noch kein Abo besteht).
+  // Code-Review-Korrektur: ohne .catch() blieb die Checkbox dauerhaft
+  // deaktiviert (nie wieder bedienbar), sobald getExistingPushSubscription()
+  // ablehnte oder registration.ready nie auflöste (z. B. Service Worker
+  // in diesem Kontext nie aktiv geworden) — ohne jeden Hinweis für die
+  // Person, dass etwas schiefging.
+  getExistingPushSubscription()
+    .then((sub) => { checkbox.checked = !!sub; })
+    .catch(() => { checkbox.checked = false; })
+    .finally(() => { checkbox.disabled = false; });
+
+  checkbox.addEventListener('change', async () => {
+    const wantsEnabled = checkbox.checked;
+    checkbox.disabled = true;
+    try {
+      if (wantsEnabled) {
+        await subscribeToPush();
+        toast(t('profile.notificationsEnabled'));
+      } else {
+        await unsubscribeFromPush();
+        toast(t('profile.notificationsDisabled'));
+      }
+    } catch (err) {
+      checkbox.checked = !wantsEnabled; // Zustand zurücksetzen — die Aktion ist fehlgeschlagen.
+      toast(t('profile.notificationsError', { message: err instanceof Error ? err.message : String(err) }), 'error');
+    } finally {
+      checkbox.disabled = false;
+    }
+  });
+
+  return card;
+}
+
 function renderView(container, athletes, results, entries, actionItems, sessions) {
   const user = getCurrentUser();
   const wrap = el('div');
@@ -262,6 +315,10 @@ function renderView(container, athletes, results, entries, actionItems, sessions
   });
   langCard.appendChild(langButtons);
   wrap.appendChild(langCard);
+
+  // ---- Push-Benachrichtigungen (Phase 2, Abschnitt 1.6) ----
+  const notificationsCard = buildNotificationsCard();
+  if (notificationsCard) wrap.appendChild(notificationsCard);
 
   // ---- Meine Daten: Auskunft (Export) & Löschung (Art. 15 + 17 DSGVO) ----
   const dataCard = el('div', { class: 'card' }, [el('h3', { class: 'mt-0' }, t('profileData.section'))]);

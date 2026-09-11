@@ -359,4 +359,53 @@ describe('PrismaSyncGateway.applyAndMarkProcessed() (Code-Review, Befund C3)', (
     );
     expect(outcome).toBe('applied');
   });
+
+  // Code-Review-Korrektur (Phase 2, Abschnitt 4.2 — docs/Plans/phase2-plan.md):
+  // ParentLink.athlete trägt zwar onDelete: Cascade, das greift aber NUR
+  // bei einer echten SQL-DELETE (z. B. dem harten DSGVO-Purge), nicht bei
+  // diesem Soft-Delete (reines "deletedAt"-UPDATE). Ohne die explizite
+  // Aufräumung in applyAndMarkProcessed() (siehe sync.gateway.ts) bliebe
+  // eine ParentLink-Zeile dauerhaft auf ein unsichtbares Athletenprofil
+  // verweisen.
+  it('löscht verknüpfte ParentLink-Zeilen, wenn eine Athletin/ein Athlet per Sync soft-gelöscht wird', async () => {
+    const club = await createTestClub();
+    const athlete = await prisma.athlete.create({ data: { clubId: club.id, firstName: 'Mara', lastName: 'Vogel' } });
+    const parentUser = await prisma.user.create({
+      data: { clubId: club.id, name: 'Petra Vogel', email: `parent-${randomUUID()}@example.org`, passwordHash: 'x', role: 'parent', roles: ['parent'] },
+    });
+    await prisma.parentLink.create({ data: { userId: parentUser.id, athleteId: athlete.id } });
+
+    const outcome = await gateway.applyAndMarkProcessed(
+      { kind: 'softDelete', store: 'athletes', id: athlete.id, clubId: club.id },
+      { id: randomUUID(), clubId: club.id, store: 'athletes', action: 'delete' },
+    );
+
+    expect(outcome).toBe('applied');
+    expect(await prisma.parentLink.findMany({ where: { userId: parentUser.id } })).toHaveLength(0);
+    // Das Elternkonto selbst bleibt unberührt — nur die Verknüpfung
+    // verschwindet (siehe docs/Plans/phase2-plan.md, Abschnitt 4.2).
+    expect(await prisma.user.findUnique({ where: { id: parentUser.id } })).not.toBeNull();
+  });
+
+  // Gegenprobe: ein Soft-Delete eines ANDEREN Stores darf keine
+  // ParentLink-Zeilen berühren (die store-spezifische Ausnahme in
+  // applyAndMarkProcessed() muss tatsächlich auf "athletes" beschränkt
+  // bleiben).
+  it('lässt ParentLink-Zeilen beim Soft-Delete eines anderen Stores unberührt', async () => {
+    const club = await createTestClub();
+    const athlete = await prisma.athlete.create({ data: { clubId: club.id, firstName: 'Mara', lastName: 'Vogel' } });
+    const parentUser = await prisma.user.create({
+      data: { clubId: club.id, name: 'Petra Vogel', email: `parent-${randomUUID()}@example.org`, passwordHash: 'x', role: 'parent', roles: ['parent'] },
+    });
+    await prisma.parentLink.create({ data: { userId: parentUser.id, athleteId: athlete.id } });
+    const groupPayloadForDelete = groupPayload(club.id);
+    await gateway.create('groups', groupPayloadForDelete);
+
+    await gateway.applyAndMarkProcessed(
+      { kind: 'softDelete', store: 'groups', id: groupPayloadForDelete.id, clubId: club.id },
+      { id: randomUUID(), clubId: club.id, store: 'groups', action: 'delete' },
+    );
+
+    expect(await prisma.parentLink.findMany({ where: { userId: parentUser.id } })).toHaveLength(1);
+  });
 });

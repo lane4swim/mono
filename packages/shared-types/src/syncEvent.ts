@@ -17,6 +17,7 @@ export const SyncStoreSchema = z.enum([
   'planCycles',
   'sessions',
   'actionItems',
+  'announcements',
 ]);
 export type SyncStore = z.infer<typeof SyncStoreSchema>;
 

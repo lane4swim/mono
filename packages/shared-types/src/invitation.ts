@@ -87,15 +87,19 @@ export const UpdateClubIdentityRequestSchema = z.object({
 });
 export type UpdateClubIdentityRequest = z.infer<typeof UpdateClubIdentityRequestSchema>;
 
-// Nur diese vier Rollen lassen sich per Einladung vergeben — "superadmin"
+// Nur diese fünf Rollen lassen sich per Einladung vergeben — "superadmin"
 // wird bewusst nie über die API vergeben (siehe scripts/createSuperAdmin.ts).
 // "referee" (Kampfrichter:in, docs/Plans/kampfrichter-modul-plan.md, Abschnitt 2)
 // kann wie jede andere Rolle direkt per Einladung vergeben werden — z. B.
 // für eine Person, die im Verein ausschließlich als Kampfrichter:in aktiv
-// ist, ohne selbst zu trainieren/zu schwimmen. Weitere Rollen kommen
-// nachträglich ausschließlich über PATCH /api/users/:userId/roles hinzu
-// (Abschnitt 1.4), nie direkt bei der Registrierung.
-export const InvitationRoleSchema = z.enum(['admin', 'trainer', 'athlete', 'referee']);
+// ist, ohne selbst zu trainieren/zu schwimmen. "parent" (docs/Plans/
+// phase2-plan.md, Abschnitt 4.2) verknüpft sich über `athleteId` unten mit
+// dem ERSTEN Kind — weitere Geschwister werden nachträglich über die
+// Verknüpfungsverwaltung ergänzt (siehe dortiger Plan, Abschnitt 3.5).
+// Weitere Rollen kommen nachträglich ausschließlich über PATCH
+// /api/users/:userId/roles hinzu (Abschnitt 1.4), nie direkt bei der
+// Registrierung.
+export const InvitationRoleSchema = z.enum(['admin', 'trainer', 'athlete', 'referee', 'parent']);
 export type InvitationRole = z.infer<typeof InvitationRoleSchema>;
 
 export const CreateInvitationRequestSchema = z.object({
@@ -109,8 +113,11 @@ export const CreateInvitationRequestSchema = z.object({
   // Verein verwendet (siehe invitations.service.ts) — ein Admin kann nicht
   // in einen fremden Verein einladen.
   clubId: z.string().uuid().optional(),
-  // Nur bei role === 'athlete' sinnvoll: verknüpft die Einladung mit einem
-  // bereits angelegten Athletenprofil.
+  // Bei role === 'athlete': verknüpft die Einladung mit einem bereits
+  // angelegten Athletenprofil (das eigene Konto der Athletin/des Athleten).
+  // Bei role === 'parent': verknüpft die Einladung mit dem ERSTEN Kind
+  // (siehe Kommentar bei InvitationRoleSchema oben) — acceptInvitation()
+  // legt daraus automatisch die erste ParentLink-Zeile an.
   athleteId: z.string().uuid().nullable().optional(),
 });
 export type CreateInvitationRequest = z.infer<typeof CreateInvitationRequestSchema>;

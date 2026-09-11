@@ -27,8 +27,8 @@ export const dashboardModule = {
 };
 
 async function renderTrainerDashboard(container, isCurrent) {
-  const [athletes, groups, plans, sessions, actionItems, competitions] = await Promise.all(
-    ['athletes', 'groups', 'plans', 'sessions', 'actionItems', 'competitions'].map(getAll)
+  const [athletes, groups, plans, sessions, actionItems, competitions, announcements] = await Promise.all(
+    ['athletes', 'groups', 'plans', 'sessions', 'actionItems', 'competitions', 'announcements'].map(getAll)
   );
   if (!isCurrent()) return;
 
@@ -139,14 +139,25 @@ async function renderTrainerDashboard(container, isCurrent) {
     ]));
   }
 
+  // Neueste Ankündigungen (Phase 2, Abschnitt 4.1) — nur als kompakter
+  // Hinweis, Vollansicht liefert das Ankündigungen-Modul.
+  const latestAnnouncements = [...announcements].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')).slice(0, 3);
+  if (latestAnnouncements.length > 0) {
+    const announcementsCard = el('div', { class: 'card' }, [el('h3', { class: 'mt-0' }, t('dashboard.announcementsTitle'))]);
+    latestAnnouncements.forEach((a) => announcementsCard.appendChild(el('div', { class: 'list-row row-click', onclick: () => navigate('announcements') }, [
+      el('div', { style: 'flex:1' }, [el('div', {}, a.title), el('div', { class: 'text-slate text-sm' }, fmtDateLong(a.createdAt))]),
+    ])));
+    grid.appendChild(announcementsCard);
+  }
+
   wrap.appendChild(grid);
   container.appendChild(wrap);
 }
 
 async function renderAthleteDashboard(container, isCurrent) {
   const user = getCurrentUser();
-  const [athletes, results, plans, actionItems, competitions] = await Promise.all(
-    ['athletes', 'results', 'plans', 'actionItems', 'competitions'].map(getAll)
+  const [athletes, results, plans, actionItems, competitions, announcements] = await Promise.all(
+    ['athletes', 'results', 'plans', 'actionItems', 'competitions', 'announcements'].map(getAll)
   );
   if (!isCurrent()) return;
   const me = athletes.find(a => a.id === user?.athleteId);
@@ -200,6 +211,15 @@ async function renderAthleteDashboard(container, isCurrent) {
     el('div', { style: 'flex:1' }, [el('div', {}, c.name), el('div', { class: 'text-slate text-sm' }, fmtDateLong(c.date))]),
   ])));
   grid.appendChild(compCard);
+
+  const latestAnnouncements = [...announcements].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')).slice(0, 3);
+  if (latestAnnouncements.length > 0) {
+    const announcementsCard = el('div', { class: 'card' }, [el('h3', { class: 'mt-0' }, t('dashboard.announcementsTitle'))]);
+    latestAnnouncements.forEach((a) => announcementsCard.appendChild(el('div', { class: 'list-row row-click', onclick: () => navigate('announcements') }, [
+      el('div', { style: 'flex:1' }, [el('div', {}, a.title), el('div', { class: 'text-slate text-sm' }, fmtDateLong(a.createdAt))]),
+    ])));
+    grid.appendChild(announcementsCard);
+  }
 
   wrap.appendChild(grid);
   container.appendChild(wrap);

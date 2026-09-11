@@ -16,7 +16,11 @@ export function getModule(routeId) {
 // bestimmte Vereine) — Kern-Module (Dashboard/Profil/Nutzerverwaltung/
 // Sync-Queue/Info) sind reine Infrastruktur ohne eigenen fachlichen
 // Sync-Store und bleiben immer sichtbar, unabhängig von enabledModules.
-export const CORE_MODULE_IDS = ['dashboard', 'profile', 'usermgmt', 'syncqueue', 'info'];
+// "parent" (Phase 2, Abschnitt 4.2): reine Infrastruktur wie 'dashboard' —
+// die Eltern-Übersicht ist unabhängig von enabledModules, sie liest über
+// einen eigenen REST-Endpunkt (GET /api/parents/overview), nicht über den
+// generischen, modul-gegateten Sync-Store-Mechanismus.
+export const CORE_MODULE_IDS = ['dashboard', 'parent', 'profile', 'usermgmt', 'syncqueue', 'info'];
 
 // Route-ID (MODULES[*].id) -> Paket-Key. MUSS inhaltlich mit
 // packages/shared-types/src/modules.ts: MODULE_PACKAGES übereinstimmen —
@@ -34,6 +38,10 @@ const ROUTE_TO_PACKAGE = {
   catalog: 'catalog',
   sessions: 'sessions',
   actionitems: 'actionitems',
+  // Vereinsinterne Nachrichten/Ankündigungen (Phase 2, Abschnitt 4.1) —
+  // MUSS mit packages/shared-types/src/modules.ts: MODULE_PACKAGES.
+  // announcements übereinstimmen.
+  announcements: 'announcements',
   stats: 'stats',
   // Qualifikationsmanagement (docs/Plans/nutzer-qualifikationen-plan.md, Abschnitt
   // 1.2) — MUSS mit packages/shared-types/src/modules.ts: MODULE_PACKAGES.

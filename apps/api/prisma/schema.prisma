@@ -61,19 +61,20 @@ model Club {
   actionItems                   ActionItem[]
   qualificationReminderSettings ClubQualificationReminderSetting[]
   refereeAssignments            RefereeAssignment[]
+  announcements                 Announcement[]
 
   @@map("clubs")
 }
 
 model User {
-  id                  String               @id @default(uuid())
+  id                               String               @id @default(uuid())
   // null nur für role === "superadmin".
-  clubId              String?
-  club                Club?                @relation(fields: [clubId], references: [id])
-  name                String
-  email               String               @unique
-  passwordHash        String
-  role                String
+  clubId                           String?
+  club                             Club?                @relation(fields: [clubId], references: [id])
+  name                             String
+  email                            String               @unique
+  passwordHash                     String
+  role                             String
   // Aufräumarbeit (Code-Review): vormals ein nackter String ohne
   // Fremdschlüssel/Unique-Constraint, obwohl jede andere Referenz in
   // diesem Schema sauber modelliert ist — zwei Konten hätten unbemerkt auf
@@ -87,8 +88,8 @@ model User {
   // in der direkt danach auch dieser User-Datensatz gelöscht wird; SetNull
   // verhindert, dass die Fremdschlüssel-Constraint diese Reihenfolge
   // blockiert, ohne den Purge-Ablauf selbst ändern zu müssen.
-  athleteId           String?              @unique
-  athlete             Athlete?             @relation(fields: [athleteId], references: [id], onDelete: SetNull)
+  athleteId                        String?              @unique
+  athlete                          Athlete?             @relation(fields: [athleteId], references: [id], onDelete: SetNull)
   // docs/Plans/kampfrichter-modul-plan.md, Abschnitt 1: ein Konto kann mehrere
   // Rollen gleichzeitig haben (z. B. Trainer:in UND Athlet:in). Löst
   // schrittweise "role" oben ab (expand -> migrate -> contract, siehe
@@ -97,34 +98,42 @@ model User {
   // bestehen (rein informativ, wird von PrismaUserRepository weiterhin
   // als roles[0] mitgepflegt, siehe auth.repository.ts), bis eine
   // spätere, eigene Migration die Spalte entfernt.
-  roles               String[]             @default([])
-  locale              String               @default("de-DE")
+  roles                            String[]             @default([])
+  locale                           String               @default("de-DE")
   // DSGVO: Zeitpunkt/Version der zuletzt bestätigten Einwilligung zur
   // Datenverarbeitung — wird bei jedem Login/jeder Registrierung erneut
   // gesetzt (siehe auth.service.ts: CURRENT_CONSENT_VERSION).
-  consentGivenAt      DateTime?
-  consentVersion      String?
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
+  consentGivenAt                   DateTime?
+  consentVersion                   String?
+  createdAt                        DateTime             @default(now())
+  updatedAt                        DateTime             @updatedAt
   // Sofort gesetzt, sobald eine Löschung beantragt wird (Recht auf
   // Löschung, Art. 17 DSGVO) — der Account ist ab dann funktionslos
   // (Login wird verweigert), der endgültige Hard-Purge aus der Datenbank
   // erfolgt zeitversetzt über DataDeletionRequest.purgeAfter.
-  deletedAt           DateTime?
-  refreshTokens       RefreshToken[]
-  sentInvitations     Invitation[]         @relation("InvitationSender")
-  deletionRequest     DataDeletionRequest?
-  assignedActionItems ActionItem[]         @relation("ActionItemAssignedTrainer")
-  passwordResetTokens PasswordResetToken[]
-  qualifications      UserQualification[]
+  deletedAt                        DateTime?
+  refreshTokens                    RefreshToken[]
+  sentInvitations                  Invitation[]         @relation("InvitationSender")
+  deletionRequest                  DataDeletionRequest?
+  assignedActionItems              ActionItem[]         @relation("ActionItemAssignedTrainer")
+  passwordResetTokens              PasswordResetToken[]
+  qualifications                   UserQualification[]
   // docs/Plans/kampfrichter-modul-plan.md, Abschnitt 5.2: eigene Wettkampfeinsätze
   // dieser Person (Rolle "referee").
-  refereeAssignments  RefereeAssignment[]
+  refereeAssignments               RefereeAssignment[]
   // Gegenstück zu RefereeAssignment.createdByAdminId — Einsätze, die diese
   // Person als admin im Namen einer anderen Kampfrichter:in erfasst hat.
   // Eigener Relationsname nötig, da User hier zweimal auf RefereeAssignment
   // verweist (Zielperson UND erfassende Admin-Person).
-  refereeAssignmentsCreatedAsAdmin RefereeAssignment[] @relation("RefereeAssignmentCreatedByAdmin")
+  refereeAssignmentsCreatedAsAdmin RefereeAssignment[]  @relation("RefereeAssignmentCreatedByAdmin")
+  // Phase 2, Abschnitt 1.2 (docs/Plans/phase2-plan.md) — Web-Push-Abos
+  // dieses Kontos (mehrere Geräte möglich).
+  pushSubscriptions                PushSubscription[]
+  // Phase 2, Abschnitt 4.1 — Ankündigungen, die diese Person verfasst hat.
+  announcements                    Announcement[]
+  // Phase 2, Abschnitt 4.2 — verknüpfte Kinder, nur relevant für Rolle
+  // "parent" (siehe ParentLink).
+  parentLinks                      ParentLink[]
 
   // Ineffizienz-Korrektur: `clubId` ist zwar ein Fremdschlüssel, Postgres
   // legt darauf aber — anders als für UNIQUE-Spalten — KEINEN Index an.
@@ -239,9 +248,10 @@ model Group {
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
 
-  athletes Athlete[]
-  plans    Plan[]
-  sessions TrainingSession[]
+  athletes      Athlete[]
+  plans         Plan[]
+  sessions      TrainingSession[]
+  announcements Announcement[]
 
   // [clubId, updatedAt] statt nur [clubId]: bedient GENAU das Zugriffsmuster
   // von sync.gateway.ts: listChangedSince() — `WHERE clubId = ? [AND
@@ -286,6 +296,8 @@ model Athlete {
   // Rückreferenz zu User.athleteId (siehe dort) — höchstens EIN Konto pro
   // Athletenprofil, daher singulär statt eines Arrays.
   user        User?
+  // Phase 2, Abschnitt 4.2 — verknüpfte Eltern-/Erziehungsberechtigten-Konten.
+  parentLinks ParentLink[]
 
   // [clubId, updatedAt] statt [clubId] — siehe Begründung bei Group oben
   // (Sync-Pull-Zugriffsmuster).
@@ -307,8 +319,8 @@ model Competition {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  entries StartlistEntry[]
-  results Result[]
+  entries            StartlistEntry[]
+  results            Result[]
   // docs/Plans/kampfrichter-modul-plan.md, Abschnitt 5.2: optionaler Verweis von
   // Wettkampfeinsätzen auf einen vereinseigenen Wettkampf-Datensatz.
   refereeAssignments RefereeAssignment[]
@@ -317,6 +329,23 @@ model Competition {
   // (Sync-Pull-Zugriffsmuster).
   @@index([clubId, updatedAt])
   @@map("competitions")
+}
+
+// Phase 2, Abschnitt 4.2 (docs/Plans/phase2-plan.md) — n:m zwischen einem
+// Eltern-Konto (Rolle "parent") und einem/mehreren Athletenprofilen
+// (Geschwister im selben Verein). onDelete: Cascade auf beiden Seiten —
+// eine Verknüpfung ohne eine der beiden Seiten ist bedeutungslos.
+model ParentLink {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  athleteId String
+  athlete   Athlete  @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, athleteId])
+  @@index([athleteId])
+  @@map("parent_links")
 }
 
 // Startlisten-Einträge (Wettkampfnummer/Lauf/Bahn/Meldezeit) — entspricht
@@ -496,25 +525,27 @@ model PlanCycle {
 // Heißt "TrainingSession" (nicht "Session"), um Verwechslung mit
 // Auth-/HTTP-Session-Konzepten zu vermeiden — Tabelle bleibt "sessions".
 model TrainingSession {
-  id          String    @id @default(uuid())
-  clubId      String
-  club        Club      @relation(fields: [clubId], references: [id])
-  date        DateTime
-  groupId     String?
-  group       Group?    @relation(fields: [groupId], references: [id])
-  planId      String?
-  plan        Plan?     @relation(fields: [planId], references: [id])
-  trainerNote String    @default("")
+  id             String    @id @default(uuid())
+  clubId         String
+  club           Club      @relation(fields: [clubId], references: [id])
+  date           DateTime
+  groupId        String?
+  group          Group?    @relation(fields: [groupId], references: [id])
+  planId         String?
+  plan           Plan?     @relation(fields: [planId], references: [id])
+  trainerNote    String    @default("")
   // Array von { athleteId, present, rpe, note } — ein Eintrag je Athlet:in.
-  attendance  Json
+  attendance     Json
   // Manuelle Distanzangabe (Meter) für Einheiten ohne planId (Ad-hoc-
   // Training) oder bei Abweichung vom Plan-Tag. null = aus dem
   // verknüpften Plan-Tag berechnen (Standardfall). Siehe
   // docs/Plans/trainingsplanung-phase1-plan.md, Abschnitt 2.2.
   actualDistance Int?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  deletedAt   DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  reminderLog SessionReminderLog?
 
   // [clubId, updatedAt] statt [clubId] — siehe Begründung bei Group oben
   // (Sync-Pull-Zugriffsmuster).
@@ -522,6 +553,19 @@ model TrainingSession {
   @@index([groupId])
   @@index([planId])
   @@map("sessions")
+}
+
+// Phase 2, Abschnitt 1.5.2 (docs/Plans/phase2-plan.md) — Doppelversand-
+// Schutz für die Push-Erinnerung an bevorstehende Trainingseinheiten,
+// analog QualificationReminderLog. onDelete: Cascade — eine gelöschte
+// Einheit braucht keine eigene Versandhistorie mehr.
+model SessionReminderLog {
+  id        String          @id @default(uuid())
+  sessionId String          @unique
+  session   TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  sentAt    DateTime        @default(now())
+
+  @@map("session_reminder_logs")
 }
 
 model ActionItem {
@@ -686,30 +730,30 @@ model ClubQualificationReminderSetting {
 // UserQualification — ein gelöschtes Konto braucht keine eigenständig
 // fortbestehende Einsatzhistorie mehr.
 model RefereeAssignment {
-  id     String @id @default(uuid())
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id               String       @id @default(uuid())
+  userId           String
+  user             User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   // Verein, dem die Kampfrichter:in zum Erfassungszeitpunkt angehört —
   // Scoping für die Admin-Übersicht, NICHT zwingend der ausrichtende
   // Verein des Wettkampfs (siehe Freitextfelder unten).
-  clubId String
-  club   Club   @relation(fields: [clubId], references: [id])
+  clubId           String
+  club             Club         @relation(fields: [clubId], references: [id])
   // Freitext, da der Wettkampf oft nicht als eigener Competition-Datensatz
   // existiert (Plan Abschnitt 5.1 — Kampfrichter:innen amtieren häufig bei
   // Wettkämpfen anderer, ggf. vereinsfremder Ausrichter).
   competitionName  String
-  competitionPlace String  @default("")
+  competitionPlace String       @default("")
   // Optionaler Verweis auf einen vereinseigenen Wettkampf-Datensatz —
   // onDelete: SetNull, damit ein gelöschter Competition-Datensatz nicht
   // die Einsatzhistorie mitreißt (sie bleibt dann als reiner
   // Freitext-Eintrag bestehen).
-  competitionId String?
-  competition   Competition? @relation(fields: [competitionId], references: [id], onDelete: SetNull)
-  date          DateTime
+  competitionId    String?
+  competition      Competition? @relation(fields: [competitionId], references: [id], onDelete: SetNull)
+  date             DateTime
   // RefereeFunctionSchema-Wert (packages/shared-types/src/referee.ts) —
   // kein Fremdschlüssel, analog UserQualification.type.
-  function String
-  note     String @default("")
+  function         String
+  note             String       @default("")
   // Gesetzt, wenn der Eintrag über den admin-Schreibpfad (statt von der
   // Kampfrichter:in selbst) angelegt/zuletzt geändert wurde — reines
   // Audit-Feld für die Anzeige ("von {name} erfasst"), keine
@@ -718,14 +762,70 @@ model RefereeAssignment {
   // mitreißt (der Eintrag bleibt bestehen, nur die Zuordnung "von wem"
   // geht verloren — analog Invitation.invitedById).
   createdByAdminId String?
-  createdByAdmin   User?   @relation("RefereeAssignmentCreatedByAdmin", fields: [createdByAdminId], references: [id], onDelete: SetNull)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
+  createdByAdmin   User?        @relation("RefereeAssignmentCreatedByAdmin", fields: [createdByAdminId], references: [id], onDelete: SetNull)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  deletedAt        DateTime?
 
   // Zugriffsmuster: "alle Einsätze einer Person" (eigene Ansicht) und
   // "alle Einsätze eines Vereins nach Datum" (Admin-Übersicht/Reporting).
   @@index([userId, deletedAt])
   @@index([clubId, date])
   @@map("referee_assignments")
+}
+
+// ============================================================
+// Phase 2 (docs/Plans/phase2-plan.md) — Push-Benachrichtigungen.
+// ============================================================
+
+// Web-Push-Abo eines Kontos (VAPID) — bewusst KEIN Sync-Store (siehe Plan,
+// Abschnitt 1.2): reine Server-Infrastruktur, kein Gerät muss diese Daten
+// je pullen. Ein Konto kann auf mehreren Geräten abonniert sein (Handy +
+// Tablet am Beckenrand), daher 1:n statt eines einzelnen Felds an User.
+// `endpoint` ist @unique — ein wiederholtes Abonnieren desselben Geräts
+// liefert denselben Endpoint zurück und aktualisiert die bestehende Zeile
+// (upsert) statt eine doppelte anzulegen. onDelete: Cascade — ein
+// gelöschtes Konto braucht keine eigenständig fortbestehenden Abos mehr.
+model PushSubscription {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("push_subscriptions")
+}
+
+// ============================================================
+// Phase 2, Abschnitt 4.1 — Vereinsinterne Nachrichten/Ankündigungen.
+// ============================================================
+
+// Kurzer Hinweis (Trainer:in/Admin -> Gruppe/Verein), getrennt von den
+// themengebundenen Kommentar-Threads an Übungen/Plänen/Ergebnissen.
+// authorId mit onDelete: SetNull — konsistent mit ActionItem.assignedTrainerId/
+// Invitation.invitedById (siehe dort): ein gelöschtes Autor:innen-Konto
+// reißt die Ankündigung nicht mit, nur die Zuordnung geht verloren.
+model Announcement {
+  id        String    @id @default(uuid())
+  clubId    String
+  club      Club      @relation(fields: [clubId], references: [id])
+  // null = an den gesamten Verein gerichtet; gesetzt = nur an diese Gruppe.
+  groupId   String?
+  group     Group?    @relation(fields: [groupId], references: [id])
+  authorId  String?
+  author    User?     @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  title     String
+  body      String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  // [clubId, updatedAt] statt [clubId] — siehe Begründung bei Group oben
+  // (Sync-Pull-Zugriffsmuster).
+  @@index([clubId, updatedAt])
+  @@index([groupId])
+  @@map("announcements")
 }

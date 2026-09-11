@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { notifyExpiringQualifications } from '../../src/jobs/notifyExpiringQualifications.js';
 import { InMemoryNotifyExpiringQualificationsGateway } from '../../src/jobs/qualificationReminder.repository.memory.js';
 import { InMemoryMailSender } from '../../src/mail/mailer.memory.js';
+import { InMemoryPushSender } from '../../src/push/pusher.memory.js';
+import { InMemoryPushSubscriptionRepository } from '../../src/modules/push/push.repository.memory.js';
 import type { QualificationReminderCandidate } from '../../src/jobs/qualificationReminder.repository.js';
 import type { QualificationReminderMailPayload } from '../../src/mail/mailer.js';
 
@@ -176,5 +178,38 @@ describe('notifyExpiringQualifications()', () => {
     // Fehlschlag bei der Person (direktes await, VOR dem Promise.all über
     // die Admins) wirft sofort in den äußeren catch.
     expect(mailer.sentQualificationReminderEmails).toHaveLength(0);
+  });
+
+  it('verschickt bei gesetztem push-Parameter zusätzlich eine Push-Nachricht an die qualifizierte Person, nicht an Admins (Phase 2, Abschnitt 1.5.1)', async () => {
+    const gateway = new InMemoryNotifyExpiringQualificationsGateway(
+      [candidate()],
+      new Map([['club1:trainer_c', [60, 14]]]),
+      new Map([['club1', admins]]),
+    );
+    const mailer = new InMemoryMailSender();
+    const pusher = new InMemoryPushSender();
+    const pushSubscriptions = new InMemoryPushSubscriptionRepository();
+    await pushSubscriptions.upsert('u1', 'https://push.example/u1', { p256dh: 'p', auth: 'a' });
+
+    const result = await notifyExpiringQualifications(gateway, mailer, NOW, { pusher, pushSubscriptions });
+    expect(result.remindersSent).toBe(1);
+    expect(pusher.sent).toHaveLength(1);
+    expect(pusher.sent[0]?.subscriptions).toHaveLength(1);
+  });
+
+  it('sendet keine Push-Nachricht, wenn die Person kein Abo hat, und lässt den E-Mail-Versand unberührt', async () => {
+    const gateway = new InMemoryNotifyExpiringQualificationsGateway(
+      [candidate()],
+      new Map([['club1:trainer_c', [60, 14]]]),
+      new Map([['club1', admins]]),
+    );
+    const mailer = new InMemoryMailSender();
+    const pusher = new InMemoryPushSender();
+    const pushSubscriptions = new InMemoryPushSubscriptionRepository();
+
+    const result = await notifyExpiringQualifications(gateway, mailer, NOW, { pusher, pushSubscriptions });
+    expect(result.remindersSent).toBe(1);
+    expect(pusher.sent).toHaveLength(0);
+    expect(mailer.sentQualificationReminderEmails).toHaveLength(2);
   });
 });

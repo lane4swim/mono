@@ -11,6 +11,7 @@ import { createSyncService } from '../src/modules/sync/sync.service.js';
 import { InMemorySyncGateway } from '../src/modules/sync/sync.gateway.memory.js';
 import { InMemoryMailSender } from '../src/mail/mailer.memory.js';
 import { InMemoryProfileDataGateway } from '../src/modules/profile/profile.repository.memory.js';
+import { InMemoryParentLinkRepository } from '../src/modules/parents/parents.repository.memory.js';
 import { CURRENT_CONSENT_VERSION } from '@lane1/shared-types';
 
 const testEnv = loadEnv({
@@ -39,6 +40,7 @@ async function buildTestApp(): Promise<FastifyInstance> {
     memberInvitationTtlDays: 7,
   });
   const authService = createAuthService({
+    parentLinks: new InMemoryParentLinkRepository(),
     users: new InMemoryUserRepository(),
     refreshTokens: new InMemoryRefreshTokenRepository(),
     invitations: invitationsService,

@@ -378,3 +378,16 @@ export function isAdminOrSuperAdmin() { return getRoles().some((r) => ['admin', 
 export function isAthleteScoped() {
   return hasRole('athlete') && !isTrainerOrAdmin();
 }
+
+// Phase 2, Abschnitt 4.2 (docs/Plans/phase2-plan.md): "parent" hat KEINEN
+// generellen Sync-Zugriff (sync.route.ts lehnt die Rolle strukturell ab) —
+// ein Konto mit dieser Rolle bekommt daher weder die reguläre Navigation
+// noch den Hintergrund-Sync (siehe app.js: startAuthenticatedApp()),
+// sondern ausschließlich die eigene, per REST geladene Übersicht
+// (modules/parentView.js). Analog zu isAthleteScoped() oben: gilt nur,
+// solange keine andere, sync-fähige Rolle vorliegt — wer zusätzlich
+// trainer/admin/athlete ist, nutzt die reguläre Ansicht (siehe
+// docs/Plans/phase2-plan.md, Abschnitt 3.3).
+export function isParentOnly() {
+  return hasRole('parent') && !isTrainerOrAdmin() && !hasRole('athlete');
+}

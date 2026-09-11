@@ -15,7 +15,7 @@
 // bliebe beliebig lange auf dem alten Stand, ohne jeden Hinweis. app.js
 // meldet stattdessen, dass eine neue Fassung bereitsteht, und lässt die
 // Person entscheiden, wann neu geladen wird.
-const CACHE_VERSION = 'lane1-v44';
+const CACHE_VERSION = 'lane1-v47';
 const PRECACHE_URLS = [
   './',
   './index.html',
@@ -32,6 +32,7 @@ const PRECACHE_URLS = [
   './js/shell.js',
   './js/moduleRegistry.js',
   './js/apiClient.js',
+  './js/push.js',
   './js/syncClient.js',
   './js/db.js',
   './js/demoMode.js',
@@ -64,6 +65,8 @@ const PRECACHE_URLS = [
   './js/modules/libraryTransfer.js',
   './js/modules/sessions.js',
   './js/modules/actionItems.js',
+  './js/modules/announcements.js',
+  './js/modules/parentView.js',
   './js/modules/stats.js',
   './js/modules/attendanceStats.js',
   './js/modules/trainingLoad.js',
@@ -178,3 +181,45 @@ function fetchAndCache(req) {
     return res;
   });
 }
+
+// Web-Push (Phase 2, Abschnitt 1.6 — docs/Plans/phase2-plan.md). Die
+// Nutzlast (siehe apps/api/src/push/pusher.ts: PushPayload) ist bewusst
+// simpel gehalten (title/body/url) — kein serverseitiges Rendering, die
+// Anzeige selbst passiert komplett hier.
+self.addEventListener('push', (event) => {
+  let payload = { title: 'Lane 1', body: '' };
+  try {
+    if (event.data) payload = { ...payload, ...event.data.json() };
+  } catch {
+    // Unerwartetes/leeres Payload — fällt auf den Default oben zurück,
+    // statt den gesamten Push-Event mit einem ungefangenen Fehler
+    // abzubrechen (der Browser würde sonst gar keine Benachrichtigung
+    // zeigen, was für die Person aussieht, als wäre nichts angekommen).
+  }
+  event.waitUntil(
+    self.registration.showNotification(payload.title, {
+      body: payload.body,
+      icon: './icons/icon-192.png',
+      data: { url: payload.url || './' },
+    })
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const targetUrl = event.notification.data?.url || './';
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientsList) => {
+      for (const client of clientsList) {
+        // Ein bereits offener Tab wird fokussiert und dorthin navigiert,
+        // statt einen weiteren Tab zu öffnen — relevant für ein Tablet am
+        // Beckenrand, das die App dauerhaft offen hält.
+        if ('focus' in client) {
+          client.navigate(targetUrl).catch(() => {});
+          return client.focus();
+        }
+      }
+      return self.clients.openWindow(targetUrl);
+    })
+  );
+});

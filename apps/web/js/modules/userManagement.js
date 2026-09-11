@@ -5,10 +5,11 @@
 // lokal in IndexedDB zu simulieren.
 import { el, clear, beginRender } from '../dom.js';
 import { fmtDateShort } from '../dates.js';
-import { badge, emptyState, laneWave, toast } from '../ui.js';
+import { badge, emptyState, laneWave, toast, fullName } from '../ui.js';
 import { openModal, confirmAction } from '../modal.js';
 import { field, textInput, selectInput, formActions } from '../forms.js';
 import { isSuperAdmin, isAdmin, getCurrentUser, setClubIdentity } from '../state.js';
+import { getAll } from '../db.js';
 import * as api from '../apiClient.js';
 import { describeError } from '../apiClient.js';
 import { t } from '../i18n.js';
@@ -140,6 +141,7 @@ function renderMembersGroupedByRole(members, onRolesChanged) {
     { role: 'trainer', label: t('usermgmt.groupTrainers') },
     { role: 'referee', label: t('usermgmt.groupReferees') },
     { role: 'athlete', label: t('usermgmt.groupAthletes') },
+    { role: 'parent', label: t('usermgmt.groupParents') },
   ];
   groups.forEach(({ role, label }) => {
     // docs/Plans/kampfrichter-modul-plan.md, Abschnitt 1: eine Person mit
@@ -157,10 +159,18 @@ function renderMembersGroupedByRole(members, onRolesChanged) {
       el('td', {}, member.name),
       el('td', {}, member.email),
       el('td', {}, el('div', { class: 'flex gap-8' }, member.roles.map((r) => badge(t(`settings.role_${r}`), 'neutral')))),
-      el('td', {}, isAdmin() ? el('button', {
-        class: 'btn btn-ghost btn-sm',
-        onclick: () => openManageRolesModal(member, onRolesChanged),
-      }, t('usermgmt.manageRoles')) : null),
+      el('td', {}, isAdmin() ? el('div', { class: 'flex gap-8' }, [
+        el('button', {
+          class: 'btn btn-ghost btn-sm',
+          onclick: () => openManageRolesModal(member, onRolesChanged),
+        }, t('usermgmt.manageRoles')),
+        // Phase 2, Abschnitt 4.2 (docs/Plans/phase2-plan.md) — Eltern-Kind-
+        // Verknüpfungsverwaltung, nur für Mitglieder mit Rolle "parent".
+        role === 'parent' ? el('button', {
+          class: 'btn btn-ghost btn-sm',
+          onclick: () => openManageParentLinksModal(member),
+        }, t('usermgmt.manageChildren')) : null,
+      ].filter(Boolean)) : null),
     ])));
     table.appendChild(tbody);
     wrap.appendChild(el('div', { class: 'table-wrap mb-16' }, table));
@@ -171,7 +181,57 @@ function renderMembersGroupedByRole(members, onRolesChanged) {
 // Alle vergebbaren Rollen außer "superadmin" (docs/kampfrichter-modul-
 // plan.md, Abschnitt 1.4 — wird ausschließlich über
 // scripts/createSuperAdmin.ts vergeben, nie über diesen Dialog).
-const ASSIGNABLE_ROLES = ['admin', 'trainer', 'athlete', 'referee'];
+const ASSIGNABLE_ROLES = ['admin', 'trainer', 'athlete', 'referee', 'parent'];
+
+// Eltern-Kind-Verknüpfungsverwaltung (Phase 2, Abschnitt 3.5 —
+// docs/Plans/phase2-plan.md): Mehrfachauswahl der Athlet:innen des
+// eigenen Vereins, direkt gegen GET/POST/DELETE /api/parents/:userId/links.
+// Athlet:innen-Liste kommt aus dem bereits synchronisierten IndexedDB-Store
+// (admin hat vollen Sync-Zugriff) statt eines eigenen REST-Aufrufs.
+async function openManageParentLinksModal(member) {
+  const [athletes, { links: currentLinks }] = await Promise.all([getAll('athletes'), api.listParentLinks(member.id)]);
+  const linkedIds = new Set(currentLinks.map((l) => l.athleteId));
+
+  const body = el('div');
+  body.appendChild(el('p', { class: 'text-sm' }, t('usermgmt.manageChildrenHint', { name: member.name })));
+  const checkboxes = new Map();
+  athletes
+    .filter((a) => a.active !== false)
+    .sort((a, b) => fullName(a).localeCompare(fullName(b)))
+    .forEach((athlete) => {
+      const cb = el('input', { type: 'checkbox', checked: linkedIds.has(athlete.id) });
+      checkboxes.set(athlete.id, cb);
+      body.appendChild(el('label', { class: 'flex items-center gap-8', style: 'display:flex;margin-bottom:6px' }, [cb, fullName(athlete)]));
+    });
+  if (athletes.length === 0) body.appendChild(el('p', {}, t('usermgmt.manageChildrenNoAthletes')));
+
+  const errorBox = el('p', { class: 'form-error', style: 'display:none' });
+  body.appendChild(errorBox);
+  const saveBtn = el('button', { class: 'btn btn-primary', style: 'margin-top:12px', onclick: async () => {
+    errorBox.style.display = 'none';
+    saveBtn.disabled = true;
+    try {
+      const selectedIds = new Set([...checkboxes.entries()].filter(([, cb]) => cb.checked).map(([id]) => id));
+      const toAdd = [...selectedIds].filter((id) => !linkedIds.has(id));
+      const toRemove = [...linkedIds].filter((id) => !selectedIds.has(id));
+      await Promise.all([
+        ...toAdd.map((id) => api.addParentLink(member.id, id)),
+        ...toRemove.map((id) => api.removeParentLink(member.id, id)),
+      ]);
+      toast(t('usermgmt.manageChildrenSaved'));
+      close();
+    } catch (err) {
+      errorBox.textContent = describeError(err);
+      errorBox.style.display = 'block';
+      saveBtn.disabled = false;
+    }
+  } }, t('common.save'));
+  body.appendChild(el('div', { class: 'form-actions' }, [
+    el('button', { class: 'btn btn-ghost', onclick: () => close() }, t('common.cancel')),
+    saveBtn,
+  ]));
+  const { close } = openModal({ title: t('usermgmt.manageChildrenTitle'), bodyNode: body, wide: true });
+}
 
 // Rollen-Verwaltung für ein bestehendes Vereinsmitglied (PATCH
 // /api/users/:userId/roles) — ersetzt die vollständige Rollenmenge, kein
@@ -319,6 +379,7 @@ function openInviteModal(clubs, onChanged) {
     { value: 'trainer', label: t('settings.role_trainer') },
     { value: 'athlete', label: t('settings.role_athlete') },
     { value: 'referee', label: t('settings.role_referee') },
+    { value: 'parent', label: t('settings.role_parent') },
   ], 'trainer');
   const fEmail = textInput('', { type: 'email', required: true });
   const fClub = isSuper

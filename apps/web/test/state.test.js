@@ -10,7 +10,7 @@ vi.mock('../js/apiClient.js', () => ({}));
 vi.mock('../js/db.js', () => ({ wipeAll: vi.fn(), setClubIdProvider: vi.fn() }));
 vi.mock('../js/i18n.js', () => ({ setLocale: vi.fn(), detectInitialLocale: vi.fn(() => 'de-DE') }));
 
-import { getRoles, hasRole, isAthleteScoped, getCurrentUser, isLoggedIn, isTrainerOrAdmin, isAdmin, isSuperAdmin, isAdminOrSuperAdmin, getEnabledModules } from '../js/state.js';
+import { getRoles, hasRole, isAthleteScoped, isParentOnly, getCurrentUser, isLoggedIn, isTrainerOrAdmin, isAdmin, isSuperAdmin, isAdminOrSuperAdmin, getEnabledModules } from '../js/state.js';
 
 // Regressionstest für die Code-Review-Korrektur: getRole() (heute
 // getRoles()) fiel bei fehlender Sitzung auf die konkrete Rolle 'trainer'
@@ -30,6 +30,7 @@ describe('getRoles() ohne aktive Sitzung', () => {
     expect(isAdminOrSuperAdmin()).toBe(false);
     expect(hasRole('trainer')).toBe(false);
     expect(isAthleteScoped()).toBe(false);
+    expect(isParentOnly()).toBe(false);
   });
 
   // Analog zu getRole(): ein leeres Array statt z. B. "alle Module" —
