@@ -13,6 +13,7 @@ import type { ClubRepository, InvitationRepository, InvitationRecord, ClubRecord
 import { generateInvitationToken, hashInvitationToken } from '../../auth/tokens.js';
 import type { MailSender } from '../../mail/mailer.js';
 import type { UserRepository } from '../auth/auth.repository.js';
+import type { AuditLogWriter } from '../auditLog/auditLog.service.js';
 
 export class ForbiddenError extends Error {
   constructor(message = 'Für diese Aktion fehlt die Berechtigung.') {
@@ -74,6 +75,9 @@ export interface InvitationsServiceDeps {
   // gehört in diesen Service.
   users: UserRepository;
   mailer: MailSender;
+  // docs/Plans/vereinsverwaltung-phase3-plan.md, Abschnitt 2: protokolliert
+  // Einladung erstellt/widerrufen für die Admin-/Superadmin-Einsicht.
+  auditLog: AuditLogWriter;
   // Basis-URL des Frontends, um den Einladungslink zu bauen (z. B.
   // "https://training.mein-verein.de") — die eigentliche Annahme-Seite
   // liegt im normalen Frontend unter "#/accept-invite/<token>", NICHT
@@ -96,6 +100,14 @@ function buildInviteUrl(frontendBaseUrl: string, token: string): string {
 async function resolveRequesterLocale(users: UserRepository, requesterId: string): Promise<string | undefined> {
   const requesterUser = await users.findById(requesterId);
   return requesterUser?.locale;
+}
+
+// Schnappschuss-Label für das Audit-Log (docs/Plans/vereinsverwaltung-
+// phase3-plan.md, Abschnitt 2.3) — "Name <E-Mail>", damit ein Eintrag auch
+// nach Löschung/Umbenennung des Akteur-Kontos lesbar bleibt, ohne Join.
+async function resolveActorLabel(users: UserRepository, requesterId: string): Promise<string> {
+  const requesterUser = await users.findById(requesterId);
+  return requesterUser ? `${requesterUser.name} <${requesterUser.email}>` : requesterId;
 }
 
 // Zentrale Gültigkeitsprüfung — von preview() UND von authService beim
@@ -224,6 +236,16 @@ export function createInvitationsService(deps: InvitationsServiceDeps) {
         locale: await resolveRequesterLocale(deps.users, requester.id),
       });
 
+      await deps.auditLog.record({
+        clubId: club.id,
+        actorId: requester.id,
+        actorLabel: await resolveActorLabel(deps.users, requester.id),
+        action: 'invitation.created',
+        targetId: invitation.id,
+        targetLabel: invitation.email,
+        metadata: { role: 'admin', email: invitation.email },
+      });
+
       return {
         club,
         invitation: {
@@ -282,6 +304,19 @@ export function createInvitationsService(deps: InvitationsServiceDeps) {
         locale: await resolveRequesterLocale(deps.users, requester.id),
       });
 
+      // Nach der eigentlichen Transaktion (siehe auditLog.service.ts:
+      // record()-Kommentar) — ein Fehlschlag hier darf die bereits
+      // versendete Einladung nicht rückgängig machen.
+      await deps.auditLog.record({
+        clubId: targetClubId,
+        actorId: requester.id,
+        actorLabel: await resolveActorLabel(deps.users, requester.id),
+        action: 'invitation.created',
+        targetId: invitation.id,
+        targetLabel: invitation.email,
+        metadata: { role: input.role, email: invitation.email },
+      });
+
       return {
         id: invitation.id,
         token: plainToken,
@@ -323,6 +358,15 @@ export function createInvitationsService(deps: InvitationsServiceDeps) {
         (requester.roles.includes('admin') && requester.clubId && invitation.clubId === requester.clubId);
       if (!allowed) throw new ForbiddenError('Diese Einladung gehört nicht zu Ihrem Verein.');
       await deps.invitations.revoke(id);
+      await deps.auditLog.record({
+        clubId: invitation.clubId,
+        actorId: requester.id,
+        actorLabel: await resolveActorLabel(deps.users, requester.id),
+        action: 'invitation.revoked',
+        targetId: invitation.id,
+        targetLabel: invitation.email,
+        metadata: { role: invitation.role },
+      });
     },
 
     // Für die Superadmin-Oberfläche ("/admin"): jeder Verein inkl. Anzahl

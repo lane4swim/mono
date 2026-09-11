@@ -61,6 +61,7 @@ model Club {
   actionItems                   ActionItem[]
   qualificationReminderSettings ClubQualificationReminderSetting[]
   refereeAssignments            RefereeAssignment[]
+  auditLogEntries               AuditLogEntry[]
   announcements                 Announcement[]
 
   @@map("clubs")
@@ -126,6 +127,11 @@ model User {
   // Eigener Relationsname nötig, da User hier zweimal auf RefereeAssignment
   // verweist (Zielperson UND erfassende Admin-Person).
   refereeAssignmentsCreatedAsAdmin RefereeAssignment[]  @relation("RefereeAssignmentCreatedByAdmin")
+  // docs/Plans/vereinsverwaltung-phase3-plan.md, Abschnitt 2: Audit-Log-
+  // Einträge, bei denen diese Person die handelnde Akteurin war (nicht das
+  // Ziel der protokollierten Aktion — es gibt keine Zielrelation, siehe
+  // AuditLogEntry.targetId-Kommentar).
+  auditLogEntriesAsActor           AuditLogEntry[]      @relation("AuditLogActor")
   // Phase 2, Abschnitt 1.2 (docs/Plans/phase2-plan.md) — Web-Push-Abos
   // dieses Kontos (mehrere Geräte möglich).
   pushSubscriptions                PushSubscription[]
@@ -244,6 +250,19 @@ model Group {
   club        Club      @relation(fields: [clubId], references: [id])
   name        String
   description String    @default("")
+  // Zuständige Trainer:innen/Admins dieser Gruppe (User.id), docs/Plans/
+  // vereinsverwaltung-phase3-plan.md Abschnitt 1: rein organisatorisch
+  // ("wer ist zuständig"), KEINE Berechtigungsprüfung hängt daran — jede
+  // Trainer:in hat ohnehin bereits club-weiten Zugriff auf alle Gruppen
+  // (sync.permissions.ts: STORE_PERMISSIONS.groups). Skalarfeld statt
+  // echter Relation: Group ist ein generischer Sync-Store, dessen
+  // Schreibpfad (sync.gateway.ts) Payloads unverändert als
+  // `delegate.create({ data: payload })` durchreicht und kein
+  // connect/set-Relationshandling kennt — analog User.roles/
+  // Club.enabledModules. Bewusst KEINE FK-Constraint: ein Eintrag kann auf
+  // ein inzwischen hart gelöschtes Konto zeigen, siehe
+  // jobs/erasure.repository.ts für das Entfernen der ID beim Hard-Purge.
+  trainerIds  String[]  @default([])
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
@@ -772,6 +791,46 @@ model RefereeAssignment {
   @@index([userId, deletedAt])
   @@index([clubId, date])
   @@map("referee_assignments")
+}
+
+// docs/Plans/vereinsverwaltung-phase3-plan.md, Abschnitt 2: Protokoll
+// sicherheitsrelevanter Aktionen (Einladung erstellt/widerrufen,
+// Rollenänderung, Löschanfrage) für die Admin-/Superadmin-Einsicht —
+// Rechenschaftspflicht Art. 5 Abs. 2 DSGVO. Bewusst KEIN Sync-Store
+// (analog UserQualification/RefereeAssignment): rein serverautoritativ,
+// nie clientseitig geschrieben, append-only — daher auch kein
+// `deletedAt` (Einträge werden nie gelöscht/geändert).
+model AuditLogEntry {
+  id     String  @id @default(uuid())
+  // null nur für künftige, nicht vereinsgebundene Superadmin-Aktionen —
+  // alle Aktionstypen dieser Phase befüllen clubId immer.
+  clubId String?
+  club   Club?   @relation(fields: [clubId], references: [id], onDelete: SetNull)
+  // Nullable + SetNull (analog Invitation.invitedById): ein gelöschtes
+  // Konto darf den Log-Eintrag nicht mitreißen — genau der Fall, den
+  // dieses Protokoll für spätere Nachvollziehbarkeit festhalten soll.
+  actorId String?
+  actor   User?   @relation("AuditLogActor", fields: [actorId], references: [id], onDelete: SetNull)
+  // Schnappschuss (Name + E-Mail) zum Zeitpunkt der Aktion — bleibt auch
+  // nach Löschung/Umbenennung des Akteur-Kontos lesbar, ohne Join.
+  actorLabel String
+  // z. B. "invitation.created" | "invitation.revoked" |
+  // "user.rolesChanged" | "user.deletionRequested".
+  action String
+  // Betroffene Entität — kein Fremdschlüssel (heterogen: Invitation ODER
+  // User), rein informativ für die Anzeige.
+  targetId    String?
+  targetLabel String  @default("")
+  // Aktionsspezifische Zusatzdaten (z. B. { role, email } bei
+  // Einladungen, { oldRoles, newRoles } bei Rollenänderungen) — Json
+  // statt einzelner Spalten je Aktionstyp, analog Plan.days/Template.sets.
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now())
+
+  // Zugriffsmuster: "alle Einträge eines Vereins, neueste zuerst"
+  // (Admin-Ansicht).
+  @@index([clubId, createdAt])
+  @@map("audit_log_entries")
 }
 
 // ============================================================

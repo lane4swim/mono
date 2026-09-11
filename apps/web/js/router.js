@@ -19,8 +19,10 @@ export function getModule(routeId) {
 // "parent" (Phase 2, Abschnitt 4.2): reine Infrastruktur wie 'dashboard' —
 // die Eltern-Übersicht ist unabhängig von enabledModules, sie liest über
 // einen eigenen REST-Endpunkt (GET /api/parents/overview), nicht über den
-// generischen, modul-gegateten Sync-Store-Mechanismus.
-export const CORE_MODULE_IDS = ['dashboard', 'parent', 'profile', 'usermgmt', 'syncqueue', 'info'];
+// generischen, modul-gegateten Sync-Store-Mechanismus. "auditlog" (Phase 3,
+// Abschnitt 5.2) ist ebenfalls reine Infrastruktur, ohne eigenen
+// fachlichen Sync-Store.
+export const CORE_MODULE_IDS = ['dashboard', 'parent', 'profile', 'usermgmt', 'auditlog', 'syncqueue', 'info'];
 
 // Route-ID (MODULES[*].id) -> Paket-Key. MUSS inhaltlich mit
 // packages/shared-types/src/modules.ts: MODULE_PACKAGES übereinstimmen —

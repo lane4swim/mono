@@ -18,6 +18,8 @@ import { createInvitationsService } from '../../src/modules/invitations/invitati
 import { InMemoryClubRepository, InMemoryInvitationRepository, InMemoryAthleteRepository } from '../../src/modules/invitations/invitations.repository.memory.js';
 import { InMemoryMailSender } from '../../src/mail/mailer.memory.js';
 import { InMemoryProfileDataGateway } from '../../src/modules/profile/profile.repository.memory.js';
+import { createAuditLogService } from '../../src/modules/auditLog/auditLog.service.js';
+import { InMemoryAuditLogRepository } from '../../src/modules/auditLog/auditLog.repository.memory.js';
 import { InMemoryParentLinkRepository } from '../../src/modules/parents/parents.repository.memory.js';
 import { generateFreshKeyPair } from '../../src/auth/keys.js';
 import { verifyAccessToken } from '../../src/auth/tokens.js';
@@ -39,12 +41,15 @@ function makeService() {
   // selbst nicht (nur findValidByToken()/markUsed()), bekommen aber der
   // Vollständigkeit halber echte In-Memory-Implementierungen.
   const clubs = new InMemoryClubRepository();
+  const auditLogEntries = new InMemoryAuditLogRepository();
+  const auditLog = createAuditLogService({ entries: auditLogEntries });
   const invitationsService = createInvitationsService({
     clubs,
     invitations,
     athletes: new InMemoryAthleteRepository(),
     users,
     mailer: new InMemoryMailSender(),
+    auditLog,
     frontendBaseUrl: 'https://app.example.org',
     clubInvitationTtlDays: 14,
     memberInvitationTtlDays: 7,
@@ -66,8 +71,9 @@ function makeService() {
     users, refreshTokens, invitations: invitationsService, profileGateway, clubs, dataErasureRetentionDays: 30,
     passwordResetTokens, mailer, frontendBaseUrl: 'https://app.example.org', passwordResetTtlMinutes: 60,
     keyPair, accessTtlSeconds: 900, refreshTtlDays: 30,
+    auditLog,
   });
-  return { service, users, refreshTokens, invitations, clubs, keyPair, profileDb, passwordResetTokens, mailer, parentLinks };
+  return { service, users, refreshTokens, invitations, clubs, keyPair, profileDb, passwordResetTokens, mailer, auditLogEntries, parentLinks };
 }
 
 // Erzeugt eine gültige Trainer-Einladung und liefert das Klartext-Token,
@@ -561,6 +567,20 @@ describe('authService.exportMyData / requestAccountDeletion', () => {
     const expectedMs = before + 30 * 24 * 60 * 60 * 1000; // dataErasureRetentionDays: 30 in makeService()
     expect(Math.abs(result.purgeAfter.getTime() - expectedMs)).toBeLessThan(5000);
   });
+
+  // docs/Plans/vereinsverwaltung-phase3-plan.md, Abschnitt 2.5.
+  it('requestAccountDeletion() protokolliert die Löschanfrage im Audit-Log (Akteur = Ziel)', async () => {
+    const { service, invitations, profileDb, auditLogEntries } = makeService();
+    const { user } = await registerViaInvitation(service, invitations, { email: 'delete3@example.org' });
+    profileDb.users.push({ id: user.id, clubId: CLUB_ID, athleteId: null, deletedAt: null, name: user.name, email: user.email });
+
+    await service.requestAccountDeletion(user.id);
+
+    const entries = await auditLogEntries.list({ clubId: CLUB_ID, limit: 10 });
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({ actorId: user.id, targetId: user.id, action: 'user.deletionRequested' });
+    expect(entries[0]!.actorLabel).toContain('delete3@example.org');
+  });
 });
 
 // Sicherheitsreview 2026-08, Befund M5 ("Passwort vergessen").
@@ -1000,11 +1020,28 @@ describe('authService.updateUserRoles', () => {
     const { service, invitations, users } = makeService();
     const trainer = await registerViaInvitation(service, invitations, { email: 'trainer@example.org', role: 'trainer' });
 
-    const updated = await service.updateUserRoles(trainer.user.id, ['trainer', 'referee'], { clubId: CLUB_ID });
+    const updated = await service.updateUserRoles(trainer.user.id, ['trainer', 'referee'], { id: 'admin-actor', clubId: CLUB_ID });
 
     expect(updated.roles.sort()).toEqual(['referee', 'trainer']);
     const stored = await users.findById(trainer.user.id);
     expect(stored!.roles.sort()).toEqual(['referee', 'trainer']);
+  });
+
+  // docs/Plans/vereinsverwaltung-phase3-plan.md, Abschnitt 2.5.
+  it('protokolliert die Rollenänderung im Audit-Log (alte und neue Rollen)', async () => {
+    const { service, invitations, auditLogEntries } = makeService();
+    const trainer = await registerViaInvitation(service, invitations, { email: 'trainer@example.org', role: 'trainer' });
+
+    await service.updateUserRoles(trainer.user.id, ['trainer', 'referee'], { id: 'admin-actor', clubId: CLUB_ID });
+
+    const entries = await auditLogEntries.list({ clubId: CLUB_ID, limit: 10 });
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      actorId: 'admin-actor',
+      targetId: trainer.user.id,
+      action: 'user.rolesChanged',
+      metadata: { oldRoles: ['trainer'], newRoles: ['trainer', 'referee'] },
+    });
   });
 
   // Sicherheitsreview-Muster wie bei changePassword()/changeEmail()/
@@ -1016,7 +1053,7 @@ describe('authService.updateUserRoles', () => {
     const trainer = await registerViaInvitation(service, invitations, { email: 'trainer@example.org', role: 'trainer' });
     expect(await refreshTokens.findByHash(hashRefreshToken(trainer.refreshToken))).toMatchObject({ revokedAt: null });
 
-    await service.updateUserRoles(trainer.user.id, ['referee'], { clubId: CLUB_ID });
+    await service.updateUserRoles(trainer.user.id, ['referee'], { id: 'admin-actor', clubId: CLUB_ID });
 
     const existing = await refreshTokens.findByHash(hashRefreshToken(trainer.refreshToken));
     expect(existing!.revokedAt).not.toBeNull();
@@ -1026,7 +1063,7 @@ describe('authService.updateUserRoles', () => {
     const { service, invitations } = makeService();
     const trainer = await registerViaInvitation(service, invitations, { email: 'trainer@example.org', role: 'trainer' });
 
-    await expect(service.updateUserRoles(trainer.user.id, ['superadmin'], { clubId: CLUB_ID })).rejects.toThrow(CannotAssignSuperadminError);
+    await expect(service.updateUserRoles(trainer.user.id, ['superadmin'], { id: 'admin-actor', clubId: CLUB_ID })).rejects.toThrow(CannotAssignSuperadminError);
   });
 
   it('lehnt eine Zielperson aus einem fremden Verein ab', async () => {
@@ -1034,14 +1071,14 @@ describe('authService.updateUserRoles', () => {
     const trainer = await registerViaInvitation(service, invitations, { email: 'trainer@example.org', role: 'trainer' });
 
     await expect(
-      service.updateUserRoles(trainer.user.id, ['athlete'], { clubId: '99999999-9999-9999-9999-999999999998' }),
+      service.updateUserRoles(trainer.user.id, ['athlete'], { id: 'admin-actor', clubId: '99999999-9999-9999-9999-999999999998' }),
     ).rejects.toThrow(ForeignClubUserError);
   });
 
   it('liefert UserNotFoundError für eine unbekannte userId', async () => {
     const { service } = makeService();
     await expect(
-      service.updateUserRoles('00000000-0000-0000-0000-000000000000', ['trainer'], { clubId: CLUB_ID }),
+      service.updateUserRoles('00000000-0000-0000-0000-000000000000', ['trainer'], { id: 'admin-actor', clubId: CLUB_ID }),
     ).rejects.toThrow(UserNotFoundError);
   });
 
@@ -1049,7 +1086,7 @@ describe('authService.updateUserRoles', () => {
     const { service, invitations } = makeService();
     const admin = await registerViaInvitation(service, invitations, { email: 'admin@example.org', role: 'admin' });
 
-    await expect(service.updateUserRoles(admin.user.id, ['trainer'], { clubId: CLUB_ID })).rejects.toThrow(LastAdminError);
+    await expect(service.updateUserRoles(admin.user.id, ['trainer'], { id: 'admin-actor', clubId: CLUB_ID })).rejects.toThrow(LastAdminError);
   });
 
   it('erlaubt das Entziehen der admin-Rolle, wenn ein anderer Admin im Verein verbleibt', async () => {
@@ -1057,7 +1094,7 @@ describe('authService.updateUserRoles', () => {
     const adminOne = await registerViaInvitation(service, invitations, { email: 'admin-1@example.org', role: 'admin' });
     await registerViaInvitation(service, invitations, { email: 'admin-2@example.org', role: 'admin' });
 
-    const updated = await service.updateUserRoles(adminOne.user.id, ['trainer'], { clubId: CLUB_ID });
+    const updated = await service.updateUserRoles(adminOne.user.id, ['trainer'], { id: 'admin-actor', clubId: CLUB_ID });
     expect(updated.roles).toEqual(['trainer']);
   });
 });

@@ -11,6 +11,8 @@ import { createSyncService } from '../src/modules/sync/sync.service.js';
 import { InMemorySyncGateway } from '../src/modules/sync/sync.gateway.memory.js';
 import { InMemoryMailSender } from '../src/mail/mailer.memory.js';
 import { InMemoryProfileDataGateway } from '../src/modules/profile/profile.repository.memory.js';
+import { createAuditLogService } from '../src/modules/auditLog/auditLog.service.js';
+import { InMemoryAuditLogRepository } from '../src/modules/auditLog/auditLog.repository.memory.js';
 import { InMemoryParentLinkRepository } from '../src/modules/parents/parents.repository.memory.js';
 import { CURRENT_CONSENT_VERSION } from '@lane1/shared-types';
 
@@ -29,12 +31,14 @@ async function buildTestApp(): Promise<FastifyInstance> {
   const keyPair = generateFreshKeyPair();
   const invitations = new InMemoryInvitationRepository();
   const clubs = new InMemoryClubRepository();
+  const auditLog = createAuditLogService({ entries: new InMemoryAuditLogRepository() });
   const invitationsService = createInvitationsService({
     clubs,
     invitations,
     athletes: new InMemoryAthleteRepository(),
     users: new InMemoryUserRepository(),
     mailer: new InMemoryMailSender(),
+    auditLog,
     frontendBaseUrl: 'https://app.example.org',
     clubInvitationTtlDays: 14,
     memberInvitationTtlDays: 7,
@@ -54,6 +58,7 @@ async function buildTestApp(): Promise<FastifyInstance> {
     passwordResetTtlMinutes: 60,
     accessTtlSeconds: 900,
     refreshTtlDays: 30,
+    auditLog,
   });
   const syncService = createSyncService({ gateway: new InMemorySyncGateway() });
   return buildApp(testEnv, { authService, invitationsService, syncService, clubs, keyPair });

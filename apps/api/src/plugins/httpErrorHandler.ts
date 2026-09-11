@@ -47,6 +47,7 @@ import {
   RefereeAssignmentForbiddenError,
   ForeignCompetitionError,
 } from '../modules/referees/referees.service.js';
+import { ClubIdRequiredError as AuditLogClubIdRequiredError } from '../modules/auditLog/auditLog.service.js';
 import {
   ParentNotInClubError,
   AthleteNotInClubError,
@@ -111,6 +112,8 @@ const HTTP_ERROR_REGISTRY = new Map<abstract new (...args: never[]) => Error, Ht
   [RefereeAssignmentNotFoundError, { status: 404, code: 'not_found' }],
   [RefereeAssignmentForbiddenError, { status: 403, code: 'forbidden' }],
   [ForeignCompetitionError, { status: 400, code: 'foreign_competition' }],
+  // docs/Plans/vereinsverwaltung-phase3-plan.md, Abschnitt 2.
+  [AuditLogClubIdRequiredError, { status: 400, code: 'club_id_required' }],
   // Phase 2, Abschnitt 4.2 (docs/Plans/phase2-plan.md) — Eltern-Kind-
   // Verknüpfungsverwaltung.
   [ParentNotInClubError, { status: 404, code: 'not_found' }],

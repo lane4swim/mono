@@ -122,7 +122,7 @@ export default {
     catalog: 'Übungskatalog', sessions: 'Einheiten & Feedback', actionitems: 'Handlungsfelder',
     announcements: 'Ankündigungen',
     stats: 'Statistiken', syncqueue: 'Sync-Warteschlange', profile: 'Mein Profil', usermgmt: 'Nutzerverwaltung',
-    info: 'Rechtliches & Datenschutz', qualifications: 'Qualifikationen', kampfrichter: 'Kampfrichter',
+    info: 'Rechtliches & Datenschutz', qualifications: 'Qualifikationen', kampfrichter: 'Kampfrichter', auditlog: 'Audit-Log',
     parent: 'Mein Kind',
     groups: {
       training: 'Training', performance: 'Leistung & Wettkampf', team: 'Team', admin: 'Verwaltung',
@@ -193,6 +193,8 @@ export default {
     groupsModalTitle: 'Trainingsgruppen verwalten', noGroupsYet: 'Noch keine Gruppen angelegt.',
     groupNamePlaceholder: 'z. B. Leistungsgruppe', groupDescPlaceholder: 'Kurzbeschreibung (optional)',
     addGroupButton: '+ Gruppe hinzufügen',
+    formGroupTrainers: 'Zuständige Trainer:innen', noTrainersYet: 'Noch keine Trainer:innen im Verein.',
+    groupTrainersLabel: 'Trainer:innen',
   },
   competitions: {
     eyebrow: '{count} Wettkämpfe', title: 'Wettkampfmanagement', addComp: '+ Wettkampf anlegen',
@@ -637,6 +639,20 @@ export default {
     settingsSaved: 'Einstellungen gespeichert',
     formThresholds: 'Tage vor Ablauf (kommagetrennt)',
     validationThresholds: 'Bitte mindestens einen gültigen Tage-Wert angeben.',
+  },
+  auditLog: {
+    eyebrow: 'Sicherheitsprotokoll', title: 'Audit-Log',
+    intro: 'Protokoll sicherheitsrelevanter Aktionen: erstellte/widerrufene Einladungen, Rollenänderungen und Löschanfragen.',
+    demoDisabled: 'Das Audit-Log ist in dieser Demo nicht verfügbar — es läuft über echte Vereinsdaten, für die diese Demo kein Backend hat.',
+    emptyTitle: 'Noch keine Einträge', emptyMsg: 'Für diesen Verein wurden noch keine sicherheitsrelevanten Aktionen protokolliert.',
+    colTime: 'Zeitpunkt', colAction: 'Aktion', colActor: 'Ausgeführt von', colTarget: 'Betroffen',
+    loadMore: 'Weitere laden',
+    action: {
+      invitationCreated: 'Einladung erstellt ({role})',
+      invitationRevoked: 'Einladung widerrufen ({role})',
+      rolesChanged: 'Rollen geändert: {oldRoles} → {newRoles}',
+      deletionRequested: 'Kontolöschung beantragt',
+    },
   },
   kampfrichter: {
     eyebrow: 'Kampfrichter-Modul', title: 'Kampfrichter',

@@ -99,7 +99,7 @@ export default {
     catalog: 'Exercise Catalog', sessions: 'Sessions & Feedback', actionitems: 'Focus Areas',
     announcements: 'Announcements',
     stats: 'Statistics', syncqueue: 'Sync Queue', profile: 'My Profile', usermgmt: 'User Management',
-    info: 'Legal & Privacy', qualifications: 'Qualifications', kampfrichter: 'Officiating',
+    info: 'Legal & Privacy', qualifications: 'Qualifications', kampfrichter: 'Officiating', auditlog: 'Audit Log',
     parent: 'My Child',
     groups: {
       training: 'Training', performance: 'Performance & Competition', team: 'Team', admin: 'Administration',
@@ -170,6 +170,8 @@ export default {
     groupsModalTitle: 'Manage training groups', noGroupsYet: 'No groups created yet.',
     groupNamePlaceholder: 'e.g. Elite squad', groupDescPlaceholder: 'Short description (optional)',
     addGroupButton: '+ Add group',
+    formGroupTrainers: 'Responsible trainers', noTrainersYet: 'No trainers in this club yet.',
+    groupTrainersLabel: 'Trainers',
   },
   competitions: {
     eyebrow: '{count} competitions', title: 'Competition Management', addComp: '+ Add competition',
@@ -614,6 +616,20 @@ export default {
     settingsSaved: 'Settings saved',
     formThresholds: 'Days before expiry (comma-separated)',
     validationThresholds: 'Please provide at least one valid number of days.',
+  },
+  auditLog: {
+    eyebrow: 'Security log', title: 'Audit Log',
+    intro: 'Log of security-relevant actions: invitations created/revoked, role changes, and deletion requests.',
+    demoDisabled: 'The audit log is not available in this demo — it runs on real club data, for which this demo has no backend.',
+    emptyTitle: 'No entries yet', emptyMsg: 'No security-relevant actions have been logged for this club yet.',
+    colTime: 'Time', colAction: 'Action', colActor: 'Performed by', colTarget: 'Affected',
+    loadMore: 'Load more',
+    action: {
+      invitationCreated: 'Invitation created ({role})',
+      invitationRevoked: 'Invitation revoked ({role})',
+      rolesChanged: 'Roles changed: {oldRoles} → {newRoles}',
+      deletionRequested: 'Account deletion requested',
+    },
   },
   kampfrichter: {
     eyebrow: 'Officiating', title: 'Officiating',

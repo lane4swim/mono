@@ -9,6 +9,8 @@ import { createSyncService } from '../../src/modules/sync/sync.service.js';
 import { InMemorySyncGateway } from '../../src/modules/sync/sync.gateway.memory.js';
 import { InMemoryMailSender } from '../../src/mail/mailer.memory.js';
 import { InMemoryProfileDataGateway } from '../../src/modules/profile/profile.repository.memory.js';
+import { createAuditLogService } from '../../src/modules/auditLog/auditLog.service.js';
+import { InMemoryAuditLogRepository } from '../../src/modules/auditLog/auditLog.repository.memory.js';
 import { InMemoryParentLinkRepository } from '../../src/modules/parents/parents.repository.memory.js';
 import { generateFreshKeyPair, type KeyPair } from '../../src/auth/keys.js';
 import { signAccessToken } from '../../src/auth/tokens.js';
@@ -30,9 +32,10 @@ async function buildTestApp() {
   const clubs = new InMemoryClubRepository(undefined, invitations);
   const athletes = new InMemoryAthleteRepository();
   const mailer = new InMemoryMailSender();
+  const auditLog = createAuditLogService({ entries: new InMemoryAuditLogRepository() });
 
   const invitationsService = createInvitationsService({
-    clubs, invitations, athletes, users, mailer, frontendBaseUrl: 'https://app.example.org',
+    clubs, invitations, athletes, users, mailer, auditLog, frontendBaseUrl: 'https://app.example.org',
     clubInvitationTtlDays: 14, memberInvitationTtlDays: 7,
   });
   const authService = createAuthService({
@@ -44,6 +47,7 @@ async function buildTestApp() {
     passwordResetTokens: new InMemoryPasswordResetTokenRepository(), mailer: new InMemoryMailSender(),
     frontendBaseUrl: 'https://app.example.org', passwordResetTtlMinutes: 60,
     keyPair, accessTtlSeconds: 900, refreshTtlDays: 30,
+    auditLog,
   });
   const syncService = createSyncService({ gateway: new InMemorySyncGateway() });
 

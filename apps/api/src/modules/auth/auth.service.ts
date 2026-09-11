@@ -24,6 +24,7 @@ import { hashPassword, verifyPassword } from '../../auth/password.js';
 import { signAccessToken, generateRefreshToken, hashRefreshToken, generatePasswordResetToken, hashPasswordResetToken } from '../../auth/tokens.js';
 import type { KeyPair } from '../../auth/keys.js';
 import type { MailSender } from '../../mail/mailer.js';
+import type { AuditLogWriter } from '../auditLog/auditLog.service.js';
 
 // Fest einprogrammierter, gültig kodierter argon2id-Hash für ein beliebiges
 // Dummy-Passwort — dient AUSSCHLIESSLICH dazu, login() bei einer unbekannten
@@ -165,6 +166,9 @@ export interface AuthServiceDeps {
   mailer: MailSender;
   frontendBaseUrl: string;
   passwordResetTtlMinutes: number;
+  // docs/Plans/vereinsverwaltung-phase3-plan.md, Abschnitt 2: protokolliert
+  // Rollenänderung/Löschanfrage für die Admin-/Superadmin-Einsicht.
+  auditLog: AuditLogWriter;
   // Phase 2, Abschnitt 4.2 (docs/Plans/phase2-plan.md) — Eltern-Kind-
   // Erstverknüpfung bei Einladungsannahme, siehe acceptInvitation() unten.
   parentLinks: ParentLinkRepository;
@@ -669,8 +673,22 @@ export function createAuthService(deps: AuthServiceDeps) {
     // Hard-Purge nach der Aufbewahrungsfrist (siehe
     // jobs/purgeExpiredDeletions.ts).
     async requestAccountDeletion(userId: string) {
+      // Vor requestErasure() geladen (nicht danach) — Name/E-Mail werden
+      // hier nur für den Audit-Log-Schnappschuss gebraucht (Abschnitt 2.3
+      // des Plans: Akteur = Ziel bei einer Selbstlöschung), der Soft-Delete
+      // selbst ändert weder Name noch E-Mail.
+      const user = await deps.users.findById(userId);
       const request = await deps.profileGateway.requestErasure(userId, deps.dataErasureRetentionDays);
       await deps.refreshTokens.revokeAllForUser(userId);
+      await deps.auditLog.record({
+        clubId: user?.clubId ?? null,
+        actorId: userId,
+        actorLabel: user ? `${user.name} <${user.email}>` : userId,
+        action: 'user.deletionRequested',
+        targetId: userId,
+        targetLabel: user ? `${user.name} <${user.email}>` : userId,
+        metadata: { purgeAfter: request.purgeAfter.toISOString() },
+      });
       return { purgeAfter: request.purgeAfter };
     },
 
@@ -730,13 +748,14 @@ export function createAuthService(deps: AuthServiceDeps) {
     // weil das Access Token die Rollen zum Ausstellzeitpunkt einfriert und
     // ein Refresh sie unverändert erneuert (analog revokeAllForUser() bei
     // der DSGVO-Löschung/einem Passwortwechsel).
-    async updateUserRoles(targetUserId: string, roles: string[], requester: { clubId: string | null }) {
+    async updateUserRoles(targetUserId: string, roles: string[], requester: { id: string; clubId: string | null }) {
       if (roles.includes('superadmin')) throw new CannotAssignSuperadminError();
       if (!requester.clubId) throw new ClubIdRequiredError();
 
       const target = await deps.users.findById(targetUserId);
       if (!target) throw new UserNotFoundError();
       if (target.clubId !== requester.clubId) throw new ForeignClubUserError();
+      const oldRoles = target.roles;
 
       // Entzieht diese Änderung der letzten "admin"-Rolle im Verein?
       // Geprüft anhand des AKTUELLEN Bestands (vor dieser Änderung) — ein
@@ -750,6 +769,16 @@ export function createAuthService(deps: AuthServiceDeps) {
 
       const updated = await deps.users.update(targetUserId, { roles });
       await deps.refreshTokens.revokeAllForUser(targetUserId);
+      const actor = await deps.users.findById(requester.id);
+      await deps.auditLog.record({
+        clubId: requester.clubId,
+        actorId: requester.id,
+        actorLabel: actor ? `${actor.name} <${actor.email}>` : requester.id,
+        action: 'user.rolesChanged',
+        targetId: targetUserId,
+        targetLabel: `${updated.name} <${updated.email}>`,
+        metadata: { oldRoles, newRoles: roles },
+      });
       return toPublicUser(updated);
     },
   };

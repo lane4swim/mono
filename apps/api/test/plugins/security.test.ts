@@ -15,6 +15,8 @@ import { createSyncService } from '../../src/modules/sync/sync.service.js';
 import { InMemorySyncGateway } from '../../src/modules/sync/sync.gateway.memory.js';
 import { InMemoryMailSender } from '../../src/mail/mailer.memory.js';
 import { InMemoryProfileDataGateway } from '../../src/modules/profile/profile.repository.memory.js';
+import { createAuditLogService } from '../../src/modules/auditLog/auditLog.service.js';
+import { InMemoryAuditLogRepository } from '../../src/modules/auditLog/auditLog.repository.memory.js';
 import { InMemoryParentLinkRepository } from '../../src/modules/parents/parents.repository.memory.js';
 
 const testEnv = loadEnv({
@@ -30,12 +32,14 @@ const testEnv = loadEnv({
 async function buildTestApp(env: Env = testEnv): Promise<FastifyInstance> {
   const keyPair = generateFreshKeyPair();
   const invitations = new InMemoryInvitationRepository();
+  const auditLog = createAuditLogService({ entries: new InMemoryAuditLogRepository() });
   const invitationsService = createInvitationsService({
     clubs: new InMemoryClubRepository(),
     invitations,
     athletes: new InMemoryAthleteRepository(),
     users: new InMemoryUserRepository(),
     mailer: new InMemoryMailSender(),
+    auditLog,
     frontendBaseUrl: 'https://app.example.org',
     clubInvitationTtlDays: 14,
     memberInvitationTtlDays: 7,
@@ -55,6 +59,7 @@ async function buildTestApp(env: Env = testEnv): Promise<FastifyInstance> {
     passwordResetTtlMinutes: 60,
     accessTtlSeconds: 900,
     refreshTtlDays: 30,
+    auditLog,
   });
   const syncService = createSyncService({ gateway: new InMemorySyncGateway() });
   return buildApp(env, { authService, invitationsService, syncService, clubs: { findById: async () => null }, keyPair });
@@ -108,12 +113,14 @@ describe('Security-Header (Helmet) — Produktionsmodus', () => {
     });
     const keyPair = generateFreshKeyPair();
     const invitations = new InMemoryInvitationRepository();
+    const auditLog = createAuditLogService({ entries: new InMemoryAuditLogRepository() });
     const invitationsService = createInvitationsService({
       clubs: new InMemoryClubRepository(),
       invitations,
       athletes: new InMemoryAthleteRepository(),
       users: new InMemoryUserRepository(),
       mailer: new InMemoryMailSender(),
+      auditLog,
       frontendBaseUrl: 'https://app.example.org',
       clubInvitationTtlDays: 14,
       memberInvitationTtlDays: 7,
@@ -133,6 +140,7 @@ describe('Security-Header (Helmet) — Produktionsmodus', () => {
       passwordResetTtlMinutes: 60,
       accessTtlSeconds: 900,
       refreshTtlDays: 30,
+      auditLog,
     });
     const syncService = createSyncService({ gateway: new InMemorySyncGateway() });
     prodApp = await buildApp(prodEnv, { authService, invitationsService, syncService, clubs: { findById: async () => null }, keyPair });
@@ -283,12 +291,14 @@ describe('CORS — mehrere kommagetrennte Origins (End-to-End)', () => {
     });
     const keyPair = generateFreshKeyPair();
     const invitations = new InMemoryInvitationRepository();
+    const auditLog = createAuditLogService({ entries: new InMemoryAuditLogRepository() });
     const invitationsService = createInvitationsService({
       clubs: new InMemoryClubRepository(),
       invitations,
       athletes: new InMemoryAthleteRepository(),
       users: new InMemoryUserRepository(),
       mailer: new InMemoryMailSender(),
+      auditLog,
       frontendBaseUrl: 'https://app.example.org',
       clubInvitationTtlDays: 14,
       memberInvitationTtlDays: 7,
@@ -308,6 +318,7 @@ describe('CORS — mehrere kommagetrennte Origins (End-to-End)', () => {
       passwordResetTtlMinutes: 60,
       accessTtlSeconds: 900,
       refreshTtlDays: 30,
+      auditLog,
     });
     const syncService = createSyncService({ gateway: new InMemorySyncGateway() });
     multiOriginApp = await buildApp(env, { authService, invitationsService, syncService, clubs: { findById: async () => null }, keyPair });

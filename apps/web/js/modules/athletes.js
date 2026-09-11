@@ -9,6 +9,7 @@ import { field, textInput, selectInput, dateInput, formActions } from '../forms.
 import { isAdminOrSuperAdmin } from '../state.js';
 import { navigate } from '../router.js';
 import { t, trCode } from '../i18n.js';
+import { fetchAssignableTrainers } from './actionItems.js';
 
 export const athletesModule = {
   id: 'athletes',
@@ -213,37 +214,90 @@ function openAthleteModal(athlete, groups, onSaved) {
   const { close } = openModal({ title: isEdit ? t('athletes.modalEditTitle', { name: fullName(athlete) }) : t('athletes.modalCreateTitle'), bodyNode: form, wide: true });
 }
 
-function openGroupModal(groups, onSaved) {
+// Eine Checkbox je Trainer:in/Admin des eigenen Vereins — analog
+// clubForm.js: buildModuleCheckboxes(), hier aber lokal (einziger
+// Aufrufer), da eine gemeinsame Extraktion für einen bislang einzigen
+// zweiten Anwendungsfall keinen Mehrwert böte.
+function buildTrainerCheckboxes(trainers, selectedIds) {
+  const selectedSet = new Set(selectedIds);
+  const rows = trainers.map((tr) => {
+    const input = el('input', { type: 'checkbox' });
+    input.checked = selectedSet.has(tr.id);
+    input.dataset.trainerId = tr.id;
+    return el('label', { class: 'consent-checkbox' }, [input, el('span', {}, tr.name)]);
+  });
+  const node = el('div', { style: 'grid-column:1/-1;display:flex;flex-direction:column;gap:6px' }, [
+    el('span', { class: 'hint' }, t('athletes.formGroupTrainers')),
+    trainers.length ? null : el('span', { class: 'text-slate text-sm' }, t('athletes.noTrainersYet')),
+    ...rows,
+  ].filter(Boolean));
+  const getSelected = () => rows.filter((row) => row.querySelector('input').checked).map((row) => row.querySelector('input').dataset.trainerId);
+  return { node, getSelected };
+}
+
+// docs/Plans/vereinsverwaltung-phase3-plan.md, Abschnitt 1.3: neben
+// Anlegen/Löschen jetzt auch Bearbeiten bestehender Gruppen (Name/
+// Beschreibung/zuständige Trainer:innen) — vormals nicht möglich.
+async function openGroupModal(groups, onSaved) {
+  // fetchAssignableTrainers() fällt bei fehlendem Netzwerk/Demo-Modus auf
+  // die anfragende Person selbst zurück (siehe actionItems.js) — die
+  // Gruppenverwaltung bleibt dadurch auch offline nutzbar, nur die
+  // Trainer-Auswahl ist dann auf die eigene Person beschränkt.
+  const trainers = await fetchAssignableTrainers();
   const body = el('div');
   const list = el('div', { class: 'mb-16' });
+  const formHost = el('div');
+
+  function trainerNames(ids) {
+    return (ids || []).map((id) => trainers.find((tr) => tr.id === id)?.name).filter(Boolean).join(', ');
+  }
+
   function drawList() {
     clear(list);
     if (groups.length === 0) { list.appendChild(el('p', {}, t('athletes.noGroupsYet'))); return; }
     groups.forEach(g => {
+      const names = trainerNames(g.trainerIds);
       list.appendChild(el('div', { class: 'list-row' }, [
-        el('div', { style: 'flex:1' }, [el('div', {}, g.name), el('div', { class: 'text-slate text-sm' }, g.description || '')]),
+        el('div', { style: 'flex:1' }, [
+          el('div', {}, g.name),
+          el('div', { class: 'text-slate text-sm' }, g.description || ''),
+          names ? el('div', { class: 'text-slate text-sm' }, `${t('athletes.groupTrainersLabel')}: ${names}`) : null,
+        ].filter(Boolean)),
+        el('button', { class: 'btn btn-ghost btn-sm', onclick: () => drawForm(g) }, t('common.edit')),
         el('button', { class: 'btn btn-danger btn-sm', onclick: async () => { await remove('groups', g.id); groups.splice(groups.indexOf(g), 1); drawList(); onSaved?.(); } }, t('common.delete')),
       ]));
     });
   }
+
+  function drawForm(editing) {
+    clear(formHost);
+    const form = el('form', { class: 'form-grid single' });
+    const fName = textInput(editing?.name || '', { placeholder: t('athletes.groupNamePlaceholder') });
+    const fDesc = el('textarea', { placeholder: t('athletes.groupDescPlaceholder') }, editing?.description || '');
+    const trainerCheckboxes = buildTrainerCheckboxes(trainers, editing?.trainerIds || []);
+    form.appendChild(field(t('athletes.formGroup'), fName));
+    form.appendChild(field(t('catalog.formDescription'), fDesc));
+    form.appendChild(trainerCheckboxes.node);
+    const actions = [el('button', { type: 'submit', class: 'btn btn-primary' }, editing ? t('common.save') : t('athletes.addGroupButton'))];
+    if (editing) actions.push(el('button', { type: 'button', class: 'btn btn-ghost', onclick: () => drawForm(null) }, t('common.cancel')));
+    form.appendChild(el('div', { class: 'form-actions' }, actions));
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!fName.value.trim()) return;
+      const payload = { ...(editing || {}), name: fName.value.trim(), description: fDesc.value.trim(), trainerIds: trainerCheckboxes.getSelected() };
+      const g = await put('groups', payload);
+      const idx = groups.findIndex(x => x.id === g.id);
+      if (idx >= 0) groups[idx] = g; else groups.push(g);
+      drawForm(null);
+      drawList();
+      onSaved?.();
+    });
+    formHost.appendChild(form);
+  }
+
   drawList();
   body.appendChild(list);
-
-  const form = el('form', { class: 'form-grid single' });
-  const fName = textInput('', { placeholder: t('athletes.groupNamePlaceholder') });
-  const fDesc = el('textarea', { placeholder: t('athletes.groupDescPlaceholder') });
-  form.appendChild(field(t('athletes.formGroup'), fName));
-  form.appendChild(field(t('catalog.formDescription'), fDesc));
-  form.appendChild(el('div', { class: 'form-actions' }, [el('button', { type: 'submit', class: 'btn btn-primary' }, t('athletes.addGroupButton'))]));
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    if (!fName.value.trim()) return;
-    const g = await put('groups', { name: fName.value.trim(), description: fDesc.value.trim() });
-    groups.push(g);
-    fName.value = ''; fDesc.value = '';
-    drawList();
-    onSaved?.();
-  });
-  body.appendChild(form);
+  body.appendChild(formHost);
+  drawForm(null);
   openModal({ title: t('athletes.groupsModalTitle'), bodyNode: body });
 }

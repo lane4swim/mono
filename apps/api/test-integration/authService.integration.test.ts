@@ -21,6 +21,8 @@ import { createInvitationsService } from '../src/modules/invitations/invitations
 import { PrismaClubRepository, PrismaInvitationRepository, PrismaAthleteRepository } from '../src/modules/invitations/invitations.repository.js';
 import { PrismaProfileDataGateway } from '../src/modules/profile/profile.repository.js';
 import { PrismaParentLinkRepository } from '../src/modules/parents/parents.repository.js';
+import { createAuditLogService } from '../src/modules/auditLog/auditLog.service.js';
+import { PrismaAuditLogRepository } from '../src/modules/auditLog/auditLog.repository.js';
 import { InMemoryMailSender } from '../src/mail/mailer.memory.js';
 import { generateFreshKeyPair } from '../src/auth/keys.js';
 import { getTestPrisma, closeTestPrisma, truncateAll, createTestClub } from './helpers.js';
@@ -29,12 +31,14 @@ const prisma = getTestPrisma();
 
 function makeServices() {
   const clubs = new PrismaClubRepository(prisma);
+  const auditLog = createAuditLogService({ entries: new PrismaAuditLogRepository(prisma) });
   const invitationsService = createInvitationsService({
     clubs,
     invitations: new PrismaInvitationRepository(prisma),
     athletes: new PrismaAthleteRepository(prisma),
     users: new PrismaUserRepository(prisma),
     mailer: new InMemoryMailSender(),
+    auditLog,
     frontendBaseUrl: 'https://app.example.org',
     clubInvitationTtlDays: 14,
     memberInvitationTtlDays: 7,
@@ -54,6 +58,7 @@ function makeServices() {
     accessTtlSeconds: 900,
     refreshTtlDays: 30,
     parentLinks: new PrismaParentLinkRepository(prisma),
+    auditLog,
   });
   return { authService, invitationsService };
 }

@@ -141,6 +141,12 @@ export function buildDemoData() {
   const groupAAthletes = athletes.filter((a) => a.groupId === groupA.id);
   const session1 = {
     id: id(), clubId: club.id, date: wkStart, groupId: groupA.id, planId: plan1.id, trainerNote: 'Gute Energie, Fokus auf Wenden verbessert.',
+    // null (statt Weglassen): verknüpft mit einem Plan, daher wird der
+    // Umfang aus dessen Tages-Sets berechnet (siehe session2 unten für den
+    // Ad-hoc-Fallback) — explizit gesetzt, damit session1/session2 dieselbe
+    // Form haben und `sessions.map()` unten kein Union-Typ mit optionalem
+    // Feld entsteht.
+    actualDistance: null as number | null,
     attendance: groupAAthletes.map((a) => ({ athleteId: a.id, present: true, rpe: 7, note: '' })),
   };
   const session2 = {
