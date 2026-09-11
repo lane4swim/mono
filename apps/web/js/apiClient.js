@@ -356,6 +356,19 @@ export function updateUserRoles(userId, roles) {
   return request(`/api/users/${encodeURIComponent(userId)}/roles`, { method: 'PATCH', body: JSON.stringify({ roles }) });
 }
 
+// docs/Plans/vereinsverwaltung-phase3-plan.md, Abschnitt 2 — admin sieht
+// den eigenen Verein, superadmin optional gefiltert per clubId. `before`
+// ist ein ISO-Zeitstempel (Cursor: "ältere Einträge als …") für "mehr
+// laden".
+export function listAuditLog({ clubId, before, limit } = {}) {
+  const params = new URLSearchParams();
+  if (clubId) params.set('clubId', clubId);
+  if (before) params.set('before', before);
+  if (limit) params.set('limit', String(limit));
+  const query = params.toString();
+  return request(`/api/audit-log${query ? `?${query}` : ''}`);
+}
+
 // ---- Qualifikationsmanagement (docs/Plans/nutzer-qualifikationen-plan.md) ---
 // Läuft NICHT über die generische Sync-API (siehe dortiger Abschnitt 1.1)
 // — eigene REST-Endpunkte, analog Einladungen/Vereinen oben. Antwort:

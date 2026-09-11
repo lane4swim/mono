@@ -28,6 +28,9 @@ import { PrismaUserQualificationRepository, PrismaQualificationReminderSettingRe
 import { refereesRoutes } from './modules/referees/referees.route.js';
 import { createRefereesService, type RefereesService } from './modules/referees/referees.service.js';
 import { PrismaRefereeAssignmentRepository, PrismaCompetitionRepository } from './modules/referees/referees.repository.js';
+import { auditLogRoutes } from './modules/auditLog/auditLog.route.js';
+import { createAuditLogService, type AuditLogService } from './modules/auditLog/auditLog.service.js';
+import { PrismaAuditLogRepository } from './modules/auditLog/auditLog.repository.js';
 import { SmtpMailSender, ConsoleMailSender, type MailSender } from './mail/mailer.js';
 import { resolveKeyPair } from './auth/keys.js';
 import { getPrisma } from './db/prisma.js';
@@ -43,6 +46,7 @@ export interface BuildAppOverrides {
   clubs?: ClubModulesLookup;
   qualificationsService?: QualificationsService;
   refereesService?: RefereesService;
+  auditLogService?: AuditLogService;
   mailer?: MailSender;
   keyPair?: ReturnType<typeof resolveKeyPair>;
 }
@@ -142,6 +146,17 @@ export async function buildApp(env: Env, overrides: BuildAppOverrides = {}): Pro
   // hinter ihrem EIGENEN `??` (keine gemeinsam vorab konstruierte
   // Instanz) — sonst würde bereits das bloße Bauen der App getPrisma()
   // aufrufen, selbst wenn ein Test alle drei Stellen überschreibt.
+  // Vor invitationsService/authService konstruiert — beide bekommen diese
+  // Instanz als schlanken AuditLogWriter injiziert (docs/Plans/
+  // vereinsverwaltung-phase3-plan.md, Abschnitt 2.4), analog dazu, wie
+  // `mailer` oben bereits in beide injiziert wird. Kein zirkulärer Import:
+  // das auditLog-Modul hängt selbst von keinem der beiden ab.
+  const auditLogService =
+    overrides.auditLogService ??
+    createAuditLogService({
+      entries: new PrismaAuditLogRepository(getPrisma()),
+    });
+
   const invitationsService =
     overrides.invitationsService ??
     createInvitationsService({
@@ -150,6 +165,7 @@ export async function buildApp(env: Env, overrides: BuildAppOverrides = {}): Pro
       athletes: new PrismaAthleteRepository(getPrisma()),
       users: new PrismaUserRepository(getPrisma()),
       mailer,
+      auditLog: auditLogService,
       frontendBaseUrl: env.FRONTEND_BASE_URL,
       clubInvitationTtlDays: CLUB_INVITATION_TTL_DAYS,
       memberInvitationTtlDays: MEMBER_INVITATION_TTL_DAYS,
@@ -169,6 +185,7 @@ export async function buildApp(env: Env, overrides: BuildAppOverrides = {}): Pro
       profileGateway: new PrismaProfileDataGateway(getPrisma()),
       clubs: new PrismaClubRepository(getPrisma()),
       dataErasureRetentionDays: env.DATA_ERASURE_RETENTION_DAYS,
+      auditLog: auditLogService,
       keyPair,
       // "Passwort vergessen" (Sicherheitsreview 2026-08, Befund M5) —
       // dieselbe mailer-Instanz wie invitationsService oben (nicht ein
@@ -215,6 +232,7 @@ export async function buildApp(env: Env, overrides: BuildAppOverrides = {}): Pro
   await app.register(invitationsRoutes, { invitationsService });
   await app.register(qualificationsRoutes, { qualificationsService, clubs: clubModulesLookup });
   await app.register(refereesRoutes, { refereesService, clubs: clubModulesLookup });
+  await app.register(auditLogRoutes, { auditLogService });
 
   return app;
 }

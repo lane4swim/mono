@@ -16,7 +16,7 @@ export function getModule(routeId) {
 // bestimmte Vereine) — Kern-Module (Dashboard/Profil/Nutzerverwaltung/
 // Sync-Queue/Info) sind reine Infrastruktur ohne eigenen fachlichen
 // Sync-Store und bleiben immer sichtbar, unabhängig von enabledModules.
-export const CORE_MODULE_IDS = ['dashboard', 'profile', 'usermgmt', 'syncqueue', 'info'];
+export const CORE_MODULE_IDS = ['dashboard', 'profile', 'usermgmt', 'syncqueue', 'info', 'auditlog'];
 
 // Route-ID (MODULES[*].id) -> Paket-Key. MUSS inhaltlich mit
 // packages/shared-types/src/modules.ts: MODULE_PACKAGES übereinstimmen —

@@ -13,6 +13,8 @@ import { createSyncService } from '../../src/modules/sync/sync.service.js';
 import { InMemorySyncGateway } from '../../src/modules/sync/sync.gateway.memory.js';
 import { InMemoryMailSender } from '../../src/mail/mailer.memory.js';
 import { InMemoryProfileDataGateway } from '../../src/modules/profile/profile.repository.memory.js';
+import { createAuditLogService } from '../../src/modules/auditLog/auditLog.service.js';
+import { InMemoryAuditLogRepository } from '../../src/modules/auditLog/auditLog.repository.memory.js';
 import { CURRENT_CONSENT_VERSION } from '@lane1/shared-types';
 
 const testEnv = loadEnv({
@@ -43,12 +45,14 @@ async function buildTestApp() {
   // acceptInvitation(), statt selbst eine zweite Gültigkeitsprüfung
   // gegen das Invitation-Repository zu implementieren (siehe
   // AuthServiceDeps.invitations-Kommentar in auth.service.ts).
+  const auditLog = createAuditLogService({ entries: new InMemoryAuditLogRepository() });
   const invitationsService = createInvitationsService({
     clubs,
     invitations,
     athletes: new InMemoryAthleteRepository(),
     users,
     mailer: new InMemoryMailSender(),
+    auditLog,
     frontendBaseUrl: 'https://app.example.org',
     clubInvitationTtlDays: 14,
     memberInvitationTtlDays: 7,
@@ -66,6 +70,7 @@ async function buildTestApp() {
     passwordResetTokens: new InMemoryPasswordResetTokenRepository(), mailer: passwordResetMailer,
     frontendBaseUrl: 'https://app.example.org', passwordResetTtlMinutes: 60,
     keyPair, accessTtlSeconds: 900, refreshTtlDays: 30,
+    auditLog,
   });
   const syncService = createSyncService({ gateway: new InMemorySyncGateway() });
 

@@ -262,7 +262,7 @@ export async function authRoutes(app: FastifyInstance, opts: { authService: Auth
       const body = parseInput(UpdateUserRolesRequestSchema, request.body, reply);
       if (!body) return;
 
-      const user = await authService.updateUserRoles(request.params.userId, body.roles, { clubId: request.user!.clubId });
+      const user = await authService.updateUserRoles(request.params.userId, body.roles, { id: request.user!.sub, clubId: request.user!.clubId });
       return reply.code(200).send(user);
     },
   );

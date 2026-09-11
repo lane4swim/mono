@@ -42,6 +42,26 @@ describe('GroupSchema', () => {
     const group = { id: ATHLETE_ID, clubId: CLUB_ID, name: 'x'.repeat(200), description: '', createdAt: now, updatedAt: now };
     expect(GroupSchema.safeParse(group).success).toBe(true);
   });
+
+  // docs/Plans/vereinsverwaltung-phase3-plan.md, Abschnitt 1.2.
+  it('setzt trainerIds standardmäßig auf ein leeres Array', () => {
+    const group = { id: ATHLETE_ID, clubId: CLUB_ID, name: 'Leistungsgruppe', description: '', createdAt: now, updatedAt: now };
+    const parsed = GroupSchema.parse(group);
+    expect(parsed.trainerIds).toEqual([]);
+  });
+  it('akzeptiert eine Liste zuständiger Trainer:innen', () => {
+    const group = { id: ATHLETE_ID, clubId: CLUB_ID, name: 'Leistungsgruppe', description: '', trainerIds: [TRAINER_ID], createdAt: now, updatedAt: now };
+    expect(GroupSchema.safeParse(group).success).toBe(true);
+  });
+  it('lehnt eine ungültige Trainer-ID ab', () => {
+    const group = { id: ATHLETE_ID, clubId: CLUB_ID, name: 'Leistungsgruppe', description: '', trainerIds: ['not-a-uuid'], createdAt: now, updatedAt: now };
+    expect(GroupSchema.safeParse(group).success).toBe(false);
+  });
+  it('lehnt mehr als 50 zugeordnete Trainer:innen ab', () => {
+    const trainerIds = Array.from({ length: 51 }, (_, i) => `33333333-3333-3333-3333-${String(i).padStart(12, '0')}`);
+    const group = { id: ATHLETE_ID, clubId: CLUB_ID, name: 'Leistungsgruppe', description: '', trainerIds, createdAt: now, updatedAt: now };
+    expect(GroupSchema.safeParse(group).success).toBe(false);
+  });
 });
 
 describe('AthleteSchema', () => {

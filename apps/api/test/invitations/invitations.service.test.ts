@@ -13,6 +13,8 @@ import {
 } from '../../src/modules/invitations/invitations.service.js';
 import { InMemoryClubRepository, InMemoryInvitationRepository, InMemoryAthleteRepository } from '../../src/modules/invitations/invitations.repository.memory.js';
 import { InMemoryUserRepository } from '../../src/modules/auth/auth.repository.memory.js';
+import { createAuditLogService } from '../../src/modules/auditLog/auditLog.service.js';
+import { InMemoryAuditLogRepository } from '../../src/modules/auditLog/auditLog.repository.memory.js';
 
 const SUPERADMIN = { id: 'super-1', roles: ['superadmin'], clubId: null };
 const ADMIN_OF_CLUB_A = { id: 'admin-a', roles: ['admin'], clubId: 'club-a' };
@@ -28,11 +30,13 @@ function makeService() {
   const athletes = new InMemoryAthleteRepository();
   const users = new InMemoryUserRepository();
   const mailer = new InMemoryMailSender();
+  const auditLogEntries = new InMemoryAuditLogRepository();
+  const auditLog = createAuditLogService({ entries: auditLogEntries });
   const service = createInvitationsService({
-    clubs, invitations, athletes, users, mailer, frontendBaseUrl: 'https://app.example.org',
+    clubs, invitations, athletes, users, mailer, auditLog, frontendBaseUrl: 'https://app.example.org',
     clubInvitationTtlDays: 14, memberInvitationTtlDays: 7,
   });
-  return { service, clubs, invitations, athletes, users, mailer };
+  return { service, clubs, invitations, athletes, users, mailer, auditLogEntries };
 }
 
 describe('invitationsService.createClub', () => {
@@ -289,6 +293,49 @@ describe('invitationsService.list / revoke', () => {
   });
 });
 
+// docs/Plans/vereinsverwaltung-phase3-plan.md, Abschnitt 2.5.
+describe('invitationsService — Audit-Log', () => {
+  it('protokolliert das Erstellen einer Einladung', async () => {
+    const { service, clubs, auditLogEntries } = makeService();
+    const club = await clubs.create({ name: 'Club A' });
+    const requester = { ...ADMIN_OF_CLUB_A, clubId: club.id };
+    const invitation = await service.createInvitation({ email: 'a@a.de', role: 'trainer' }, requester);
+
+    const entries = await auditLogEntries.list({ clubId: club.id, limit: 10 });
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      clubId: club.id,
+      actorId: requester.id,
+      action: 'invitation.created',
+      targetId: invitation.id,
+      targetLabel: 'a@a.de',
+      metadata: { role: 'trainer' },
+    });
+  });
+
+  it('protokolliert das Widerrufen einer Einladung', async () => {
+    const { service, clubs, auditLogEntries } = makeService();
+    const club = await clubs.create({ name: 'Club A' });
+    const requester = { ...ADMIN_OF_CLUB_A, clubId: club.id };
+    const invitation = await service.createInvitation({ email: 'a@a.de', role: 'trainer' }, requester);
+
+    await service.revoke(invitation.id, requester);
+
+    const entries = await auditLogEntries.list({ clubId: club.id, limit: 10 });
+    const revokeEntry = entries.find((e) => e.action === 'invitation.revoked');
+    expect(revokeEntry).toMatchObject({ targetId: invitation.id, targetLabel: 'a@a.de' });
+  });
+
+  it('protokolliert createClub() als Einladung erstellt', async () => {
+    const { service, auditLogEntries } = makeService();
+    const result = await service.createClub({ name: 'SV Wasserfreunde', adminEmail: 'admin@sv.de', adminName: 'Petra Klein' }, SUPERADMIN);
+
+    const entries = await auditLogEntries.list({ clubId: result.club.id, limit: 10 });
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({ action: 'invitation.created', targetLabel: 'admin@sv.de' });
+  });
+});
+
 describe('invitationsService — Einladungs-E-Mail-Versand', () => {
   it('createClub() versendet eine Einladungs-E-Mail an die angegebene Admin-Adresse', async () => {
     const { service, mailer } = makeService();
@@ -351,7 +398,7 @@ describe('invitationsService.listClubs — Mitgliederzahlen', () => {
     const clubs = new InMemoryClubRepository(() => clubMembers);
     const invitations = new InMemoryInvitationRepository();
     const mailer = new InMemoryMailSender();
-    const service = createInvitationsService({ clubs, invitations, athletes: new InMemoryAthleteRepository(), users: new InMemoryUserRepository(), mailer, frontendBaseUrl: 'https://app.example.org', clubInvitationTtlDays: 14, memberInvitationTtlDays: 7 });
+    const service = createInvitationsService({ clubs, invitations, athletes: new InMemoryAthleteRepository(), users: new InMemoryUserRepository(), mailer, auditLog: createAuditLogService({ entries: new InMemoryAuditLogRepository() }), frontendBaseUrl: 'https://app.example.org', clubInvitationTtlDays: 14, memberInvitationTtlDays: 7 });
 
     const club = await clubs.create({ name: 'Club A' });
     clubMembers = [

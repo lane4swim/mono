@@ -22,12 +22,13 @@ import { userManagementModule } from './modules/userManagement.js';
 import { infoModule } from './modules/info.js';
 import { qualificationsModule } from './modules/qualifications.js';
 import { kampfrichterModule } from './modules/kampfrichter.js';
+import { auditLogModule } from './modules/auditLog.js';
 
 const ALL_MODULES = [
   dashboardModule, athletesModule, competitionsModule, timesModule, plansModule,
   templatesModule, catalogModule, sessionsModule, actionItemsModule, statsModule,
   syncQueueModule, profileModule, userManagementModule, infoModule, qualificationsModule,
-  kampfrichterModule,
+  kampfrichterModule, auditLogModule,
 ];
 
 export function registerAllModules() {

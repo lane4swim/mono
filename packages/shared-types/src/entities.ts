@@ -85,6 +85,11 @@ export const GroupSchema = z.object({
   clubId: z.string().uuid(),
   name: z.string().min(1).max(200),
   description: z.string().max(2000).default(''),
+  // Zuständige Trainer:innen/Admins (User.id), docs/Plans/
+  // vereinsverwaltung-phase3-plan.md Abschnitt 1: rein organisatorisch,
+  // keine Berechtigungsprüfung hängt daran (siehe Prisma-Schema-Kommentar
+  // zu Group.trainerIds).
+  trainerIds: z.array(z.string().uuid()).max(50).default([]),
   createdAt: isoDate,
   updatedAt: isoDate,
 }).strict();

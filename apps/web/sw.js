@@ -15,7 +15,7 @@
 // bliebe beliebig lange auf dem alten Stand, ohne jeden Hinweis. app.js
 // meldet stattdessen, dass eine neue Fassung bereitsteht, und lässt die
 // Person entscheiden, wann neu geladen wird.
-const CACHE_VERSION = 'lane1-v44';
+const CACHE_VERSION = 'lane1-v45';
 const PRECACHE_URLS = [
   './',
   './index.html',
@@ -76,6 +76,7 @@ const PRECACHE_URLS = [
   './js/modules/clubForm.js',
   './js/modules/qualifications.js',
   './js/modules/kampfrichter.js',
+  './js/modules/auditLog.js',
   './js/modules/info.js',
   './js/modules/resultsImportUI.js',
   './js/resultsImport/dsv7Parser.js',

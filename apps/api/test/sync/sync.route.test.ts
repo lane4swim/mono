@@ -11,6 +11,8 @@ import { createSyncService } from '../../src/modules/sync/sync.service.js';
 import { InMemorySyncGateway } from '../../src/modules/sync/sync.gateway.memory.js';
 import { InMemoryMailSender } from '../../src/mail/mailer.memory.js';
 import { InMemoryProfileDataGateway } from '../../src/modules/profile/profile.repository.memory.js';
+import { createAuditLogService } from '../../src/modules/auditLog/auditLog.service.js';
+import { InMemoryAuditLogRepository } from '../../src/modules/auditLog/auditLog.repository.memory.js';
 import { generateFreshKeyPair, type KeyPair } from '../../src/auth/keys.js';
 import { signAccessToken } from '../../src/auth/tokens.js';
 
@@ -24,12 +26,14 @@ const testEnv = loadEnv({
 async function buildTestApp() {
   const keyPair = generateFreshKeyPair();
   const invitations = new InMemoryInvitationRepository();
+  const auditLog = createAuditLogService({ entries: new InMemoryAuditLogRepository() });
   const invitationsService = createInvitationsService({
     clubs: new InMemoryClubRepository(),
     invitations,
     athletes: new InMemoryAthleteRepository(),
     users: new InMemoryUserRepository(),
     mailer: new InMemoryMailSender(),
+    auditLog,
     frontendBaseUrl: 'https://app.example.org',
     clubInvitationTtlDays: 14,
     memberInvitationTtlDays: 7,
@@ -57,6 +61,7 @@ async function buildTestApp() {
     passwordResetTtlMinutes: 60,
     accessTtlSeconds: 900,
     refreshTtlDays: 30,
+    auditLog,
   });
   const gateway = new InMemorySyncGateway();
   const syncService = createSyncService({ gateway });
