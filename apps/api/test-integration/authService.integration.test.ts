@@ -20,6 +20,7 @@ import { PrismaUserRepository, PrismaRefreshTokenRepository, PrismaPasswordReset
 import { createInvitationsService } from '../src/modules/invitations/invitations.service.js';
 import { PrismaClubRepository, PrismaInvitationRepository, PrismaAthleteRepository } from '../src/modules/invitations/invitations.repository.js';
 import { PrismaProfileDataGateway } from '../src/modules/profile/profile.repository.js';
+import { PrismaParentLinkRepository } from '../src/modules/parents/parents.repository.js';
 import { InMemoryMailSender } from '../src/mail/mailer.memory.js';
 import { generateFreshKeyPair } from '../src/auth/keys.js';
 import { getTestPrisma, closeTestPrisma, truncateAll, createTestClub } from './helpers.js';
@@ -52,6 +53,7 @@ function makeServices() {
     passwordResetTtlMinutes: 60,
     accessTtlSeconds: 900,
     refreshTtlDays: 30,
+    parentLinks: new PrismaParentLinkRepository(prisma),
   });
   return { authService, invitationsService };
 }

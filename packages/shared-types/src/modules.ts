@@ -48,6 +48,11 @@ export const MODULE_PACKAGES = {
   catalog: { routeIds: ['catalog'], stores: ['exercises'] },
   sessions: { routeIds: ['sessions'], stores: ['sessions'] },
   actionitems: { routeIds: ['actionitems'], stores: ['actionItems'] },
+  // Vereinsinterne Nachrichten/Ankündigungen (Phase 2, Abschnitt 4.1 —
+  // docs/Plans/phase2-plan.md). Eigenes, zubuchbares Paket (nicht in
+  // "actionitems"/"plans" gebündelt): fachlich eigenständig, ein Verein
+  // soll es unabhängig von anderen Paketen buchen können.
+  announcements: { routeIds: ['announcements'], stores: ['announcements'] },
   stats: { routeIds: ['stats'], stores: [] },
   // Qualifikationsmanagement (docs/Plans/nutzer-qualifikationen-plan.md, Abschnitt
   // 1.2): `stores: []` wie bei times/stats — kein Sync-Store, da

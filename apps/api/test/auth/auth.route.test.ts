@@ -15,6 +15,7 @@ import { InMemoryMailSender } from '../../src/mail/mailer.memory.js';
 import { InMemoryProfileDataGateway } from '../../src/modules/profile/profile.repository.memory.js';
 import { createAuditLogService } from '../../src/modules/auditLog/auditLog.service.js';
 import { InMemoryAuditLogRepository } from '../../src/modules/auditLog/auditLog.repository.memory.js';
+import { InMemoryParentLinkRepository } from '../../src/modules/parents/parents.repository.memory.js';
 import { CURRENT_CONSENT_VERSION } from '@lane1/shared-types';
 
 const testEnv = loadEnv({
@@ -63,6 +64,7 @@ async function buildTestApp() {
   // /auth/forgot-password).
   const passwordResetMailer = new InMemoryMailSender();
   const authService = createAuthService({
+    parentLinks: new InMemoryParentLinkRepository(),
     users, refreshTokens, invitations: invitationsService,
     profileGateway: new InMemoryProfileDataGateway(profileDb),
     clubs,

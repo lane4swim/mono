@@ -13,6 +13,7 @@ import { InMemoryMailSender } from '../src/mail/mailer.memory.js';
 import { InMemoryProfileDataGateway } from '../src/modules/profile/profile.repository.memory.js';
 import { createAuditLogService } from '../src/modules/auditLog/auditLog.service.js';
 import { InMemoryAuditLogRepository } from '../src/modules/auditLog/auditLog.repository.memory.js';
+import { InMemoryParentLinkRepository } from '../src/modules/parents/parents.repository.memory.js';
 import { CURRENT_CONSENT_VERSION } from '@lane1/shared-types';
 
 const testEnv = loadEnv({
@@ -43,6 +44,7 @@ async function buildTestApp(): Promise<FastifyInstance> {
     memberInvitationTtlDays: 7,
   });
   const authService = createAuthService({
+    parentLinks: new InMemoryParentLinkRepository(),
     users: new InMemoryUserRepository(),
     refreshTokens: new InMemoryRefreshTokenRepository(),
     invitations: invitationsService,

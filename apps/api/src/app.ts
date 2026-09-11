@@ -14,6 +14,11 @@ import authenticatePlugin from './plugins/authenticate.js';
 import { healthRoutes } from './modules/health/health.route.js';
 import { authRoutes } from './modules/auth/auth.route.js';
 import { syncRoutes, type ClubModulesLookup } from './modules/sync/sync.route.js';
+import { PrismaAnnouncementRecipientsGateway } from './modules/sync/announcementRecipients.repository.js';
+import { parentsRoutes } from './modules/parents/parents.route.js';
+import { createParentsService, type ParentsService } from './modules/parents/parents.service.js';
+import { PrismaParentLinkRepository, PrismaParentsAthleteLookup } from './modules/parents/parents.repository.js';
+import { PrismaParentOverviewGateway } from './modules/parents/parents.overview.repository.js';
 import { invitationsRoutes } from './modules/invitations/invitations.route.js';
 import { createAuthService, type AuthService } from './modules/auth/auth.service.js';
 import { PrismaUserRepository, PrismaRefreshTokenRepository, PrismaPasswordResetTokenRepository } from './modules/auth/auth.repository.js';
@@ -32,6 +37,11 @@ import { auditLogRoutes } from './modules/auditLog/auditLog.route.js';
 import { createAuditLogService, type AuditLogService } from './modules/auditLog/auditLog.service.js';
 import { PrismaAuditLogRepository } from './modules/auditLog/auditLog.repository.js';
 import { SmtpMailSender, ConsoleMailSender, type MailSender } from './mail/mailer.js';
+import { pushRoutes } from './modules/push/push.route.js';
+import { PrismaPushSubscriptionRepository, type PushSubscriptionRepository } from './modules/push/push.repository.js';
+import { WebPushSender } from './push/pusher.webpush.js';
+import { ConsolePushSender } from './push/pusher.console.js';
+import type { PushSender } from './push/pusher.js';
 import { resolveKeyPair } from './auth/keys.js';
 import { getPrisma } from './db/prisma.js';
 
@@ -47,7 +57,10 @@ export interface BuildAppOverrides {
   qualificationsService?: QualificationsService;
   refereesService?: RefereesService;
   auditLogService?: AuditLogService;
+  parentsService?: ParentsService;
   mailer?: MailSender;
+  pusher?: PushSender;
+  pushSubscriptions?: PushSubscriptionRepository;
   keyPair?: ReturnType<typeof resolveKeyPair>;
 }
 
@@ -87,6 +100,19 @@ export function resolveMailer(env: Env): MailSender {
     password: env.SMTP_PASSWORD,
     fromEmail: env.SMTP_FROM_EMAIL,
     fromName: env.SMTP_FROM_NAME,
+  });
+}
+
+// Exportiert (statt modulintern), analog resolveMailer() oben, damit
+// scripts/notifyExpiringQualifications.ts und
+// scripts/notifyUpcomingSessions.ts dieselbe VAPID-vs.-Konsole-
+// Entscheidung treffen wie die eigentliche App.
+export function resolvePushSender(env: Env): PushSender {
+  if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY) return new ConsolePushSender();
+  return new WebPushSender({
+    publicKey: env.VAPID_PUBLIC_KEY,
+    privateKey: env.VAPID_PRIVATE_KEY,
+    subject: env.VAPID_SUBJECT || `mailto:${env.SMTP_FROM_EMAIL}`,
   });
 }
 
@@ -197,6 +223,9 @@ export async function buildApp(env: Env, overrides: BuildAppOverrides = {}): Pro
       passwordResetTtlMinutes: PASSWORD_RESET_TTL_MINUTES,
       accessTtlSeconds: env.JWT_ACCESS_TTL_SECONDS,
       refreshTtlDays: env.JWT_REFRESH_TTL_DAYS,
+      // Phase 2, Abschnitt 4.2: Eltern-Kind-Erstverknüpfung bei
+      // Einladungsannahme (siehe acceptInvitation()).
+      parentLinks: new PrismaParentLinkRepository(getPrisma()),
     });
 
   const syncService =
@@ -226,13 +255,32 @@ export async function buildApp(env: Env, overrides: BuildAppOverrides = {}): Pro
       competitions: new PrismaCompetitionRepository(getPrisma()),
     });
 
+  const pushSubscriptions = overrides.pushSubscriptions ?? new PrismaPushSubscriptionRepository(getPrisma());
+  const pusher = overrides.pusher ?? resolvePushSender(env);
+
+  const parentsService =
+    overrides.parentsService ??
+    createParentsService({
+      parentLinks: new PrismaParentLinkRepository(getPrisma()),
+      overview: new PrismaParentOverviewGateway(getPrisma()),
+      users: new PrismaUserRepository(getPrisma()),
+      athletes: new PrismaParentsAthleteLookup(getPrisma()),
+    });
+
   await app.register(healthRoutes);
   await app.register(authRoutes, { authService });
-  await app.register(syncRoutes, { syncService, clubs: clubModulesLookup });
+  await app.register(syncRoutes, {
+    syncService,
+    clubs: clubModulesLookup,
+    // Phase 2, Abschnitt 2.4: Push-Auslöser für ein neues Announcement.
+    announcementNotify: { pusher, pushSubscriptions, recipients: new PrismaAnnouncementRecipientsGateway(getPrisma()) },
+  });
   await app.register(invitationsRoutes, { invitationsService });
   await app.register(qualificationsRoutes, { qualificationsService, clubs: clubModulesLookup });
   await app.register(refereesRoutes, { refereesService, clubs: clubModulesLookup });
   await app.register(auditLogRoutes, { auditLogService });
+  await app.register(pushRoutes, { subscriptions: pushSubscriptions, vapidPublicKey: env.VAPID_PUBLIC_KEY ?? null });
+  await app.register(parentsRoutes, { parentsService });
 
   return app;
 }

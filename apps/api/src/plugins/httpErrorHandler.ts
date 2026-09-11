@@ -48,6 +48,11 @@ import {
   ForeignCompetitionError,
 } from '../modules/referees/referees.service.js';
 import { ClubIdRequiredError as AuditLogClubIdRequiredError } from '../modules/auditLog/auditLog.service.js';
+import {
+  ParentNotInClubError,
+  AthleteNotInClubError,
+  UserNotParentError,
+} from '../modules/parents/parents.service.js';
 
 interface HttpErrorMapping {
   status: number;
@@ -109,6 +114,11 @@ const HTTP_ERROR_REGISTRY = new Map<abstract new (...args: never[]) => Error, Ht
   [ForeignCompetitionError, { status: 400, code: 'foreign_competition' }],
   // docs/Plans/vereinsverwaltung-phase3-plan.md, Abschnitt 2.
   [AuditLogClubIdRequiredError, { status: 400, code: 'club_id_required' }],
+  // Phase 2, Abschnitt 4.2 (docs/Plans/phase2-plan.md) — Eltern-Kind-
+  // Verknüpfungsverwaltung.
+  [ParentNotInClubError, { status: 404, code: 'not_found' }],
+  [AthleteNotInClubError, { status: 400, code: 'athlete_club_mismatch' }],
+  [UserNotParentError, { status: 400, code: 'user_not_parent' }],
 ]);
 
 function sendMappedError(err: Error, mapping: HttpErrorMapping, reply: FastifyReply) {

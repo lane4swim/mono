@@ -12,9 +12,18 @@
 //                 Abschnitt 2) — einem Verein zugehörig, wie trainer/
 //                 athlete kombinierbar mit jeder anderen Nicht-superadmin-
 //                 Rolle (siehe UserRolesSchema unten).
+//   - parent:     Eltern-/Erziehungsberechtigten-Zugang (docs/Plans/
+//                 phase2-plan.md, Abschnitt 4.2) — einem Verein zugehörig,
+//                 schreibgeschränkt auf eine eigene, stark eingeschränkte
+//                 Übersicht (siehe modules/parents). Technisch mit jeder
+//                 anderen Nicht-superadmin-Rolle kombinierbar (keine
+//                 harte Schema-Sperre, siehe Plan Abschnitt 3.3), in der
+//                 Praxis aber eigenständig (wer bereits trainer/admin
+//                 ist, sieht die Daten des eigenen Kindes ohnehin über
+//                 die reguläre Team-Sicht).
 import { z } from 'zod';
 
-export const RoleSchema = z.enum(['superadmin', 'admin', 'trainer', 'athlete', 'referee']);
+export const RoleSchema = z.enum(['superadmin', 'admin', 'trainer', 'athlete', 'referee', 'parent']);
 export type Role = z.infer<typeof RoleSchema>;
 
 // docs/Plans/kampfrichter-modul-plan.md, Abschnitt 1.2: ein Konto kann künftig

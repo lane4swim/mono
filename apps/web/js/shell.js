@@ -28,10 +28,10 @@ const GROUP_ICON_ADMIN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentCo
 // following raw module-registration order. Groups without a `labelKey`
 // (dashboard, profile) render as plain top-level items with no header.
 export const NAV_GROUPS = [
-  { id: 'dashboard', moduleIds: ['dashboard'] },
+  { id: 'dashboard', moduleIds: ['dashboard', 'parent'] },
   { id: 'training', labelKey: 'nav.groups.training', icon: GROUP_ICON_TRAINING, moduleIds: ['plans', 'templates', 'catalog', 'sessions'] },
   { id: 'performance', labelKey: 'nav.groups.performance', icon: GROUP_ICON_PERFORMANCE, moduleIds: ['times', 'competitions', 'stats'] },
-  { id: 'team', labelKey: 'nav.groups.team', icon: GROUP_ICON_TEAM, moduleIds: ['athletes', 'actionitems', 'qualifications', 'kampfrichter'] },
+  { id: 'team', labelKey: 'nav.groups.team', icon: GROUP_ICON_TEAM, moduleIds: ['athletes', 'announcements', 'actionitems', 'qualifications', 'kampfrichter'] },
   { id: 'admin', labelKey: 'nav.groups.admin', icon: GROUP_ICON_ADMIN, moduleIds: ['usermgmt', 'auditlog', 'syncqueue', 'info'] },
   { id: 'profile', moduleIds: ['profile'] },
 ];
@@ -155,7 +155,7 @@ export function markActive(routeId) {
 // Verein/keine Athlet:innen vorhanden). Gilt unverändert auch für
 // app-demo.js, obwohl die Demo nie einen Superadmin-Account kennt (siehe
 // demoMode.js: DEMO_USERS) — der Eintrag greift dort schlicht nie.
-const DEFAULT_ROUTE_BY_ROLE = { superadmin: 'usermgmt', referee: 'kampfrichter' };
+const DEFAULT_ROUTE_BY_ROLE = { superadmin: 'usermgmt', referee: 'kampfrichter', parent: 'parent' };
 
 // `roles` statt eines Einzelwerts (docs/Plans/kampfrichter-modul-plan.md,
 // Abschnitt 1) — "superadmin" ist die einzige Rolle mit einem eigenen
@@ -177,7 +177,8 @@ export function defaultModuleFor(roles) {
   const enabledModules = getEnabledModules();
   const preferredRole = roles.includes('superadmin')
     ? 'superadmin'
-    : (roles.length === 1 && roles[0] === 'referee' ? 'referee' : '');
+    : (roles.length === 1 && roles[0] === 'referee' ? 'referee'
+      : (roles.length === 1 && roles[0] === 'parent' ? 'parent' : ''));
   const preferred = getModule(DEFAULT_ROUTE_BY_ROLE[preferredRole] || '');
   if (preferred && isModuleVisible(preferred, roles, enabledModules)) return preferred;
   return visibleModules(roles, enabledModules)[0];

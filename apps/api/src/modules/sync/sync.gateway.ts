@@ -380,6 +380,24 @@ export class PrismaSyncGateway implements SyncGateway, SyncGatewayTestSurface {
         await delegate.update({ where: { id: operation.id, clubId: operation.clubId }, data: operation.payload });
       } else {
         await delegate.update({ where: { id: operation.id, clubId: operation.clubId }, data: { deletedAt: new Date() } });
+        // Aufräumarbeit (Code-Review): eine gelöschte Athletin/ein
+        // gelöschter Athlet ist per Soft-Delete NUR "deletedAt" gesetzt,
+        // keine echte SQL-DELETE — ParentLink.athlete trägt zwar
+        // `onDelete: Cascade` (schema.prisma), das greift aber
+        // ausschließlich bei einer tatsächlichen Zeilenlöschung (z. B. dem
+        // harten DSGVO-Purge in jobs/erasure.repository.ts), nicht bei
+        // diesem UPDATE. Ohne diese explizite Aufräumung bliebe eine
+        // ParentLink-Zeile dauerhaft auf ein unsichtbares Athletenprofil
+        // verweisen — Phase 2, Abschnitt 4.2 (docs/Plans/phase2-plan.md).
+        // Bewusst in DERSELBEN Transaktion (statt eines separaten,
+        // fehlschlagbaren Nachgangs): beides gehört atomar zusammen, ein
+        // Elternkonto soll nie eine Verknüpfung zu einem gerade gelöschten
+        // Kind behalten. Store-spezifische Ausnahme in dieser sonst
+        // generischen Methode — einzige begründete Abweichung, siehe
+        // Datei-Kopfkommentar.
+        if (operation.store === 'athletes') {
+          await tx.parentLink.deleteMany({ where: { athleteId: operation.id } });
+        }
       }
       return 'applied' as const;
     });

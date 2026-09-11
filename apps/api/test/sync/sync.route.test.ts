@@ -13,6 +13,7 @@ import { InMemoryMailSender } from '../../src/mail/mailer.memory.js';
 import { InMemoryProfileDataGateway } from '../../src/modules/profile/profile.repository.memory.js';
 import { createAuditLogService } from '../../src/modules/auditLog/auditLog.service.js';
 import { InMemoryAuditLogRepository } from '../../src/modules/auditLog/auditLog.repository.memory.js';
+import { InMemoryParentLinkRepository } from '../../src/modules/parents/parents.repository.memory.js';
 import { generateFreshKeyPair, type KeyPair } from '../../src/auth/keys.js';
 import { signAccessToken } from '../../src/auth/tokens.js';
 
@@ -48,6 +49,7 @@ async function buildTestApp() {
   // Verhalten sind identisch zu vorher.
   const clubs = { findById: vi.fn(async () => ({ enabledModules: [...MODULE_KEYS], nationalID: null, nationalIDType: null })) };
   const authService = createAuthService({
+    parentLinks: new InMemoryParentLinkRepository(),
     users: new InMemoryUserRepository(),
     refreshTokens: new InMemoryRefreshTokenRepository(),
     invitations: invitationsService,
@@ -218,6 +220,18 @@ describe('POST /api/sync/push', () => {
     await app.close();
   });
 
+  it('lehnt Rolle "parent" ab (403) — kein genereller Sync-Zugriff (Phase 2, Abschnitt 4.2/5.2)', async () => {
+    const { app, keyPair } = await buildTestApp();
+    const token = await tokenFor(keyPair, 'parent', CLUB_ID);
+    const response = await app.inject({
+      method: 'POST', url: '/api/sync/push',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { events: [] },
+    });
+    expect(response.statusCode).toBe(403);
+    await app.close();
+  });
+
   it('wendet ein gültiges create-Event für einen eingeloggten Trainer an (200)', async () => {
     const { app, keyPair, gateway } = await buildTestApp();
     const token = await tokenFor(keyPair, 'trainer', CLUB_ID);
@@ -331,6 +345,14 @@ describe('GET /api/sync/pull', () => {
     const { app } = await buildTestApp();
     const response = await app.inject({ method: 'GET', url: '/api/sync/pull' });
     expect(response.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it('lehnt Rolle "parent" ab (403) — kein genereller Sync-Zugriff (Phase 2, Abschnitt 4.2/5.2)', async () => {
+    const { app, keyPair } = await buildTestApp();
+    const token = await tokenFor(keyPair, 'parent', CLUB_ID);
+    const response = await app.inject({ method: 'GET', url: '/api/sync/pull', headers: { authorization: `Bearer ${token}` } });
+    expect(response.statusCode).toBe(403);
     await app.close();
   });
 

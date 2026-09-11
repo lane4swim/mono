@@ -26,7 +26,7 @@ Wer die Befehle aus den Abschnitten 6–9 nicht Schritt für Schritt von Hand ei
 bash scripts/setup-netcup.sh
 ```
 
-Vorausgesetzt sind die Abschnitte 1–5 (Server angelegt, SSH-Zugang als `deploy`-Benutzer, Grundhärtung erledigt, Domain per A-Record bereits auf den Server zeigend — **ohne funktionierendes DNS schlägt Schritt 10, siehe unten, später fehl**) sowie ein bereits im Arbeitsverzeichnis liegendes Repository (Abschnitt 7, Variante A oder B). Das Script deckt dann genau ab: Abschnitt 6 (Node.js/PostgreSQL/Nginx/PM2/Git installieren), 7 samt 7.1–7.4 (npm-Abhängigkeiten, `apps/api/.env` inkl. JWT-Schlüsseln, `prisma migrate deploy`, Backend bauen), 8 samt 8.1 (PM2 starten inkl. Autostart per `pm2 startup`/`pm2 save`, ersten Superadmin anlegen) und 9 (Nginx konfigurieren) — mit denselben Befehlen und Begründungen, die in den jeweiligen Abschnitten unten ausführlich erklärt sind.
+Vorausgesetzt sind die Abschnitte 1–5 (Server angelegt, SSH-Zugang als `deploy`-Benutzer, Grundhärtung erledigt, Domain per A-Record bereits auf den Server zeigend — **ohne funktionierendes DNS schlägt Schritt 10, siehe unten, später fehl**) sowie ein bereits im Arbeitsverzeichnis liegendes Repository (Abschnitt 7, Variante A oder B). Das Script deckt dann genau ab: Abschnitt 6 (Node.js/PostgreSQL/Nginx/PM2/Git installieren), 7 samt 7.1–7.4 (npm-Abhängigkeiten, `apps/api/.env` inkl. JWT- und VAPID-Schlüsseln, `prisma migrate deploy`, Backend bauen), 8 samt 8.1 (PM2 starten inkl. Autostart per `pm2 startup`/`pm2 save`, ersten Superadmin anlegen) und 9 (Nginx konfigurieren) — mit denselben Befehlen und Begründungen, die in den jeweiligen Abschnitten unten ausführlich erklärt sind.
 
 Das Script fragt dabei interaktiv nach allem, was nicht automatisch ermittelt werden kann:
 
@@ -34,7 +34,7 @@ Das Script fragt dabei interaktiv nach allem, was nicht automatisch ermittelt we
 - **Superadmin-E-Mail-Adresse und -Passwort** (Schritt 8.1) — das Passwort wird mit verdeckter Eingabe und Bestätigung abgefragt, mindestens 8 Zeichen; es gibt bewusst **kein** Default-Passwort (Sicherheitsreview 2026-08, Befund H1).
 - **SMTP-Zugangsdaten** (optional, Schritt 7.2) — wird gefragt, ob Einladungs-E-Mails direkt jetzt per SMTP versendet werden sollen; bei „Nein" bzw. ohne Antwort landen Einladungen vorerst nur im Server-Log (später jederzeit in `apps/api/.env` nachtragbar).
 
-Datenbank-Passwörter und das JWT-Schlüsselpaar werden automatisch erzeugt (nie interaktiv abgefragt) und landen ausschließlich in `apps/api/.env`, `apps/api/.env.migrate` bzw. `apps/api/keys/` — alle mit `chmod 600`/`700` geschützt. Für einen nicht-interaktiven Lauf (z. B. um alles vorab per Umgebungsvariable festzulegen) lassen sich sämtliche Werte auch vorgeben, siehe Kopfkommentar in `scripts/setup-netcup.sh`.
+Datenbank-Passwörter, das JWT-Schlüsselpaar und das VAPID-Schlüsselpaar (Web-Push, Phase 2/Abschnitt 1.2) werden automatisch erzeugt (nie interaktiv abgefragt) und landen ausschließlich in `apps/api/.env`, `apps/api/.env.migrate` bzw. `apps/api/keys/` — alle mit `chmod 600`/`700` geschützt. Für einen nicht-interaktiven Lauf (z. B. um alles vorab per Umgebungsvariable festzulegen) lassen sich sämtliche Werte auch vorgeben, siehe Kopfkommentar in `scripts/setup-netcup.sh`.
 
 Am Ende gibt das Script eine Zusammenfassung aus — ausschließlich die Superadmin-E-Mail-Adresse, nie ein Passwort — sowie den Hinweis, mit Abschnitt 10 (HTTPS) fortzufahren. Es ist wiederholt ausführbar: bereits installierte Software, eine bestehende `.env` und ein bereits angelegter Superadmin werden übersprungen statt erneut angelegt/überschrieben, PM2 und Nginx werden bei einem erneuten Lauf einfach neu gestartet.
 
@@ -354,6 +354,13 @@ SMTP_USER="postversand@mein-verein.de"
 SMTP_PASSWORD="EIN-SICHERES-SMTP-PASSWORT-HIER"
 SMTP_FROM_EMAIL="postversand@mein-verein.de"
 SMTP_FROM_NAME="Lane 1"
+
+# Web-Push (Phase 2, Abschnitt 1.2) — siehe "VAPID-Schlüsselpaar erzeugen"
+# weiter unten. Optional: bleiben beide leer, protokolliert der Server
+# Push-Versuche nur, statt sie zu versenden (kein Startabbruch).
+VAPID_PUBLIC_KEY="<mit npx web-push generate-vapid-keys erzeugen, siehe unten>"
+VAPID_PRIVATE_KEY="<mit npx web-push generate-vapid-keys erzeugen, siehe unten>"
+VAPID_SUBJECT="mailto:postversand@mein-verein.de"
 ```
 **RS256-Schlüsselpaar erzeugen** (signiert die Zugriffs-Tokens; in
 Produktion PFLICHT — ohne einen konfigurierten Schlüssel bricht der
@@ -423,6 +430,26 @@ lehnt eine gleichzeitige Angabe sonst mit einer klaren Fehlermeldung ab).
 > SMTP-Konto — netcup bietet über die eigenen Hosting-/Domain-Produkte
 > auch eigene E-Mail-Postfächer inklusive SMTP-Zugang an, die sich dafür
 > eignen. Port 587 funktioniert mit jedem gängigen Anbieter.
+
+**VAPID-Schlüsselpaar erzeugen** (Phase 2, Abschnitt 1.2 —
+Push-Benachrichtigungen; **optional**, kein Startabbruch ohne). Anders
+als das JWT-Schlüsselpaar oben ist der private VAPID-Schlüssel kein
+Geheimnis auf demselben Schutzniveau — er landet direkt als Wert in der
+`.env` (die ohnehin `chmod 600` bekommt, siehe unten), keine eigene
+Schlüsseldatei nötig. `web-push` ist bereits eine Abhängigkeit von
+`apps/api` (`npm install` in Schritt 7.1 hat es mitinstalliert):
+```bash
+cd apps/api && npx web-push generate-vapid-keys
+```
+Liefert zwei Zeilen `Public Key:`/`Private Key:` — als
+`VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY` oben eintragen. `VAPID_SUBJECT`
+ist laut VAPID-Spezifikation ein `mailto:`- oder `https://`-Kontakt, an
+den sich ein Push-Dienst im Missbrauchsfall wenden kann — die eigene
+`SMTP_FROM_EMAIL`-Adresse genügt. Ohne diese drei Werte bleibt „Push-
+Benachrichtigungen aktivieren" (Mein Profil) in der Oberfläche zwar
+sichtbar, der Server protokolliert Versandversuche dann aber nur, statt
+sie tatsächlich zuzustellen (`ConsolePushSender`, siehe
+`apps/api/src/push/pusher.console.ts`).
 
 ### 7.3 Datenbank-Schema anlegen
 `DATABASE_URL` wird hier bewusst **überschrieben** (Sicherheitsreview
@@ -799,6 +826,44 @@ Datenbank-Backup aus 12.1):
 > Node ≥ 20.6 unterstützt `--env-file` nativ, `tsx` reicht es unverändert
 > an den zugrundeliegenden Node-Prozess durch.
 
+### 12.5 Ablauf-Erinnerungen für Qualifikationen (Cronjob)
+
+Nur relevant, wenn mindestens ein Verein das Modul „Qualifikationsmanagement"
+gebucht hat. Verschickt E-Mail- (und, sofern `VAPID_*` gesetzt ist,
+zusätzlich Push-)Erinnerungen an Personen mit bald ablaufender oder
+bereits abgelaufener Qualifikation sowie an die Admins ihres Vereins.
+Ohne diesen Cronjob bleiben solche Fristen unbemerkt. Einrichten:
+```bash
+crontab -e
+```
+Folgende Zeile ergänzen (läuft täglich um 5:00 Uhr, eine Stunde nach dem
+Purge-Cronjob aus 12.4):
+```
+0 5 * * * cd /home/deploy/lane1/apps/api && /home/deploy/lane1/node_modules/.bin/tsx --env-file-if-exists=.env scripts/notifyExpiringQualifications.ts >> /home/deploy/backups/notify-qualifications.log 2>&1
+```
+Absoluter `tsx`-Pfad und `--env-file-if-exists=.env` aus demselben Grund
+wie beim Purge-Cronjob oben (siehe dortige Erklärung).
+
+### 12.6 Erinnerungen an bevorstehende Trainingseinheiten (Cronjob)
+
+Nur relevant, wenn mindestens ein Verein das Modul „Einheiten & Feedback"
+gebucht hat, UND nur wirksam, wenn `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`
+gesetzt sind (siehe Schritt 7.2) — dieser Cronjob versendet ausschließlich
+Push, keine E-Mail. Erinnert Athlet:innen der betroffenen Gruppe sowie
+alle Trainer:innen/Admins des Vereins rechtzeitig vor einer bevorstehenden
+Einheit. Einrichten:
+```bash
+crontab -e
+```
+Folgende Zeile ergänzen (läuft alle 6 Stunden — die Erinnerung selbst
+greift erst, sobald eine Einheit näher als 20 Stunden bevorsteht, siehe
+`apps/api/src/jobs/notifyUpcomingSessions.ts: UPCOMING_SESSION_REMINDER_HOURS`):
+```
+0 */6 * * * cd /home/deploy/lane1/apps/api && /home/deploy/lane1/node_modules/.bin/tsx --env-file-if-exists=.env scripts/notifyUpcomingSessions.ts >> /home/deploy/backups/notify-sessions.log 2>&1
+```
+Absoluter `tsx`-Pfad und `--env-file-if-exists=.env` aus demselben Grund
+wie beim Purge-Cronjob oben (siehe dortige Erklärung).
+
 ---
 
 ## 13. Künftige Updates ausrollen
@@ -869,6 +934,7 @@ sudo systemctl reload nginx
 | Backend startet gar nicht (`pm2 status` zeigt „errored") | Pflicht-Umgebungsvariable fehlt/ungültig, z. B. `JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY` in Produktion nicht gesetzt | `pm2 logs lane1-api` — `env.ts` gibt die genaue fehlende/ungültige Variable aus |
 | Login/Registrierung liefert die HTML-Startseite statt einer Fehlermeldung/eines Tokens | `/auth/`-Location-Block in nginx fehlt oder `proxy_pass` mit abschließendem `/` (siehe Warnhinweis Abschnitt 9) | `curl -i .../auth/login -X POST -d '{}'`, Antwort auf `<!DOCTYPE html>` prüfen |
 | Einladungs-E-Mails kommen nicht an | `SMTP_HOST` nicht gesetzt (nur Server-Log) | `pm2 logs lane1-api` auf SMTP-Fehler prüfen, `.env` kontrollieren |
+| Push-Benachrichtigungen kommen nie an | `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY` nicht gesetzt (nur Server-Log, siehe Schritt 7.2) oder die beiden Cronjobs aus 12.5/12.6 fehlen | `pm2 logs lane1-api` auf „[push] Kein VAPID-Schlüssel konfiguriert" prüfen, `crontab -l` kontrollieren |
 | Kein Schloss-Symbol/HTTPS-Fehler | Zertifikat nicht erneuert oder DNS falsch bei Erstanfrage | `sudo certbot renew --dry-run` |
 | Änderungen erscheinen nicht | Browser-/Service-Worker-Cache | Hard-Reload (`Strg+Shift+R`), `CACHE_VERSION` in `sw.js` prüfen |
 | „Permission denied" bei SSH | falscher Benutzer/Key | Mit `deploy` statt `root` verbinden, richtigen Key prüfen |

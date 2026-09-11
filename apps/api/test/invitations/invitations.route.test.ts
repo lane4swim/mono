@@ -11,6 +11,7 @@ import { InMemoryMailSender } from '../../src/mail/mailer.memory.js';
 import { InMemoryProfileDataGateway } from '../../src/modules/profile/profile.repository.memory.js';
 import { createAuditLogService } from '../../src/modules/auditLog/auditLog.service.js';
 import { InMemoryAuditLogRepository } from '../../src/modules/auditLog/auditLog.repository.memory.js';
+import { InMemoryParentLinkRepository } from '../../src/modules/parents/parents.repository.memory.js';
 import { generateFreshKeyPair, type KeyPair } from '../../src/auth/keys.js';
 import { signAccessToken } from '../../src/auth/tokens.js';
 
@@ -38,6 +39,7 @@ async function buildTestApp() {
     clubInvitationTtlDays: 14, memberInvitationTtlDays: 7,
   });
   const authService = createAuthService({
+    parentLinks: new InMemoryParentLinkRepository(),
     users, refreshTokens, invitations: invitationsService,
     profileGateway: new InMemoryProfileDataGateway({ users: [], athletes: [], results: [], entries: [], actionItems: [], sessions: [] }),
     clubs,

@@ -134,6 +134,12 @@ async function seedDemoClubData() {
     { athleteId: jonas.id, title: 'Atemtechnik bei Sprints', description: 'Neigt zum Luftanhalten in den letzten 15m. Bilaterales Atmen in Drills festigen.', status: 'offen', category: 'technik', createdDate: isoAddDays(todayISO(), -5), dueDate: isoAddDays(todayISO(), 25) },
   ].map(a => ({ id: id(), clubId: DEMO_CLUB_ID, ...a, createdDate: toIsoDateTime(a.createdDate), dueDate: toIsoDateTime(a.dueDate) }));
   await bulkPut('actionItems', actionItems);
+
+  const announcements = [
+    { groupId: null, authorId: null, title: 'Beckenzeiten am Feiertag', body: 'Am kommenden Feiertag entfällt das Training für alle Gruppen. Nächste reguläre Einheit wie gewohnt.' },
+    { groupId: groupA.id, authorId: null, title: 'Meldeschluss Bezirksmeisterschaften', body: 'Bitte bis Freitag Rückmeldung, wer an den Bezirksmeisterschaften teilnimmt.' },
+  ].map(a => ({ id: id(), clubId: DEMO_CLUB_ID, ...a, createdAt: toIsoDateTime(todayISO()), updatedAt: toIsoDateTime(todayISO()) }));
+  await bulkPut('announcements', announcements);
 }
 
 // Nur beim allerersten Aufruf der Demo (leere Datenbank) automatisch

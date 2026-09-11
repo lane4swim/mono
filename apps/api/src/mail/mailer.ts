@@ -8,7 +8,7 @@ import type { QualificationType } from '@lane1/shared-types';
 export interface InvitationMailPayload {
   to: string;
   recipientName?: string | null;
-  role: 'admin' | 'trainer' | 'athlete' | 'referee';
+  role: 'admin' | 'trainer' | 'athlete' | 'referee' | 'parent';
   clubName: string;
   inviteUrl: string;
   expiresAt: Date;
@@ -95,12 +95,14 @@ const ROLE_LABEL: Record<SupportedLocale, Record<InvitationMailPayload['role'], 
     trainer: 'Trainer:in',
     athlete: 'Athlet:in',
     referee: 'Kampfrichter:in',
+    parent: 'Erziehungsberechtigte:r',
   },
   'en-US': {
     admin: 'administrator',
     trainer: 'coach',
     athlete: 'athlete',
     referee: 'referee',
+    parent: 'parent/guardian',
   },
 };
 

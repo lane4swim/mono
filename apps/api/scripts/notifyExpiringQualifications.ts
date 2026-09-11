@@ -17,9 +17,10 @@
 // Nutzung manuell: npm run notify-expiring-qualifications (im Ordner apps/api)
 import { PrismaClient } from '@prisma/client';
 import { loadEnv } from '../src/config/env.js';
-import { resolveMailer } from '../src/app.js';
+import { resolveMailer, resolvePushSender } from '../src/app.js';
 import { PrismaNotifyExpiringQualificationsGateway } from '../src/jobs/qualificationReminder.repository.js';
 import { notifyExpiringQualifications } from '../src/jobs/notifyExpiringQualifications.js';
+import { PrismaPushSubscriptionRepository } from '../src/modules/push/push.repository.js';
 
 async function main() {
   const env = loadEnv();
@@ -27,7 +28,10 @@ async function main() {
   try {
     const gateway = new PrismaNotifyExpiringQualificationsGateway(prisma);
     const mailer = resolveMailer(env);
-    const result = await notifyExpiringQualifications(gateway, mailer, new Date());
+    // Push (Phase 2, Abschnitt 1.5.1): optionaler Zusatzkanal neben
+    // E-Mail — siehe notifyExpiringQualifications.ts: PushDeps-Kommentar.
+    const push = { pusher: resolvePushSender(env), pushSubscriptions: new PrismaPushSubscriptionRepository(prisma) };
+    const result = await notifyExpiringQualifications(gateway, mailer, new Date(), push);
 
     console.log(`[qualifications] ${new Date().toISOString()} — ${result.remindersSent} Erinnerung(en) versendet.`);
     if (result.failed.length > 0) {
