@@ -1698,9 +1698,8 @@ describe('syncService.push — Kommentar-Autor:innen-Prüfung (Sicherheitsreview
 
   it('akzeptiert Kommentare in Template.sets, wenn die authorId der eigenen Identität entspricht', async () => {
     const { service, gateway } = makeService();
-    const payload = makeTemplatePayload({
-      sets: [{ kind: 'set', id: 's1', description: '', distance: 200, reps: 1, intensity: 'ga1', restSec: 0, comments: [{ id: 'c1', authorId: TRAINER_USER_ID, authorName: 'Jonas Beck', text: 'Vorlagen-Hinweis', createdAt: new Date().toISOString() }] }],
-    });
+    const ownSet = { kind: 'set', id: 's1', description: '', distance: 200, reps: 1, intensity: 'ga1', restSec: 0, comments: [{ id: 'c1', authorId: TRAINER_USER_ID, authorName: 'Jonas Beck', text: 'Vorlagen-Hinweis', createdAt: new Date().toISOString() }] };
+    const payload = makeTemplatePayload({ sets: [ownSet] });
     const results = await service.push(
       [{ id: 'evt-m2-template-own', store: 'templates', entityId: payload.id, action: 'create', payload, clientUpdatedAt: payload.updatedAt }],
       asTrainer(CLUB_A),
@@ -1711,7 +1710,7 @@ describe('syncService.push — Kommentar-Autor:innen-Prüfung (Sicherheitsreview
     // wird beim Schema-Parsing serverseitig auf null normalisiert (siehe
     // PlainSetSchema.durationSec in entities.ts) — deshalb hier explizit
     // erwartet statt 1:1 gegen payload.sets zu vergleichen.
-    expect((stored as Record<string, unknown>).sets).toEqual([{ ...payload.sets[0], durationSec: null }]);
+    expect((stored as Record<string, unknown>).sets).toEqual([{ ...ownSet, durationSec: null }]);
   });
 
   it('lehnt einen fremd zugeordneten neuen Kommentar in Template.sets ab', async () => {
