@@ -8,7 +8,7 @@ import { EXERCISE_CATEGORIES, STROKES, EQUIPMENT_ITEMS } from '../refdata.js';
 import { t, trLabel, trCode, trOptions } from '../i18n.js';
 import { renderCommentThread } from './comments.js';
 import { libraryTransferButtons } from './libraryTransfer.js';
-import { compareByCategoryThenName } from './setEditor.js';
+import { compareByCategoryThenName, formatDuration, durationToMinSec, minSecToDuration } from './setEditor.js';
 
 const VIEW_STORAGE_KEY = 'lane1-catalog-view';
 function loadCatalogView() {
@@ -103,7 +103,7 @@ function renderList(container, exercises) {
         el('div', { class: 'pill-group mb-8' }, [
           ex.stroke ? badge(trCode(ex.stroke, 'strokes'), 'progress') : null,
           ex.defaultDistance ? badge(`${ex.defaultDistance} m`, 'neutral') : null,
-          ex.defaultDurationSec ? badge(t('catalog.durationBadge', { s: ex.defaultDurationSec }), 'neutral') : null,
+          ex.defaultDurationSec ? badge(formatDuration(ex.defaultDurationSec), 'neutral') : null,
           ...(ex.equipment || []).map(eq => badge(trLabel(EQUIPMENT_ITEMS, eq, 'equipment'), 'pb')),
           ...(ex.tags || []).map(tag => badge(tag, 'neutral')),
         ].filter(Boolean)),
@@ -131,7 +131,7 @@ function renderList(container, exercises) {
         el('td', {}, badge(catLabel, 'neutral')),
         el('td', {}, ex.stroke ? badge(trCode(ex.stroke, 'strokes'), 'progress') : '—'),
         el('td', {}, ex.defaultDistance ? `${ex.defaultDistance} m` : '—'),
-        el('td', {}, ex.defaultDurationSec ? t('catalog.durationBadge', { s: ex.defaultDurationSec }) : '—'),
+        el('td', {}, ex.defaultDurationSec ? formatDuration(ex.defaultDurationSec) : '—'),
         el('td', {}, el('div', { class: 'pill-group' }, (ex.equipment || []).map(eq => badge(trLabel(EQUIPMENT_ITEMS, eq, 'equipment'), 'pb')))),
         el('td', {}, el('div', { class: 'flex gap-8' }, [
           el('button', { class: 'btn btn-ghost btn-sm', onclick: () => openExerciseModal(ex, refresh) }, t('common.edit')),
@@ -156,9 +156,10 @@ function openExerciseModal(exercise, onSaved) {
   const fCat = selectInput(trOptions(EXERCISE_CATEGORIES, 'exerciseCategories'), data.category);
   const fStroke = selectInput([{ value: '', label: t('catalog.noStroke') }, ...STROKES.map(s => ({ value: s, label: trCode(s, 'strokes') }))], data.stroke || '');
   const fDist = el('input', { type: 'number', min: '0', value: data.defaultDistance || '', placeholder: t('catalog.formDistancePlaceholder') });
-  // min="1": defaultDurationSec ist in ExerciseSchema (entities.ts) .positive()
-  // (>0) mit null als einzig zulässigem "leer"-Wert — 0 wäre kein gültiger Wert.
-  const fDuration = el('input', { type: 'number', min: '1', value: data.defaultDurationSec || '', placeholder: t('catalog.formDurationPlaceholder') });
+  // "mm:ss" statt Rohsekunden, wie das Dauer-Feld im Satz-Editor
+  // (setEditor.js) — type="text" statt "number", weil ein Doppelpunkt in
+  // einem <input type="number"> nicht eingebbar ist.
+  const fDuration = el('input', { type: 'text', value: durationToMinSec(data.defaultDurationSec), placeholder: t('catalog.formDurationPlaceholder') });
   const fDesc = el('textarea', {}, data.description || '');
   const fTags = textInput((data.tags || []).join(', '), { placeholder: 'e.g. warmup, technique' });
   form.appendChild(field(t('catalog.formName'), fName, { span2: true }));
@@ -208,7 +209,7 @@ function openExerciseModal(exercise, onSaved) {
     await put('exercises', {
       ...data, name: fName.value.trim(), category: fCat.value, stroke: fStroke.value || null,
       defaultDistance: fDist.value ? parseInt(fDist.value) : null,
-      defaultDurationSec: fDuration.value ? parseInt(fDuration.value) : null,
+      defaultDurationSec: minSecToDuration(fDuration.value),
       description: fDesc.value.trim(),
       tags: fTags.value.split(',').map(x => x.trim()).filter(Boolean),
       equipment: [...selectedEquipment],
