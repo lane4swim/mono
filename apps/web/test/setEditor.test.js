@@ -14,7 +14,7 @@ import { vi } from 'vitest';
 
 vi.mock('../js/demoMode.js', () => ({ IS_DEMO: false }));
 
-const { moveEntry, insertEntry, totalDistance, totalDuration, formatQuantity, formatTotalDuration } = await import('../js/modules/setEditor.js');
+const { moveEntry, insertEntry, totalDistance, totalDuration, formatQuantity, formatTotalDuration, durationToMinSec, minSecToDuration } = await import('../js/modules/setEditor.js');
 
 const set = (id, distance = 100) => ({ kind: 'set', id, description: id, distance, reps: 1 });
 const ids = (list) => list.map(e => e.id);
@@ -205,5 +205,52 @@ describe('formatTotalDuration()', () => {
 
   it('zeigt Stunden, sobald die Gesamtzeit eine Stunde erreicht', () => {
     expect(formatTotalDuration(3900)).toBe('1 Std 5 Min'); // 65 Min
+  });
+});
+
+// durationToMinSec()/minSecToDuration() sind das Eingabe-/Anzeigeformat
+// des Dauer-Felds im Editor (buildSetRow()) — bewusst reines "m:ss" ohne
+// Worteinheiten, im Unterschied zu formatDuration() oben (Anzeige-Badges).
+describe('durationToMinSec()', () => {
+  it('formatiert Sekunden unter einer Minute als "0:ss"', () => {
+    expect(durationToMinSec(45)).toBe('0:45');
+  });
+
+  it('formatiert Sekunden ab einer Minute als "m:ss" mit gepaddeten Sekunden', () => {
+    expect(durationToMinSec(90)).toBe('1:30');
+    expect(durationToMinSec(65)).toBe('1:05');
+  });
+
+  it('liefert einen leeren String für null (kein Wert gesetzt)', () => {
+    expect(durationToMinSec(null)).toBe('');
+  });
+});
+
+describe('minSecToDuration()', () => {
+  it('parst "m:ss" zu Sekunden', () => {
+    expect(minSecToDuration('1:30')).toBe(90);
+    expect(minSecToDuration('0:45')).toBe(45);
+  });
+
+  it('parst eine reine Zahl ohne Doppelpunkt als Sekunden (Tippgewohnheit aus der Zeit vor diesem Feld)', () => {
+    expect(minSecToDuration('45')).toBe(45);
+  });
+
+  it('ist die Umkehrfunktion von durationToMinSec() (Rundtrip)', () => {
+    expect(minSecToDuration(durationToMinSec(90))).toBe(90);
+  });
+
+  it('liefert null für leere, nur-Leerzeichen- oder ungültige Eingaben', () => {
+    expect(minSecToDuration('')).toBeNull();
+    expect(minSecToDuration('   ')).toBeNull();
+    expect(minSecToDuration('abc')).toBeNull();
+    expect(minSecToDuration('1:2:3')).toBeNull();
+    expect(minSecToDuration('1:')).toBeNull();
+  });
+
+  it('liefert null für 0 oder negative Werte, analog zum positiven durationSec-Schema', () => {
+    expect(minSecToDuration('0')).toBeNull();
+    expect(minSecToDuration('0:00')).toBeNull();
+    expect(minSecToDuration('-5')).toBeNull();
   });
 });
