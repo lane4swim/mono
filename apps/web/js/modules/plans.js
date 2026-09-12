@@ -6,7 +6,7 @@ import { badge, emptyState, laneWave, toast } from '../ui.js';
 import { openModal, confirmAction } from '../modal.js';
 import { field, textInput, selectInput, dateInput, formActions } from '../forms.js';
 import { EQUIPMENT_ITEMS } from '../refdata.js';
-import { renderSetEditor, totalDistance, cloneItems, collectEquipment, equipmentForEntry, exerciseById } from './setEditor.js';
+import { renderSetEditor, totalDistance, totalDuration, formatTotalDuration, cloneItems, collectEquipment, equipmentForEntry, exerciseById } from './setEditor.js';
 import { renderCommentThread, commentsButton } from './comments.js';
 import { exportPlanToPdf, exportDayToPdf } from './planPdfExport.js';
 import { renderCyclesRoute } from './planCycles.js';
@@ -78,6 +78,14 @@ async function renderDetail(container, planId) {
   ]));
   wrap.appendChild(laneWave());
   wrap.appendChild(el('p', {}, t('plans.statusLine', { date: fmtDateLong(plan.weekStart), status: plan.status === 'aktiv' ? t('plans.statusActive') : t('plans.statusArchived') })));
+  // Geplante Gesamtzeit über ALLE Tage des Plans (nicht nur einen Tag) —
+  // nur eingeblendet, wenn mindestens ein Satz im Plan überhaupt eine
+  // Dauer trägt, sonst wäre die Zeile bei rein distanzbasierten
+  // Bestandsplänen dauerhaft "0 Min" und damit reines Rauschen.
+  const planDuration = (plan.days || []).reduce((sum, d) => sum + totalDuration(d.sets || []), 0);
+  if (planDuration > 0) {
+    wrap.appendChild(el('p', {}, t('plans.planTotalDuration', { duration: formatTotalDuration(planDuration) })));
+  }
 
   const planCommentsCard = el('div', { class: 'card' }, [el('h3', { class: 'mt-0' }, t('comments.planCommentsTitle'))]);
   const planCommentsHost = el('div');
@@ -93,7 +101,7 @@ async function renderDetail(container, planId) {
       el('div', { class: 'day-block-head' }, [
         el('h3', { class: 'mt-0' }, fmtDateLong(day.date)),
         el('div', { class: 'flex items-center gap-8' }, [
-          badge(t('plans.totalBadge', { m: totalDistance(day.sets || []) }), 'neutral'),
+          badge(dayTotalBadgeLabel(day.sets || []), 'neutral'),
           el('button', { class: 'btn btn-ghost btn-sm', onclick: () => exportDayToPdf(plan, day, group, exercises) }, t('plans.exportDayPdf')),
         ]),
       ]),
@@ -117,6 +125,17 @@ async function renderDetail(container, planId) {
 // section likewise interrupts the table and renders its heading followed
 // by its own entries — appendEntryRows() recurses into it, so sets/blocks
 // inside a section are grouped exactly the same way as at the top level.
+// Distanz-Badge eines Tages, um die Gesamtzeit ergänzt, sobald mindestens
+// einer der Sätze eine Dauer trägt (siehe totalDuration() in
+// setEditor.js) — reine Distanztage zeigen weiterhin nur die Meterzahl,
+// wie bisher.
+function dayTotalBadgeLabel(items) {
+  const duration = totalDuration(items);
+  return duration > 0
+    ? t('plans.totalBadgeWithDuration', { m: totalDistance(items), duration: formatTotalDuration(duration) })
+    : t('plans.totalBadge', { m: totalDistance(items) });
+}
+
 function renderDayItems(items, exercises, plan) {
   const host = el('div');
   if (items.length === 0) { host.appendChild(el('p', {}, t('plans.noSetsPlanned'))); return host; }
@@ -129,7 +148,7 @@ function appendEntryRows(host, items, exercises, plan) {
   function flushTable() {
     if (pendingRows.length === 0) return;
     const table = el('table');
-    table.appendChild(el('thead', {}, el('tr', {}, [el('th', {}, t('plans.colDescription')), el('th', {}, t('plans.colDistance')), el('th', {}, t('plans.colReps')), el('th', {}, t('plans.colRest')), el('th', {}, '')])));
+    table.appendChild(el('thead', {}, el('tr', {}, [el('th', {}, t('plans.colDescription')), el('th', {}, t('plans.colDistance')), el('th', {}, t('plans.colDuration')), el('th', {}, t('plans.colReps')), el('th', {}, t('plans.colRest')), el('th', {}, '')])));
     const tbody = el('tbody');
     pendingRows.forEach(row => tbody.appendChild(row));
     table.appendChild(tbody);
@@ -146,7 +165,7 @@ function appendEntryRows(host, items, exercises, plan) {
       host.appendChild(renderSectionBox(entry, exercises, plan));
     } else {
       pendingRows.push(el('tr', {}, [
-        el('td', {}, equipmentDescCell(entry, exercises)), el('td', {}, `${entry.distance ?? '—'} m`), el('td', {}, entry.reps), el('td', {}, `${entry.restSec || 0}s`),
+        el('td', {}, equipmentDescCell(entry, exercises)), el('td', {}, `${entry.distance ?? '—'} m`), el('td', {}, entry.durationSec != null ? `${entry.durationSec}s` : '—'), el('td', {}, entry.reps), el('td', {}, `${entry.restSec || 0}s`),
         el('td', {}, setCommentsButton(entry, plan)),
       ]));
     }
@@ -235,11 +254,16 @@ function exerciseCommentsHint(ex) {
 
 function renderBlockBox(block, exercises, plan) {
   const innerDist = totalDistance(block.sets || []);
+  const innerDuration = totalDuration(block.sets || []);
+  const repeatCount = block.repeatCount || 1;
   const blockEquipment = collectEquipment(block.sets || [], exercises);
   const box = el('div', { class: 'day-block', style: 'margin:4px 0 12px;border-style:dashed;border-color:var(--c-chlorine-d);background:var(--c-foam-2)' });
+  const blockDuration = innerDuration * repeatCount;
   box.appendChild(el('div', { class: 'day-block-head' }, [
-    el('div', { class: 'flex items-center gap-8' }, [badge(t('plans.repeatBlockLabel', { n: block.repeatCount || 1 }), 'progress'), el('strong', {}, block.label || t('templates.defaultBlockLabel'))]),
-    badge(t('plans.totalBadge', { m: innerDist * (block.repeatCount || 1) }), 'neutral'),
+    el('div', { class: 'flex items-center gap-8' }, [badge(t('plans.repeatBlockLabel', { n: repeatCount }), 'progress'), el('strong', {}, block.label || t('templates.defaultBlockLabel'))]),
+    badge(blockDuration > 0
+      ? t('plans.totalBadgeWithDuration', { m: innerDist * repeatCount, duration: formatTotalDuration(blockDuration) })
+      : t('plans.totalBadge', { m: innerDist * repeatCount }), 'neutral'),
   ]));
   if (blockEquipment.length > 0) {
     box.appendChild(el('p', { class: 'text-sm', style: 'margin-top:-6px' },
@@ -249,13 +273,13 @@ function renderBlockBox(block, exercises, plan) {
     box.appendChild(el('p', { class: 'hint mt-0' }, t('plans.blockNoSets')));
   } else {
     const table = el('table');
-    table.appendChild(el('thead', {}, el('tr', {}, [el('th', {}, t('plans.colDescription')), el('th', {}, t('plans.colDistance')), el('th', {}, t('plans.colReps')), el('th', {}, t('plans.colRest')), el('th', {}, '')])));
+    table.appendChild(el('thead', {}, el('tr', {}, [el('th', {}, t('plans.colDescription')), el('th', {}, t('plans.colDistance')), el('th', {}, t('plans.colDuration')), el('th', {}, t('plans.colReps')), el('th', {}, t('plans.colRest')), el('th', {}, '')])));
     const tbody = el('tbody');
-    block.sets.forEach(s => tbody.appendChild(el('tr', {}, [el('td', {}, equipmentDescCell(s, exercises)), el('td', {}, `${s.distance ?? '—'} m`), el('td', {}, s.reps), el('td', {}, `${s.restSec || 0}s`), el('td', {}, setCommentsButton(s, plan))])));
+    block.sets.forEach(s => tbody.appendChild(el('tr', {}, [el('td', {}, equipmentDescCell(s, exercises)), el('td', {}, `${s.distance ?? '—'} m`), el('td', {}, s.durationSec != null ? `${s.durationSec}s` : '—'), el('td', {}, s.reps), el('td', {}, `${s.restSec || 0}s`), el('td', {}, setCommentsButton(s, plan))])));
     table.appendChild(tbody);
     box.appendChild(el('div', { class: 'table-wrap' }, table));
   }
-  box.appendChild(el('div', { class: 'hint', style: 'margin-top:8px;margin-bottom:0' }, t('plans.blockSummary', { inner: innerDist, n: block.repeatCount || 1, total: innerDist * (block.repeatCount || 1) })));
+  box.appendChild(el('div', { class: 'hint', style: 'margin-top:8px;margin-bottom:0' }, t('plans.blockSummary', { inner: innerDist, n: repeatCount, total: innerDist * repeatCount })));
   return box;
 }
 

@@ -1707,7 +1707,11 @@ describe('syncService.push — Kommentar-Autor:innen-Prüfung (Sicherheitsreview
     );
     expect(results[0]!.status).toBe('applied');
     const stored = await gateway.findById('templates', payload.id);
-    expect((stored as Record<string, unknown>).sets).toEqual(payload.sets);
+    // durationSec fehlt im Payload (Altbestand vor Einführung des Felds) und
+    // wird beim Schema-Parsing serverseitig auf null normalisiert (siehe
+    // PlainSetSchema.durationSec in entities.ts) — deshalb hier explizit
+    // erwartet statt 1:1 gegen payload.sets zu vergleichen.
+    expect((stored as Record<string, unknown>).sets).toEqual([{ ...payload.sets[0], durationSec: null }]);
   });
 
   it('lehnt einen fremd zugeordneten neuen Kommentar in Template.sets ab', async () => {

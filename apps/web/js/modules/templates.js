@@ -4,7 +4,7 @@ import { el, clear, beginRender } from '../dom.js';
 import { badge, emptyState, laneWave, toast } from '../ui.js';
 import { openModal, confirmAction } from '../modal.js';
 import { field, textInput, formActions } from '../forms.js';
-import { renderSetEditor, totalDistance, cloneItems, collectEquipment, equipmentForEntry } from './setEditor.js';
+import { renderSetEditor, totalDistance, formatQuantity, cloneItems, collectEquipment, equipmentForEntry } from './setEditor.js';
 import { EQUIPMENT_ITEMS } from '../refdata.js';
 import { t, trLabel } from '../i18n.js';
 import { libraryTransferButtons } from './libraryTransfer.js';
@@ -70,7 +70,7 @@ function renderList(container, templates, exercises) {
               ? el('div', { class: 'pill-group', style: 'margin-top:3px' }, equipment.map(eq => badge(trLabel(EQUIPMENT_ITEMS, eq, 'equipment'), 'pb')))
               : null,
           ].filter(Boolean)),
-          el('span', { class: 'data text-sm' }, `${entry.reps}× ${entry.distance ?? '—'}m`),
+          el('span', { class: 'data text-sm' }, formatQuantity(entry)),
         ]));
       }
     });

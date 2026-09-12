@@ -103,6 +103,7 @@ function renderList(container, exercises) {
         el('div', { class: 'pill-group mb-8' }, [
           ex.stroke ? badge(trCode(ex.stroke, 'strokes'), 'progress') : null,
           ex.defaultDistance ? badge(`${ex.defaultDistance} m`, 'neutral') : null,
+          ex.defaultDurationSec ? badge(t('catalog.durationBadge', { s: ex.defaultDurationSec }), 'neutral') : null,
           ...(ex.equipment || []).map(eq => badge(trLabel(EQUIPMENT_ITEMS, eq, 'equipment'), 'pb')),
           ...(ex.tags || []).map(tag => badge(tag, 'neutral')),
         ].filter(Boolean)),
@@ -120,7 +121,7 @@ function renderList(container, exercises) {
     const table = el('table');
     table.appendChild(el('thead', {}, el('tr', {}, [
       el('th', {}, t('catalog.colName')), el('th', {}, t('catalog.colCategory')), el('th', {}, t('catalog.colStroke')),
-      el('th', {}, t('catalog.colDistance')), el('th', {}, t('catalog.colEquipment')), el('th', {}, ''),
+      el('th', {}, t('catalog.colDistance')), el('th', {}, t('catalog.colDuration')), el('th', {}, t('catalog.colEquipment')), el('th', {}, ''),
     ])));
     const tbody = el('tbody');
     filtered.forEach(ex => {
@@ -130,6 +131,7 @@ function renderList(container, exercises) {
         el('td', {}, badge(catLabel, 'neutral')),
         el('td', {}, ex.stroke ? badge(trCode(ex.stroke, 'strokes'), 'progress') : '—'),
         el('td', {}, ex.defaultDistance ? `${ex.defaultDistance} m` : '—'),
+        el('td', {}, ex.defaultDurationSec ? t('catalog.durationBadge', { s: ex.defaultDurationSec }) : '—'),
         el('td', {}, el('div', { class: 'pill-group' }, (ex.equipment || []).map(eq => badge(trLabel(EQUIPMENT_ITEMS, eq, 'equipment'), 'pb')))),
         el('td', {}, el('div', { class: 'flex gap-8' }, [
           el('button', { class: 'btn btn-ghost btn-sm', onclick: () => openExerciseModal(ex, refresh) }, t('common.edit')),
@@ -148,18 +150,20 @@ function renderList(container, exercises) {
 
 function openExerciseModal(exercise, onSaved) {
   const isEdit = !!exercise;
-  const data = exercise ? { ...exercise } : { name: '', category: 'technik', stroke: '', description: '', defaultDistance: '', tags: [], equipment: [], comments: [] };
+  const data = exercise ? { ...exercise } : { name: '', category: 'technik', stroke: '', description: '', defaultDistance: '', defaultDurationSec: '', tags: [], equipment: [], comments: [] };
   const form = el('form', { class: 'form-grid' });
   const fName = textInput(data.name, { required: true });
   const fCat = selectInput(trOptions(EXERCISE_CATEGORIES, 'exerciseCategories'), data.category);
   const fStroke = selectInput([{ value: '', label: t('catalog.noStroke') }, ...STROKES.map(s => ({ value: s, label: trCode(s, 'strokes') }))], data.stroke || '');
   const fDist = el('input', { type: 'number', min: '0', value: data.defaultDistance || '', placeholder: t('catalog.formDistancePlaceholder') });
+  const fDuration = el('input', { type: 'number', min: '0', value: data.defaultDurationSec || '', placeholder: t('catalog.formDurationPlaceholder') });
   const fDesc = el('textarea', {}, data.description || '');
   const fTags = textInput((data.tags || []).join(', '), { placeholder: 'e.g. warmup, technique' });
   form.appendChild(field(t('catalog.formName'), fName, { span2: true }));
   form.appendChild(field(t('catalog.formCategory'), fCat));
   form.appendChild(field(t('catalog.formStroke'), fStroke));
   form.appendChild(field(t('catalog.formDistance'), fDist));
+  form.appendChild(field(t('catalog.formDuration'), fDuration));
   const selectedEquipment = new Set(data.equipment || []);
   const equipmentPills = el('div', { class: 'pill-group' });
   EQUIPMENT_ITEMS.forEach(eq => {
@@ -201,7 +205,9 @@ function openExerciseModal(exercise, onSaved) {
     if (!fName.value.trim()) { toast(t('catalog.validationName'), 'error'); return; }
     await put('exercises', {
       ...data, name: fName.value.trim(), category: fCat.value, stroke: fStroke.value || null,
-      defaultDistance: fDist.value ? parseInt(fDist.value) : null, description: fDesc.value.trim(),
+      defaultDistance: fDist.value ? parseInt(fDist.value) : null,
+      defaultDurationSec: fDuration.value ? parseInt(fDuration.value) : null,
+      description: fDesc.value.trim(),
       tags: fTags.value.split(',').map(x => x.trim()).filter(Boolean),
       equipment: [...selectedEquipment],
     });

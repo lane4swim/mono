@@ -201,6 +201,12 @@ export const ExerciseSchema = z.object({
   stroke: z.string().max(100).nullable(),
   description: z.string().max(5000).default(''),
   defaultDistance: z.number().int().positive().nullable(),
+  // Analog zu defaultDistance, aber für zeitbasierte Übungen (Kraft/Land,
+  // Dauerschwimmen ohne feste Distanz). .default(null) statt .nullable()
+  // pur, da Altbestand (vor dieser Änderung) das Feld gar nicht kennt —
+  // ein fehlender Schlüssel muss also genauso wie ein expliziter
+  // null-Wert behandelt werden.
+  defaultDurationSec: z.number().int().positive().nullable().default(null),
   tags: z.array(z.string().max(100)).max(50).default([]),
   equipment: z.array(z.string().max(100)).max(50).default([]),
   // Diskussions-/Hinweiskommentare im Übungskatalog (z. B. Technikhinweise
@@ -220,6 +226,11 @@ export const PlainSetSchema = z.object({
   id: z.string(),
   description: z.string().max(2000).default(''),
   distance: z.number().int().nonnegative().nullable(),
+  // Dauer dieses Satzes in Sekunden — unabhängig von distance und frei
+  // damit kombinierbar (z. B. "20 Min Dauerschwimmen" ohne feste Distanz,
+  // oder "3x100m" MIT Zielzeit). .default(null) statt .nullable() pur,
+  // da Altbestand (vor dieser Änderung) das Feld gar nicht kennt.
+  durationSec: z.number().int().positive().nullable().default(null),
   reps: z.number().int().positive(),
   intensity: z.string().max(200),
   restSec: z.number().int().nonnegative(),

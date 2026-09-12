@@ -18,7 +18,7 @@
 // dadurch bleiben Übungsname/Distanz/Wiederholungen noch größer.
 import { el, clear } from '../dom.js';
 import { fmtDateLong } from '../dates.js';
-import { totalDistance, exerciseById, equipmentForEntry } from './setEditor.js';
+import { totalDistance, totalDuration, formatTotalDuration, formatQuantity, exerciseById, equipmentForEntry } from './setEditor.js';
 import { EQUIPMENT_ITEMS, SET_INTENSITIES } from '../refdata.js';
 import { t, trLabel } from '../i18n.js';
 
@@ -111,6 +111,7 @@ function buildSheet(plan, group, exercises) {
   // aus (schmaler/kleiner hier vs. volle Breite/große Schrift dort).
   if (days.length === 1) return buildDaySheet(plan, days[0], group, exercises);
   const total = days.reduce((sum, d) => sum + totalDistance(d.sets || []), 0);
+  const totalTime = days.reduce((sum, d) => sum + totalDuration(d.sets || []), 0);
 
   const sheet = el('div', { class: 'plan-print-sheet' });
   sheet.appendChild(el('div', { class: 'print-head' }, [
@@ -121,6 +122,7 @@ function buildSheet(plan, group, exercises) {
       t('plans.weekFrom', { date: fmtDateLong(plan.weekStart) }),
       ' · ',
       t('plans.totalMeters', { m: total }),
+      ...(totalTime > 0 ? [' · ', t('plans.planTotalDuration', { duration: formatTotalDuration(totalTime) })] : []),
     ]),
   ]));
 
@@ -152,9 +154,12 @@ function buildDaySheet(plan, day, group, exercises) {
 
 function buildDayColumn(day, exercises) {
   const col = el('div', { class: 'print-day' });
+  const dayDuration = totalDuration(day.sets || []);
   col.appendChild(el('div', { class: 'print-day-head' }, [
     el('span', { class: 'print-day-date' }, fmtDateLong(day.date)),
-    el('span', { class: 'print-day-total' }, `${totalDistance(day.sets || [])} m`),
+    el('span', { class: 'print-day-total' }, dayDuration > 0
+      ? `${totalDistance(day.sets || [])} m · ${formatTotalDuration(dayDuration)}`
+      : `${totalDistance(day.sets || [])} m`),
   ]));
   const list = el('div', { class: 'print-entry-list' });
   const sets = day.sets || [];
@@ -198,7 +203,7 @@ function buildEntryNode(entry, exercises) {
 function buildSetRow(entrySet, exercises) {
   const name = entrySet.description || exerciseName(entrySet, exercises) || '—';
   const row = el('div', { class: 'print-entry' }, [
-    el('span', { class: 'print-entry-qty' }, `${entrySet.reps || 1}×${entrySet.distance ?? '—'} m`),
+    el('span', { class: 'print-entry-qty' }, formatQuantity(entrySet)),
     el('span', { class: 'print-entry-intensity' }, trLabel(SET_INTENSITIES, entrySet.intensity || 'ga1', 'setIntensities')),
     el('span', { class: 'print-entry-name' }, name),
   ]);

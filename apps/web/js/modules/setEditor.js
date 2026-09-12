@@ -45,7 +45,7 @@ const CATEGORY_DEFAULTS = {
 };
 
 function newBlankSet() {
-  return { kind: 'set', id: localId('set'), description: '', distance: 100, reps: 1, intensity: 'ga1', restSec: 20, equipment: [], comments: [] };
+  return { kind: 'set', id: localId('set'), description: '', distance: 100, durationSec: null, reps: 1, intensity: 'ga1', restSec: 20, equipment: [], comments: [] };
 }
 
 function newBlock() {
@@ -58,11 +58,17 @@ function newSection() {
 
 function setFromExercise(exercise) {
   const defaults = CATEGORY_DEFAULTS[exercise.category] || { intensity: 'ga1', restSec: 20 };
+  // Übungen mit einer eigenen Standarddauer (typischerweise Kraft-/
+  // Trockentraining) bekommen KEINE Distanz aufgezwungen — der
+  // 100m-Fallback unten gilt nur, wenn die Übung weder Distanz noch Dauer
+  // vorgibt (der bisherige Fall vor Einführung von defaultDurationSec).
+  const hasDefaultDuration = exercise.defaultDurationSec != null;
   return {
     kind: 'set',
     id: localId('set'),
     description: exercise.name,
-    distance: exercise.defaultDistance || 100,
+    distance: exercise.defaultDistance || (hasDefaultDuration ? null : 100),
+    durationSec: exercise.defaultDurationSec ?? null,
     reps: 1,
     intensity: defaults.intensity,
     restSec: defaults.restSec,
@@ -92,6 +98,66 @@ export function totalDistance(items) {
     }
     return sum + (entry.distance || 0) * (entry.reps || 1);
   }, 0);
+}
+
+// Geplante Gesamtzeit (Sekunden) über eine Liste von Sätzen/Blöcken/
+// Abschnitten — Pendant zu totalDistance() oben, strukturell identisch
+// (Block-Innensumme × repeatCount, Abschnitt rekursiv unverändert
+// durchgereicht). Ein Satz OHNE durationSec (reine Distanz-Sätze) trägt
+// NUR seine Pause bei: wie lange 100m Schwimmen tatsächlich dauern, ist
+// unbekannt und wird bewusst nicht geschätzt — nur explizit erfasste
+// Zeit-Sätze zählen zur "Nettozeit". Deshalb speist diese Funktion auch
+// NICHT die Belastungssteuerung (trainingLoad.js bleibt reine
+// Meter-Auswertung) — nur die Anzeige der geplanten Trainingszeit.
+export function totalDuration(items) {
+  return (items || []).reduce((sum, entry) => {
+    if (entry.kind === 'block') {
+      const inner = totalDuration(entry.sets || []);
+      return sum + inner * (entry.repeatCount || 1);
+    }
+    if (entry.kind === 'section') {
+      return sum + totalDuration(entry.entries || []);
+    }
+    const reps = entry.reps || 1;
+    return sum + ((entry.durationSec || 0) + (entry.restSec || 0)) * reps;
+  }, 0);
+}
+
+// "45 Sek" unterhalb einer Minute, sonst "1:30 Min" — eigenständig statt
+// über swimTime.js (secToTime), das Hundertstel für Wettkampfzeiten
+// formatiert; ein Trainingszeit-Satz kennt nur ganze Sekunden.
+function formatDuration(sec) {
+  if (sec < 60) return t('setEditor.durationSecShort', { s: sec });
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return t('setEditor.durationMinShort', { m, s: String(s).padStart(2, '0') });
+}
+
+// Für die Gesamtzeitanzeige (Editor-Summe, Plan-Übersicht, PDF): auf ganze
+// Minuten gerundet statt sekundengenau, da die zugrundeliegende Summe
+// ohnehin nur eine Planungsgröße ist (Pausenzeiten sind Vorgaben, keine
+// Messwerte).
+export function formatTotalDuration(sec) {
+  const totalMin = Math.round(sec / 60);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  return h > 0 ? t('setEditor.totalDurationHours', { h, m }) : t('setEditor.totalDurationMinutes', { m });
+}
+
+// Eine Mengenangabe ("3×100 m", "3×45 Sek", "3×100 m · 45 Sek", "3×—") für
+// EINEN Satz — einzige Stelle, die Distanz und Dauer zu einem kompakten
+// Label zusammensetzt, damit alle Ansichten (PDF, Vorlagenkarten) dieselbe
+// Schreibweise zeigen. Sind BEIDE gesetzt, steht die Zeit als eigene,
+// durch " · " abgetrennte Angabe daneben — NICHT als zusätzlicher
+// Multiplikationsfaktor ("3×100 m×45 Sek" läse sich wie 3 Wiederholungen
+// von je 100m UND je 45 Sekunden, was am Wiederholungsfaktor vorbei einen
+// zweiten, so nicht gemeinten Multiplikator suggeriert).
+export function formatQuantity(entry) {
+  const reps = entry.reps || 1;
+  const parts = [];
+  if (entry.distance != null) parts.push(`${entry.distance} m`);
+  if (entry.durationSec != null) parts.push(formatDuration(entry.durationSec));
+  return `${reps}×${parts.length > 0 ? parts.join(' · ') : '—'}`;
 }
 
 // Deep-clones a list of entries with fresh ids — used when copying a
@@ -340,6 +406,10 @@ function appendEquipmentEditor(container, s, exercises, onChange) {
 function buildSetRow(s, exercises, controls, onEquipmentChange) {
   const row = el('div', { class: 'set-row' }, [
     el('input', { type: 'number', min: '0', value: s.distance ?? '', oninput: (e) => s.distance = e.target.value ? parseInt(e.target.value) : null }),
+    el('input', {
+      type: 'number', min: '0', value: s.durationSec ?? '', placeholder: t('setEditor.durationPlaceholder'),
+      oninput: (e) => s.durationSec = e.target.value ? parseInt(e.target.value) : null,
+    }),
     el('input', { type: 'text', value: s.description || '', placeholder: t('setEditor.descriptionPlaceholder'), oninput: (e) => s.description = e.target.value }),
     el('input', { type: 'number', min: '1', value: s.reps ?? 1, oninput: (e) => s.reps = parseInt(e.target.value) || 1 }),
     el('input', { type: 'number', min: '0', value: s.restSec ?? 0, oninput: (e) => s.restSec = parseInt(e.target.value) || 0 }),
@@ -613,14 +683,17 @@ export function renderSetEditor(hostNode, items, exercises = []) {
   hostNode.appendChild(equipmentEl);
 
   const head = el('div', { class: 'set-row set-row-head' }, [
-    el('span', {}, t('setEditor.colDistance')), el('span', {}, t('setEditor.colDescription')), el('span', {}, t('setEditor.colReps')), el('span', {}, t('setEditor.colRest')), el('span', {}, ''),
+    el('span', {}, t('setEditor.colDistance')), el('span', {}, t('setEditor.colDuration')), el('span', {}, t('setEditor.colDescription')), el('span', {}, t('setEditor.colReps')), el('span', {}, t('setEditor.colRest')), el('span', {}, ''),
   ]);
   hostNode.appendChild(head);
   const rowsHost = el('div');
   hostNode.appendChild(rowsHost);
 
   function updateTotal() {
-    totalEl.textContent = t('setEditor.totalDistance', { m: totalDistance(items) });
+    const duration = totalDuration(items);
+    totalEl.textContent = duration > 0
+      ? t('setEditor.totalDistanceAndDuration', { m: totalDistance(items), duration: formatTotalDuration(duration) })
+      : t('setEditor.totalDistance', { m: totalDistance(items) });
     const equipment = collectEquipment(items, exercises);
     equipmentEl.textContent = equipment.length > 0
       ? `${t('setEditor.equipmentSummary')} ${equipment.map(eq => trLabel(EQUIPMENT_ITEMS, eq, 'equipment')).join(', ')}`

@@ -14,7 +14,7 @@ import { vi } from 'vitest';
 
 vi.mock('../js/demoMode.js', () => ({ IS_DEMO: false }));
 
-const { moveEntry, insertEntry, totalDistance } = await import('../js/modules/setEditor.js');
+const { moveEntry, insertEntry, totalDistance, totalDuration, formatQuantity, formatTotalDuration } = await import('../js/modules/setEditor.js');
 
 const set = (id, distance = 100) => ({ kind: 'set', id, description: id, distance, reps: 1 });
 const ids = (list) => list.map(e => e.id);
@@ -135,5 +135,71 @@ describe('totalDistance() mit Abschnitten', () => {
       { kind: 'section', id: 'sec2', heading: 'Ausschwimmen', entries: [set('b', 200)] },
     ];
     expect(totalDistance(list)).toBe(700);
+  });
+});
+
+// timedSet() ergänzt set() (oben) um durationSec/restSec/reps für die
+// Gesamtzeit-Tests unten — set() bleibt unverändert, damit die
+// bestehenden totalDistance()-Tests weiterhin exakt dieselben Objekte
+// bekommen.
+const timedSet = (id, durationSec, { restSec = 0, reps = 1, distance = null } = {}) =>
+  ({ kind: 'set', id, description: id, distance, durationSec, reps, restSec });
+
+describe('totalDuration()', () => {
+  it('zählt bei einem reinen Zeit-Satz Dauer × Wiederholungen plus Pause × Wiederholungen', () => {
+    // 3 × (45s Übung + 15s Pause) = 180s
+    expect(totalDuration([timedSet('a', 45, { restSec: 15, reps: 3 })])).toBe(180);
+  });
+
+  it('zählt bei einem reinen Distanz-Satz (ohne durationSec) nur die Pause', () => {
+    const distanceOnly = { kind: 'set', id: 'a', distance: 100, durationSec: null, reps: 4, restSec: 20 };
+    expect(totalDuration([distanceOnly])).toBe(80); // 4 × 20s Pause, keine geschätzte Schwimmzeit
+  });
+
+  it('multipliziert die Blockinnensumme mit repeatCount, wie totalDistance()', () => {
+    const block = { kind: 'block', id: 'blk', repeatCount: 3, sets: [timedSet('x', 45, { restSec: 15 })] };
+    expect(totalDuration([block])).toBe(180); // 3 × (45+15)
+  });
+
+  it('summiert die entries-Liste eines Abschnitts', () => {
+    const section = { kind: 'section', id: 'sec', heading: 'Kraft', entries: [timedSet('a', 30, { restSec: 10, reps: 2 })] };
+    expect(totalDuration([section])).toBe(80); // 2 × (30+10)
+  });
+
+  it('liefert 0 für eine reine Distanz-Liste ohne jede Pause', () => {
+    expect(totalDuration([set('a', 100), set('b', 200)])).toBe(0);
+  });
+});
+
+describe('formatQuantity()', () => {
+  it('zeigt nur die Distanz, wenn keine Dauer gesetzt ist', () => {
+    expect(formatQuantity({ reps: 3, distance: 100, durationSec: null })).toBe('3×100 m');
+  });
+
+  it('zeigt nur die Zeit, wenn keine Distanz gesetzt ist', () => {
+    expect(formatQuantity({ reps: 3, distance: null, durationSec: 45 })).toBe('3×45 Sek');
+  });
+
+  it('kombiniert Distanz UND Zeit als zwei getrennte Angaben, nicht als zweiten Multiplikationsfaktor', () => {
+    // Bewusst NICHT "3×100 m×45 Sek" (läse sich wie ein zweiter ×-Faktor).
+    expect(formatQuantity({ reps: 3, distance: 100, durationSec: 45 })).toBe('3×100 m · 45 Sek');
+  });
+
+  it('zeigt "—", wenn weder Distanz noch Zeit gesetzt ist', () => {
+    expect(formatQuantity({ reps: 1, distance: null, durationSec: null })).toBe('1×—');
+  });
+
+  it('formatiert Zeiten ab einer Minute als m:ss', () => {
+    expect(formatQuantity({ reps: 1, distance: null, durationSec: 90 })).toBe('1×1:30 Min');
+  });
+});
+
+describe('formatTotalDuration()', () => {
+  it('rundet auf ganze Minuten', () => {
+    expect(formatTotalDuration(150)).toBe('3 Min'); // 2:30 → aufgerundet
+  });
+
+  it('zeigt Stunden, sobald die Gesamtzeit eine Stunde erreicht', () => {
+    expect(formatTotalDuration(3900)).toBe('1 Std 5 Min'); // 65 Min
   });
 });

@@ -212,6 +212,14 @@ describe('ExerciseSchema', () => {
     const manyComments = Array.from({ length: 501 }, (_, i) => ({ id: `c${i}`, authorId: TRAINER_ID, authorName: 'X', text: 'x', createdAt: now }));
     expect(ExerciseSchema.safeParse({ ...valid, comments: manyComments }).success).toBe(false);
   });
+  it('fehlt "defaultDurationSec" ganz, wird null angenommen (Rückwärtskompatibilität mit älteren Datensätzen)', () => {
+    const parsed = ExerciseSchema.safeParse(valid);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data.defaultDurationSec).toBeNull();
+  });
+  it('akzeptiert eine zeitbasierte Übung (z. B. Trockentraining) mit defaultDurationSec statt defaultDistance', () => {
+    expect(ExerciseSchema.safeParse({ ...valid, defaultDistance: null, defaultDurationSec: 45 }).success).toBe(true);
+  });
 });
 
 describe('SetEntrySchema (Sätze & Wiederholungsblöcke)', () => {
@@ -235,6 +243,18 @@ describe('SetEntrySchema (Sätze & Wiederholungsblöcke)', () => {
   });
   it('lehnt einen unbekannten "kind"-Wert ab', () => {
     expect(SetEntrySchema.safeParse({ kind: 'unknown' }).success).toBe(false);
+  });
+  it('fehlt "durationSec" ganz, wird null angenommen (Rückwärtskompatibilität mit älteren Datensätzen)', () => {
+    const set = { kind: 'set', id: 's1', description: '8x100 Freistil', distance: 100, reps: 8, intensity: 'ga1', restSec: 20 };
+    const parsed = SetEntrySchema.safeParse(set);
+    expect(parsed.success).toBe(true);
+    if (parsed.success && parsed.data.kind === 'set') expect(parsed.data.durationSec).toBeNull();
+  });
+  it('akzeptiert einen rein zeitbasierten Satz ohne Distanz sowie einen mit Distanz UND Zeit', () => {
+    const timeOnly = { kind: 'set', id: 's1', description: 'Unterarmstütz', distance: null, durationSec: 45, reps: 3, intensity: 'ga1', restSec: 15 };
+    expect(SetEntrySchema.safeParse(timeOnly).success).toBe(true);
+    const both = { kind: 'set', id: 's2', description: '100 Freistil mit Zielzeit', distance: 100, durationSec: 90, reps: 4, intensity: 'schwelle', restSec: 20 };
+    expect(SetEntrySchema.safeParse(both).success).toBe(true);
   });
   it('akzeptiert Kommentare an einem einzelnen Satz (auch innerhalb eines Blocks)', () => {
     const set = { kind: 'set', id: 's1', description: '8x100 Freistil', distance: 100, reps: 8, intensity: 'ga1', restSec: 20, comments: [{ id: 'c1', authorId: TRAINER_ID, authorName: 'Mara Vogel', text: 'War heute sehr anstrengend.', createdAt: now }] };
