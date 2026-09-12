@@ -154,6 +154,34 @@ export function formatTotalDuration(sec) {
   return h > 0 ? t('setEditor.totalDurationHours', { h, m }) : t('setEditor.totalDurationMinutes', { m });
 }
 
+// Eingabe-/Anzeigeformat "mm:ss" für das Dauer-Eingabefeld im Editor
+// (buildSetRow() unten) — eigenständig statt über swimTime.js
+// (secToTime/timeToSec), das Hundertstel für Wettkampfzeiten formatiert
+// und Stunden zulässt; ein Trainingszeit-Satz kennt nur ganze Sekunden.
+// Bewusst getrennt von formatDuration() oben: das dort verwendete
+// Wortformat ("45 Sek"/"1:30 Min") ist für Anzeige-Badges gedacht, nicht
+// als rückparsbares Eingabeformat.
+export function durationToMinSec(sec) {
+  if (sec == null) return '';
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+// Akzeptiert "mm:ss" (bzw. "m:ss") UND eine reine Zahl ohne Doppelpunkt
+// (dann als Sekunden gelesen — Tippgewohnheit aus der Zeit vor diesem
+// Feld). Ungültige/leere Eingaben ergeben null (= "keine Dauer"), analog
+// zum Distanzfeld daneben.
+export function minSecToDuration(str) {
+  const trimmed = (str || '').trim();
+  if (!trimmed) return null;
+  const parts = trimmed.split(':');
+  if (parts.length > 2 || parts.some(p => p === '' || isNaN(Number(p)))) return null;
+  const nums = parts.map(Number);
+  const sec = parts.length === 2 ? nums[0] * 60 + nums[1] : nums[0];
+  return sec > 0 ? Math.round(sec) : null;
+}
+
 // Eine Mengenangabe ("3×100 m", "3×45 Sek", "3×100 m · 45 Sek", "3×—") für
 // EINEN Satz — einzige Stelle, die Distanz und Dauer zu einem kompakten
 // Label zusammensetzt, damit alle Ansichten (PDF, Vorlagenkarten) dieselbe
@@ -417,11 +445,12 @@ function buildSetRow(s, exercises, controls, onEquipmentChange) {
   const row = el('div', { class: 'set-row' }, [
     el('input', { type: 'number', min: '0', value: s.distance ?? '', oninput: (e) => s.distance = e.target.value ? parseInt(e.target.value) : null }),
     el('input', {
-      // min="1": durationSec ist in PlainSetSchema (entities.ts) .positive()
-      // (>0) mit null als einzig zulässigem "leer"-Wert — 0 wäre weder
-      // "leer" noch ein gültiger Zeitwert und schlägt beim Sync-Push fehl.
-      type: 'number', min: '1', value: s.durationSec ?? '', placeholder: t('setEditor.durationPlaceholder'),
-      oninput: (e) => s.durationSec = e.target.value ? parseInt(e.target.value) : null,
+      // "mm:ss" statt Rohsekunden (minSecToDuration() liest auch eine reine
+      // Zahl als Sekunden, für ungültige/leere Eingaben null — analog zum
+      // Distanzfeld daneben). type="text" statt "number", weil ein
+      // Doppelpunkt in einem <input type="number"> nicht eingebbar ist.
+      type: 'text', inputmode: 'numeric', value: durationToMinSec(s.durationSec), placeholder: t('setEditor.durationPlaceholder'),
+      oninput: (e) => s.durationSec = minSecToDuration(e.target.value),
     }),
     el('input', { type: 'text', value: s.description || '', placeholder: t('setEditor.descriptionPlaceholder'), oninput: (e) => s.description = e.target.value }),
     el('input', { type: 'number', min: '1', value: s.reps ?? 1, oninput: (e) => s.reps = parseInt(e.target.value) || 1 }),
