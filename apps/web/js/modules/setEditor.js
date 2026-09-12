@@ -162,7 +162,10 @@ export function formatTotalDuration(sec) {
 // Wortformat ("45 Sek"/"1:30 Min") ist für Anzeige-Badges gedacht, nicht
 // als rückparsbares Eingabeformat.
 export function durationToMinSec(sec) {
-  if (sec == null) return '';
+  // Falsy-Check statt "== null": catalog.js übergibt für eine neue,
+  // ungespeicherte Übung '' (Leerstring, analog zum Distanzfeld dort)
+  // statt null — beides soll ein leeres Eingabefeld ergeben.
+  if (!sec) return '';
   const m = Math.floor(sec / 60);
   const s = sec % 60;
   return `${m}:${String(s).padStart(2, '0')}`;
@@ -449,7 +452,11 @@ function buildSetRow(s, exercises, controls, onEquipmentChange) {
       // Zahl als Sekunden, für ungültige/leere Eingaben null — analog zum
       // Distanzfeld daneben). type="text" statt "number", weil ein
       // Doppelpunkt in einem <input type="number"> nicht eingebbar ist.
-      type: 'text', inputmode: 'numeric', value: durationToMinSec(s.durationSec), placeholder: t('setEditor.durationPlaceholder'),
+      // KEIN inputmode="numeric": das zeigt auf Touchgeräten eine rein
+      // numerische Tastatur OHNE Doppelpunkt — genau das würde die
+      // mm:ss-Eingabe dort unmöglich machen (Poolside-Tablets sind der
+      // Hauptanwendungsfall dieser App, siehe sw.js-Kommentare).
+      type: 'text', value: durationToMinSec(s.durationSec), placeholder: t('setEditor.durationPlaceholder'),
       oninput: (e) => s.durationSec = minSecToDuration(e.target.value),
     }),
     el('input', { type: 'text', value: s.description || '', placeholder: t('setEditor.descriptionPlaceholder'), oninput: (e) => s.description = e.target.value }),
