@@ -6,7 +6,7 @@ import { badge, emptyState, laneWave, toast } from '../ui.js';
 import { openModal, confirmAction } from '../modal.js';
 import { field, textInput, selectInput, dateInput, formActions } from '../forms.js';
 import { EQUIPMENT_ITEMS } from '../refdata.js';
-import { renderSetEditor, totalDistance, totalDuration, formatTotalDuration, cloneItems, collectEquipment, equipmentForEntry, exerciseById } from './setEditor.js';
+import { renderSetEditor, totalDistance, totalDuration, formatTotalDuration, formatDuration, cloneItems, collectEquipment, equipmentForEntry, exerciseById } from './setEditor.js';
 import { renderCommentThread, commentsButton } from './comments.js';
 import { exportPlanToPdf, exportDayToPdf } from './planPdfExport.js';
 import { renderCyclesRoute } from './planCycles.js';
@@ -165,7 +165,7 @@ function appendEntryRows(host, items, exercises, plan) {
       host.appendChild(renderSectionBox(entry, exercises, plan));
     } else {
       pendingRows.push(el('tr', {}, [
-        el('td', {}, equipmentDescCell(entry, exercises)), el('td', {}, `${entry.distance ?? '—'} m`), el('td', {}, entry.durationSec != null ? `${entry.durationSec}s` : '—'), el('td', {}, entry.reps), el('td', {}, `${entry.restSec || 0}s`),
+        el('td', {}, equipmentDescCell(entry, exercises)), el('td', {}, `${entry.distance ?? '—'} m`), el('td', {}, entry.durationSec != null ? formatDuration(entry.durationSec) : '—'), el('td', {}, entry.reps), el('td', {}, `${entry.restSec || 0}s`),
         el('td', {}, setCommentsButton(entry, plan)),
       ]));
     }
@@ -275,7 +275,7 @@ function renderBlockBox(block, exercises, plan) {
     const table = el('table');
     table.appendChild(el('thead', {}, el('tr', {}, [el('th', {}, t('plans.colDescription')), el('th', {}, t('plans.colDistance')), el('th', {}, t('plans.colDuration')), el('th', {}, t('plans.colReps')), el('th', {}, t('plans.colRest')), el('th', {}, '')])));
     const tbody = el('tbody');
-    block.sets.forEach(s => tbody.appendChild(el('tr', {}, [el('td', {}, equipmentDescCell(s, exercises)), el('td', {}, `${s.distance ?? '—'} m`), el('td', {}, s.durationSec != null ? `${s.durationSec}s` : '—'), el('td', {}, s.reps), el('td', {}, `${s.restSec || 0}s`), el('td', {}, setCommentsButton(s, plan))])));
+    block.sets.forEach(s => tbody.appendChild(el('tr', {}, [el('td', {}, equipmentDescCell(s, exercises)), el('td', {}, `${s.distance ?? '—'} m`), el('td', {}, s.durationSec != null ? formatDuration(s.durationSec) : '—'), el('td', {}, s.reps), el('td', {}, `${s.restSec || 0}s`), el('td', {}, setCommentsButton(s, plan))])));
     table.appendChild(tbody);
     box.appendChild(el('div', { class: 'table-wrap' }, table));
   }

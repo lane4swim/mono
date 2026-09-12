@@ -104,11 +104,17 @@ export function totalDistance(items) {
 // Abschnitten — Pendant zu totalDistance() oben, strukturell identisch
 // (Block-Innensumme × repeatCount, Abschnitt rekursiv unverändert
 // durchgereicht). Ein Satz OHNE durationSec (reine Distanz-Sätze) trägt
-// NUR seine Pause bei: wie lange 100m Schwimmen tatsächlich dauern, ist
-// unbekannt und wird bewusst nicht geschätzt — nur explizit erfasste
-// Zeit-Sätze zählen zur "Nettozeit". Deshalb speist diese Funktion auch
-// NICHT die Belastungssteuerung (trainingLoad.js bleibt reine
-// Meter-Auswertung) — nur die Anzeige der geplanten Trainingszeit.
+// GAR NICHTS bei, auch nicht seine Pause: wie lange 100m Schwimmen
+// tatsächlich dauern, ist unbekannt und wird bewusst nicht geschätzt —
+// nur explizit erfasste Zeit-Sätze zählen zur "Nettozeit". Würde die
+// Pause reiner Distanz-Sätze mitgezählt, wäre die Summe für praktisch
+// jeden Bestandsplan > 0 (restSec ist ein Pflichtfeld mit typischen
+// Default-Werten von 15-40s, siehe CATEGORY_DEFAULTS/newBlankSet oben)
+// und die "planDuration > 0"-Anzeigebedingung in plans.js/
+// planPdfExport.js liefe leer — genau das rein distanzbasierte
+// Bestandsplan-Rauschen, das sie vermeiden soll. Deshalb speist diese
+// Funktion auch NICHT die Belastungssteuerung (trainingLoad.js bleibt
+// reine Meter-Auswertung) — nur die Anzeige der geplanten Trainingszeit.
 export function totalDuration(items) {
   return (items || []).reduce((sum, entry) => {
     if (entry.kind === 'block') {
@@ -118,15 +124,19 @@ export function totalDuration(items) {
     if (entry.kind === 'section') {
       return sum + totalDuration(entry.entries || []);
     }
+    if (entry.durationSec == null) return sum;
     const reps = entry.reps || 1;
-    return sum + ((entry.durationSec || 0) + (entry.restSec || 0)) * reps;
+    return sum + (entry.durationSec + (entry.restSec || 0)) * reps;
   }, 0);
 }
 
 // "45 Sek" unterhalb einer Minute, sonst "1:30 Min" — eigenständig statt
 // über swimTime.js (secToTime), das Hundertstel für Wettkampfzeiten
-// formatiert; ein Trainingszeit-Satz kennt nur ganze Sekunden.
-function formatDuration(sec) {
+// formatiert; ein Trainingszeit-Satz kennt nur ganze Sekunden. Exportiert,
+// damit plans.js einzelne durationSec-Werte in Tabellen genauso formatiert
+// wie formatQuantity() es hier für Vorlagenkarten/PDF bereits tut (siehe
+// Code-Review), statt Rohsekunden ("90s" statt "1:30 Min") anzuzeigen.
+export function formatDuration(sec) {
   if (sec < 60) return t('setEditor.durationSecShort', { s: sec });
   const m = Math.floor(sec / 60);
   const s = sec % 60;
@@ -407,7 +417,10 @@ function buildSetRow(s, exercises, controls, onEquipmentChange) {
   const row = el('div', { class: 'set-row' }, [
     el('input', { type: 'number', min: '0', value: s.distance ?? '', oninput: (e) => s.distance = e.target.value ? parseInt(e.target.value) : null }),
     el('input', {
-      type: 'number', min: '0', value: s.durationSec ?? '', placeholder: t('setEditor.durationPlaceholder'),
+      // min="1": durationSec ist in PlainSetSchema (entities.ts) .positive()
+      // (>0) mit null als einzig zulässigem "leer"-Wert — 0 wäre weder
+      // "leer" noch ein gültiger Zeitwert und schlägt beim Sync-Push fehl.
+      type: 'number', min: '1', value: s.durationSec ?? '', placeholder: t('setEditor.durationPlaceholder'),
       oninput: (e) => s.durationSec = e.target.value ? parseInt(e.target.value) : null,
     }),
     el('input', { type: 'text', value: s.description || '', placeholder: t('setEditor.descriptionPlaceholder'), oninput: (e) => s.description = e.target.value }),

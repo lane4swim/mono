@@ -156,7 +156,9 @@ function openExerciseModal(exercise, onSaved) {
   const fCat = selectInput(trOptions(EXERCISE_CATEGORIES, 'exerciseCategories'), data.category);
   const fStroke = selectInput([{ value: '', label: t('catalog.noStroke') }, ...STROKES.map(s => ({ value: s, label: trCode(s, 'strokes') }))], data.stroke || '');
   const fDist = el('input', { type: 'number', min: '0', value: data.defaultDistance || '', placeholder: t('catalog.formDistancePlaceholder') });
-  const fDuration = el('input', { type: 'number', min: '0', value: data.defaultDurationSec || '', placeholder: t('catalog.formDurationPlaceholder') });
+  // min="1": defaultDurationSec ist in ExerciseSchema (entities.ts) .positive()
+  // (>0) mit null als einzig zulässigem "leer"-Wert — 0 wäre kein gültiger Wert.
+  const fDuration = el('input', { type: 'number', min: '1', value: data.defaultDurationSec || '', placeholder: t('catalog.formDurationPlaceholder') });
   const fDesc = el('textarea', {}, data.description || '');
   const fTags = textInput((data.tags || []).join(', '), { placeholder: 'e.g. warmup, technique' });
   form.appendChild(field(t('catalog.formName'), fName, { span2: true }));

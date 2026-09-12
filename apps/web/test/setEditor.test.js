@@ -151,9 +151,13 @@ describe('totalDuration()', () => {
     expect(totalDuration([timedSet('a', 45, { restSec: 15, reps: 3 })])).toBe(180);
   });
 
-  it('zählt bei einem reinen Distanz-Satz (ohne durationSec) nur die Pause', () => {
+  it('trägt bei einem reinen Distanz-Satz (ohne durationSec) GAR NICHTS bei, auch nicht die Pause', () => {
+    // Sonst wäre die Summe für praktisch jeden Bestandsplan > 0, da restSec
+    // ein Pflichtfeld mit typischen Default-Werten (15-40s) ist — und die
+    // "planDuration > 0"-Anzeigebedingung in plans.js/planPdfExport.js
+    // liefe leer (siehe Code-Review-Korrektur in totalDuration()).
     const distanceOnly = { kind: 'set', id: 'a', distance: 100, durationSec: null, reps: 4, restSec: 20 };
-    expect(totalDuration([distanceOnly])).toBe(80); // 4 × 20s Pause, keine geschätzte Schwimmzeit
+    expect(totalDuration([distanceOnly])).toBe(0);
   });
 
   it('multipliziert die Blockinnensumme mit repeatCount, wie totalDistance()', () => {
