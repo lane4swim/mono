@@ -277,7 +277,11 @@ tr:hover td{ background: var(--c-foam-2); }
 .chart-box svg{ display:block; }
 
 /* Sets/plan editor */
-.set-row{ display:grid; grid-template-columns: 70px 70px 1fr 90px 90px 80px; gap:8px; align-items:center; padding: 6px 0; }
+/* Die Zeit-Spalte ("mm:ss", 5 Zeichen) braucht deutlich weniger Platz als
+   die Distanz-Spalte daneben (bis zu 4-stellige Meterzahlen) — calc(5ch + …)
+   statt eines festen px-Werts, damit die Breite an der tatsächlichen
+   Zeichenzahl hängt statt an einer geschätzten Pixelbreite. */
+.set-row{ display:grid; grid-template-columns: 70px calc(5ch + 18px) 1fr 90px 90px 80px; gap:8px; align-items:center; padding: 6px 0; }
 /* min-width:0 hebt die intrinsische Mindestbreite von <input> auf —
    ohne sie kann die Beschreibungsspalte (1fr) nicht unter ~180px
    schrumpfen und die Zeile sprengt auf schmalen Bildschirmen das
@@ -344,7 +348,7 @@ tr:hover td{ background: var(--c-foam-2); }
      unter die Eingabefelder in eine eigene, volle Rasterzeile: die
      Beschreibungsspalte behält so ihre Breite, und die Knöpfe bleiben
      mit voller Größe (statt zusammengequetscht) gut treffbar. */
-  .set-row{ grid-template-columns: 56px 56px 1fr 70px 70px; }
+  .set-row{ grid-template-columns: 56px calc(5ch + 14px) 1fr 70px 70px; }
   .set-row-actions{ grid-column: 1 / -1; justify-content:flex-end; }
   .set-row-actions .btn{ width:30px; padding: 6px 0; }
   /* Blockname darf schmaler werden, damit die Blockkopfzeile

@@ -596,8 +596,8 @@ export default {
     notificationsError: 'Push-Benachrichtigungen konnten nicht aktiviert werden: {message}',
   },
   setEditor: {
-    colDistance: 'Dist. (m)', colDuration: 'Zeit (s)', colDescription: 'Beschreibung', colReps: 'Wdh.', colRest: 'Pause (s)',
-    durationPlaceholder: 'Sek.',
+    colDistance: 'Dist. (m)', colDuration: 'Zeit (mm:ss)', colDescription: 'Beschreibung', colReps: 'Wdh.', colRest: 'Pause (s)',
+    durationPlaceholder: 'mm:ss',
     durationSecShort: '{s} Sek', durationMinShort: '{m}:{s} Min',
     totalDurationHours: '{h} Std {m} Min', totalDurationMinutes: '{m} Min',
     totalDistance: 'Gesamtdistanz: {m} m', totalDistanceAndDuration: 'Gesamtdistanz: {m} m · Gesamtzeit: {duration}',
