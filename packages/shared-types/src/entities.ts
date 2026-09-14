@@ -288,6 +288,12 @@ export const TemplateSchema = z.object({
   name: z.string().min(1).max(200),
   description: z.string().max(5000).default(''),
   tags: z.array(z.string().max(100)).max(50).default([]),
+  // Standard-Beckenlänge dieser Vorlage (siehe
+  // docs/Plans/beckenlaenge-regeneration-plan.md, Abschnitt 2) — wird beim
+  // Anwenden der Vorlage als Snapshot in PlanDay.poolLength übernommen,
+  // bleibt dort aber pro Tag unabhängig überschreibbar. null = nicht
+  // festgelegt, kein irreführender Default für Vorlagen ohne Angabe.
+  poolLength: CourseSchema.nullable().default(null),
   sets: z.array(SetEntrySchema).max(200),
   createdAt: isoDate,
   updatedAt: isoDate,
@@ -313,6 +319,10 @@ export type SectionTemplate = z.infer<typeof SectionTemplateSchema>;
 
 export const PlanDaySchema = z.object({
   date: isoDate,
+  // Beckenlänge dieses Trainingstages (Issue #72) — optional, da bestehende
+  // Pläne keinen Wert haben; null = nicht festgelegt, kann von Tag zu Tag
+  // im selben Plan variieren.
+  poolLength: CourseSchema.nullable().default(null),
   sets: z.array(SetEntrySchema).max(200),
 }).strict();
 export type PlanDay = z.infer<typeof PlanDaySchema>;

@@ -28,7 +28,7 @@ describe('buildPlansFromCycle()', () => {
 
     expect(plans).toHaveLength(2);
     expect(plans[0]).toMatchObject({ name: 'Aufbauzyklus — Grundlage', weekStart: '2026-01-05', groupId: 'g1', status: 'aktiv' });
-    expect(plans[0].days).toEqual([{ date: '2026-01-05', sets: expect.arrayContaining([expect.objectContaining({ distance: 1000 })]) }]);
+    expect(plans[0].days).toEqual([{ date: '2026-01-05', poolLength: null, sets: expect.arrayContaining([expect.objectContaining({ distance: 1000 })]) }]);
     expect(plans[1].weekStart).toBe('2026-01-12'); // eine Woche später
     expect(plans[1].days[0].date).toBe('2026-01-14'); // Mittwoch (dayOfWeek 2) derselben Woche
   });
@@ -58,6 +58,17 @@ describe('buildPlansFromCycle()', () => {
     const cycle = { name: 'X', weeks: [{ weekOffset: 0, label: '', days: [{ dayOfWeek: 0, templateId: 'gelöscht' }] }] };
     const plans = buildPlansFromCycle(cycle, [], '2026-01-05', 'g1');
     expect(plans[0].days[0].sets).toEqual([]);
+    expect(plans[0].days[0].poolLength).toBeNull();
+  });
+
+  // Issue #72 (docs/Plans/beckenlaenge-regeneration-plan.md): die
+  // Beckenlänge der Vorlage wird wie die Sets als Snapshot in den
+  // erzeugten Plan-Tag übernommen.
+  it('übernimmt die poolLength der Vorlage in den erzeugten Plan-Tag', () => {
+    const cycle = { name: 'X', weeks: [{ weekOffset: 0, label: '', days: [{ dayOfWeek: 0, templateId: 'a' }] }] };
+    const tpl = { ...template('a', 1000), poolLength: 'SCM' };
+    const plans = buildPlansFromCycle(cycle, [tpl], '2026-01-05', 'g1');
+    expect(plans[0].days[0].poolLength).toBe('SCM');
   });
 
   // Regressionstest (Code-Review): Plan.name ist serverseitig auf 200

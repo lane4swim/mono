@@ -254,6 +254,7 @@ export default {
     colDescription: 'Description', colDistance: 'Distance', colDuration: 'Time', colReps: 'Reps', colRest: 'Rest',
     modalEdit: 'Edit plan', modalCreate: 'Create training plan',
     formName: 'Name', formWeekStart: 'Week starting', formGroup: 'Group', formStatus: 'Status',
+    formPoolLength: 'Pool length', poolLengthNotSet: '— not set —',
     trainingDaysLabel: 'Training Days', dateLabel: 'Date:', removeDay: 'Remove day',
     emptyDayOption: '— empty day —', addDayButton: '+ Add training day',
     validationName: 'Please enter a name.', savedEdit: 'Changes saved', savedCreate: 'Plan created',
@@ -684,6 +685,7 @@ export default {
       kick: 'Kick work', atmung: 'Breathing', 'start-wende': 'Starts & Turns', koordination: 'Coordination',
     },
     setIntensities: {
+      regeneration: 'Recovery',
       locker: 'Easy (aerobic 2)', ga1: 'Aerobic base (aerobic 1)', schwelle: 'Threshold', renotempo: 'Race pace', sprint: 'Sprint / Max',
     },
     actionCategories: {

@@ -3,11 +3,17 @@ import { getAll, put, remove } from '../db.js';
 import { el, clear, beginRender } from '../dom.js';
 import { badge, emptyState, laneWave, toast } from '../ui.js';
 import { openModal, confirmAction } from '../modal.js';
-import { field, textInput, formActions } from '../forms.js';
+import { field, textInput, selectInput, formActions } from '../forms.js';
 import { renderSetEditor, totalDistance, formatQuantity, cloneItems, collectEquipment, equipmentForEntry } from './setEditor.js';
-import { EQUIPMENT_ITEMS } from '../refdata.js';
-import { t, trLabel } from '../i18n.js';
+import { EQUIPMENT_ITEMS, COURSES } from '../refdata.js';
+import { t, trLabel, trOptions } from '../i18n.js';
 import { libraryTransferButtons } from './libraryTransfer.js';
+
+// poolLength ist nullable (siehe TemplateSchema) — eine leere Option bildet
+// "nicht festgelegt" ab, siehe docs/Plans/beckenlaenge-regeneration-plan.md.
+function poolLengthOptions() {
+  return [{ value: '', label: t('plans.poolLengthNotSet') }, ...trOptions(COURSES, 'courses')];
+}
 
 export const templatesModule = {
   id: 'templates',
@@ -42,7 +48,13 @@ function renderList(container, templates, exercises, sectionTemplates) {
   templates.forEach(tpl => {
     const tplEquipment = collectEquipment(tpl.sets || [], exercises);
     const card = el('div', { class: 'card' }, [
-      el('div', { class: 'flex justify-between items-center' }, [el('h3', { class: 'mt-0' }, tpl.name), badge(t('plans.totalBadge', { m: totalDistance(tpl.sets || []) }), 'neutral')]),
+      el('div', { class: 'flex justify-between items-center' }, [
+        el('h3', { class: 'mt-0' }, tpl.name),
+        el('div', { class: 'flex items-center gap-8' }, [
+          tpl.poolLength ? badge(trLabel(COURSES, tpl.poolLength, 'courses'), 'neutral') : null,
+          badge(t('plans.totalBadge', { m: totalDistance(tpl.sets || []) }), 'neutral'),
+        ]),
+      ]),
       el('p', { class: 'text-sm' }, tpl.description || ''),
       el('div', { class: 'pill-group mb-8' }, (tpl.tags || []).map(tag => badge(tag, 'neutral'))),
     ]);
@@ -87,14 +99,16 @@ function renderList(container, templates, exercises, sectionTemplates) {
 
 function openTemplateModal(template, exercises, sectionTemplates, onSaved) {
   const isEdit = !!template;
-  const data = template ? { ...template, sets: cloneItems(template.sets) } : { name: '', description: '', tags: [], sets: [] };
+  const data = template ? { ...template, sets: cloneItems(template.sets) } : { name: '', description: '', tags: [], sets: [], poolLength: null };
   const form = el('form', { class: 'form-grid single' });
   const fName = textInput(data.name, { required: true });
   const fDesc = el('textarea', {}, data.description || '');
   const fTags = textInput((data.tags || []).join(', '), { placeholder: 'e.g. endurance, base' });
+  const fPoolLength = selectInput(poolLengthOptions(), data.poolLength ?? '');
   form.appendChild(field(t('templates.formName'), fName));
   form.appendChild(field(t('templates.formDescription'), fDesc));
   form.appendChild(field(t('templates.formTags'), fTags, { hint: t('templates.formTagsHint') }));
+  form.appendChild(field(t('plans.formPoolLength'), fPoolLength));
 
   const setsWrap = el('div', { class: 'field' });
   setsWrap.appendChild(el('label', {}, t('templates.setsLabel')));
@@ -107,7 +121,7 @@ function openTemplateModal(template, exercises, sectionTemplates, onSaved) {
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     if (!fName.value.trim()) { toast(t('templates.validationName'), 'error'); return; }
-    await put('templates', { ...data, name: fName.value.trim(), description: fDesc.value.trim(), tags: fTags.value.split(',').map(x => x.trim()).filter(Boolean), sets: data.sets });
+    await put('templates', { ...data, name: fName.value.trim(), description: fDesc.value.trim(), tags: fTags.value.split(',').map(x => x.trim()).filter(Boolean), poolLength: fPoolLength.value || null, sets: data.sets });
     toast(isEdit ? t('templates.savedEdit') : t('templates.savedCreate'));
     close(); onSaved?.();
   });

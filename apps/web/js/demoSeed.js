@@ -76,7 +76,7 @@ async function seedDemoClubData() {
 
   const template1 = {
     id: id(), clubId: DEMO_CLUB_ID, name: 'Grundlagenausdauer – Standardwoche', description: 'Klassische GA1/GA2-Einheit für die Basisperiode.',
-    tags: ['ausdauer', 'basis'],
+    tags: ['ausdauer', 'basis'], poolLength: 'LCM',
     sets: [
       { kind: 'set', id: id(), description: 'Einschwimmen gemischt', distance: 400, reps: 1, intensity: 'locker', restSec: 0 },
       { kind: 'set', id: id(), description: '8x100 Freistil', distance: 100, reps: 8, intensity: 'ga1', restSec: 20 },
@@ -86,7 +86,7 @@ async function seedDemoClubData() {
   };
   const template2 = {
     id: id(), clubId: DEMO_CLUB_ID, name: 'Sprint & Wenden', description: 'Kurze, intensive Serien mit Fokus auf Renntempo.',
-    tags: ['sprint', 'wettkampf'],
+    tags: ['sprint', 'wettkampf'], poolLength: 'SCM',
     sets: [
       { kind: 'set', id: id(), description: 'Einschwimmen', distance: 300, reps: 1, intensity: 'locker', restSec: 0 },
       {
@@ -111,10 +111,15 @@ async function seedDemoClubData() {
   const wkStart = startOfWeek(todayISO());
   const plan1 = {
     id: id(), clubId: DEMO_CLUB_ID, name: 'Trainingswoche ' + wkStart, weekStart: toIsoDateTime(wkStart), groupId: groupA.id, status: 'aktiv',
+    // poolLength wird pro Tag aus der jeweils genutzten Vorlage übernommen
+    // (siehe planCycles.js/plans.js) — der letzte Tag weicht bewusst vom
+    // Vorlagenwert ab (Hallenbelegung wechselt kurzfristig auf ein
+    // 25m-Becken), um zu zeigen, dass die Beckenlänge je Trainingstag
+    // unabhängig überschreibbar bleibt (Issue #72).
     days: [
-      { date: toIsoDateTime(wkStart), sets: cloneSets(template1.sets) },
-      { date: toIsoDateTime(isoAddDays(wkStart, 2)), sets: cloneSets(template2.sets) },
-      { date: toIsoDateTime(isoAddDays(wkStart, 4)), sets: cloneSets(template1.sets) },
+      { date: toIsoDateTime(wkStart), poolLength: template1.poolLength, sets: cloneSets(template1.sets) },
+      { date: toIsoDateTime(isoAddDays(wkStart, 2)), poolLength: template2.poolLength, sets: cloneSets(template2.sets) },
+      { date: toIsoDateTime(isoAddDays(wkStart, 4)), poolLength: 'SCM', sets: cloneSets(template1.sets) },
     ],
   };
   await bulkPut('plans', [plan1]);

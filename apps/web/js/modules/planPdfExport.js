@@ -19,7 +19,7 @@
 import { el, clear } from '../dom.js';
 import { fmtDateLong } from '../dates.js';
 import { totalDistance, totalDuration, formatTotalDuration, formatQuantity, exerciseById, equipmentForEntry } from './setEditor.js';
-import { EQUIPMENT_ITEMS, SET_INTENSITIES } from '../refdata.js';
+import { EQUIPMENT_ITEMS, SET_INTENSITIES, COURSES } from '../refdata.js';
 import { t, trLabel } from '../i18n.js';
 
 const MM_TO_PX = 96 / 25.4;
@@ -156,7 +156,9 @@ function buildDayColumn(day, exercises) {
   const col = el('div', { class: 'print-day' });
   const dayDuration = totalDuration(day.sets || []);
   col.appendChild(el('div', { class: 'print-day-head' }, [
-    el('span', { class: 'print-day-date' }, fmtDateLong(day.date)),
+    el('span', { class: 'print-day-date' }, day.poolLength
+      ? `${fmtDateLong(day.date)} · ${trLabel(COURSES, day.poolLength, 'courses')}`
+      : fmtDateLong(day.date)),
     el('span', { class: 'print-day-total' }, dayDuration > 0
       ? `${totalDistance(day.sets || [])} m · ${formatTotalDuration(dayDuration)}`
       : `${totalDistance(day.sets || [])} m`),

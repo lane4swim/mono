@@ -37,7 +37,7 @@ export function buildPlansFromCycle(cycle, templates, startDateIso, groupId) {
     const weekStart = isoAddDays(base, week.weekOffset * 7);
     const days = week.days.map(d => {
       const tpl = templates.find(x => x.id === d.templateId);
-      return { date: isoAddDays(weekStart, d.dayOfWeek), sets: tpl ? cloneItems(tpl.sets) : [] };
+      return { date: isoAddDays(weekStart, d.dayOfWeek), poolLength: tpl?.poolLength ?? null, sets: tpl ? cloneItems(tpl.sets) : [] };
     });
     return { name: planNameFor(cycle.name, week.label || `Woche ${i + 1}`), weekStart, groupId, status: 'aktiv', days };
   });

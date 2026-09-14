@@ -5,13 +5,19 @@ import { fmtDateLong, fmtDateShort, todayISO, toIsoDateTime, dateOnly, isoAddDay
 import { badge, emptyState, laneWave, toast } from '../ui.js';
 import { openModal, confirmAction } from '../modal.js';
 import { field, textInput, selectInput, dateInput, formActions } from '../forms.js';
-import { EQUIPMENT_ITEMS } from '../refdata.js';
+import { EQUIPMENT_ITEMS, COURSES } from '../refdata.js';
 import { renderSetEditor, totalDistance, totalDuration, formatTotalDuration, formatDuration, cloneItems, collectEquipment, equipmentForEntry, exerciseById } from './setEditor.js';
 import { renderCommentThread, commentsButton } from './comments.js';
 import { exportPlanToPdf, exportDayToPdf } from './planPdfExport.js';
 import { renderCyclesRoute } from './planCycles.js';
 import { navigate } from '../router.js';
-import { t, trLabel } from '../i18n.js';
+import { t, trLabel, trOptions } from '../i18n.js';
+
+// poolLength ist nullable (siehe PlanDaySchema) — eine leere Option bildet
+// "nicht festgelegt" ab, siehe docs/Plans/beckenlaenge-regeneration-plan.md.
+function poolLengthOptions() {
+  return [{ value: '', label: t('plans.poolLengthNotSet') }, ...trOptions(COURSES, 'courses')];
+}
 
 export const plansModule = {
   id: 'plans',
@@ -101,6 +107,7 @@ async function renderDetail(container, planId) {
       el('div', { class: 'day-block-head' }, [
         el('h3', { class: 'mt-0' }, fmtDateLong(day.date)),
         el('div', { class: 'flex items-center gap-8' }, [
+          day.poolLength ? badge(trLabel(COURSES, day.poolLength, 'courses'), 'neutral') : null,
           badge(dayTotalBadgeLabel(day.sets || []), 'neutral'),
           el('button', { class: 'btn btn-ghost btn-sm', onclick: () => exportDayToPdf(plan, day, group, exercises) }, t('plans.exportDayPdf')),
         ]),
@@ -314,8 +321,12 @@ function openPlanModal(plan, groups, templates, exercises, sectionTemplates, onS
     data.days.forEach((day, di) => {
       const block = el('div', { class: 'day-block' });
       const dayDateInput = dateInput(day.date, { oninput: (e) => day.date = e.target.value });
+      const dayPoolLengthInput = selectInput(poolLengthOptions(), day.poolLength ?? '', { onchange: (e) => day.poolLength = e.target.value || null });
       block.appendChild(el('div', { class: 'day-block-head' }, [
-        el('div', { class: 'flex items-center gap-8' }, [el('strong', {}, t('plans.dateLabel')), dayDateInput]),
+        el('div', { class: 'flex items-center gap-8' }, [
+          el('strong', {}, t('plans.dateLabel')), dayDateInput,
+          el('strong', {}, t('plans.formPoolLength')), dayPoolLengthInput,
+        ]),
         el('button', { type: 'button', class: 'btn btn-danger btn-sm', onclick: () => { data.days.splice(di, 1); drawDays(); } }, t('plans.removeDay')),
       ]));
       const setsHost = el('div');
@@ -332,7 +343,7 @@ function openPlanModal(plan, groups, templates, exercises, sectionTemplates, onS
   addRow.appendChild(el('button', { type: 'button', class: 'btn btn-accent btn-sm', onclick: () => {
     const tpl = templates.find(x => x.id === templateSel.value);
     const nextDate = data.days.length ? isoAddDays(data.days[data.days.length - 1].date, 1) : fWeek.value || todayISO();
-    data.days.push({ date: nextDate, sets: tpl ? cloneItems(tpl.sets) : [] });
+    data.days.push({ date: nextDate, poolLength: tpl?.poolLength ?? null, sets: tpl ? cloneItems(tpl.sets) : [] });
     drawDays();
   } }, t('plans.addDayButton')));
   daysWrap.appendChild(addRow);
