@@ -55,6 +55,7 @@ model Club {
   results                       Result[]
   exercises                     Exercise[]
   templates                     Template[]
+  sectionTemplates              SectionTemplate[]
   plans                         Plan[]
   planCycles                    PlanCycle[]
   sessions                      TrainingSession[]
@@ -489,6 +490,25 @@ model Template {
   // (Sync-Pull-Zugriffsmuster).
   @@index([clubId, updatedAt])
   @@map("templates")
+}
+
+// Eigenständige, wiederverwendbare Abschnitts-Vorlage (z. B. "Einschwimmen").
+// `entries` ist dieselbe Json-Struktur wie Template.sets, nur ohne die
+// section-Variante selbst (keine verschachtelten Abschnitte).
+model SectionTemplate {
+  id          String    @id @default(uuid())
+  clubId      String
+  club        Club      @relation(fields: [clubId], references: [id])
+  name        String
+  description String    @default("")
+  tags        String[]  @default([])
+  entries     Json
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  @@index([clubId, updatedAt])
+  @@map("section_templates")
 }
 
 model Plan {

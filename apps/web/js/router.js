@@ -38,6 +38,7 @@ const ROUTE_TO_PACKAGE = {
   plans: 'plans',
   templates: 'templates',
   catalog: 'catalog',
+  sectionTemplates: 'sectionTemplates',
   sessions: 'sessions',
   actionitems: 'actionitems',
   // Vereinsinterne Nachrichten/Ankündigungen (Phase 2, Abschnitt 4.1) —

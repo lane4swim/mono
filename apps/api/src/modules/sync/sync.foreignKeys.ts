@@ -84,6 +84,9 @@ const FOREIGN_KEY_REFS: Partial<Record<EntityStoreName, ForeignKeyRef[]>> = {
   templates: [
     { kind: 'nested', store: 'exercises', extract: (payload) => collectSetExerciseIds(payload.sets) },
   ],
+  sectionTemplates: [
+    { kind: 'nested', store: 'exercises', extract: (payload) => collectSetExerciseIds(payload.entries) },
+  ],
   plans: [
     { kind: 'entity', field: 'groupId', store: 'groups' },
     {

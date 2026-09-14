@@ -157,3 +157,14 @@ export function anonymizeTemplateCommentAuthors(
   const sets = anonymizeSetEntries(template.sets, author);
   return { changed: sets.changed, sets: sets.value };
 }
+
+// Wie anonymizeTemplateCommentAuthors(), nur für SectionTemplate.entries
+// (dieselbe SetEntry-Struktur wie Template.sets, nur ohne die
+// section-Variante selbst — siehe SectionTemplateSchema).
+export function anonymizeSectionTemplateCommentAuthors(
+  sectionTemplate: { entries: unknown },
+  author: DeletedCommentAuthor,
+): { changed: boolean; entries: unknown } {
+  const entries = anonymizeSetEntries(sectionTemplate.entries, author);
+  return { changed: entries.changed, entries: entries.value };
+}

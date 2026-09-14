@@ -13,6 +13,7 @@ import { timesModule } from './modules/times.js';
 import { plansModule } from './modules/plans.js';
 import { templatesModule } from './modules/templates.js';
 import { catalogModule } from './modules/catalog.js';
+import { sectionTemplatesModule } from './modules/sectionTemplates.js';
 import { sessionsModule } from './modules/sessions.js';
 import { actionItemsModule } from './modules/actionItems.js';
 import { announcementsModule } from './modules/announcements.js';
@@ -28,7 +29,7 @@ import { parentViewModule } from './modules/parentView.js';
 
 const ALL_MODULES = [
   dashboardModule, athletesModule, competitionsModule, timesModule, plansModule,
-  templatesModule, catalogModule, sessionsModule, actionItemsModule, announcementsModule, statsModule,
+  templatesModule, catalogModule, sectionTemplatesModule, sessionsModule, actionItemsModule, announcementsModule, statsModule,
   syncQueueModule, profileModule, userManagementModule, infoModule, qualificationsModule,
   kampfrichterModule, auditLogModule, parentViewModule,
 ];

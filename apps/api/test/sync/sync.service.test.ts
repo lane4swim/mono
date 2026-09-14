@@ -920,6 +920,47 @@ describe('syncService.push — Fremdschlüssel-Eigentümerprüfung (Sicherheitsr
     expect(results[0]!.status).toBe('applied');
   });
 
+  it('lehnt ein "sectionTemplates"-Event mit einer exerciseId eines FREMDEN Vereins ab (verschachtelt in entries[])', async () => {
+    const { service, gateway } = makeService();
+    const foreignExerciseId = 'cccccccc-0000-0000-0000-000000000004';
+    gateway.seed('exercises', {
+      id: foreignExerciseId, clubId: CLUB_B, name: 'Fremde Übung', category: 'kick', stroke: null,
+      description: '', defaultDistance: null, tags: [], equipment: [], comments: [], updatedAt: new Date(), deletedAt: null,
+    });
+    const now = new Date().toISOString();
+    const payload = {
+      id: '99999999-8888-8888-8888-888888888885', clubId: CLUB_A, name: 'Einschwimmen', description: '', tags: [],
+      entries: [{ kind: 'set' as const, id: 'set-1', description: '', distance: null, reps: 1, intensity: '', restSec: 0, exerciseId: foreignExerciseId, comments: [] }],
+      createdAt: now, updatedAt: now,
+    };
+    const results = await service.push(
+      [{ id: 'evt-fk-foreign-exercise-sectiontemplate', store: 'sectionTemplates', entityId: payload.id, action: 'create', payload, clientUpdatedAt: now }],
+      asTrainer(CLUB_A),
+    );
+    expect(results[0]!.status).toBe('error');
+    expect(await gateway.findById('sectionTemplates', payload.id)).toBeNull();
+  });
+
+  it('akzeptiert eine exerciseId, die zu einer Übung des EIGENEN Vereins gehört (verschachtelt in "sectionTemplates".entries[])', async () => {
+    const { service, gateway } = makeService();
+    const ownExerciseId = 'cccccccc-0000-0000-0000-000000000005';
+    gateway.seed('exercises', {
+      id: ownExerciseId, clubId: CLUB_A, name: 'Eigene Übung', category: 'kick', stroke: null,
+      description: '', defaultDistance: null, tags: [], equipment: [], comments: [], updatedAt: new Date(), deletedAt: null,
+    });
+    const now = new Date().toISOString();
+    const payload = {
+      id: '99999999-8888-8888-8888-888888888886', clubId: CLUB_A, name: 'Einschwimmen', description: '', tags: [],
+      entries: [{ kind: 'set' as const, id: 'set-1', description: '', distance: null, reps: 1, intensity: '', restSec: 0, exerciseId: ownExerciseId, comments: [] }],
+      createdAt: now, updatedAt: now,
+    };
+    const results = await service.push(
+      [{ id: 'evt-fk-own-exercise-sectiontemplates', store: 'sectionTemplates', entityId: payload.id, action: 'create', payload, clientUpdatedAt: now }],
+      asTrainer(CLUB_A),
+    );
+    expect(results[0]!.status).toBe('applied');
+  });
+
   // Ineffizienz-Korrektur (Fremdschlüsselprüfung gebündelt statt seriell,
   // siehe sync.foreignKeys.ts): die Prüfung stellt je Zielstore GENAU EINE
   // Existenzabfrage, unabhängig davon, wie viele — und wie oft dieselben —
@@ -1497,6 +1538,21 @@ describe('syncService.push — Kommentar-Autor:innen-Prüfung (Sicherheitsreview
     };
   }
 
+  function makeSectionTemplatePayload(overrides: Partial<Record<string, unknown>> = {}) {
+    const now = new Date().toISOString();
+    return {
+      id: '99999999-6666-6666-6666-666666666666',
+      clubId: CLUB_A,
+      name: 'Einschwimmen',
+      description: '',
+      tags: [],
+      entries: [],
+      createdAt: now,
+      updatedAt: now,
+      ...overrides,
+    };
+  }
+
   it('akzeptiert einen NEUEN Kommentar an einer Übung, dessen authorId der eigenen Identität entspricht', async () => {
     const { service, gateway } = makeService();
     const payload = makeExercisePayload({
@@ -1725,6 +1781,36 @@ describe('syncService.push — Kommentar-Autor:innen-Prüfung (Sicherheitsreview
     );
     expect(results[0]!.status).toBe('error');
     expect(await gateway.findById('templates', payload.id)).toBeNull();
+  });
+
+  // Analog zu Template.sets: SectionTemplate.entries bettet dieselben
+  // PlainSet-Kommentare ein (siehe SectionTemplateSchema, collectCommentGroups()
+  // in sync.commentAuthorship.ts).
+  it('akzeptiert Kommentare in SectionTemplate.entries, wenn die authorId der eigenen Identität entspricht', async () => {
+    const { service, gateway } = makeService();
+    const ownSet = { kind: 'set', id: 's1', description: '', distance: 200, reps: 1, intensity: 'ga1', restSec: 0, comments: [{ id: 'c1', authorId: TRAINER_USER_ID, authorName: 'Jonas Beck', text: 'Abschnitts-Hinweis', createdAt: new Date().toISOString() }] };
+    const payload = makeSectionTemplatePayload({ entries: [ownSet] });
+    const results = await service.push(
+      [{ id: 'evt-m2-sectiontemplate-own', store: 'sectionTemplates', entityId: payload.id, action: 'create', payload, clientUpdatedAt: payload.updatedAt }],
+      asTrainer(CLUB_A),
+    );
+    expect(results[0]!.status).toBe('applied');
+    const stored = await gateway.findById('sectionTemplates', payload.id);
+    expect((stored as Record<string, unknown>).entries).toEqual([{ ...ownSet, durationSec: null }]);
+  });
+
+  it('lehnt einen fremd zugeordneten neuen Kommentar in SectionTemplate.entries ab', async () => {
+    const { service, gateway } = makeService();
+    const payload = makeSectionTemplatePayload({
+      id: '99999999-6666-6666-6666-666666666667',
+      entries: [{ kind: 'set', id: 's1', description: '', distance: 200, reps: 1, intensity: 'ga1', restSec: 0, comments: [{ id: 'c1', authorId: ADMIN_USER_ID, authorName: 'Fremd', text: 'X', createdAt: new Date().toISOString() }] }],
+    });
+    const results = await service.push(
+      [{ id: 'evt-m2-sectiontemplate-spoof', store: 'sectionTemplates', entityId: payload.id, action: 'create', payload, clientUpdatedAt: payload.updatedAt }],
+      asTrainer(CLUB_A),
+    );
+    expect(results[0]!.status).toBe('error');
+    expect(await gateway.findById('sectionTemplates', payload.id)).toBeNull();
   });
 
   // ----------------------------------------------------------------

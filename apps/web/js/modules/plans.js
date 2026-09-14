@@ -23,20 +23,20 @@ export const plansModule = {
     // Vorlagen-Zyklen (Phase 1, Abschnitt 3.1) hängen an derselben Route
     // statt an einem eigenen Paket — siehe planCycles.js.
     if (params[0] === 'cycles') return renderCyclesRoute(container, isCurrent, params.slice(1));
-    const [plans, groups, templates, exercises] = await Promise.all([getAll('plans'), getAll('groups'), getAll('templates'), getAll('exercises')]);
+    const [plans, groups, templates, exercises, sectionTemplates] = await Promise.all([getAll('plans'), getAll('groups'), getAll('templates'), getAll('exercises'), getAll('sectionTemplates')]);
     if (!isCurrent()) return;
     if (params[0]) return renderDetail(container, params[0]);
-    renderList(container, plans, groups, templates, exercises);
+    renderList(container, plans, groups, templates, exercises, sectionTemplates);
   }
 };
 
-function renderList(container, plans, groups, templates, exercises) {
+function renderList(container, plans, groups, templates, exercises, sectionTemplates) {
   const wrap = el('div');
   wrap.appendChild(el('div', { class: 'page-head' }, [
     el('div', {}, [el('div', { class: 'page-eyebrow' }, t('plans.eyebrow', { count: plans.length })), el('h1', { class: 'mt-0' }, t('plans.title'))]),
     el('div', { class: 'page-actions' }, [
       el('button', { class: 'btn btn-ghost', onclick: () => navigate('plans', 'cycles') }, t('plans.manageCycles')),
-      el('button', { class: 'btn btn-primary', onclick: () => openPlanModal(null, groups, templates, exercises, refresh) }, t('plans.createPlan')),
+      el('button', { class: 'btn btn-primary', onclick: () => openPlanModal(null, groups, templates, exercises, sectionTemplates, refresh) }, t('plans.createPlan')),
     ]),
   ]));
   wrap.appendChild(laneWave());
@@ -57,11 +57,11 @@ function renderList(container, plans, groups, templates, exercises) {
     host.appendChild(card);
   });
 
-  async function refresh() { const [p2, g2, t2, e2] = await Promise.all([getAll('plans'), getAll('groups'), getAll('templates'), getAll('exercises')]); clear(container); renderList(container, p2, g2, t2, e2); }
+  async function refresh() { const [p2, g2, t2, e2, st2] = await Promise.all([getAll('plans'), getAll('groups'), getAll('templates'), getAll('exercises'), getAll('sectionTemplates')]); clear(container); renderList(container, p2, g2, t2, e2, st2); }
 }
 
 async function renderDetail(container, planId) {
-  const [plans, groups, templates, exercises] = await Promise.all([getAll('plans'), getAll('groups'), getAll('templates'), getAll('exercises')]);
+  const [plans, groups, templates, exercises, sectionTemplates] = await Promise.all([getAll('plans'), getAll('groups'), getAll('templates'), getAll('exercises'), getAll('sectionTemplates')]);
   const plan = plans.find(p => p.id === planId);
   if (!plan) { container.appendChild(emptyState(t('common.notFoundTitle'), t('plans.notFoundMsg'), el('button', { class: 'btn btn-primary', onclick: () => navigate('plans') }, t('common.back')))); return; }
   const group = groups.find(g => g.id === plan.groupId);
@@ -72,7 +72,7 @@ async function renderDetail(container, planId) {
     el('div', {}, [el('div', { class: 'page-eyebrow' }, group?.name || t('plans.noGroup')), el('h1', { class: 'mt-0' }, plan.name)]),
     el('div', { class: 'page-actions' }, [
       el('button', { class: 'btn btn-ghost', onclick: () => exportPlanToPdf(plan, group, exercises) }, t('plans.exportPdf')),
-      el('button', { class: 'btn btn-ghost', onclick: () => openPlanModal(plan, groups, templates, exercises, () => { clear(container); renderDetail(container, planId); }) }, t('common.edit')),
+      el('button', { class: 'btn btn-ghost', onclick: () => openPlanModal(plan, groups, templates, exercises, sectionTemplates, () => { clear(container); renderDetail(container, planId); }) }, t('common.edit')),
       el('button', { class: 'btn btn-danger', onclick: () => confirmAction(t('plans.deleteConfirm'), async () => { await remove('plans', planId); toast(t('plans.deleted')); navigate('plans'); }) }, t('common.delete')),
     ]),
   ]));
@@ -283,7 +283,7 @@ function renderBlockBox(block, exercises, plan) {
   return box;
 }
 
-function openPlanModal(plan, groups, templates, exercises, onSaved) {
+function openPlanModal(plan, groups, templates, exercises, sectionTemplates, onSaved) {
   const isEdit = !!plan;
   // data.days[].date wird intern durchgehend als reines "YYYY-MM-DD"
   // geführt (siehe dateOnly() in dates.js) — sowohl für die Anzeige im
@@ -320,7 +320,7 @@ function openPlanModal(plan, groups, templates, exercises, onSaved) {
       ]));
       const setsHost = el('div');
       block.appendChild(setsHost);
-      renderSetEditor(setsHost, day.sets, exercises);
+      renderSetEditor(setsHost, day.sets, exercises, { sectionTemplates });
       daysHost.appendChild(block);
     });
   }

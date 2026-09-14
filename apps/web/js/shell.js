@@ -19,6 +19,7 @@ import { openModal } from './modal.js';
 import { t, getLocale, getAvailableLocales } from './i18n.js';
 
 const GROUP_ICON_TRAINING = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 7c1.4 1.3 2.8 1.3 4.2 0s2.8-1.3 4.2 0 2.8 1.3 4.2 0 2.8-1.3 4.2 0"/><path d="M2 12.5c1.4 1.3 2.8 1.3 4.2 0s2.8-1.3 4.2 0 2.8 1.3 4.2 0 2.8-1.3 4.2 0"/><path d="M2 18c1.4 1.3 2.8 1.3 4.2 0s2.8-1.3 4.2 0 2.8 1.3 4.2 0 2.8-1.3 4.2 0"/></svg>';
+const GROUP_ICON_VORLAGEN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h12v18l-6-4-6 4V3z"/></svg>';
 const GROUP_ICON_PERFORMANCE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 3h10v5a5 5 0 01-10 0V3z"/><path d="M7 5H4a3 3 0 003 5.5"/><path d="M17 5h3a3 3 0 01-3 5.5"/><path d="M12 13v4"/><path d="M8 21h8"/><path d="M9 21l.7-4h4.6l.7 4"/></svg>';
 const GROUP_ICON_TEAM = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="7.5" r="2.3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M15 14.3c2.5.5 4.3 2.7 4.3 5.7"/></svg>';
 const GROUP_ICON_ADMIN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="7" cy="18" r="2"/></svg>';
@@ -29,7 +30,8 @@ const GROUP_ICON_ADMIN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentCo
 // (dashboard, profile) render as plain top-level items with no header.
 export const NAV_GROUPS = [
   { id: 'dashboard', moduleIds: ['dashboard', 'parent'] },
-  { id: 'training', labelKey: 'nav.groups.training', icon: GROUP_ICON_TRAINING, moduleIds: ['plans', 'templates', 'catalog', 'sessions'] },
+  { id: 'training', labelKey: 'nav.groups.training', icon: GROUP_ICON_TRAINING, moduleIds: ['plans', 'sessions'] },
+  { id: 'vorlagen', labelKey: 'nav.groups.vorlagen', icon: GROUP_ICON_VORLAGEN, moduleIds: ['templates', 'catalog', 'sectionTemplates'] },
   { id: 'performance', labelKey: 'nav.groups.performance', icon: GROUP_ICON_PERFORMANCE, moduleIds: ['times', 'competitions', 'stats'] },
   { id: 'team', labelKey: 'nav.groups.team', icon: GROUP_ICON_TEAM, moduleIds: ['athletes', 'announcements', 'actionitems', 'qualifications', 'kampfrichter'] },
   { id: 'admin', labelKey: 'nav.groups.admin', icon: GROUP_ICON_ADMIN, moduleIds: ['usermgmt', 'auditlog', 'syncqueue', 'info'] },
@@ -40,7 +42,7 @@ export const NAV_GROUPS = [
 // get one direct entry each (their first visible module, but shown under
 // the group's own icon/label — see bottomNavItem()); anything beyond that
 // first module — and the whole admin group — sits behind "Mehr".
-export const MOBILE_DIRECT_GROUPS = ['dashboard', 'training', 'performance', 'team', 'profile'];
+export const MOBILE_DIRECT_GROUPS = ['dashboard', 'training', 'vorlagen', 'performance', 'team', 'profile'];
 export const MORE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>';
 
 export function buildNav() {

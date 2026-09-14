@@ -45,6 +45,13 @@ describe('canRead()/canWrite() — Modul-Gating', () => {
     expect(canWrite('planCycles', ['trainer'], [])).toBe(false); // Paket nicht gebucht
   });
 
+  it('"sectionTemplates" ist ein eigenes, zubuchbares Paket wie "templates"', () => {
+    expect(canRead('sectionTemplates', ['athlete'], ['sectionTemplates'])).toBe(true);
+    expect(canWrite('sectionTemplates', ['trainer'], ['sectionTemplates'])).toBe(true);
+    expect(canWrite('sectionTemplates', ['athlete'], ['sectionTemplates'])).toBe(false); // nur trainer/admin
+    expect(canRead('sectionTemplates', ['athlete'], ['templates'])).toBe(false); // eigenes Paket, nicht in "templates" gebündelt
+  });
+
   it('"announcements" ist ein eigenes, zubuchbares Paket (Phase 2, Abschnitt 4.1)', () => {
     expect(canRead('announcements', ['athlete'], ['announcements'])).toBe(true);
     expect(canWrite('announcements', ['trainer'], ['announcements'])).toBe(true);

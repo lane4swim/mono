@@ -61,6 +61,7 @@ const PRECACHE_URLS = [
   './js/modules/planCycles.js',
   './js/modules/templates.js',
   './js/modules/catalog.js',
+  './js/modules/sectionTemplates.js',
   './js/modules/comments.js',
   './js/modules/libraryTransfer.js',
   './js/modules/sessions.js',

@@ -294,6 +294,23 @@ export const TemplateSchema = z.object({
 }).strict();
 export type Template = z.infer<typeof TemplateSchema>;
 
+// Eigenständige, wiederverwendbare Abschnitts-Vorlage — dieselbe Form wie
+// SectionSchema.entries (nur Sätze/Blöcke, keine verschachtelten
+// Abschnitte), aber mit eigener id/clubId, damit sie unabhängig von einem
+// Trainingsplan katalogisiert und in mehrere Pläne/Vorlagen eingefügt
+// werden kann.
+export const SectionTemplateSchema = z.object({
+  id: z.string().uuid(),
+  clubId: z.string().uuid(),
+  name: z.string().min(1).max(200),
+  description: z.string().max(5000).default(''),
+  tags: z.array(z.string().max(100)).max(50).default([]),
+  entries: z.array(ExerciseEntrySchema).max(200),
+  createdAt: isoDate,
+  updatedAt: isoDate,
+}).strict();
+export type SectionTemplate = z.infer<typeof SectionTemplateSchema>;
+
 export const PlanDaySchema = z.object({
   date: isoDate,
   sets: z.array(SetEntrySchema).max(200),
@@ -426,6 +443,7 @@ export const ENTITY_SCHEMAS = {
   results: ResultSchema,
   exercises: ExerciseSchema,
   templates: TemplateSchema,
+  sectionTemplates: SectionTemplateSchema,
   plans: PlanSchema,
   planCycles: PlanCycleSchema,
   sessions: TrainingSessionSchema,

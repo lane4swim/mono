@@ -1,6 +1,6 @@
 import { ANONYMIZED_INVITATION_EMAIL, type ErasureJobGateway, type DueErasureRequest } from './erasure.repository.js';
 import type { TombstoneRecord } from '../modules/sync/sync.gateway.js';
-import { anonymizePlanCommentAuthors, anonymizeExerciseCommentAuthors, anonymizeTemplateCommentAuthors } from './commentAnonymization.js';
+import { anonymizePlanCommentAuthors, anonymizeExerciseCommentAuthors, anonymizeTemplateCommentAuthors, anonymizeSectionTemplateCommentAuthors } from './commentAnonymization.js';
 
 export interface InMemoryErasureDatabase {
   users: Array<{ id: string; clubId: string | null; athleteId: string | null; [key: string]: unknown }>;
@@ -14,6 +14,7 @@ export interface InMemoryErasureDatabase {
   plans?: Array<{ id: string; clubId: string; comments: unknown; days: unknown }>;
   exercises?: Array<{ id: string; clubId: string; comments: unknown }>;
   templates?: Array<{ id: string; clubId: string; sets: unknown }>;
+  sectionTemplates?: Array<{ id: string; clubId: string; entries: unknown }>;
   // Optional (Sicherheitsreview 2026-08-27, Befund M1) — siehe
   // erasure.repository.ts (Prisma-Pendant) für die ausführliche
   // Begründung.
@@ -98,6 +99,11 @@ export class InMemoryErasureJobGateway implements ErasureJobGateway {
         if (template.clubId !== clubId) continue;
         const { changed, sets } = anonymizeTemplateCommentAuthors(template, author);
         if (changed) template.sets = sets;
+      }
+      for (const sectionTemplate of this.db.sectionTemplates ?? []) {
+        if (sectionTemplate.clubId !== clubId) continue;
+        const { changed, entries } = anonymizeSectionTemplateCommentAuthors(sectionTemplate, author);
+        if (changed) sectionTemplate.entries = entries;
       }
     }
 

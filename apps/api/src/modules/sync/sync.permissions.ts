@@ -49,6 +49,7 @@ export const STORE_PERMISSIONS: Record<EntityStoreName, StoreAccess> = {
   groups: coachManaged,
   exercises: coachManaged,
   templates: coachManaged,
+  sectionTemplates: coachManaged,
   competitions: coachManaged,
   entries: coachManaged,
   actionItems: coachManaged,

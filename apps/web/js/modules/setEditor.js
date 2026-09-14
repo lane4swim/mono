@@ -56,6 +56,13 @@ function newSection() {
   return { kind: 'section', id: localId('section'), heading: '', entries: [] };
 }
 
+// Baut einen Abschnitt aus einer gespeicherten Abschnitts-Vorlage
+// (sectionTemplates.js) — frische ids wie cloneItems(), damit die Vorlage
+// selbst unverändert bleibt.
+function sectionFromTemplate(tpl) {
+  return { kind: 'section', id: localId('section'), heading: tpl.name, entries: cloneItems(tpl.entries || []) };
+}
+
 function setFromExercise(exercise) {
   const defaults = CATEGORY_DEFAULTS[exercise.category] || { intensity: 'ga1', restSec: 20 };
   // Übungen mit einer eigenen Standarddauer (typischerweise Kraft-/
@@ -504,7 +511,7 @@ function buildSetRow(s, exercises, controls, onEquipmentChange) {
 // aus dem Übungskatalog — beide erzeugen direkt einen Satz). Die obere
 // Zeile entfällt ganz, wenn an dieser Stelle weder Abschnitt noch Block
 // erlaubt ist (z. B. innerhalb eines Blocks).
-function buildAddControls(exercises, { onAdd, allowBlock = true, allowSection = false, style = '', labels = {} }) {
+function buildAddControls(exercises, { onAdd, allowBlock = true, allowSection = false, sectionTemplates = [], style = '', labels = {} }) {
   const container = el('div', { class: 'add-controls', style });
 
   const structureRow = el('div', { class: 'flex gap-8', style: 'flex-wrap:wrap' });
@@ -512,6 +519,18 @@ function buildAddControls(exercises, { onAdd, allowBlock = true, allowSection = 
     structureRow.appendChild(el('button', {
       type: 'button', class: 'btn btn-primary btn-sm', onclick: () => onAdd(newSection()),
     }, labels.section || t('setEditor.addSection')));
+  }
+  if (allowSection && sectionTemplates.length > 0) {
+    const tplSel = selectInput([{ value: '', label: t('setEditor.pickSectionTemplate') }, ...sectionTemplates.map(st => ({ value: st.id, label: st.name }))], '', { style: 'min-width:180px' });
+    const useTplBtn = el('button', { type: 'button', class: 'btn btn-accent btn-sm' }, t('setEditor.addFromSectionTemplate'));
+    useTplBtn.addEventListener('click', () => {
+      const tpl = sectionTemplates.find(x => x.id === tplSel.value);
+      if (!tpl) return;
+      tplSel.value = '';
+      onAdd(sectionFromTemplate(tpl));
+    });
+    structureRow.appendChild(tplSel);
+    structureRow.appendChild(useTplBtn);
   }
   if (allowBlock) {
     structureRow.appendChild(el('button', {
@@ -551,7 +570,7 @@ function buildAddControls(exercises, { onAdd, allowBlock = true, allowSection = 
 // Listenende aufklappt — nur wird hier an Position `index` eingefügt
 // statt angehängt. Dadurch braucht es keinen separaten "Wohin?"-Dialog:
 // die Einfügestelle IST der angeklickte Punkt.
-function buildInsertPoint(list, index, exercises, { allowBlock = true, allowSection = false, redraw }) {
+function buildInsertPoint(list, index, exercises, { allowBlock = true, allowSection = false, sectionTemplates = [], redraw }) {
   const host = el('div', { class: 'insert-point-host' });
   const panelHost = el('div');
   let open = false;
@@ -574,6 +593,7 @@ function buildInsertPoint(list, index, exercises, { allowBlock = true, allowSect
       buildAddControls(exercises, {
         allowBlock,
         allowSection,
+        sectionTemplates,
         // Nach dem Einfügen zeichnet redraw() die ganze Liste neu — das
         // Panel verschwindet dabei von selbst, ohne eigenes Aufräumen.
         onAdd: (entry) => { insertEntry(list, index, entry); redraw(); },
@@ -723,7 +743,12 @@ function buildSectionRow(section, exercises, controls, onRedrawParent) {
 // Renders an editable list of mixed sets/blocks into `hostNode`.
 // `items` is mutated in place; the caller reads the same array on submit.
 // `exercises` (optional) enables "use from exercise catalog" pickers.
-export function renderSetEditor(hostNode, items, exercises = []) {
+// `allowSection` (default true): false for a section template's own editor
+// — its `entries` may only hold sets/blocks, not another section (siehe
+// SectionTemplateSchema). `sectionTemplates` (optional) enables "insert
+// section from template" at the top level, alongside the plain "add
+// section" button.
+export function renderSetEditor(hostNode, items, exercises = [], { allowSection = true, sectionTemplates = [] } = {}) {
   clear(hostNode);
 
   const totalEl = el('div', { class: 'hint', style: 'margin-bottom:4px;font-weight:700' });
@@ -755,7 +780,7 @@ export function renderSetEditor(hostNode, items, exercises = []) {
       // Vor JEDEM Eintrag ein Einfügepunkt (der letzte Platz — ganz am
       // Ende — bleibt den Steuerelementen unter der Liste vorbehalten,
       // die genau das schon immer getan haben).
-      rowsHost.appendChild(buildInsertPoint(items, i, exercises, { allowSection: true, redraw: draw }));
+      rowsHost.appendChild(buildInsertPoint(items, i, exercises, { allowSection, sectionTemplates, redraw: draw }));
       const controls = entryControls(items, i, draw);
       if (entry.kind === 'block') {
         rowsHost.appendChild(buildBlockRow(entry, exercises, controls, updateTotal));
@@ -773,7 +798,8 @@ export function renderSetEditor(hostNode, items, exercises = []) {
   draw();
 
   const controls = buildAddControls(exercises, {
-    allowSection: true,
+    allowSection,
+    sectionTemplates,
     style: 'margin-top:10px;flex-wrap:wrap',
     onAdd: (entry) => { items.push(entry); draw(); },
   });

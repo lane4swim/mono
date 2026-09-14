@@ -42,6 +42,7 @@ export function getEntityDelegate(prisma: PrismaClient, store: EntityStoreName):
     case 'results': return prisma.result;
     case 'exercises': return prisma.exercise;
     case 'templates': return prisma.template;
+    case 'sectionTemplates': return prisma.sectionTemplate;
     case 'plans': return prisma.plan;
     case 'planCycles': return prisma.planCycle;
     case 'sessions': return prisma.trainingSession;
