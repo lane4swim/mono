@@ -6,7 +6,7 @@
 // ausgeführt über scripts/purgeDeletedData.ts (per Cron) und
 // orchestriert von jobs/purgeExpiredDeletions.ts.
 import type { PrismaClient, Prisma } from '@prisma/client';
-import { anonymizePlanCommentAuthors, anonymizeExerciseCommentAuthors, anonymizeTemplateCommentAuthors } from './commentAnonymization.js';
+import { anonymizePlanCommentAuthors, anonymizeExerciseCommentAuthors, anonymizeTemplateCommentAuthors, anonymizeSectionTemplateCommentAuthors } from './commentAnonymization.js';
 
 // Platzhalter, auf den `Invitation.email` beim Hard-Purge gesetzt wird
 // (purgeUserAndDependents() unten); Gegenstück zu ANONYMIZED_COMMENT_AUTHOR
@@ -141,8 +141,9 @@ export class PrismaErasureJobGateway implements ErasureJobGateway {
 
       // Comment.authorName ist ein freier, beim Anlegen aus dem eingeloggten
       // Konto übernommener Klarname — eingebettet in "plans.comments",
-      // "exercises.comments", "plans.days[].sets[].comments" und
-      // "templates.sets[].comments" (Struktur siehe commentAnonymization.ts).
+      // "exercises.comments", "plans.days[].sets[].comments",
+      // "templates.sets[].comments" und "section_templates.entries[].comments"
+      // (Struktur siehe commentAnonymization.ts).
       // Bewusst NICHT an `user.athleteId` gekoppelt: Kommentare stammen auch
       // von Trainer:innen/Admins ohne athleteId, deren Klarnamen ein
       // athletengebundener Filter unangetastet ließe. Gescoped auf
@@ -219,6 +220,18 @@ export class PrismaErasureJobGateway implements ErasureJobGateway {
           const { changed, sets } = anonymizeTemplateCommentAuthors(row, author);
           if (changed) {
             await tx.template.update({ where: { id: row.id }, data: { sets: sets as Prisma.InputJsonValue } });
+          }
+        }
+
+        const affectedSectionTemplates = await tx.$queryRaw<Array<{ id: string; entries: unknown }>>`
+          SELECT id, entries FROM "section_templates"
+          WHERE "clubId" = ${user.clubId}
+            AND jsonb_path_exists(entries, '$.**.comments[*] ? (@.authorId == $id || @.authorName == $name)', ${pathVars}::jsonb)
+        `;
+        for (const row of affectedSectionTemplates) {
+          const { changed, entries } = anonymizeSectionTemplateCommentAuthors(row, author);
+          if (changed) {
+            await tx.sectionTemplate.update({ where: { id: row.id }, data: { entries: entries as Prisma.InputJsonValue } });
           }
         }
       }

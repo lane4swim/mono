@@ -1,5 +1,5 @@
-// JSON-Export/Import für Vorlagen (templates)
-// und Übungskatalog (exercises), gemeinsam als ein Bundle.
+// JSON-Export/Import für Vorlagen (templates), Übungskatalog (exercises)
+// und Abschnitts-Vorlagen (sectionTemplates), gemeinsam als ein Bundle.
 //
 // Export schließt bewusst clubId (Mandantenbindung) und persönliche Daten
 // (Kommentare inkl. authorName, siehe CommentSchema in
@@ -62,7 +62,7 @@ function stripSetEntry(entry) {
 }
 
 export async function buildLibraryExport() {
-  const [exercises, templates] = await Promise.all([getAll('exercises'), getAll('templates')]);
+  const [exercises, templates, sectionTemplates] = await Promise.all([getAll('exercises'), getAll('templates'), getAll('sectionTemplates')]);
   return {
     format: LIBRARY_EXPORT_FORMAT,
     exportedAt: new Date().toISOString(),
@@ -83,6 +83,13 @@ export async function buildLibraryExport() {
       description: tpl.description || '',
       tags: tpl.tags || [],
       sets: (tpl.sets || []).map(stripSetEntry),
+    })),
+    sectionTemplates: sectionTemplates.map(st => ({
+      id: st.id,
+      name: st.name,
+      description: st.description || '',
+      tags: st.tags || [],
+      entries: (st.entries || []).map(stripSetEntry),
     })),
   };
 }
@@ -146,6 +153,7 @@ function remapSetEntry(entry, idMap) {
 export async function importLibrary(dump) {
   const exercises = (Array.isArray(dump.exercises) ? dump.exercises : []).filter(ex => ex && ex.name && ex.category);
   const templates = (Array.isArray(dump.templates) ? dump.templates : []).filter(tpl => tpl && tpl.name);
+  const sectionTemplates = (Array.isArray(dump.sectionTemplates) ? dump.sectionTemplates : []).filter(st => st && st.name);
 
   const clubId = getCurrentUser()?.clubId;
   const now = new Date().toISOString();
@@ -182,14 +190,29 @@ export async function importLibrary(dump) {
     createdAt: now,
     updatedAt: now,
   }));
-  await bulkPut('templates', templateRows);
+  const sectionTemplateRows = sectionTemplates.map(st => ({
+    id: uid(),
+    ...(clubId ? { clubId } : {}),
+    name: st.name,
+    description: st.description || '',
+    tags: st.tags || [],
+    entries: (st.entries || []).map(s => remapSetEntry(s, idMap)),
+    createdAt: now,
+    updatedAt: now,
+  }));
+  // Beide Bulk-Schreibvorgänge hängen nur von idMap (bereits über die
+  // Übungen befüllt) ab, nicht voneinander — unabhängige IndexedDB-
+  // Transaktionen auf verschiedenen Object Stores, daher parallel statt
+  // seriell.
+  await Promise.all([bulkPut('templates', templateRows), bulkPut('sectionTemplates', sectionTemplateRows)]);
 
   await bulkEnqueueSyncEvents([
     ...exerciseRows.map(row => ({ store: 'exercises', entityId: row.id, action: 'create', payload: row })),
     ...templateRows.map(row => ({ store: 'templates', entityId: row.id, action: 'create', payload: row })),
+    ...sectionTemplateRows.map(row => ({ store: 'sectionTemplates', entityId: row.id, action: 'create', payload: row })),
   ]);
 
-  return { exercises: exerciseRows.length, templates: templateRows.length };
+  return { exercises: exerciseRows.length, templates: templateRows.length, sectionTemplates: sectionTemplateRows.length };
 }
 
 function downloadJSON(filename, data) {
@@ -204,8 +227,9 @@ function downloadJSON(filename, data) {
 function openImportConfirmModal(dump, onImported) {
   const exCount = Array.isArray(dump.exercises) ? dump.exercises.length : 0;
   const tplCount = Array.isArray(dump.templates) ? dump.templates.length : 0;
+  const stCount = Array.isArray(dump.sectionTemplates) ? dump.sectionTemplates.length : 0;
   const body = el('div', {}, [
-    el('p', {}, t('libraryTransfer.importConfirm', { exercises: exCount, templates: tplCount })),
+    el('p', {}, t('libraryTransfer.importConfirm', { exercises: exCount, templates: tplCount, sectionTemplates: stCount })),
     el('div', { class: 'form-actions' }, [
       el('button', { class: 'btn btn-ghost', onclick: () => close() }, t('common.cancel')),
       el('button', {
@@ -213,7 +237,7 @@ function openImportConfirmModal(dump, onImported) {
         onclick: async () => {
           close();
           const result = await importLibrary(dump);
-          toast(t('libraryTransfer.importDone', { exercises: result.exercises, templates: result.templates }));
+          toast(t('libraryTransfer.importDone', { exercises: result.exercises, templates: result.templates, sectionTemplates: result.sectionTemplates }));
           onImported?.();
         },
       }, t('libraryTransfer.importButton')),
@@ -222,10 +246,10 @@ function openImportConfirmModal(dump, onImported) {
   const { close } = openModal({ title: t('libraryTransfer.importConfirmTitle'), bodyNode: body });
 }
 
-// Rendert das "Export (JSON)"/"Import (JSON)"-Buttonpaar für templates.js
-// und catalog.js — beide Module exportieren/importieren dasselbe
-// kombinierte Bundle (Vorlagen + Übungskatalog), damit exerciseId-
-// Referenzen zwischen Vorlagen-Sätzen und Katalogübungen erhalten bleiben.
+// Rendert das "Export (JSON)"/"Import (JSON)"-Buttonpaar für templates.js,
+// catalog.js und sectionTemplates.js — alle drei Module exportieren/
+// importieren dasselbe kombinierte Bundle, damit exerciseId-Referenzen
+// zwischen Sätzen und Katalogübungen erhalten bleiben.
 export function libraryTransferButtons({ onImported } = {}) {
   const fileInput = el('input', {
     type: 'file', accept: 'application/json', style: 'display:none',

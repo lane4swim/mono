@@ -9,7 +9,7 @@ vi.mock('../js/demoMode.js', () => ({ IS_DEMO: false }));
 
 import * as db from '../js/db.js';
 import { importLibrary, LIBRARY_EXPORT_FORMAT } from '../js/modules/libraryTransfer.js';
-import { ExerciseSchema, TemplateSchema } from '../../../packages/shared-types/src/entities.js';
+import { ExerciseSchema, TemplateSchema, SectionTemplateSchema } from '../../../packages/shared-types/src/entities.js';
 
 beforeEach(async () => {
   await db.wipeAll();
@@ -21,10 +21,11 @@ describe('importLibrary()', () => {
       format: LIBRARY_EXPORT_FORMAT,
       exercises: [{ id: 'orig-ex-1', name: 'Kraul-Beinschlag', category: 'Technik', tags: ['Kraul'], equipment: [] }],
       templates: [{ id: 'orig-tpl-1', name: 'Einschwimmen', tags: [], sets: [{ kind: 'set', description: '', exerciseId: 'orig-ex-1' }] }],
+      sectionTemplates: [{ id: 'orig-st-1', name: 'Hauptteil', tags: [], entries: [{ kind: 'set', description: '', exerciseId: 'orig-ex-1' }] }],
     };
 
     const result = await importLibrary(dump);
-    expect(result).toEqual({ exercises: 1, templates: 1 });
+    expect(result).toEqual({ exercises: 1, templates: 1, sectionTemplates: 1 });
 
     const savedExercises = await db.getAll('exercises');
     expect(savedExercises).toHaveLength(1);
@@ -38,6 +39,11 @@ describe('importLibrary()', () => {
     // exerciseId im Vorlagen-Satz zeigt auf die NEU vergebene Übungs-id,
     // nicht mehr auf die exportierte "orig-ex-1".
     expect(savedTemplates[0].sets[0].exerciseId).toBe(savedExercises[0].id);
+
+    const savedSectionTemplates = await db.getAll('sectionTemplates');
+    expect(savedSectionTemplates).toHaveLength(1);
+    expect(savedSectionTemplates[0].clubId).toBe(CLUB_ID);
+    expect(savedSectionTemplates[0].entries[0].exerciseId).toBe(savedExercises[0].id);
   });
 
   // exercises.id/templates.id müssen `z.string().uuid()`-Form haben (siehe
@@ -46,19 +52,22 @@ describe('importLibrary()', () => {
   // nur, DASS eine neue id vergeben wurde, nicht IN WELCHEM Format; dieser
   // Test prüft deshalb direkt gegen dasselbe Zod-Schema, das der Server
   // anwendet.
-  it('vergibt für exercises.id/templates.id serverseitig gültige UUIDs', async () => {
+  it('vergibt für exercises.id/templates.id/sectionTemplates.id serverseitig gültige UUIDs', async () => {
     const dump = {
       format: LIBRARY_EXPORT_FORMAT,
       exercises: [{ id: 'orig-ex-1', name: 'Kraul-Beinschlag', category: 'Technik', tags: [], equipment: [] }],
       templates: [{ id: 'orig-tpl-1', name: 'Einschwimmen', tags: [], sets: [] }],
+      sectionTemplates: [{ id: 'orig-st-1', name: 'Einschwimmen', tags: [], entries: [] }],
     };
     await importLibrary(dump);
 
     const [savedExercise] = await db.getAll('exercises');
     const [savedTemplate] = await db.getAll('templates');
+    const [savedSectionTemplate] = await db.getAll('sectionTemplates');
 
     expect(ExerciseSchema.safeParse(savedExercise).success).toBe(true);
     expect(TemplateSchema.safeParse(savedTemplate).success).toBe(true);
+    expect(SectionTemplateSchema.safeParse(savedSectionTemplate).success).toBe(true);
   });
 
   it('remappt exerciseId auch innerhalb eines Abschnitts (sets[].entries[]) und ergibt eine gültige Vorlage', async () => {
@@ -86,20 +95,22 @@ describe('importLibrary()', () => {
     expect(TemplateSchema.safeParse(savedTemplate).success).toBe(true);
   });
 
-  it('reiht für jede importierte Übung/Vorlage ein "create"-Sync-Event ein', async () => {
+  it('reiht für jede importierte Übung/Vorlage/Abschnitts-Vorlage ein "create"-Sync-Event ein', async () => {
     const dump = {
       format: LIBRARY_EXPORT_FORMAT,
       exercises: [{ name: 'A', category: 'Technik' }, { name: 'B', category: 'Technik' }],
       templates: [{ name: 'T1', sets: [] }],
+      sectionTemplates: [{ name: 'S1', entries: [] }],
     };
 
     await importLibrary(dump);
 
     const queue = await db.getSyncQueue();
-    expect(queue).toHaveLength(3);
+    expect(queue).toHaveLength(4);
     expect(queue.every((e) => e.status === 'pending' && e.action === 'create')).toBe(true);
     expect(queue.filter((e) => e.store === 'exercises')).toHaveLength(2);
     expect(queue.filter((e) => e.store === 'templates')).toHaveLength(1);
+    expect(queue.filter((e) => e.store === 'sectionTemplates')).toHaveLength(1);
 
     const savedExerciseIds = (await db.getAll('exercises')).map((e) => e.id).sort();
     expect(queue.filter((e) => e.store === 'exercises').map((e) => e.entityId).sort()).toEqual(savedExerciseIds);
@@ -110,10 +121,11 @@ describe('importLibrary()', () => {
       format: LIBRARY_EXPORT_FORMAT,
       exercises: [{ name: 'Ohne Kategorie' }, { category: 'Ohne Namen' }, { name: 'Gültig', category: 'Technik' }],
       templates: [{ description: 'Ohne Namen' }],
+      sectionTemplates: [{ description: 'Ohne Namen' }],
     };
 
     const result = await importLibrary(dump);
-    expect(result).toEqual({ exercises: 1, templates: 0 });
+    expect(result).toEqual({ exercises: 1, templates: 0, sectionTemplates: 0 });
   });
 
   // Regressionstest für Befund P7 (Code-Review): put() pro Datensatz
@@ -121,18 +133,19 @@ describe('importLibrary()', () => {
   // enqueueSyncEvent()) für dessen Sync-Event je eine EIGENE
   // IndexedDB-Transaktion — bei einem Bundle mit 50 Übungen + 50 Vorlagen
   // also bis zu 200 Transaktionen. Nach der Korrektur (bulkPut() +
-  // bulkEnqueueSyncEvents()) genügen drei: eine je Store (exercises,
-  // templates, syncQueue).
-  it('öffnet für den gesamten Import GENAU DREI IndexedDB-Transaktionen, unabhängig von der Anzahl der Datensätze', async () => {
+  // bulkEnqueueSyncEvents()) genügen vier: eine je Store (exercises,
+  // templates, sectionTemplates, syncQueue).
+  it('öffnet für den gesamten Import GENAU VIER IndexedDB-Transaktionen, unabhängig von der Anzahl der Datensätze', async () => {
     const exercises = Array.from({ length: 50 }, (_, i) => ({ name: `Übung ${i}`, category: 'Technik' }));
     const templates = Array.from({ length: 50 }, (_, i) => ({ name: `Vorlage ${i}`, sets: [] }));
-    const dump = { format: LIBRARY_EXPORT_FORMAT, exercises, templates };
+    const sectionTemplates = Array.from({ length: 50 }, (_, i) => ({ name: `Abschnitt ${i}`, entries: [] }));
+    const dump = { format: LIBRARY_EXPORT_FORMAT, exercises, templates, sectionTemplates };
 
     const transactionSpy = vi.spyOn(IDBDatabase.prototype, 'transaction');
     try {
       const result = await importLibrary(dump);
-      expect(result).toEqual({ exercises: 50, templates: 50 });
-      expect(transactionSpy).toHaveBeenCalledTimes(3);
+      expect(result).toEqual({ exercises: 50, templates: 50, sectionTemplates: 50 });
+      expect(transactionSpy).toHaveBeenCalledTimes(4);
     } finally {
       transactionSpy.mockRestore();
     }

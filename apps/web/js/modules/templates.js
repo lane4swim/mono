@@ -16,19 +16,19 @@ export const templatesModule = {
   async render(container) {
     const isCurrent = beginRender(container);
     clear(container);
-    const [templates, exercises] = await Promise.all([getAll('templates'), getAll('exercises')]);
+    const [templates, exercises, sectionTemplates] = await Promise.all([getAll('templates'), getAll('exercises'), getAll('sectionTemplates')]);
     if (!isCurrent()) return;
-    renderList(container, templates, exercises);
+    renderList(container, templates, exercises, sectionTemplates);
   }
 };
 
-function renderList(container, templates, exercises) {
+function renderList(container, templates, exercises, sectionTemplates) {
   const wrap = el('div');
   wrap.appendChild(el('div', { class: 'page-head' }, [
     el('div', {}, [el('div', { class: 'page-eyebrow' }, t('templates.eyebrow', { count: templates.length })), el('h1', { class: 'mt-0' }, t('templates.title'))]),
     el('div', { class: 'page-actions' }, [
       libraryTransferButtons({ onImported: refresh }),
-      el('button', { class: 'btn btn-primary', onclick: () => openTemplateModal(null, exercises, refresh) }, t('templates.createTemplate')),
+      el('button', { class: 'btn btn-primary', onclick: () => openTemplateModal(null, exercises, sectionTemplates, refresh) }, t('templates.createTemplate')),
     ]),
   ]));
   wrap.appendChild(laneWave());
@@ -76,16 +76,16 @@ function renderList(container, templates, exercises) {
     });
     card.appendChild(list);
     card.appendChild(el('div', { class: 'flex gap-8' }, [
-      el('button', { class: 'btn btn-ghost btn-sm', onclick: () => openTemplateModal(tpl, exercises, refresh) }, t('common.edit')),
+      el('button', { class: 'btn btn-ghost btn-sm', onclick: () => openTemplateModal(tpl, exercises, sectionTemplates, refresh) }, t('common.edit')),
       el('button', { class: 'btn btn-danger btn-sm', onclick: () => confirmAction(t('templates.deleteConfirm', { name: tpl.name }), async () => { await remove('templates', tpl.id); toast(t('templates.deleted')); refresh(); }) }, t('common.delete')),
     ]));
     host.appendChild(card);
   });
 
-  async function refresh() { const [t2, e2] = await Promise.all([getAll('templates'), getAll('exercises')]); clear(container); renderList(container, t2, e2); }
+  async function refresh() { const [t2, e2, st2] = await Promise.all([getAll('templates'), getAll('exercises'), getAll('sectionTemplates')]); clear(container); renderList(container, t2, e2, st2); }
 }
 
-function openTemplateModal(template, exercises, onSaved) {
+function openTemplateModal(template, exercises, sectionTemplates, onSaved) {
   const isEdit = !!template;
   const data = template ? { ...template, sets: cloneItems(template.sets) } : { name: '', description: '', tags: [], sets: [] };
   const form = el('form', { class: 'form-grid single' });
@@ -101,7 +101,7 @@ function openTemplateModal(template, exercises, onSaved) {
   const setsHost = el('div');
   setsWrap.appendChild(setsHost);
   form.appendChild(setsWrap);
-  renderSetEditor(setsHost, data.sets, exercises);
+  renderSetEditor(setsHost, data.sets, exercises, { sectionTemplates });
 
   form.appendChild(formActions({ onCancel: () => close(), submitLabel: isEdit ? t('common.save') : t('common.create'), spanFull: false }).row);
   form.addEventListener('submit', async (e) => {

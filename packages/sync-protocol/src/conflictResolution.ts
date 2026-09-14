@@ -18,6 +18,7 @@ const STRATEGY_BY_STORE: Record<SyncStore, ConflictStrategy> = {
   exercises: 'last-write-wins',
   results: 'never-overwrite',
   templates: 'last-write-wins-document',
+  sectionTemplates: 'last-write-wins-document',
   plans: 'last-write-wins-document',
   planCycles: 'last-write-wins-document',
   sessions: 'last-write-wins',

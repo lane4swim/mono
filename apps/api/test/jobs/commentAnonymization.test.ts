@@ -14,6 +14,7 @@ import {
   anonymizePlanCommentAuthors,
   anonymizeExerciseCommentAuthors,
   anonymizeTemplateCommentAuthors,
+  anonymizeSectionTemplateCommentAuthors,
 } from '../../src/jobs/commentAnonymization.js';
 
 const MARA_ID = 'user-mara';
@@ -210,5 +211,14 @@ describe('anonymizeTemplateCommentAuthors', () => {
     const result = anonymizeTemplateCommentAuthors(template, MARA);
     expect(result.changed).toBe(true);
     expect((result.sets as Array<{ comments: Array<{ authorName: string }> }>)[0]!.comments[0]!.authorName).toBe(ANONYMIZED_COMMENT_AUTHOR);
+  });
+});
+
+describe('anonymizeSectionTemplateCommentAuthors', () => {
+  it('anonymisiert Kommentare in SectionTemplate.entries (identische Struktur wie Template.sets)', () => {
+    const sectionTemplate = { entries: [{ kind: 'set', id: 's1', comments: [makeComment()] }] };
+    const result = anonymizeSectionTemplateCommentAuthors(sectionTemplate, MARA);
+    expect(result.changed).toBe(true);
+    expect((result.entries as Array<{ comments: Array<{ authorName: string }> }>)[0]!.comments[0]!.authorName).toBe(ANONYMIZED_COMMENT_AUTHOR);
   });
 });

@@ -16,6 +16,7 @@ function makeFakePrismaClient(): PrismaClient {
     result: makeDelegate('result'),
     exercise: makeDelegate('exercise'),
     template: makeDelegate('template'),
+    sectionTemplate: makeDelegate('sectionTemplate'),
     plan: makeDelegate('plan'),
     planCycle: makeDelegate('planCycle'),
     trainingSession: makeDelegate('trainingSession'),
@@ -65,8 +66,8 @@ describe('getEntityDelegate', () => {
 });
 
 describe('ENTITY_STORE_NAMES', () => {
-  it('enthält genau die zwölf fachlichen Stores (ohne "users")', () => {
-    expect(ENTITY_STORE_NAMES).toHaveLength(12);
+  it('enthält genau die dreizehn fachlichen Stores (ohne "users")', () => {
+    expect(ENTITY_STORE_NAMES).toHaveLength(13);
     expect(ENTITY_STORE_NAMES).not.toContain('users');
   });
 });

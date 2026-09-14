@@ -8,6 +8,7 @@ import {
   ExerciseSchema,
   SetEntrySchema,
   TemplateSchema,
+  SectionTemplateSchema,
   PlanSchema,
   PlanCycleSchema,
   TrainingSessionSchema,
@@ -343,6 +344,36 @@ describe('TemplateSchema', () => {
     expect(TemplateSchema.safeParse({ ...base, tags: Array(51).fill('x'), sets: [] }).success).toBe(false);
     const oneSet = { kind: 'set', id: 's1', description: 'X', distance: 100, reps: 1, intensity: 'ga1', restSec: 0 };
     expect(TemplateSchema.safeParse({ ...base, tags: [], sets: Array(201).fill(oneSet) }).success).toBe(false);
+  });
+});
+
+describe('SectionTemplateSchema', () => {
+  it('akzeptiert eine Abschnitts-Vorlage mit gemischten Sätzen/Blöcken', () => {
+    const sectionTemplate = {
+      id: ATHLETE_ID, clubId: CLUB_ID, name: 'Einschwimmen', description: '', tags: ['einschwimmen'],
+      entries: [
+        { kind: 'set', id: 's1', description: 'Kraul locker', distance: 400, reps: 1, intensity: 'locker', restSec: 0 },
+        { kind: 'block', id: 'b1', label: 'Beine', repeatCount: 3, sets: [] },
+      ],
+      createdAt: now, updatedAt: now,
+    };
+    expect(SectionTemplateSchema.safeParse(sectionTemplate).success).toBe(true);
+  });
+
+  it('lehnt eine Abschnitts-Vorlage ab, deren entries selbst wieder einen Abschnitt enthalten (keine Verschachtelung erlaubt)', () => {
+    const sectionTemplate = {
+      id: ATHLETE_ID, clubId: CLUB_ID, name: 'Einschwimmen', description: '', tags: [],
+      entries: [{ kind: 'section', id: 'sec1', heading: 'X', entries: [] }],
+      createdAt: now, updatedAt: now,
+    };
+    expect(SectionTemplateSchema.safeParse(sectionTemplate).success).toBe(false);
+  });
+
+  it('lehnt mehr als 50 Tags sowie mehr als 200 Einträge ab', () => {
+    const base = { id: ATHLETE_ID, clubId: CLUB_ID, name: 'X', description: '', createdAt: now, updatedAt: now };
+    expect(SectionTemplateSchema.safeParse({ ...base, tags: Array(51).fill('x'), entries: [] }).success).toBe(false);
+    const oneSet = { kind: 'set', id: 's1', description: 'X', distance: 100, reps: 1, intensity: 'ga1', restSec: 0 };
+    expect(SectionTemplateSchema.safeParse({ ...base, tags: [], entries: Array(201).fill(oneSet) }).success).toBe(false);
   });
 });
 

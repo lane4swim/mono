@@ -105,6 +105,7 @@ const MODULE_STORES = {
   plans: ['plans'],
   templates: ['templates'],
   catalog: ['exercises'],
+  sectionTemplates: ['sectionTemplates'],
   sessions: ['sessions'],
   actionitems: ['actionItems'],
   stats: [],

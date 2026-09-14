@@ -46,6 +46,7 @@ export const MODULE_PACKAGES = {
   plans: { routeIds: ['plans'], stores: ['plans', 'planCycles'] },
   templates: { routeIds: ['templates'], stores: ['templates'] },
   catalog: { routeIds: ['catalog'], stores: ['exercises'] },
+  sectionTemplates: { routeIds: ['sectionTemplates'], stores: ['sectionTemplates'] },
   sessions: { routeIds: ['sessions'], stores: ['sessions'] },
   actionitems: { routeIds: ['actionitems'], stores: ['actionItems'] },
   // Vereinsinterne Nachrichten/Ankündigungen (Phase 2, Abschnitt 4.1 —

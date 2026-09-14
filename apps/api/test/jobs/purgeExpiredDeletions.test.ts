@@ -44,6 +44,9 @@ describe('purgeExpiredDeletions — Comment.authorName-Anonymisierung (Befund N5
       templates: [
         { id: 't1', clubId: 'club-1', sets: [{ kind: 'set', id: 's2', comments: [{ id: 'c4', authorId: 'u1', authorName: 'Mara Vogel', text: 'Vorlagen-Hinweis', createdAt: NOW.toISOString() }] }] },
       ],
+      sectionTemplates: [
+        { id: 'st1', clubId: 'club-1', entries: [{ kind: 'set', id: 's3', comments: [{ id: 'c5', authorId: 'u1', authorName: 'Mara Vogel', text: 'Abschnitts-Hinweis', createdAt: NOW.toISOString() }] }] },
+      ],
     });
     const gateway = new InMemoryErasureJobGateway(db);
     await purgeExpiredDeletions(gateway, NOW);
@@ -58,6 +61,9 @@ describe('purgeExpiredDeletions — Comment.authorName-Anonymisierung (Befund N5
 
     const template = db.templates![0]!;
     expect((template.sets as Array<{ comments: Array<{ authorName: string; text: string }> }>)[0]!.comments[0]).toMatchObject({ authorName: ANONYMIZED_COMMENT_AUTHOR, text: 'Vorlagen-Hinweis' });
+
+    const sectionTemplate = db.sectionTemplates![0]!;
+    expect((sectionTemplate.entries as Array<{ comments: Array<{ authorName: string; text: string }> }>)[0]!.comments[0]).toMatchObject({ authorName: ANONYMIZED_COMMENT_AUTHOR, text: 'Abschnitts-Hinweis' });
   });
 
   it('lässt Kommentare ANDERER Personen und eines ANDEREN Vereins unangetastet', async () => {

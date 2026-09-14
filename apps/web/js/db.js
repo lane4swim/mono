@@ -29,11 +29,12 @@ const DB_NAME = IS_DEMO ? 'lane1-demo-db' : 'lane1-db';
 // diesen häufigsten Pfad der App billig.
 // v4: neuer Store 'planCycles' (Phase 1, Abschnitt 3.1 — Vorlagen-Zyklen).
 // v5: neuer Store 'announcements' (Phase 2, Abschnitt 4.1 — Ankündigungen).
-const DB_VERSION = 5;
+// v6: neuer Store 'sectionTemplates' (Abschnitts-Vorlagen-Katalog).
+const DB_VERSION = 6;
 
 export const STORES = [
   'users', 'athletes', 'groups', 'competitions', 'entries', 'results',
-  'exercises', 'templates', 'plans', 'planCycles', 'sessions', 'actionItems', 'announcements', 'meta', 'syncQueue',
+  'exercises', 'templates', 'sectionTemplates', 'plans', 'planCycles', 'sessions', 'actionItems', 'announcements', 'meta', 'syncQueue',
   'clubs', 'invitations'
 ];
 
@@ -170,7 +171,7 @@ const SYNC_EXCLUDED = new Set(['syncQueue', 'meta']);
 // clubId (seine id IST die clubId).
 export const CLUB_SCOPED_STORES = new Set([
   'athletes', 'groups', 'competitions', 'entries', 'results',
-  'exercises', 'templates', 'plans', 'planCycles', 'sessions', 'actionItems', 'announcements',
+  'exercises', 'templates', 'sectionTemplates', 'plans', 'planCycles', 'sessions', 'actionItems', 'announcements',
 ]);
 
 // Liefert die clubId der aktuell eingeloggten Person, für put() unten —
