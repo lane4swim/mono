@@ -6,6 +6,15 @@ Bereich — als Diskussionsgrundlage gedacht, analog zu den übrigen Plänen in
 im Umfang: beide Änderungen sind additiv, ohne neue Prisma-Migration, ohne
 neuen Sync-Store.
 
+## Umsetzungsstand
+
+**Beide Issues sind umgesetzt.**
+
+| Issue | Status |
+|---|---|
+| #73 Belastungsstufe „Regeneration" | **umgesetzt** — siehe Abschnitt 1.6 |
+| #72 Beckenlänge im Trainingsplan | **umgesetzt** — siehe Abschnitt 2.9 |
+
 ## 0. Ausgangslage
 
 - **Issue #72** (`Auswahl für die Beckenlänge im Trainingsplan`): Trainingspläne
@@ -107,6 +116,21 @@ halber hier vermerkt.
 Minimal — ein Array-Eintrag plus zwei i18n-Zeilen, kein Datenmodell-,
 Migrations- oder Sync-Eingriff. Kann unabhängig von #72 sofort umgesetzt
 werden.
+
+### 1.6 Umsetzungsstand: **umgesetzt**
+
+Wie geplant, ohne Abweichung:
+
+- `apps/web/js/refdata.js` — `SET_INTENSITIES` bekommt `{ value:
+  'regeneration', label: 'Regeneration' }` an erster Stelle (unterhalb von
+  `locker`).
+- `apps/web/js/i18n/de-DE.js`/`en-US.js` — `refdata.setIntensities.
+  regeneration` (`'Regeneration'` bzw. `'Recovery'`).
+- Kein Schema-, Migrations- oder Sync-Eingriff, wie geplant.
+- Tests: bestehende i18n-Vollständigkeitstests (`apps/web/test/
+  i18n.test.js`) decken den neuen Schlüssel bereits automatisch ab (kein
+  neuer Testfall nötig, da rein strukturprüfend). Gesamte Testsuite bleibt
+  grün.
 
 ## 2. Issue #72 — Beckenlänge im Trainingsplan
 
@@ -327,6 +351,50 @@ Vorlage→Plan-Tag-Erzeugung an einer zweiten Stelle dupliziert existiert,
 siehe 2.5.4) — beim Umsetzen mit einem gemeinsamen Grep nach
 `cloneItems(` in `plans.js`/`planCycles.js` gegenprüfen, um beide
 Erzeugungsstellen zu erfassen.
+
+### 2.9 Umsetzungsstand: **umgesetzt**
+
+Wie geplant, ohne Abweichung — `CourseSchema` wiederverwendet, keine
+Migration:
+
+- `packages/shared-types/src/entities.ts` — `poolLength:
+  CourseSchema.nullable().default(null)` auf `PlanDaySchema` und
+  `TemplateSchema`. Keine neue Prisma-Spalte/Migration (Json-Felder).
+- `apps/web/js/modules/plans.js` — `poolLengthOptions()`-Helfer (leere
+  Option „nicht festgelegt" + `trOptions(COURSES, 'courses')`); Select je
+  Trainingstag in `drawDays()`; Snapshot der Vorlagen-`poolLength` beim
+  Anlegen eines Tages aus einer Vorlage; zusätzlich — **über den
+  ursprünglichen Plan hinaus** — ein Badge mit der Beckenlänge in der
+  Plan-Detailansicht (`renderDetail()`), da das Feld sonst nur im
+  Bearbeiten-Modal sichtbar gewesen wäre, nicht beim bloßen Ansehen eines
+  bereits gespeicherten Plans.
+- `apps/web/js/modules/templates.js` — analoges Select im
+  Vorlagen-Modal sowie, ebenfalls über den ursprünglichen Plan hinaus, ein
+  Beckenlängen-Badge auf der Vorlagen-Karte in der Listenansicht (gleiche
+  Begründung: Sichtbarkeit außerhalb des Bearbeiten-Modals).
+- `apps/web/js/modules/planCycles.js` — `buildPlansFromCycle()` übernimmt
+  `template.poolLength` in jeden erzeugten `PlanDay`, exakt wie `sets`.
+- `apps/web/js/modules/planPdfExport.js` — `buildDayColumn()` (von
+  Wochen- und Einzeltag-Export gemeinsam genutzt) zeigt die Beckenlänge in
+  der Tageskopfzeile neben dem Datum, nur wenn gesetzt.
+- `apps/web/js/i18n/de-DE.js`/`en-US.js` — `plans.formPoolLength`/
+  `plans.poolLengthNotSet` (von `templates.js` mitgenutzt, wie auch
+  `plans.totalBadge` dort bereits zuvor über Namespace-Grenzen hinweg
+  verwendet wurde); `refdata.courses` existierte bereits, keine Änderung
+  nötig.
+- `apps/web/sw.js` — `CACHE_VERSION` `lane1-v52` → `lane1-v53`; keine neue
+  Precache-Zeile nötig, da alle geänderten Dateien bereits precacht waren.
+- Kein Backend-Code geändert (generischer Sync-Pfad deckt das neue Feld
+  automatisch ab, wie geplant).
+- **Tests:** zwei neue `TemplateSchema`-/`PlanDaySchema`-Testfälle
+  (`packages/shared-types/test/entities.test.ts`) für gültige/ungültige
+  `poolLength`-Werte sowie Default `null`; ein bestehender
+  `planCycles.test.js`-Testfall musste um das neue Feld ergänzt werden
+  (`toEqual()` mit vollständigem Objekt), ein neuer Testfall prüft die
+  `poolLength`-Übernahme von Vorlage zu erzeugtem Plan-Tag. Gesamte
+  Monorepo-Suite bleibt grün: 1174 Tests (622 `apps/api`, 297 `apps/web`,
+  245 `shared-types`, 10 `sync-protocol`), 0 Fehlschläge; `npm run lint`
+  sauber in allen vier Workspaces.
 
 ## 3. Umsetzungsreihenfolge
 

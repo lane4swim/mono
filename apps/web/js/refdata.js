@@ -95,6 +95,7 @@ export const EQUIPMENT_ITEMS = [
 ];
 
 export const SET_INTENSITIES = [
+  { value: 'regeneration', label: 'Regeneration' },
   { value: 'locker', label: 'Locker (GA2)' },
   { value: 'ga1', label: 'Grundlage (GA1)' },
   { value: 'schwelle', label: 'Schwelle' },

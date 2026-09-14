@@ -345,6 +345,22 @@ describe('TemplateSchema', () => {
     const oneSet = { kind: 'set', id: 's1', description: 'X', distance: 100, reps: 1, intensity: 'ga1', restSec: 0 };
     expect(TemplateSchema.safeParse({ ...base, tags: [], sets: Array(201).fill(oneSet) }).success).toBe(false);
   });
+
+  // Issue #72 (docs/Plans/beckenlaenge-regeneration-plan.md).
+  it('akzeptiert poolLength LCM/SCM, setzt bei fehlendem Feld null (Alt-Vorlagen bleiben gültig)', () => {
+    const base = { id: ATHLETE_ID, clubId: CLUB_ID, name: 'X', description: '', tags: [], sets: [], createdAt: now, updatedAt: now };
+    expect(TemplateSchema.safeParse({ ...base, poolLength: 'LCM' }).success).toBe(true);
+    expect(TemplateSchema.safeParse({ ...base, poolLength: 'SCM' }).success).toBe(true);
+    expect(TemplateSchema.safeParse({ ...base, poolLength: null }).success).toBe(true);
+    const parsed = TemplateSchema.safeParse(base);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data.poolLength).toBeNull();
+  });
+
+  it('lehnt einen ungültigen poolLength-Wert ab', () => {
+    const base = { id: ATHLETE_ID, clubId: CLUB_ID, name: 'X', description: '', tags: [], sets: [], createdAt: now, updatedAt: now };
+    expect(TemplateSchema.safeParse({ ...base, poolLength: '25yd' }).success).toBe(false);
+  });
 });
 
 describe('SectionTemplateSchema', () => {
@@ -410,6 +426,32 @@ describe('PlanSchema', () => {
     expect(PlanSchema.safeParse({ ...base, days: Array(60).fill(oneDay), comments: [] }).success).toBe(true);
     const manyComments = Array.from({ length: 501 }, (_, i) => ({ id: `c${i}`, authorId: TRAINER_ID, authorName: 'X', text: 'x', createdAt: now }));
     expect(PlanSchema.safeParse({ ...base, days: [], comments: manyComments }).success).toBe(false);
+  });
+
+  // Issue #72 (docs/Plans/beckenlaenge-regeneration-plan.md): Beckenlänge
+  // je Trainingstag, unabhängig zwischen Tagen desselben Plans wählbar.
+  it('akzeptiert je Trainingstag eine eigene poolLength, Alt-Tage ohne Feld bleiben gültig', () => {
+    const base = { id: ATHLETE_ID, clubId: CLUB_ID, name: 'X', weekStart: now, groupId: null, status: 'aktiv', comments: [], createdAt: now, updatedAt: now };
+    const plan = {
+      ...base,
+      days: [
+        { date: now, poolLength: 'LCM', sets: [] },
+        { date: now, poolLength: 'SCM', sets: [] },
+        { date: now, sets: [] },
+      ],
+    };
+    const parsed = PlanSchema.safeParse(plan);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.days[0].poolLength).toBe('LCM');
+      expect(parsed.data.days[1].poolLength).toBe('SCM');
+      expect(parsed.data.days[2].poolLength).toBeNull();
+    }
+  });
+
+  it('lehnt einen ungültigen poolLength-Wert bei einem Trainingstag ab', () => {
+    const base = { id: ATHLETE_ID, clubId: CLUB_ID, name: 'X', weekStart: now, groupId: null, status: 'aktiv', comments: [], createdAt: now, updatedAt: now };
+    expect(PlanSchema.safeParse({ ...base, days: [{ date: now, poolLength: '25yd', sets: [] }] }).success).toBe(false);
   });
 });
 
