@@ -316,7 +316,6 @@ export default {
     searchLabel: 'Search', searchPlaceholder: 'Name or description…',
     noSectionTemplatesTitle: 'No section templates yet', noSectionTemplatesMsg: 'Create a reusable section, e.g. "Warm-up".',
     colName: 'Name', colEntries: 'Entries', colDistance: 'Distance',
-    entriesCountSuffix: ' ({count} entries)',
     deleteConfirm: 'Delete section template "{name}"?', deleted: 'Section template deleted',
     modalEdit: 'Edit section template', modalCreate: 'Create section template',
     formName: 'Name', formDescription: 'Description', formTags: 'Tags', formTagsHint: 'comma-separated',

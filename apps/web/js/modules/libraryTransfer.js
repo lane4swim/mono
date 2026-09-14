@@ -190,8 +190,6 @@ export async function importLibrary(dump) {
     createdAt: now,
     updatedAt: now,
   }));
-  await bulkPut('templates', templateRows);
-
   const sectionTemplateRows = sectionTemplates.map(st => ({
     id: uid(),
     ...(clubId ? { clubId } : {}),
@@ -202,7 +200,11 @@ export async function importLibrary(dump) {
     createdAt: now,
     updatedAt: now,
   }));
-  await bulkPut('sectionTemplates', sectionTemplateRows);
+  // Beide Bulk-Schreibvorgänge hängen nur von idMap (bereits über die
+  // Übungen befüllt) ab, nicht voneinander — unabhängige IndexedDB-
+  // Transaktionen auf verschiedenen Object Stores, daher parallel statt
+  // seriell.
+  await Promise.all([bulkPut('templates', templateRows), bulkPut('sectionTemplates', sectionTemplateRows)]);
 
   await bulkEnqueueSyncEvents([
     ...exerciseRows.map(row => ({ store: 'exercises', entityId: row.id, action: 'create', payload: row })),

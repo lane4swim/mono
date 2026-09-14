@@ -339,7 +339,6 @@ export default {
     searchLabel: 'Suche', searchPlaceholder: 'Name oder Beschreibung…',
     noSectionTemplatesTitle: 'Noch keine Abschnitts-Vorlagen', noSectionTemplatesMsg: 'Lege einen wiederverwendbaren Abschnitt an, z. B. "Einschwimmen".',
     colName: 'Name', colEntries: 'Einträge', colDistance: 'Distanz',
-    entriesCountSuffix: ' ({count} Einträge)',
     deleteConfirm: 'Abschnitts-Vorlage "{name}" löschen?', deleted: 'Abschnitts-Vorlage gelöscht',
     modalEdit: 'Abschnitts-Vorlage bearbeiten', modalCreate: 'Abschnitts-Vorlage erstellen',
     formName: 'Name', formDescription: 'Beschreibung', formTags: 'Tags', formTagsHint: 'kommagetrennt',
