@@ -93,7 +93,7 @@ export function buildDemoData() {
 
   const template1 = {
     id: id(), clubId: club.id, name: 'Grundlagenausdauer – Standardwoche', description: 'Klassische GA1/GA2-Einheit für die Basisperiode.',
-    tags: ['ausdauer', 'basis'],
+    tags: ['ausdauer', 'basis'], poolLength: 'LCM',
     sets: [
       { kind: 'set' as const, id: id(), description: 'Einschwimmen gemischt', distance: 400, durationSec: null, reps: 1, intensity: 'locker', restSec: 0, comments: [] },
       { kind: 'set' as const, id: id(), description: '8x100 Freistil', distance: 100, durationSec: null, reps: 8, intensity: 'ga1', restSec: 20, comments: [] },
@@ -103,7 +103,7 @@ export function buildDemoData() {
   };
   const template2 = {
     id: id(), clubId: club.id, name: 'Sprint & Wenden', description: 'Kurze, intensive Serien mit Fokus auf Renntempo.',
-    tags: ['sprint', 'wettkampf'],
+    tags: ['sprint', 'wettkampf'], poolLength: 'SCM',
     sets: [
       { kind: 'set' as const, id: id(), description: 'Einschwimmen', distance: 300, durationSec: null, reps: 1, intensity: 'locker', restSec: 0, comments: [] },
       {
@@ -130,10 +130,14 @@ export function buildDemoData() {
   const wkStart = startOfWeek(todayISO());
   const plan1 = {
     id: id(), clubId: club.id, name: `Trainingswoche ${wkStart.slice(0, 10)}`, weekStart: wkStart, groupId: groupA.id, status: 'aktiv',
+    // poolLength wird pro Tag aus der jeweils genutzten Vorlage übernommen
+    // (siehe planCycles.js/plans.js) — der letzte Tag weicht bewusst vom
+    // Vorlagenwert ab, um zu zeigen, dass die Beckenlänge je Trainingstag
+    // unabhängig überschreibbar bleibt (Issue #72).
     days: [
-      { date: wkStart, sets: cloneSets(template1.sets) },
-      { date: addDays(wkStart, 2), sets: cloneSets(template2.sets) },
-      { date: addDays(wkStart, 4), sets: cloneSets(template1.sets) },
+      { date: wkStart, poolLength: template1.poolLength, sets: cloneSets(template1.sets) },
+      { date: addDays(wkStart, 2), poolLength: template2.poolLength, sets: cloneSets(template2.sets) },
+      { date: addDays(wkStart, 4), poolLength: 'SCM', sets: cloneSets(template1.sets) },
     ],
   };
   const plans = [plan1];
@@ -238,7 +242,7 @@ async function main() {
     }
 
     await prisma.exercise.createMany({ data: data.exercises });
-    await prisma.template.createMany({ data: data.templates.map((t) => ({ id: t.id, clubId: t.clubId, name: t.name, description: t.description, tags: t.tags, sets: t.sets })) });
+    await prisma.template.createMany({ data: data.templates.map((t) => ({ id: t.id, clubId: t.clubId, name: t.name, description: t.description, tags: t.tags, poolLength: t.poolLength ?? null, sets: t.sets })) });
     await prisma.plan.createMany({ data: data.plans.map((p) => ({ id: p.id, clubId: p.clubId, name: p.name, weekStart: new Date(p.weekStart), groupId: p.groupId, status: p.status, days: p.days })) });
     await prisma.trainingSession.createMany({ data: data.sessions.map((s) => ({ id: s.id, clubId: s.clubId, date: new Date(s.date), groupId: s.groupId, planId: s.planId, trainerNote: s.trainerNote, attendance: s.attendance, actualDistance: s.actualDistance ?? null })) });
     await prisma.actionItem.createMany({ data: data.actionItems.map((a) => ({ ...a, createdDate: new Date(a.createdDate), dueDate: a.dueDate ? new Date(a.dueDate) : null })) });

@@ -8,12 +8,15 @@ neuen Sync-Store.
 
 ## Umsetzungsstand
 
-**Beide Issues sind umgesetzt.**
+**Beide Issues sind umgesetzt UND per Code-Review geprüft.** Das Review
+deckte einen Befund mit Praxisrelevanz für den gesamten Vorlagen-Sync auf
+(fehlende Prisma-Spalte für `Template.poolLength`, siehe „Nachträglich
+behoben" am Ende von Abschnitt 2) — behoben, nicht nur dokumentiert.
 
 | Issue | Status |
 |---|---|
 | #73 Belastungsstufe „Regeneration" | **umgesetzt** — siehe Abschnitt 1.6 |
-| #72 Beckenlänge im Trainingsplan | **umgesetzt** — siehe Abschnitt 2.9 |
+| #72 Beckenlänge im Trainingsplan | **umgesetzt** — siehe Abschnitt 2.9 (inkl. Code-Review-Korrektur) |
 
 ## 0. Ausgangslage
 
@@ -395,6 +398,74 @@ Migration:
   Monorepo-Suite bleibt grün: 1174 Tests (622 `apps/api`, 297 `apps/web`,
   245 `shared-types`, 10 `sync-protocol`), 0 Fehlschläge; `npm run lint`
   sauber in allen vier Workspaces.
+
+**Nachträglich behoben (unabhängiges Code-Review):**
+
+- **Fehlende Prisma-Spalte für `Template.poolLength` — hätte JEDEN
+  Template-Sync-Schreibzugriff zum Absturz gebracht, nicht nur solche mit
+  gesetzter Beckenlänge.** Abschnitt 2.1/2.4 dieses Plans nahm an, dass
+  `poolLength` wie bei `PlanDay` folgenlos innerhalb eines bestehenden
+  Json-Feldes lebt — das stimmt für `Plan.days` (Json-Array), aber
+  **nicht** für `Template`: dort sind `name`/`description`/`tags`/`sets`
+  jeweils eigene Prisma-Spalten (`apps/api/prisma/schema.prisma:477-493`),
+  `poolLength` wurde als *zusätzliches Top-Level-Feld* des Zod-Schemas
+  ergänzt, ohne eine passende Spalte anzulegen. Der generische Sync-Pfad
+  (`sync.gateway.ts: delegate.create({ data: payload })`/`delegate.update
+  (...)`) hätte das vollständige, gegen `TemplateSchema` geparste Payload
+  direkt an Prisma weitergereicht — und weil `poolLength:
+  CourseSchema.nullable().default(null)` bei jedem `safeParse()` befüllt
+  wird (auch wenn der Client das Feld nie sendet), wäre **jeder**
+  Template-`create`/`update` über Sync mit einem Prisma-Laufzeitfehler
+  („Unknown argument `poolLength`") gescheitert — nicht nur der neue
+  Beckenlängen-Workflow, sondern das gesamte Vorlagen-Feature. Von den 622
+  `apps/api`-Tests hat das keiner erfasst, weil `entityRegistry.test.ts`
+  gegen einen *gefakten* Prisma-Client testet
+  (`makeFakePrismaClient()`), nicht gegen ein echtes Schema — dieser
+  Sandbox fehlt weiterhin der Docker-Zugriff für einen echten
+  Postgres-Integrationstest (siehe bereits bekannter Vorbehalt in
+  `trainingsplanung-phase1-plan.md`).
+  - **Behoben:** neue Spalte `Template.poolLength String?` (nullable,
+    kein Default — konsistent mit dem bereits etablierten Muster für
+    optionale String-Spalten wie `Athlete.nationalID`, statt eines
+    erzwungenen Defaults wie bei `Competition.course`) in
+    `apps/api/prisma/schema.prisma`; neue Migration
+    `20260914100000_add_template_pool_length` (`ALTER TABLE "templates"
+    ADD COLUMN "poolLength" TEXT`, von Hand angelegt nach demselben Muster
+    wie die beiden vorherigen additiven Migrationen dieses Bereichs —
+    `20260908090000_add_session_actual_distance`,
+    `20260909090000_add_plan_cycle` — da auch hier kein Docker-Zugriff für
+    `prisma migrate dev` besteht). `apps/api/prisma/seed.ts:
+    prisma.template.createMany()` explizit um `poolLength: t.poolLength ??
+    null` ergänzt (die dortige Feld-Whitelist hätte das Feld sonst
+    ebenfalls stillschweigend verworfen). **Nicht gegen eine echte
+    Postgres-Instanz geprüft** (`npx prisma validate` mit Platzhalter-
+    `DATABASE_URL` bestätigt nur die Schema-Syntax) — vor dem ersten
+    Produktiv-Deployment `npx prisma migrate deploy` gegen eine echte
+    Datenbank verifizieren, exakt wie bei den beiden genannten Vorgänger-
+    Migrationen bereits vermerkt. Dafür angelegt:
+    [Issue #74](https://github.com/lane4swim/mono/issues/74).
+  - `PlanDay.poolLength` war von diesem Befund **nicht** betroffen — `Plan.
+    days` ist und bleibt eine einzige `Json`-Spalte, das neue Feld lebt
+    dort korrekt bereits innerhalb des Blobs, keine Migration nötig, wie
+    ursprünglich geplant.
+- **Demo-/Seed-Daten zeigten das neue Feld nirgends** — weder
+  `apps/web/js/demoSeed.js` noch `apps/api/prisma/seed.ts` setzten
+  `poolLength` auf den beiden Beispiel-Vorlagen oder den drei
+  Beispiel-Plantagen, obwohl der Phase-1-Plan genau dafür ein Präzedenzfall
+  ist (`TrainingSession.actualDistance` wurde dort gezielt in die
+  Demo-Daten aufgenommen, „damit die Demo-Datenbank den neuen Fallback
+  direkt zeigt"). Behoben: `template1`/`template2` bekommen `poolLength:
+  'LCM'` bzw. `'SCM'`, die drei Tage von `plan1` übernehmen den
+  Vorlagenwert — der letzte Tag weicht bewusst davon ab (`'SCM'` trotz
+  `template1`-Herkunft), um sichtbar zu machen, dass die Beckenlänge pro
+  Tag unabhängig von der Vorlage überschreibbar bleibt (Kernpunkt von
+  Issue #72). In beiden Seed-Dateien identisch nachgezogen, damit
+  Demo-Modus (`apps/web`) und lokale Postgres-Demo-DB (`apps/api`)
+  konsistent bleiben.
+- Gesamte Monorepo-Suite nach beiden Korrekturen erneut grün: 1174 Tests,
+  0 Fehlschläge; `npm run build`/`npm run typecheck` (`apps/api`, deckt
+  `prisma/seed.ts` ab, das nicht Teil von `npm test` ist) sauber; `npm run
+  lint` sauber in allen vier Workspaces.
 
 ## 3. Umsetzungsreihenfolge
 

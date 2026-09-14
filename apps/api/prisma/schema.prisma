@@ -481,6 +481,10 @@ model Template {
   name        String
   description String    @default("")
   tags        String[]  @default([])
+  // Standard-Beckenlänge dieser Vorlage (Issue #72) — nullable statt eines
+  // erzwungenen Defaults wie bei Competition.course, da eine Vorlage ohne
+  // Angabe "nicht festgelegt" bedeuten soll, nicht fälschlich LCM/SCM.
+  poolLength  String?   // "LCM" | "SCM" | null
   sets        Json
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
