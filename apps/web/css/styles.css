@@ -457,9 +457,15 @@ tr:hover td{ background: var(--c-foam-2); }
 .print-day-date{ font-weight: 700; font-size: 4.6mm; text-transform: capitalize; }
 .print-day-total{ font-weight: 700; font-size: 3.8mm; font-family: var(--f-mono); }
 .print-entry-list{ display: flex; flex-direction: column; }
+/* Falls trotz der Ein-Seiten-Erzwingung in planPdfExport.js (Skalierung +
+   Höhen-Clip) doch noch ein Seitenumbruch nötig wird (z. B. abweichende
+   Schriftmetriken/Druckränder auf dem jeweiligen Gerät), soll er zumindest
+   zwischen zwei Sätzen/Blöcken fallen statt mitten in einem — siehe
+   Issue #76. */
 .print-entry{
   display: flex; flex-wrap: wrap; align-items: baseline; gap: 2mm;
   padding: 1.6mm 0; border-bottom: 0.25mm solid #000;
+  break-inside: avoid;
 }
 .print-entry-qty{
   font-family: var(--f-mono); font-weight: 800; font-size: 4.4mm; white-space: nowrap; color: #000;
@@ -479,6 +485,7 @@ tr:hover td{ background: var(--c-foam-2); }
 .print-entry-equipment{ flex-basis: 100%; font-size: 3.2mm; font-style: italic; color: #000; }
 .print-block{
   border: 0.7mm solid #000; border-radius: 1.5mm; padding: 2mm 3mm; margin: 1.5mm 0 3mm;
+  break-inside: avoid;
 }
 .print-block-head{
   font-weight: 800; font-size: 3.8mm; text-transform: uppercase; letter-spacing: 0.2mm; margin-bottom: 1mm;
