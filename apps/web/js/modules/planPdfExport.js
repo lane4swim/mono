@@ -23,10 +23,18 @@ import { EQUIPMENT_ITEMS, SET_INTENSITIES, COURSES } from '../refdata.js';
 import { t, trLabel } from '../i18n.js';
 
 const MM_TO_PX = 96 / 25.4;
+const PAGE_WIDTH_MM = 210;
 const PAGE_HEIGHT_MM = 297;
 const PAGE_MARGIN_MM = 12;
-// Muss zur Breite von .plan-print-sheet in css/styles.css passen.
-const SHEET_WIDTH_MM = 190;
+// Tatsächliche Druckbreite (A4 minus @page-Rand, siehe css/styles.css) — muss
+// zur Breite von .plan-print-sheet dort passen. Vorher war hier 190mm fest
+// hinterlegt, während @page (styles.css) einen 12mm-Rand vorgibt, also
+// tatsächlich nur 186mm Druckbreite zur Verfügung stehen: Die Vorab-Messung
+// auf dem Bildschirm lief dadurch 4mm breiter als der spätere Ausdruck, ein
+// Trainingstag knapp unterhalb der Ein-Seiten-Grenze konnte beim echten
+// (schmaleren) Druck durch zusätzliche Zeilenumbrüche doch noch auf eine
+// zweite Seite rutschen (Issue #76).
+const SHEET_WIDTH_MM = PAGE_WIDTH_MM - PAGE_MARGIN_MM * 2;
 
 let printRoot = null;
 function getPrintRoot() {
@@ -67,8 +75,8 @@ function printSheet(sheet) {
   // der Text für kurze Pläne/Tage maximal groß. Kein unterer Anschlag für
   // den Skalierungsfaktor: "einseitig" ist eine harte Anforderung, ein
   // sehr umfangreicher Plan mit kleinerer Schrift ist besser als eine
-  // zweite Seite. Der 3%-Sicherheitsabschlag fängt ab, dass die gemessene
-  // Breite (190mm) minimal von der tatsächlichen Druckbreite abweichen kann.
+  // zweite Seite. Der 3%-Sicherheitsabschlag fängt verbleibende
+  // Rundungsungenauigkeiten zwischen CSS-mm und Druck-px ab.
   const naturalHeight = sheet.scrollHeight;
   const targetHeight = (PAGE_HEIGHT_MM - PAGE_MARGIN_MM * 2) * MM_TO_PX;
   if (naturalHeight > targetHeight) {
@@ -82,11 +90,11 @@ function printSheet(sheet) {
     // Browser sieht dadurch für die Seitenaufteilung nur noch diese
     // eine-Seite-hohe Box, unabhängig von der (nur optisch verkleinerten)
     // tatsächlichen Höhe von .sheet. Nur overflow-y wird geclippt, nicht
-    // overflow-x: .page hat selbst keine explizite Breite (füllt seinen
-    // Container, ~186mm Druckbereich), während .sheet nach dem Skalieren
-    // bewusst auf die volle Blattbreite (190mm, SHEET_WIDTH_MM) gerendert
-    // wird — mit `overflow: hidden` auf beiden Achsen würde das die rechte
-    // Kante jedes skalierten Ausdrucks abschneiden.
+    // overflow-x: .page hat selbst keine explizite Breite (füllt den
+    // Druckbereich, SHEET_WIDTH_MM), während .sheet nach dem Skalieren
+    // bewusst auf die volle Blattbreite gerendert wird — mit
+    // `overflow: hidden` auf beiden Achsen würde das die rechte Kante
+    // jedes skalierten Ausdrucks abschneiden.
     page.style.height = `${targetHeight}px`;
     page.style.overflowY = 'hidden';
     page.style.overflowX = 'visible';
@@ -141,7 +149,7 @@ function buildSheet(plan, group, exercises) {
 // Übungsname/Distanz/Wiederholungen für einen einzelnen Tag noch größer
 // dargestellt werden können als in der Wochenübersicht.
 function buildDaySheet(plan, day, group, exercises) {
-  const sheet = el('div', { class: 'plan-print-sheet plan-print-sheet-solo' });
+  const sheet = el('div', { class: 'plan-print-sheet' });
   sheet.appendChild(el('div', { class: 'print-head' }, [
     el('h1', { class: 'print-title' }, plan.name),
     el('div', { class: 'print-sub' }, `${group?.name || t('plans.noGroup')} · ${t('plans.weekFrom', { date: fmtDateLong(plan.weekStart) })}`),

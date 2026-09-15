@@ -434,9 +434,13 @@ tr:hover td{ background: var(--c-foam-2); }
    Schwarz auf Weiß statt der App-Markenfarben, für maximalen Kontrast
    auf Papier/Ausdruck. */
 .plan-print-root{ height: 0; overflow: hidden; }
-.plan-print-page{ width: 190mm; }
+/* 186mm = A4 (210mm) minus den 12mm @page-Rand weiter unten — muss zu
+   SHEET_WIDTH_MM in js/modules/planPdfExport.js passen, sonst wird die
+   Vorab-Messung auf einer anderen Breite gemacht als später gedruckt wird
+   (siehe Kommentar dort, Issue #76). */
+.plan-print-page{ width: 186mm; }
 .plan-print-sheet{
-  width: 190mm; background: #fff; color: #000; font-family: var(--f-body);
+  width: 186mm; background: #fff; color: #000; font-family: var(--f-body);
 }
 .print-head{ border-bottom: 1mm solid #000; padding-bottom: 3mm; margin-bottom: 5mm; }
 .print-title{
