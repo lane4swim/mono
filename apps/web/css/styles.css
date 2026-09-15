@@ -433,7 +433,18 @@ tr:hover td{ background: var(--c-foam-2); }
    @media print blendet sie ein und alles andere aus. Bewusst reines
    Schwarz auf Weiß statt der App-Markenfarben, für maximalen Kontrast
    auf Papier/Ausdruck. */
-.plan-print-root{ height: 0; overflow: hidden; }
+/* text-size-adjust: ohne dies bläst mobiles Safari (iOS) Text im
+   Druck-Output eigenmächtig auf ("Lesbarkeits"-Textvergrößerung) — auf dem
+   Bildschirm/bei der Höhenmessung in planPdfExport.js (VOR window.print())
+   greift das nicht, nur im tatsächlichen Druck-Rendering. Dadurch fällt der
+   real gedruckte Text deutlich größer aus als das JS beim Berechnen von
+   Skalierung/Ein-Seiten-Clip gemessen hat, und der Trainingstag läuft trotz
+   an sich ausreichend kleinem gemessenen Inhalt auf mehrere Seiten
+   (Issue #76, auf einem iPhone reproduziert). */
+.plan-print-root{
+  height: 0; overflow: hidden;
+  -webkit-text-size-adjust: 100%; text-size-adjust: 100%;
+}
 /* 186mm = A4 (210mm) minus den 12mm @page-Rand weiter unten — muss zu
    SHEET_WIDTH_MM in js/modules/planPdfExport.js passen, sonst wird die
    Vorab-Messung auf einer anderen Breite gemacht als später gedruckt wird
