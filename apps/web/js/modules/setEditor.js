@@ -328,6 +328,47 @@ export function compareByCategoryThenName(a, b) {
   return catA.localeCompare(catB) || (a.name || '').localeCompare(b.name || '');
 }
 
+// Kompakte, schreibgeschützte Vorschau einer Satz-/Block-/Abschnittsliste
+// (Karten/Listen in templates.js und sectionTemplates.js) — EIN Ort für
+// Badge, Beschreibung, Ausrüstungs-Pills und Distanz-Suffix, damit
+// zukünftige Formatänderungen nicht an zwei Stellen auseinanderlaufen
+// können (siehe Issue #70).
+//
+// allowSection: false — für Abschnitts-Vorlagen, deren `entries` laut
+// Schema (entities.ts) keine verschachtelten Abschnitte enthalten können.
+// Ein `section`-Eintrag wird in diesem Fall still übersprungen statt einen
+// Fehler zu werfen: er sollte laut Schema nie auftreten, und ein Rendering-
+// Helfer ist nicht der Ort, um das durchzusetzen.
+export function renderEntryList(entries, exercises, { allowSection = true } = {}) {
+  const list = el('div', { class: 'mb-8' });
+  (entries || []).forEach(entry => {
+    if (entry.kind === 'block') {
+      list.appendChild(el('div', { class: 'list-row' }, [
+        el('span', { style: 'flex:1' }, [badge(`${entry.repeatCount || 1}×`, 'progress'), ' ', entry.label || t('templates.defaultBlockLabel'), el('span', { class: 'hint' }, t('templates.setsCountSuffix', { count: (entry.sets || []).length }))]),
+        el('span', { class: 'data text-sm' }, `${totalDistance(entry.sets || []) * (entry.repeatCount || 1)}m`),
+      ]));
+    } else if (entry.kind === 'section') {
+      if (!allowSection) return;
+      list.appendChild(el('div', { class: 'list-row' }, [
+        el('span', { style: 'flex:1' }, [badge(t('templates.sectionLabel'), 'neutral'), ' ', entry.heading || t('plans.defaultSectionHeading'), el('span', { class: 'hint' }, t('templates.entriesCountSuffix', { count: (entry.entries || []).length }))]),
+        el('span', { class: 'data text-sm' }, `${totalDistance(entry.entries || [])}m`),
+      ]));
+    } else {
+      const equipment = equipmentForEntry(entry, exercises);
+      list.appendChild(el('div', { class: 'list-row' }, [
+        el('span', { style: 'flex:1' }, [
+          entry.description || '—',
+          equipment.length > 0
+            ? el('div', { class: 'pill-group', style: 'margin-top:3px' }, equipment.map(eq => badge(trLabel(EQUIPMENT_ITEMS, eq, 'equipment'), 'pb')))
+            : null,
+        ].filter(Boolean)),
+        el('span', { class: 'data text-sm' }, formatQuantity(entry)),
+      ]));
+    }
+  });
+  return list;
+}
+
 function buildExerciseOptions(exercises) {
   return [{ value: '', label: t('setEditor.pickExercise') }, ...exercises
     .slice()

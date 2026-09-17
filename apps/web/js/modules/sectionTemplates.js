@@ -6,7 +6,7 @@ import { el, clear, beginRender, icon } from '../dom.js';
 import { badge, emptyState, laneWave, toast } from '../ui.js';
 import { openModal, confirmAction } from '../modal.js';
 import { field, textInput, formActions } from '../forms.js';
-import { renderSetEditor, totalDistance, formatQuantity, cloneItems, collectEquipment, equipmentForEntry } from './setEditor.js';
+import { renderSetEditor, totalDistance, cloneItems, collectEquipment, renderEntryList } from './setEditor.js';
 import { EQUIPMENT_ITEMS } from '../refdata.js';
 import { t, trLabel } from '../i18n.js';
 import { libraryTransferButtons } from './libraryTransfer.js';
@@ -104,7 +104,7 @@ function renderList(container, sectionTemplates, exercises) {
       if (stEquipment.length > 0) {
         card.appendChild(el('p', { class: 'text-sm' }, `${t('setEditor.equipmentSummary')} ${stEquipment.map(eq => trLabel(EQUIPMENT_ITEMS, eq, 'equipment')).join(', ')}`));
       }
-      card.appendChild(entriesPreview(st.entries || [], exercises));
+      card.appendChild(renderEntryList(st.entries || [], exercises, { allowSection: false }));
       card.appendChild(el('div', { class: 'flex gap-8' }, [
         el('button', { class: 'btn btn-ghost btn-sm', onclick: () => openSectionTemplateModal(st, exercises, refresh) }, t('common.edit')),
         el('button', { class: 'btn btn-danger btn-sm', onclick: () => confirmAction(t('sectionTemplates.deleteConfirm', { name: st.name }), async () => { await remove('sectionTemplates', st.id); toast(t('sectionTemplates.deleted')); refresh(); }) }, t('common.delete')),
@@ -138,31 +138,6 @@ function renderList(container, sectionTemplates, exercises) {
   draw();
 
   async function refresh() { const [st2, e2] = await Promise.all([getAll('sectionTemplates'), getAll('exercises')]); clear(container); renderList(container, st2, e2); }
-}
-
-// Kurze Vorschau der Einträge einer Abschnitts-Vorlage — dieselbe
-// Darstellung wie templates.js für tpl.sets, nur ohne den section-Zweig
-// (eine Abschnitts-Vorlage kann selbst keinen Abschnitt enthalten).
-function entriesPreview(entries, exercises) {
-  const list = el('div', { class: 'mb-8' });
-  entries.forEach(entry => {
-    if (entry.kind === 'block') {
-      list.appendChild(el('div', { class: 'list-row' }, [
-        el('span', { style: 'flex:1' }, [badge(`${entry.repeatCount || 1}×`, 'progress'), ' ', entry.label || t('templates.defaultBlockLabel'), el('span', { class: 'hint' }, t('templates.setsCountSuffix', { count: (entry.sets || []).length }))]),
-        el('span', { class: 'data text-sm' }, `${totalDistance(entry.sets || []) * (entry.repeatCount || 1)}m`),
-      ]));
-    } else {
-      const equipment = equipmentForEntry(entry, exercises);
-      list.appendChild(el('div', { class: 'list-row' }, [
-        el('span', { style: 'flex:1' }, [
-          entry.description || '—',
-          equipment.length > 0 ? el('div', { class: 'pill-group', style: 'margin-top:3px' }, equipment.map(eq => badge(trLabel(EQUIPMENT_ITEMS, eq, 'equipment'), 'pb'))) : null,
-        ].filter(Boolean)),
-        el('span', { class: 'data text-sm' }, formatQuantity(entry)),
-      ]));
-    }
-  });
-  return list;
 }
 
 function openSectionTemplateModal(sectionTemplate, exercises, onSaved) {
