@@ -282,6 +282,13 @@ export default {
     emptyDayOption: '— leerer Tag —', addDayButton: '+ Trainingstag hinzufügen',
     validationName: 'Bitte einen Namen angeben.', savedEdit: 'Änderungen gespeichert', savedCreate: 'Plan angelegt',
     exportPdf: '🖨️ Plan drucken', exportDayPdf: '🖨️ Tag drucken',
+    liveModeStart: 'Trainingsmodus starten', liveModeTitle: 'Trainingsmodus',
+    backToPlan: '← Zurück zum Plan',
+    liveModeNoDays: 'Dieser Plan hat noch keine Trainingstage.',
+    liveModePosition: 'Tag {current} von {total}',
+    liveModeNextDay: 'Nächster Tag →', liveModeLastDay: 'Letzter Tag',
+    liveModeEnd: 'Trainingsmodus beenden',
+    liveModeUnnamedSet: 'Satz ohne Beschreibung',
   },
   planCycles: {
     backToPlans: '← Zu den Trainingsplänen', backToList: '← Alle Zyklen',
