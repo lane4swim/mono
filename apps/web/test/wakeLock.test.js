@@ -68,6 +68,28 @@ describe('wakeLock', () => {
     await expect(acquireWakeLock()).resolves.toBeUndefined();
   });
 
+  // Code-Review-Befund: request() ist ein echter asynchroner Aufruf — ein
+  // releaseWakeLock() KURZ NACH acquireWakeLock(), aber VOR dessen
+  // Auflösung, darf den dann eintreffenden Sentinel nicht mehr festhalten.
+  it('gibt einen erst nach releaseWakeLock() eintreffenden Sentinel sofort wieder frei, statt ihn zu halten', async () => {
+    clearGlobals();
+    let resolveRequest;
+    const pending = new Promise((resolve) => { resolveRequest = resolve; });
+    const request = vi.fn(() => pending);
+    globalThis.navigator = { wakeLock: { request } };
+    globalThis.document = { visibilityState: 'visible', addEventListener: () => {} };
+
+    const { acquireWakeLock, releaseWakeLock } = await import('../js/wakeLock.js');
+    const acquiring = acquireWakeLock();
+    releaseWakeLock(); // läuft, während request() noch offen ist
+
+    const lateSentinel = makeSentinel();
+    resolveRequest(lateSentinel);
+    await acquiring;
+
+    expect(lateSentinel.release).toHaveBeenCalled();
+  });
+
   it('fordert beim erneuten Sichtbarwerden automatisch einen neuen Sentinel an, solange der Lock noch gewünscht ist', async () => {
     clearGlobals();
     const firstSentinel = makeSentinel();

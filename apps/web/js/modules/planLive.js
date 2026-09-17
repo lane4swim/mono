@@ -9,7 +9,7 @@
 // Verlassen des Trainingsmodus — auch bei einem bloßen Reload — wieder
 // weg, wie in Issue #78 gefordert ("wird nicht dauerhaft gespeichert").
 import { getAll } from '../db.js';
-import { el } from '../dom.js';
+import { el, beginRender } from '../dom.js';
 import { badge, emptyState, laneWave } from '../ui.js';
 import { fmtDateLong } from '../dates.js';
 import { navigate } from '../router.js';
@@ -50,7 +50,14 @@ export async function renderLiveMode(container, planId, dayIndex) {
   // einzuschalten — siehe wakeLock.js zur zentralen Freigabe beim
   // Verlassen (shell.js: renderRoute()).
   acquireWakeLock();
+  // Code-Review: zwei sequenzielle awaits unten (getAll('plans'), dann
+  // bedingt getAll('exercises')) — ein überholter, langsamerer Aufruf
+  // (schnelles Doppelklicken auf "Nächster Tag"/Vor-Zurück-Navigation)
+  // darf nach einem neueren Render nicht mehr selbst ins DOM schreiben,
+  // siehe dom.js: beginRender().
+  const isCurrent = beginRender(container);
   const plans = await getAll('plans');
+  if (!isCurrent()) return;
   const plan = plans.find(p => p.id === planId);
 
   const wrap = el('div');
@@ -63,6 +70,7 @@ export async function renderLiveMode(container, planId, dayIndex) {
   }
 
   const exercises = await getAll('exercises');
+  if (!isCurrent()) return;
   const days = (plan.days || []).slice().sort((a, b) => a.date.localeCompare(b.date));
 
   wrap.appendChild(el('div', { class: 'page-head' }, [
@@ -130,7 +138,7 @@ function buildSetCard(row, exercises, checkedIds) {
     el('strong', {}, entry.description || t('plans.liveModeUnnamedSet')),
   ]));
 
-  const context = [row.sectionHeading, row.blockLabel ? t('plans.repeatBlockLabel', { n: row.blockRepeatCount }) + (row.blockLabel ? ` ${row.blockLabel}` : '') : null].filter(Boolean);
+  const context = [row.sectionHeading, row.blockLabel ? `${t('plans.repeatBlockLabel', { n: row.blockRepeatCount })} ${row.blockLabel}` : null].filter(Boolean);
   if (context.length > 0) card.appendChild(el('p', { class: 'text-sm hint', style: 'margin:4px 0' }, context.join(' · ')));
 
   card.appendChild(el('p', { class: 'data', style: 'margin:6px 0' }, `${entry.distance ?? '—'} m${(entry.reps || 1) > 1 ? ` × ${entry.reps}` : ''}`));

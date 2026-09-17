@@ -20,7 +20,16 @@ function isSupported() {
 async function requestSentinel() {
   if (!isSupported() || typeof document === 'undefined' || document.visibilityState !== 'visible') return;
   try {
-    sentinel = await navigator.wakeLock.request('screen');
+    const requested = await navigator.wakeLock.request('screen');
+    // Code-Review: request() ist ein echter asynchroner Browser-Aufruf —
+    // releaseWakeLock() kann währenddessen laufen (z. B. sofortiges
+    // Verlassen des Live-Modus direkt nach dem Öffnen) und `wanted` schon
+    // wieder auf false gesetzt haben, bevor dieses Promise auflöst. Ohne
+    // diese Prüfung würde der inzwischen unerwünschte Sentinel trotzdem in
+    // `sentinel` abgelegt und der Bildschirm bliebe auf der neuen Route
+    // gesperrt, bis der nächste Routenwechsel ihn zufällig mit freigibt.
+    if (!wanted) { requested.release().catch(() => {}); return; }
+    sentinel = requested;
     sentinel.addEventListener('release', () => { sentinel = null; });
   } catch {
     // Ablehnung (kein sichtbares Dokument, Browser-Richtlinie o. Ä.) ist
