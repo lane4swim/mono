@@ -35,11 +35,11 @@ describe('renderEntryList()', () => {
   });
 
   it('überspringt einen Abschnitt still, wenn allowSection: false ist', () => {
-    const entries = [set('a'), section('s', [set('x')]), set('c')];
+    const entries = [set('a'), section('warmup-heading', [set('x')]), set('c')];
     const list = renderEntryList(entries, [], { allowSection: false });
     const rows = list.querySelectorAll('.list-row');
     expect(rows.length).toBe(2);
-    expect(list.textContent).not.toContain('s');
+    expect(list.textContent).not.toContain('warmup-heading');
   });
 
   it('zeigt Ausrüstungs-Pills für einen Satz mit verknüpfter Katalogübung', () => {
