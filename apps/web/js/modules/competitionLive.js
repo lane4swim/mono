@@ -24,6 +24,7 @@ import { navigate } from '../router.js';
 import { t, trCode } from '../i18n.js';
 import { openItemModal, fetchAssignableTrainers } from './actionItems.js';
 import { buildSharedStopwatch } from './stopwatch.js';
+import { acquireWakeLock } from '../wakeLock.js';
 
 // Exportiert für competitions.js: appendEntryRows() (Startliste, CRUD)
 // braucht dieselbe Zuordnung "Startlisteneintrag -> bereits vorhandenes
@@ -83,6 +84,11 @@ export function buildLiveGroups(compEntries) {
 }
 
 export async function renderLiveMode(container, compId, groupIndex) {
+  // Issue #78: der Wettkampfmodus läuft typischerweise am Beckenrand, wo
+  // niemand zwischen zwei Läufen Zeit hat, den Bildschirm manuell wieder
+  // einzuschalten — siehe wakeLock.js zur zentralen Freigabe beim
+  // Verlassen (shell.js: renderRoute()).
+  acquireWakeLock();
   const [competitions, athletes, entries, results, trainers] = await Promise.all([
     getAll('competitions'), getAll('athletes'), getAll('entries'), getAll('results'), fetchAssignableTrainers(),
   ]);

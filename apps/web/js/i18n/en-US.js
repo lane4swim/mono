@@ -259,6 +259,13 @@ export default {
     emptyDayOption: '— empty day —', addDayButton: '+ Add training day',
     validationName: 'Please enter a name.', savedEdit: 'Changes saved', savedCreate: 'Plan created',
     exportPdf: '🖨️ Print plan', exportDayPdf: '🖨️ Print day',
+    liveModeStart: 'Start training mode', liveModeTitle: 'Training Mode',
+    backToPlan: '← Back to plan',
+    liveModeNoDays: 'This plan has no training days yet.',
+    liveModePosition: 'Day {current} of {total}',
+    liveModeNextDay: 'Next day →', liveModeLastDay: 'Last day',
+    liveModeEnd: 'End training mode',
+    liveModeUnnamedSet: 'Set without description',
   },
   planCycles: {
     backToPlans: '← To training plans', backToList: '← All cycles',

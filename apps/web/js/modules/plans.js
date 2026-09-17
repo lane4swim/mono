@@ -10,8 +10,10 @@ import { renderSetEditor, totalDistance, totalDuration, formatTotalDuration, for
 import { renderCommentThread, commentsButton } from './comments.js';
 import { exportPlanToPdf, exportDayToPdf } from './planPdfExport.js';
 import { renderCyclesRoute } from './planCycles.js';
+import { renderLiveMode } from './planLive.js';
 import { navigate } from '../router.js';
 import { t, trLabel, trOptions } from '../i18n.js';
+import { isTrainerOrAdmin } from '../state.js';
 
 // poolLength ist nullable (siehe PlanDaySchema) — eine leere Option bildet
 // "nicht festgelegt" ab, siehe docs/Plans/beckenlaenge-regeneration-plan.md.
@@ -29,6 +31,13 @@ export const plansModule = {
     // Vorlagen-Zyklen (Phase 1, Abschnitt 3.1) hängen an derselben Route
     // statt an einem eigenen Paket — siehe planCycles.js.
     if (params[0] === 'cycles') return renderCyclesRoute(container, isCurrent, params.slice(1));
+    // Trainingsmodus (Issue #78): nur für Trainer:innen/Admins — eine
+    // Athlet:in, die die Route direkt aufruft (die Plan-ANSICHT selbst
+    // bleibt ihr erlaubt, siehe plansModule.roles oben), landet
+    // stattdessen auf der normalen, schreibgeschützten Plandetailseite.
+    if (params[0] && params[1] === 'live' && isTrainerOrAdmin()) {
+      return renderLiveMode(container, params[0], parseInt(params[2], 10) || 0);
+    }
     const [plans, groups, templates, exercises, sectionTemplates] = await Promise.all([getAll('plans'), getAll('groups'), getAll('templates'), getAll('exercises'), getAll('sectionTemplates')]);
     if (!isCurrent()) return;
     if (params[0]) return renderDetail(container, params[0]);
@@ -101,7 +110,7 @@ async function renderDetail(container, planId) {
     await put('plans', { ...plan, comments: nextComments });
   });
 
-  (plan.days || []).slice().sort((a, b) => a.date.localeCompare(b.date)).forEach(day => {
+  (plan.days || []).slice().sort((a, b) => a.date.localeCompare(b.date)).forEach((day, dayIndex) => {
     const dayEquipment = collectEquipment(day.sets || [], exercises);
     const dayCard = el('div', { class: 'card' }, [
       el('div', { class: 'day-block-head' }, [
@@ -109,6 +118,10 @@ async function renderDetail(container, planId) {
         el('div', { class: 'flex items-center gap-8' }, [
           day.poolLength ? badge(trLabel(COURSES, day.poolLength, 'courses'), 'neutral') : null,
           badge(dayTotalBadgeLabel(day.sets || []), 'neutral'),
+          // Issue #78: Trainingsmodus nur für Trainer:innen/Admins
+          // anbieten — Athlet:innen sehen den Plan weiterhin (siehe
+          // plansModule.roles), aber ohne diesen Einstieg.
+          isTrainerOrAdmin() ? el('button', { class: 'btn btn-accent btn-sm', onclick: () => navigate('plans', plan.id, 'live', String(dayIndex)) }, t('plans.liveModeStart')) : null,
           el('button', { class: 'btn btn-ghost btn-sm', onclick: () => exportDayToPdf(plan, day, group, exercises) }, t('plans.exportDayPdf')),
         ]),
       ]),

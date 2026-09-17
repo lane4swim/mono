@@ -17,6 +17,7 @@ import { el, clear, beginRender, icon } from './dom.js';
 import { toast } from './ui.js';
 import { openModal } from './modal.js';
 import { t, getLocale, getAvailableLocales } from './i18n.js';
+import { releaseWakeLock } from './wakeLock.js';
 
 const GROUP_ICON_TRAINING = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 7c1.4 1.3 2.8 1.3 4.2 0s2.8-1.3 4.2 0 2.8 1.3 4.2 0 2.8-1.3 4.2 0"/><path d="M2 12.5c1.4 1.3 2.8 1.3 4.2 0s2.8-1.3 4.2 0 2.8 1.3 4.2 0 2.8-1.3 4.2 0"/><path d="M2 18c1.4 1.3 2.8 1.3 4.2 0s2.8-1.3 4.2 0 2.8 1.3 4.2 0 2.8-1.3 4.2 0"/></svg>';
 const GROUP_ICON_VORLAGEN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h12v18l-6-4-6 4V3z"/></svg>';
@@ -192,6 +193,11 @@ export function defaultModuleFor(roles) {
 // Sinn (keine echte, ablaufende Sitzung) und bleibt daher dort weg.
 export async function renderRoute(viewEl, route) {
   const isCurrent = beginRender(viewEl);
+  // Löst einen ggf. vom Wettkampf-/Trainingsmodus gehaltenen Screen Wake
+  // Lock (siehe wakeLock.js) bei JEDEM Routenwechsel — der neue Modul-Render
+  // unten fordert ihn selbst erneut an, falls er ihn weiterhin braucht
+  // (z. B. ein Wechsel zum nächsten Lauf/Tag INNERHALB desselben Modus).
+  releaseWakeLock();
   const roles = getRoles();
   let mod = getModule(route.routeId);
   // Greift auch, wenn `mod` existiert und die Rolle passt, aber der Verein
