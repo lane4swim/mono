@@ -4,7 +4,7 @@ import { el, clear, beginRender } from '../dom.js';
 import { badge, emptyState, laneWave, toast } from '../ui.js';
 import { openModal, confirmAction } from '../modal.js';
 import { field, textInput, selectInput, formActions } from '../forms.js';
-import { renderSetEditor, totalDistance, formatQuantity, cloneItems, collectEquipment, equipmentForEntry } from './setEditor.js';
+import { renderSetEditor, totalDistance, cloneItems, collectEquipment, renderEntryList } from './setEditor.js';
 import { EQUIPMENT_ITEMS, COURSES } from '../refdata.js';
 import { t, trLabel, trOptions } from '../i18n.js';
 import { libraryTransferButtons } from './libraryTransfer.js';
@@ -61,32 +61,7 @@ function renderList(container, templates, exercises, sectionTemplates) {
     if (tplEquipment.length > 0) {
       card.appendChild(el('p', { class: 'text-sm' }, `${t('setEditor.equipmentSummary')} ${tplEquipment.map(eq => trLabel(EQUIPMENT_ITEMS, eq, 'equipment')).join(', ')}`));
     }
-    const list = el('div', { class: 'mb-8' });
-    (tpl.sets || []).forEach(entry => {
-      if (entry.kind === 'block') {
-        list.appendChild(el('div', { class: 'list-row' }, [
-          el('span', { style: 'flex:1' }, [badge(`${entry.repeatCount || 1}×`, 'progress'), ' ', entry.label || t('templates.defaultBlockLabel'), el('span', { class: 'hint' }, t('templates.setsCountSuffix', { count: (entry.sets || []).length }))]),
-          el('span', { class: 'data text-sm' }, `${totalDistance(entry.sets || []) * (entry.repeatCount || 1)}m`),
-        ]));
-      } else if (entry.kind === 'section') {
-        list.appendChild(el('div', { class: 'list-row' }, [
-          el('span', { style: 'flex:1' }, [badge(t('templates.sectionLabel'), 'neutral'), ' ', entry.heading || t('plans.defaultSectionHeading'), el('span', { class: 'hint' }, t('templates.entriesCountSuffix', { count: (entry.entries || []).length }))]),
-          el('span', { class: 'data text-sm' }, `${totalDistance(entry.entries || [])}m`),
-        ]));
-      } else {
-        const equipment = equipmentForEntry(entry, exercises);
-        list.appendChild(el('div', { class: 'list-row' }, [
-          el('span', { style: 'flex:1' }, [
-            entry.description || '—',
-            equipment.length > 0
-              ? el('div', { class: 'pill-group', style: 'margin-top:3px' }, equipment.map(eq => badge(trLabel(EQUIPMENT_ITEMS, eq, 'equipment'), 'pb')))
-              : null,
-          ].filter(Boolean)),
-          el('span', { class: 'data text-sm' }, formatQuantity(entry)),
-        ]));
-      }
-    });
-    card.appendChild(list);
+    card.appendChild(renderEntryList(tpl.sets || [], exercises));
     card.appendChild(el('div', { class: 'flex gap-8' }, [
       el('button', { class: 'btn btn-ghost btn-sm', onclick: () => openTemplateModal(tpl, exercises, sectionTemplates, refresh) }, t('common.edit')),
       el('button', { class: 'btn btn-danger btn-sm', onclick: () => confirmAction(t('templates.deleteConfirm', { name: tpl.name }), async () => { await remove('templates', tpl.id); toast(t('templates.deleted')); refresh(); }) }, t('common.delete')),
