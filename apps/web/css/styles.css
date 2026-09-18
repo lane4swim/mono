@@ -213,6 +213,8 @@ td{ padding: 10px 10px; border-bottom: 1px solid var(--c-line); vertical-align: 
 tr:hover td{ background: var(--c-foam-2); }
 .table-wrap{ overflow-x:auto; }
 .row-click{ cursor:pointer; }
+tr.live-row-done td{ background: var(--c-foam-2); box-shadow: inset 3px 0 0 var(--c-chlorine); transition: background .15s var(--ease), box-shadow .15s var(--ease); }
+tr.live-row-done .live-set-desc{ text-decoration: line-through; color: var(--c-slate); }
 
 .badge{ display:inline-flex; align-items:center; gap:5px; font-size: var(--fs-xs); font-weight:600; padding: 3px 9px; border-radius: 999px; }
 .badge-open{ background:#FDECE7; color: var(--c-lane-d); }
