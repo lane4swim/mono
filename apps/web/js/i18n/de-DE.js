@@ -274,7 +274,7 @@ export default {
     blockSummary: '{inner} m je Durchgang × {n} Wiederholungen = {total} m',
     totalBadge: '{m} m gesamt', totalBadgeWithDuration: '{m} m gesamt · {duration}',
     defaultSectionHeading: 'Abschnitt', sectionNoEntries: 'Keine Einträge in diesem Abschnitt.',
-    colDescription: 'Beschreibung', colDistance: 'Distanz', colDuration: 'Zeit', colReps: 'Wdh.', colRest: 'Pause',
+    colDescription: 'Beschreibung', colDistance: 'Distanz', colDuration: 'Zeit', colReps: 'Wdh.', colRest: 'Pause', colIntensity: 'Intensität',
     modalEdit: 'Plan bearbeiten', modalCreate: 'Trainingsplan erstellen',
     formName: 'Name', formWeekStart: 'Wochenbeginn', formGroup: 'Gruppe', formStatus: 'Status',
     formPoolLength: 'Beckenlänge', poolLengthNotSet: '— nicht festgelegt —',

@@ -5,7 +5,7 @@
 // reload-fest ist (siehe dortiger Dateikopf), gilt das hier NUR für die
 // Plan-/Tagauswahl: welche Sätze eines Trainingstages bereits abgehakt
 // sind, lebt bewusst ausschließlich als In-Memory-Zustand in diesem
-// Render-Aufruf (buildDayChecklist()/buildSetCard() unten) und ist beim
+// Render-Aufruf (buildDayChecklist()/buildSetRow() unten) und ist beim
 // Verlassen des Trainingsmodus — auch bei einem bloßen Reload — wieder
 // weg, wie in Issue #78 gefordert ("wird nicht dauerhaft gespeichert").
 import { getAll } from '../db.js';
@@ -14,7 +14,7 @@ import { badge, emptyState, laneWave } from '../ui.js';
 import { fmtDateLong } from '../dates.js';
 import { navigate } from '../router.js';
 import { t, trLabel } from '../i18n.js';
-import { EQUIPMENT_ITEMS } from '../refdata.js';
+import { EQUIPMENT_ITEMS, SET_INTENSITIES } from '../refdata.js';
 import { equipmentForEntry, formatDuration } from './setEditor.js';
 import { acquireWakeLock } from '../wakeLock.js';
 
@@ -25,7 +25,7 @@ import { acquireWakeLock } from '../wakeLock.js';
 // EIN abhakbarer Eintrag, unabhängig von `reps` (Wiederholungen
 // INNERHALB eines Satzes) oder dem `repeatCount` eines umgebenden Blocks
 // (Wiederholungen des GANZEN Blocks): beides bleibt reine Anzeigeangabe
-// auf der Karte, exakt wie in der bestehenden schreibgeschützten
+// in der Zeile, exakt wie in der bestehenden schreibgeschützten
 // Plananzeige (appendEntryRows() in plans.js), die dieselbe Distanz/Zeit
 // ebenfalls nur als eine Zeile zeigt statt sie zu vervielfachen.
 export function buildDayChecklist(items, sectionHeading = null) {
@@ -105,12 +105,23 @@ export async function renderLiveMode(container, planId, dayIndex) {
   if (rows.length === 0) {
     wrap.appendChild(emptyState(t('common.nothingHereTitle'), t('plans.noSetsPlanned'), null));
   } else {
-    const cardsGrid = el('div', { class: 'grid grid-3' });
+    const table = el('table');
+    table.appendChild(el('thead', {}, el('tr', {}, [
+      el('th', {}, ''),
+      el('th', {}, t('plans.colDescription')),
+      el('th', {}, t('plans.colIntensity')),
+      el('th', {}, t('plans.colDistance')),
+      el('th', {}, t('plans.colDuration')),
+      el('th', {}, t('plans.colReps')),
+      el('th', {}, t('plans.colRest')),
+    ])));
+    const tbody = el('tbody');
     // Bewusst NICHT über put() persistiert (siehe Dateikopf) — lebt nur,
     // solange dieser Render-Aufruf besteht.
     const checkedIds = new Set();
-    rows.forEach(row => cardsGrid.appendChild(buildSetCard(row, exercises, checkedIds)));
-    wrap.appendChild(cardsGrid);
+    rows.forEach(row => tbody.appendChild(buildSetRow(row, exercises, checkedIds)));
+    table.appendChild(tbody);
+    wrap.appendChild(el('div', { class: 'table-wrap' }, table));
   }
 
   wrap.appendChild(el('button', { class: 'btn btn-ghost mt-16', onclick: () => navigate('plans', planId) }, t('plans.liveModeEnd')));
@@ -118,33 +129,39 @@ export async function renderLiveMode(container, planId, dayIndex) {
   container.appendChild(wrap);
 }
 
-// Eine Karte je abhakbarem Satz — Klassen/Optik bewusst identisch zum
-// Wettkampfmodus (live-athlete-card/live-card-done, siehe
-// competitionLive.js: buildAthleteCard()), wie in Issue #78 verlangt
-// ("checked off sets should resemble competition mode").
-function buildSetCard(row, exercises, checkedIds) {
+// Eine Tabellenzeile je abhakbarem Satz — Spalten/Optik bewusst identisch
+// zur schreibgeschützten Plananzeige (appendEntryRows() in plans.js), nur
+// um eine Abhak-Checkbox sowie die Kontextzeile (Abschnitt/Wiederholungs-
+// block, siehe buildDayChecklist() oben) in der Beschreibungszelle
+// ergänzt. Abgehakte Zeilen bekommen die Klasse live-row-done (siehe
+// styles.css), analog zur früheren Kartenoptik.
+function buildSetRow(row, exercises, checkedIds) {
   const { entry } = row;
   const equipment = equipmentForEntry(entry, exercises);
-  const card = el('div', { class: 'card live-athlete-card' });
+  const tr = el('tr');
 
   const checkbox = el('input', { type: 'checkbox' });
   checkbox.addEventListener('change', () => {
     if (checkbox.checked) checkedIds.add(row.id); else checkedIds.delete(row.id);
-    card.classList.toggle('live-card-done', checkbox.checked);
+    tr.classList.toggle('live-row-done', checkbox.checked);
   });
 
-  card.appendChild(el('label', { class: 'flex items-center gap-8', style: 'cursor:pointer' }, [
+  const descCell = el('div');
+  descCell.appendChild(el('label', { class: 'flex items-center gap-8', style: 'cursor:pointer' }, [
     checkbox,
-    el('strong', {}, entry.description || t('plans.liveModeUnnamedSet')),
+    el('strong', { class: 'live-set-desc' }, entry.description || t('plans.liveModeUnnamedSet')),
   ]));
-
   const context = [row.sectionHeading, row.blockLabel ? `${t('plans.repeatBlockLabel', { n: row.blockRepeatCount })} ${row.blockLabel}` : null].filter(Boolean);
-  if (context.length > 0) card.appendChild(el('p', { class: 'text-sm hint', style: 'margin:4px 0' }, context.join(' · ')));
-
-  card.appendChild(el('p', { class: 'data', style: 'margin:6px 0' }, `${entry.distance ?? '—'} m${(entry.reps || 1) > 1 ? ` × ${entry.reps}` : ''}`));
-  if (entry.durationSec != null) card.appendChild(el('p', { class: 'text-sm' }, formatDuration(entry.durationSec)));
+  if (context.length > 0) descCell.appendChild(el('p', { class: 'text-sm hint', style: 'margin:4px 0 0' }, context.join(' · ')));
   if (equipment.length > 0) {
-    card.appendChild(el('div', { class: 'pill-group', style: 'margin-top:6px' }, equipment.map(eq => badge(trLabel(EQUIPMENT_ITEMS, eq, 'equipment'), 'pb'))));
+    descCell.appendChild(el('div', { class: 'pill-group', style: 'margin-top:4px' }, equipment.map(eq => badge(trLabel(EQUIPMENT_ITEMS, eq, 'equipment'), 'pb'))));
   }
-  return card;
+  tr.appendChild(el('td', {}, descCell));
+
+  tr.appendChild(el('td', {}, trLabel(SET_INTENSITIES, entry.intensity || 'ga1', 'setIntensities')));
+  tr.appendChild(el('td', {}, `${entry.distance ?? '—'} m`));
+  tr.appendChild(el('td', {}, entry.durationSec != null ? formatDuration(entry.durationSec) : '—'));
+  tr.appendChild(el('td', {}, entry.reps));
+  tr.appendChild(el('td', {}, `${entry.restSec || 0}s`));
+  return tr;
 }

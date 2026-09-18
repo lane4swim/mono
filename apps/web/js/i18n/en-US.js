@@ -251,7 +251,7 @@ export default {
     blockSummary: '{inner} m per round × {n} repeats = {total} m',
     totalBadge: '{m} m total', totalBadgeWithDuration: '{m} m total · {duration}',
     defaultSectionHeading: 'Section', sectionNoEntries: 'No entries in this section yet.',
-    colDescription: 'Description', colDistance: 'Distance', colDuration: 'Time', colReps: 'Reps', colRest: 'Rest',
+    colDescription: 'Description', colDistance: 'Distance', colDuration: 'Time', colReps: 'Reps', colRest: 'Rest', colIntensity: 'Intensity',
     modalEdit: 'Edit plan', modalCreate: 'Create training plan',
     formName: 'Name', formWeekStart: 'Week starting', formGroup: 'Group', formStatus: 'Status',
     formPoolLength: 'Pool length', poolLengthNotSet: '— not set —',
