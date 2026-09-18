@@ -107,7 +107,6 @@ export async function renderLiveMode(container, planId, dayIndex) {
   } else {
     const table = el('table');
     table.appendChild(el('thead', {}, el('tr', {}, [
-      el('th', {}, ''),
       el('th', {}, t('plans.colDescription')),
       el('th', {}, t('plans.colIntensity')),
       el('th', {}, t('plans.colDistance')),
