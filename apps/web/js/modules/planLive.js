@@ -32,13 +32,20 @@ export function buildDayChecklist(items, sectionHeading = null) {
   const rows = [];
   (items || []).forEach(entry => {
     if (entry.kind === 'block') {
+      // blockId markiert, welche aufeinanderfolgenden Zeilen zu EINEM
+      // Wiederholungsblock gehören — renderLiveMode() gruppiert Zeilen mit
+      // derselben blockId visuell in einer gemeinsamen Box (siehe dort),
+      // statt wie zuvor auf jeder Zeile einzeln denselben "N× Wiederholung"-
+      // Hinweis zu wiederholen (Ursache der Mehrdeutigkeit aus Issue: war
+      // nicht erkennbar, ob "Satz 1 x2, Satz 2 x2" oder "(Satz 1, Satz 2) x2"
+      // gemeint war).
       buildDayChecklist(entry.sets || [], sectionHeading).forEach(row => rows.push({
-        ...row, blockLabel: entry.label, blockRepeatCount: entry.repeatCount || 1,
+        ...row, blockId: entry.id, blockLabel: entry.label, blockRepeatCount: entry.repeatCount || 1,
       }));
     } else if (entry.kind === 'section') {
       rows.push(...buildDayChecklist(entry.entries || [], entry.heading));
     } else {
-      rows.push({ id: entry.id, entry, sectionHeading, blockLabel: null, blockRepeatCount: null });
+      rows.push({ id: entry.id, entry, sectionHeading, blockId: null, blockLabel: null, blockRepeatCount: null });
     }
   });
   return rows;
@@ -105,23 +112,10 @@ export async function renderLiveMode(container, planId, dayIndex) {
   if (rows.length === 0) {
     wrap.appendChild(emptyState(t('common.nothingHereTitle'), t('plans.noSetsPlanned'), null));
   } else {
-    const table = el('table');
-    table.appendChild(el('thead', {}, el('tr', {}, [
-      el('th', {}, ''),
-      el('th', {}, t('plans.colDescription')),
-      el('th', {}, t('plans.colIntensity')),
-      el('th', {}, t('plans.colDistance')),
-      el('th', {}, t('plans.colDuration')),
-      el('th', {}, t('plans.colReps')),
-      el('th', {}, t('plans.colRest')),
-    ])));
-    const tbody = el('tbody');
     // Bewusst NICHT über put() persistiert (siehe Dateikopf) — lebt nur,
     // solange dieser Render-Aufruf besteht.
     const checkedIds = new Set();
-    rows.forEach(row => tbody.appendChild(buildSetRow(row, exercises, checkedIds)));
-    table.appendChild(tbody);
-    wrap.appendChild(el('div', { class: 'table-wrap' }, table));
+    appendChecklistGroups(wrap, rows, exercises, checkedIds);
   }
 
   wrap.appendChild(el('button', { class: 'btn btn-ghost mt-16', onclick: () => navigate('plans', planId) }, t('plans.liveModeEnd')));
@@ -129,12 +123,76 @@ export async function renderLiveMode(container, planId, dayIndex) {
   container.appendChild(wrap);
 }
 
+// Hängt rows als eine Folge von Tabellen/Boxen an host an: einzelne Sätze
+// (blockId === null) landen wie bisher zusammen in einer flachen Tabelle;
+// aufeinanderfolgende Zeilen mit derselben blockId (siehe buildDayChecklist())
+// gehören zu EINEM Wiederholungsblock und werden stattdessen gemeinsam in
+// eine umrandete Box mit genau EINEM "N× Wiederholung"-Badge gepackt (Optik
+// angelehnt an renderBlockBox() in plans.js). Das macht sichtbar, dass sich
+// die GESAMTE Abfolge der Box N-mal wiederholt (2 × (Satz 1, Satz 2)) statt,
+// wie zuvor bei einem Hinweistext auf jeder einzelnen Zeile, fälschlich zu
+// suggerieren, jeder Satz für sich wiederhole sich (Satz 1 × 2, Satz 2 × 2).
+function appendChecklistGroups(host, rows, exercises, checkedIds) {
+  let pending = [];
+  const flushPending = () => {
+    if (pending.length === 0) return;
+    host.appendChild(el('div', { class: 'table-wrap' }, buildChecklistTable(pending, exercises, checkedIds)));
+    pending = [];
+  };
+  let i = 0;
+  while (i < rows.length) {
+    const row = rows[i];
+    if (row.blockId) {
+      flushPending();
+      const groupRows = [];
+      while (i < rows.length && rows[i].blockId === row.blockId) { groupRows.push(rows[i]); i++; }
+      host.appendChild(buildBlockBox(row.blockLabel, row.blockRepeatCount, groupRows, exercises, checkedIds));
+    } else {
+      pending.push(row);
+      i++;
+    }
+  }
+  flushPending();
+}
+
+function buildChecklistTable(rows, exercises, checkedIds) {
+  const table = el('table');
+  table.appendChild(el('thead', {}, el('tr', {}, [
+    el('th', {}, ''),
+    el('th', {}, t('plans.colDescription')),
+    el('th', {}, t('plans.colIntensity')),
+    el('th', {}, t('plans.colDistance')),
+    el('th', {}, t('plans.colDuration')),
+    el('th', {}, t('plans.colReps')),
+    el('th', {}, t('plans.colRest')),
+  ])));
+  const tbody = el('tbody');
+  rows.forEach(row => tbody.appendChild(buildSetRow(row, exercises, checkedIds)));
+  table.appendChild(tbody);
+  return table;
+}
+
+// Eine Box je Wiederholungsblock: EIN Badge/Hinweis oberhalb der (in sich
+// flachen) Tabelle der Blocksätze statt eines je Zeile wiederholten
+// Hinweistexts (siehe appendChecklistGroups() oben zur Begründung).
+function buildBlockBox(label, repeatCount, rows, exercises, checkedIds) {
+  const box = el('div', { class: 'day-block', style: 'margin:4px 0 12px;border-style:dashed;border-color:var(--c-chlorine-d);background:var(--c-foam-2)' });
+  box.appendChild(el('div', { class: 'day-block-head' }, [
+    el('div', { class: 'flex items-center gap-8' }, [badge(t('plans.repeatBlockLabel', { n: repeatCount }), 'progress'), el('strong', {}, label || t('templates.defaultBlockLabel'))]),
+  ]));
+  box.appendChild(el('p', { class: 'hint', style: 'margin:0 0 10px' }, t('plans.liveModeBlockHint', { n: repeatCount })));
+  box.appendChild(el('div', { class: 'table-wrap' }, buildChecklistTable(rows, exercises, checkedIds)));
+  return box;
+}
+
 // Eine Tabellenzeile je abhakbarem Satz — Spalten/Optik bewusst identisch
 // zur schreibgeschützten Plananzeige (appendEntryRows() in plans.js), nur
-// um eine Abhak-Checkbox sowie die Kontextzeile (Abschnitt/Wiederholungs-
-// block, siehe buildDayChecklist() oben) in der Beschreibungszelle
-// ergänzt. Abgehakte Zeilen bekommen die Klasse live-row-done (siehe
-// styles.css), analog zur früheren Kartenoptik.
+// um eine Abhak-Checkbox sowie die Kontextzeile (Abschnitt, siehe
+// buildDayChecklist() oben) in der Beschreibungszelle ergänzt. Der
+// Wiederholungsblock-Hinweis steht NICHT mehr hier (siehe buildBlockBox()
+// oben) — genau das war die Ursache der Mehrdeutigkeit. Abgehakte Zeilen
+// bekommen die Klasse live-row-done (siehe styles.css), analog zur
+// früheren Kartenoptik.
 function buildSetRow(row, exercises, checkedIds) {
   const { entry } = row;
   const equipment = equipmentForEntry(entry, exercises);
@@ -151,8 +209,7 @@ function buildSetRow(row, exercises, checkedIds) {
     checkbox,
     el('strong', { class: 'live-set-desc' }, entry.description || t('plans.liveModeUnnamedSet')),
   ]));
-  const context = [row.sectionHeading, row.blockLabel ? `${t('plans.repeatBlockLabel', { n: row.blockRepeatCount })} ${row.blockLabel}` : null].filter(Boolean);
-  if (context.length > 0) descCell.appendChild(el('p', { class: 'text-sm hint', style: 'margin:4px 0 0' }, context.join(' · ')));
+  if (row.sectionHeading) descCell.appendChild(el('p', { class: 'text-sm hint', style: 'margin:4px 0 0' }, row.sectionHeading));
   if (equipment.length > 0) {
     descCell.appendChild(el('div', { class: 'pill-group', style: 'margin-top:4px' }, equipment.map(eq => badge(trLabel(EQUIPMENT_ITEMS, eq, 'equipment'), 'pb'))));
   }

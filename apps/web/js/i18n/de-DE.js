@@ -289,6 +289,7 @@ export default {
     liveModeNextDay: 'Nächster Tag →', liveModeLastDay: 'Letzter Tag',
     liveModeEnd: 'Trainingsmodus beenden',
     liveModeUnnamedSet: 'Satz ohne Beschreibung',
+    liveModeBlockHint: 'Sätze unten der Reihe nach absolvieren, dann die gesamte Abfolge {n}× wiederholen.',
   },
   planCycles: {
     backToPlans: '← Zu den Trainingsplänen', backToList: '← Alle Zyklen',
