@@ -18,16 +18,23 @@ describe('buildDayChecklist()', () => {
   it('bildet für jeden einfachen Satz genau eine Zeile ohne Gruppierungsangaben', () => {
     const rows = buildDayChecklist([plainSet('a'), plainSet('b')]);
     expect(rows).toHaveLength(2);
-    expect(rows[0]).toMatchObject({ id: 'a', sectionHeading: null, blockLabel: null, blockRepeatCount: null });
-    expect(rows[1]).toMatchObject({ id: 'b', sectionHeading: null, blockLabel: null, blockRepeatCount: null });
+    expect(rows[0]).toMatchObject({ id: 'a', sectionHeading: null, blockId: null, blockLabel: null, blockRepeatCount: null });
+    expect(rows[1]).toMatchObject({ id: 'b', sectionHeading: null, blockId: null, blockLabel: null, blockRepeatCount: null });
   });
 
   it('zählt einen Wiederholungsblock als seine EINZELNEN Sätze, nicht vervielfacht um repeatCount', () => {
     const block = { kind: 'block', id: 'blk1', label: 'Kraftblock', repeatCount: 3, sets: [plainSet('x'), plainSet('y')] };
     const rows = buildDayChecklist([block]);
     expect(rows).toHaveLength(2); // NICHT 6 (2 Sätze × repeatCount 3)
-    expect(rows[0]).toMatchObject({ id: 'x', blockLabel: 'Kraftblock', blockRepeatCount: 3 });
-    expect(rows[1]).toMatchObject({ id: 'y', blockLabel: 'Kraftblock', blockRepeatCount: 3 });
+    expect(rows[0]).toMatchObject({ id: 'x', blockId: 'blk1', blockLabel: 'Kraftblock', blockRepeatCount: 3 });
+    expect(rows[1]).toMatchObject({ id: 'y', blockId: 'blk1', blockLabel: 'Kraftblock', blockRepeatCount: 3 });
+  });
+
+  it('trägt bei aufeinanderfolgenden Blöcken unterschiedliche blockId, damit renderLiveMode() sie getrennt gruppieren kann', () => {
+    const blockA = { kind: 'block', id: 'blkA', label: 'A', repeatCount: 2, sets: [plainSet('a1')] };
+    const blockB = { kind: 'block', id: 'blkB', label: 'B', repeatCount: 3, sets: [plainSet('b1')] };
+    const rows = buildDayChecklist([blockA, blockB]);
+    expect(rows.map(r => r.blockId)).toEqual(['blkA', 'blkB']);
   });
 
   it('rekursiert in Abschnitte und trägt deren Überschrift auf jede enthaltene Zeile', () => {

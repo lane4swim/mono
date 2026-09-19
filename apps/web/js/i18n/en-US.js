@@ -266,6 +266,7 @@ export default {
     liveModeNextDay: 'Next day →', liveModeLastDay: 'Last day',
     liveModeEnd: 'End training mode',
     liveModeUnnamedSet: 'Set without description',
+    liveModeBlockHint: 'Do the sets below in order, then repeat this whole sequence {n}× in total.',
   },
   planCycles: {
     backToPlans: '← To training plans', backToList: '← All cycles',
