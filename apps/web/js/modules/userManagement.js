@@ -29,15 +29,19 @@ export const userManagementModule = {
     // ab, analog qualifications.js.
     if (IS_DEMO) { renderDemoDisabled(container); return; }
     try {
-      const [clubs, invitationsResp, membersResp] = await Promise.all([
+      const [clubs, invitationsResp, membersResp, legalInfoResp] = await Promise.all([
         isSuperAdmin() ? api.listClubs() : Promise.resolve({ clubs: [] }),
         api.listInvitations(),
         // superadmin gehört zu keinem Verein und sieht Mitglieder stattdessen
         // je Verein über einen Button in der Vereinsliste (on demand).
         isSuperAdmin() ? Promise.resolve({ users: [] }) : api.listClubMembers(),
+        // Ebenso: die rechtlichen Vereinsangaben (Impressum/Datenschutz,
+        // siehe renderClubLegalInfoSection() unten) gibt es nur je EIGENEM
+        // Verein — ein Superadmin hat keinen.
+        isSuperAdmin() ? Promise.resolve({ legalInfo: null }) : api.getClubLegalInfo(getCurrentUser().clubId),
       ]);
       if (!isCurrent()) return;
-      renderView(container, clubs.clubs, invitationsResp.invitations, membersResp.users);
+      renderView(container, clubs.clubs, invitationsResp.invitations, membersResp.users, legalInfoResp.legalInfo);
     } catch (err) {
       if (!isCurrent()) return;
       renderError(container, err);
@@ -75,7 +79,7 @@ function buildInviteUrl(token) {
   return `${location.origin}${location.pathname}#/accept-invite/${token}`;
 }
 
-function renderView(container, clubs, invitations, members) {
+function renderView(container, clubs, invitations, members, legalInfo) {
   const wrap = el('div');
   wrap.appendChild(el('div', { class: 'page-head' }, [
     el('div', {}, [el('div', { class: 'page-eyebrow' }, t('usermgmt.eyebrow')), el('h1', { class: 'mt-0' }, t('usermgmt.title'))]),
@@ -88,6 +92,7 @@ function renderView(container, clubs, invitations, members) {
   } else {
     wrap.appendChild(renderMembersSection(members, refresh));
     wrap.appendChild(renderClubIdentitySection());
+    wrap.appendChild(renderClubLegalInfoSection(legalInfo));
   }
 
   wrap.appendChild(renderInviteSection(clubs, refresh));
@@ -100,12 +105,13 @@ function renderView(container, clubs, invitations, members) {
   async function refresh() {
     clear(container);
     try {
-      const [c2, i2, m2] = await Promise.all([
+      const [c2, i2, m2, l2] = await Promise.all([
         isSuperAdmin() ? api.listClubs() : Promise.resolve({ clubs: [] }),
         api.listInvitations(),
         isSuperAdmin() ? Promise.resolve({ users: [] }) : api.listClubMembers(),
+        isSuperAdmin() ? Promise.resolve({ legalInfo: null }) : api.getClubLegalInfo(getCurrentUser().clubId),
       ]);
-      renderView(container, c2.clubs, i2.invitations, m2.users);
+      renderView(container, c2.clubs, i2.invitations, m2.users, l2.legalInfo);
     } catch (err) {
       renderError(container, err);
     }
@@ -301,6 +307,88 @@ function renderClubIdentitySection() {
       await api.updateClubIdentity(user.clubId, { nationalID, nationalIDType });
       setClubIdentity(nationalID, nationalIDType);
       toast(t('usermgmt.clubIdentitySaved'));
+    } catch (err) {
+      toast(describeError(err), 'error');
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
+  card.appendChild(form);
+  return card;
+}
+
+// Rechtliche Vereinsangaben (Impressum § 5 DDG + Datenschutzhinweis
+// Art. 13 DSGVO) — angezeigt für JEDE Rolle in modules/info.js, hier
+// editierbar nur für Admins des eigenen Vereins (siehe
+// clubLegalInfo.service.ts: update()), daher wie renderClubIdentitySection()
+// oben nur im admin-Zweig von renderView() eingebunden, nicht für
+// superadmin. `legalInfo` kann `null` sein (Abruf schlug fehl, z. B.
+// offline) — das Formular startet dann einfach mit leeren Feldern statt
+// zu crashen; ein erneutes Speichern überschreibt in dem Fall zwar
+// serverseitig bereits gesetzte Werte, ist aber dasselbe Verhalten wie
+// jedes andere Formular dieser App, das ohne vorab geladene Daten
+// speichert.
+function renderClubLegalInfoSection(legalInfo) {
+  const user = getCurrentUser();
+  const card = el('div', { class: 'card mb-16' }, [el('h3', { class: 'mt-0' }, t('usermgmt.legalInfoSection'))]);
+  card.appendChild(el('p', { class: 'hint' }, t('usermgmt.legalInfoHint')));
+  const form = el('form', { class: 'form-grid' });
+  const data = legalInfo || {};
+
+  const fAddress = textInput(data.addressLine1 || '');
+  const fPostalCode = textInput(data.postalCode || '');
+  const fCity = textInput(data.city || '');
+  const fRepresentative = textInput(data.representativeName || '');
+  const fContactEmail = textInput(data.contactEmail || '', { type: 'email' });
+  const fContactPhone = textInput(data.contactPhone || '');
+  const fRegisterNumber = textInput(data.registerNumber || '');
+  const fRegisterCourt = textInput(data.registerCourt || '');
+  const fVatId = textInput(data.vatId || '');
+  const fPrivacyContactEmail = textInput(data.privacyContactEmail || '', { type: 'email' });
+  const fSupervisoryAuthority = textInput(data.supervisoryAuthority || '');
+  const fDpoRequired = el('input', { type: 'checkbox' });
+  fDpoRequired.checked = Boolean(data.dpoRequired);
+  const fDpoName = textInput(data.dpoName || '');
+  const fDpoContact = textInput(data.dpoContact || '');
+
+  form.appendChild(field(t('usermgmt.legalAddressLabel'), fAddress, { span2: true }));
+  form.appendChild(field(t('usermgmt.legalPostalCodeLabel'), fPostalCode));
+  form.appendChild(field(t('usermgmt.legalCityLabel'), fCity));
+  form.appendChild(field(t('usermgmt.legalRepresentativeLabel'), fRepresentative, { span2: true }));
+  form.appendChild(field(t('usermgmt.legalContactEmailLabel'), fContactEmail));
+  form.appendChild(field(t('usermgmt.legalContactPhoneLabel'), fContactPhone));
+  form.appendChild(field(t('usermgmt.legalRegisterNumberLabel'), fRegisterNumber));
+  form.appendChild(field(t('usermgmt.legalRegisterCourtLabel'), fRegisterCourt));
+  form.appendChild(field(t('usermgmt.legalVatIdLabel'), fVatId));
+  form.appendChild(field(t('usermgmt.legalPrivacyContactEmailLabel'), fPrivacyContactEmail, { hint: t('usermgmt.legalPrivacyContactEmailHint'), span2: true }));
+  form.appendChild(field(t('usermgmt.legalSupervisoryAuthorityLabel'), fSupervisoryAuthority, { hint: t('usermgmt.legalSupervisoryAuthorityHint'), span2: true }));
+  form.appendChild(field(t('usermgmt.legalDpoRequiredLabel'), fDpoRequired, { span2: true }));
+  form.appendChild(field(t('usermgmt.legalDpoNameLabel'), fDpoName));
+  form.appendChild(field(t('usermgmt.legalDpoContactLabel'), fDpoContact));
+
+  const submitBtn = el('button', { type: 'submit', class: 'btn btn-primary' }, t('common.save'));
+  form.appendChild(el('div', { class: 'form-actions', style: 'grid-column:1/-1' }, [submitBtn]));
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    submitBtn.disabled = true;
+    try {
+      await api.updateClubLegalInfo(user.clubId, {
+        addressLine1: fAddress.value.trim() || null,
+        postalCode: fPostalCode.value.trim() || null,
+        city: fCity.value.trim() || null,
+        representativeName: fRepresentative.value.trim() || null,
+        contactEmail: fContactEmail.value.trim() || null,
+        contactPhone: fContactPhone.value.trim() || null,
+        registerNumber: fRegisterNumber.value.trim() || null,
+        registerCourt: fRegisterCourt.value.trim() || null,
+        vatId: fVatId.value.trim() || null,
+        privacyContactEmail: fPrivacyContactEmail.value.trim() || null,
+        supervisoryAuthority: fSupervisoryAuthority.value.trim() || null,
+        dpoRequired: fDpoRequired.checked,
+        dpoName: fDpoName.value.trim() || null,
+        dpoContact: fDpoContact.value.trim() || null,
+      });
+      toast(t('usermgmt.legalInfoSaved'));
     } catch (err) {
       toast(describeError(err), 'error');
     } finally {

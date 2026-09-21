@@ -43,6 +43,44 @@ model Club {
   // für die 4-stellige DSV-Vereinskennzahl in nationalID.
   nationalID     String?
   nationalIDType String?
+  // Rechtliche Angaben (Impressum § 5 DDG + Datenschutzhinweis Art. 13
+  // DSGVO) — bewusst auf dem Club-Modell statt in einer eigenen Tabelle,
+  // analog zu nationalID/nationalIDType oben: genau EIN Satz Angaben je
+  // Verein, kein Verlauf/History nötig. Vorerst auf deutsches Recht
+  // zugeschnitten (DDG § 5, BDSG § 38) — siehe docs/Plans/
+  // club-legal-info-plan.md, Abschnitt "Weitere Rechtsordnungen" für den
+  // dokumentierten Folgeaufwand bei Vereinen außerhalb Deutschlands. Jeder
+  // Verein ist selbst datenschutzrechtlich Verantwortlicher (siehe
+  // apps/web/js/i18n/de-DE.js: legal.gdprResponsibleText) — diese Angaben
+  // werden deshalb PRO VEREIN gepflegt statt global/statisch im Frontend
+  // hinterlegt zu sein (siehe clubLegalInfo-Modul).
+  addressLine1        String?
+  postalCode          String?
+  city                String?
+  representativeName  String?
+  contactEmail        String?
+  contactPhone        String?
+  registerNumber      String?
+  registerCourt       String?
+  vatId               String?
+  // Kontaktadresse ausschließlich für Datenschutzanfragen (Art. 13 Abs. 1
+  // Buchst. a DSGVO) — kann von contactEmail abweichen (z. B. eigenes
+  // Postfach der/des Datenschutzbeauftragten). Frontend fällt auf
+  // contactEmail zurück, wenn dieses Feld leer ist (siehe info.js).
+  privacyContactEmail String?
+  // Kontaktangaben der zuständigen Aufsichtsbehörde (Art. 13 Abs. 2
+  // Buchst. d DSGVO: Recht auf Beschwerde) — Freitext, da die zuständige
+  // Landesdatenschutzbehörde vom Bundesland des Vereins abhängt und hier
+  // keine feste Liste gepflegt wird.
+  supervisoryAuthority String?
+  // Ob dieser Verein nach § 38 BDSG / Art. 37 DSGVO zur Bestellung einer/
+  // eines Datenschutzbeauftragten verpflichtet ist bzw. sich freiwillig
+  // dazu entschieden hat — steuert nur, ob dpoName/dpoContact im
+  // Datenschutzhinweis angezeigt werden (siehe info.js), keine eigene
+  // Prüfung der gesetzlichen Schwelle durch die Anwendung.
+  dpoRequired          Boolean @default(false)
+  dpoName              String?
+  dpoContact           String?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
   users          User[]

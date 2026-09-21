@@ -325,6 +325,18 @@ export function updateClub(clubId, { enabledModules }) {
 export function updateClubIdentity(clubId, { nationalID, nationalIDType }) {
   return request(`/api/clubs/${encodeURIComponent(clubId)}/identity`, { method: 'PATCH', body: JSON.stringify({ nationalID, nationalIDType }) });
 }
+// Rechtliche Vereinsangaben (Impressum § 5 DDG + Datenschutzhinweis Art. 13
+// DSGVO), siehe modules/info.js (Anzeige) und modules/userManagement.js
+// (Admin-Bearbeitungsformular). Antwort jeweils: { legalInfo }. Erreichbar
+// für JEDE Rolle des eigenen Vereins (siehe clubLegalInfo.route.ts) —
+// anders als updateClub()/updateClubIdentity() oben kein Superadmin- oder
+// Admin-only-Endpunkt.
+export function getClubLegalInfo(clubId) {
+  return request(`/api/clubs/${encodeURIComponent(clubId)}/legal-info`);
+}
+export function updateClubLegalInfo(clubId, data) {
+  return request(`/api/clubs/${encodeURIComponent(clubId)}/legal-info`, { method: 'PATCH', body: JSON.stringify(data) });
+}
 export function createInvitation({ email, role, clubId, athleteId }) {
   return postJson('/api/invitations', { email, role, clubId, athleteId });
 }

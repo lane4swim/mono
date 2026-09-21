@@ -332,6 +332,24 @@ Cache aufgeräumt wird — ein fehlgeschlagener Serveraufruf darf nie dazu
 führen, dass nur lokal etwas verschwindet, während das Konto serverseitig
 unverändert weiterbesteht.
 
+## DSGVO: Rechtliche Vereinsangaben (Impressum & Datenschutzhinweis)
+
+Ergänzt die Selbstauskunft/Löschung oben um die **Anbieterkennzeichnung**:
+jeder Verein ist laut eigenem Datenschutzhinweis selbst datenschutzrechtlich
+Verantwortlicher, daher werden Impressum (§ 5 DDG) und Datenschutz-Kontakt
+(Art. 13 DSGVO) jetzt **pro Verein** gepflegt statt als eine für alle Vereine
+identische Platzhalterseite. Details, Geltungsbereich (aktuell nur
+deutsches Recht) und der dokumentierte Folgeaufwand für weitere
+Rechtsordnungen: `docs/Plans/club-legal-info-plan.md`.
+
+| Endpunkt | Zweck |
+|---|---|
+| `GET /api/clubs/:id/legal-info` | Angaben abrufen — jede Rolle des eigenen Vereins, Superadmin für jeden Verein |
+| `PATCH /api/clubs/:id/legal-info` | Angaben ändern — nur admin (eigener Verein) oder superadmin |
+
+Die Vorab-Anzeige ohne Login (`authScreens.js`) bleibt bewusst generisch —
+vor der Anmeldung ist der Verein der besuchenden Person noch nicht bekannt.
+
 ## Frontend-Integration (Phase 4)
 
 `apps/web` ist jetzt vollständig mit `apps/api` verbunden:
