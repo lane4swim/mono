@@ -40,7 +40,7 @@ export async function restoreSession() {
     // geschlossen, nicht abgemeldet hat).
     await ensureLocalStoreBelongsTo(result.user.id);
     await applyEnabledModules(result.enabledModules);
-    current = { ...result.user, enabledModules: result.enabledModules, clubNationalID: result.clubNationalID, clubNationalIDType: result.clubNationalIDType };
+    current = { ...result.user, enabledModules: result.enabledModules, clubName: result.clubName, clubNationalID: result.clubNationalID, clubNationalIDType: result.clubNationalIDType };
     setLocale(current?.locale || detectInitialLocale());
     return current;
   } catch (err) {

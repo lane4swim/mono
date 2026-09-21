@@ -330,7 +330,11 @@ function renderClubIdentitySection() {
 // speichert.
 function renderClubLegalInfoSection(legalInfo) {
   const user = getCurrentUser();
-  const card = el('div', { class: 'card mb-16' }, [el('h3', { class: 'mt-0' }, t('usermgmt.legalInfoSection'))]);
+  // clubName kommt seit docs/Plans/club-legal-info-plan.md direkt aus der
+  // Session-Antwort (state.js) mit — kein zusätzlicher Request nötig, nur
+  // um den eigenen Vereinsnamen in der Überschrift zu zeigen.
+  const title = user?.clubName ? `${t('usermgmt.legalInfoSection')} – ${user.clubName}` : t('usermgmt.legalInfoSection');
+  const card = el('div', { class: 'card mb-16' }, [el('h3', { class: 'mt-0' }, title)]);
   card.appendChild(el('p', { class: 'hint' }, t('usermgmt.legalInfoHint')));
   const form = el('form', { class: 'form-grid' });
   const data = legalInfo || {};
