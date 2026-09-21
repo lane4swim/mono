@@ -87,6 +87,63 @@ export const UpdateClubIdentityRequestSchema = z.object({
 });
 export type UpdateClubIdentityRequest = z.infer<typeof UpdateClubIdentityRequestSchema>;
 
+// Rechtliche Vereinsangaben (Impressum § 5 DDG + Datenschutzhinweis
+// Art. 13 DSGVO), siehe schema.prisma: Club-Modell und
+// docs/Plans/club-legal-info-plan.md. Eigenständiges Schema statt
+// Erweiterung von ClubSchema oben: diese Felder werden über einen eigenen
+// Endpunkt (GET/PATCH /api/clubs/:id/legal-info) ausgeliefert, NICHT
+// automatisch bei jeder Club-Abfrage (z. B. GET /api/clubs für die
+// Superadmin-Oberfläche) mitgeschickt — Adresse/Telefon/DPO-Kontakt sind
+// sensibler als die übrigen, bereits breiter exponierten Club-Felder.
+export const ClubLegalInfoSchema = z.object({
+  clubId: z.string().uuid(),
+  // Nur lesend über diesen Endpunkt — der Vereinsname wird weiterhin über
+  // ClubSchema.name / PATCH /api/clubs/:id gepflegt (Superadmin), hier
+  // ausschließlich für die Diensteanbieter-Angabe im Impressum mitgeliefert
+  // (siehe info.js: buildImprintSection()).
+  name: z.string(),
+  addressLine1: z.string().max(200).nullable(),
+  postalCode: z.string().max(20).nullable(),
+  city: z.string().max(200).nullable(),
+  representativeName: z.string().max(200).nullable(),
+  contactEmail: z.string().max(320).nullable(),
+  contactPhone: z.string().max(50).nullable(),
+  registerNumber: z.string().max(100).nullable(),
+  registerCourt: z.string().max(200).nullable(),
+  vatId: z.string().max(50).nullable(),
+  // Fällt im Frontend auf contactEmail zurück, wenn hier nicht gesetzt
+  // (siehe apps/web/js/modules/info.js).
+  privacyContactEmail: z.string().max(320).nullable(),
+  supervisoryAuthority: z.string().max(500).nullable(),
+  dpoRequired: z.boolean(),
+  dpoName: z.string().max(200).nullable(),
+  dpoContact: z.string().max(300).nullable(),
+  updatedAt: z.string().datetime(),
+});
+export type ClubLegalInfo = z.infer<typeof ClubLegalInfoSchema>;
+
+// Schreibbare Teilmenge von ClubLegalInfoSchema oben (ohne clubId/updatedAt,
+// die serverseitig gesetzt werden). Leerstring wird — wie bei
+// UpdateClubIdentityRequestSchema oben — bereits im Frontend zu `null`
+// normalisiert (siehe userManagement.js), nicht per Zod-Transform hier.
+export const UpdateClubLegalInfoRequestSchema = z.object({
+  addressLine1: z.string().max(200).nullable(),
+  postalCode: z.string().max(20).nullable(),
+  city: z.string().max(200).nullable(),
+  representativeName: z.string().max(200).nullable(),
+  contactEmail: z.string().max(320).nullable(),
+  contactPhone: z.string().max(50).nullable(),
+  registerNumber: z.string().max(100).nullable(),
+  registerCourt: z.string().max(200).nullable(),
+  vatId: z.string().max(50).nullable(),
+  privacyContactEmail: z.string().max(320).nullable(),
+  supervisoryAuthority: z.string().max(500).nullable(),
+  dpoRequired: z.boolean(),
+  dpoName: z.string().max(200).nullable(),
+  dpoContact: z.string().max(300).nullable(),
+});
+export type UpdateClubLegalInfoRequest = z.infer<typeof UpdateClubLegalInfoRequestSchema>;
+
 // Nur diese fünf Rollen lassen sich per Einladung vergeben — "superadmin"
 // wird bewusst nie über die API vergeben (siehe scripts/createSuperAdmin.ts).
 // "referee" (Kampfrichter:in, docs/Plans/kampfrichter-modul-plan.md, Abschnitt 2)

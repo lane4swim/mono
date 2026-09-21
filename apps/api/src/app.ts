@@ -36,6 +36,9 @@ import { PrismaRefereeAssignmentRepository, PrismaCompetitionRepository } from '
 import { auditLogRoutes } from './modules/auditLog/auditLog.route.js';
 import { createAuditLogService, type AuditLogService } from './modules/auditLog/auditLog.service.js';
 import { PrismaAuditLogRepository } from './modules/auditLog/auditLog.repository.js';
+import { clubLegalInfoRoutes } from './modules/clubLegalInfo/clubLegalInfo.route.js';
+import { createClubLegalInfoService, type ClubLegalInfoService } from './modules/clubLegalInfo/clubLegalInfo.service.js';
+import { PrismaClubLegalInfoRepository } from './modules/clubLegalInfo/clubLegalInfo.repository.js';
 import { SmtpMailSender, ConsoleMailSender, type MailSender } from './mail/mailer.js';
 import { pushRoutes } from './modules/push/push.route.js';
 import { PrismaPushSubscriptionRepository, type PushSubscriptionRepository } from './modules/push/push.repository.js';
@@ -57,6 +60,7 @@ export interface BuildAppOverrides {
   qualificationsService?: QualificationsService;
   refereesService?: RefereesService;
   auditLogService?: AuditLogService;
+  clubLegalInfoService?: ClubLegalInfoService;
   parentsService?: ParentsService;
   mailer?: MailSender;
   pusher?: PushSender;
@@ -255,6 +259,12 @@ export async function buildApp(env: Env, overrides: BuildAppOverrides = {}): Pro
       competitions: new PrismaCompetitionRepository(getPrisma()),
     });
 
+  const clubLegalInfoService =
+    overrides.clubLegalInfoService ??
+    createClubLegalInfoService({
+      legalInfo: new PrismaClubLegalInfoRepository(getPrisma()),
+    });
+
   const pushSubscriptions = overrides.pushSubscriptions ?? new PrismaPushSubscriptionRepository(getPrisma());
   const pusher = overrides.pusher ?? resolvePushSender(env);
 
@@ -279,6 +289,7 @@ export async function buildApp(env: Env, overrides: BuildAppOverrides = {}): Pro
   await app.register(qualificationsRoutes, { qualificationsService, clubs: clubModulesLookup });
   await app.register(refereesRoutes, { refereesService, clubs: clubModulesLookup });
   await app.register(auditLogRoutes, { auditLogService });
+  await app.register(clubLegalInfoRoutes, { clubLegalInfoService });
   await app.register(pushRoutes, { subscriptions: pushSubscriptions, vapidPublicKey: env.VAPID_PUBLIC_KEY ?? null });
   await app.register(parentsRoutes, { parentsService });
 

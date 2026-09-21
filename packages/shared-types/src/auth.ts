@@ -81,6 +81,9 @@ export const AuthTokensResponseSchema = z.object({
   // Steuert die Sichtbarkeit der Fach-Module in der Navigation
   // (apps/web/js/router.js: visibleModules()).
   enabledModules: z.array(ModuleKeySchema),
+  // Anzeigename des eigenen Vereins — null für "superadmin". Siehe
+  // docs/Plans/club-legal-info-plan.md.
+  clubName: z.string().nullable(),
   // Externe Vereinskennung für den Ergebnisimport (DSV7/Lenex) — null für
   // "superadmin" oder wenn der Verein keine hinterlegt hat. Siehe
   // docs/Plans/dsv7-lenex-import-plan.md Abschnitt 3.1 und
@@ -97,6 +100,7 @@ export type AuthTokensResponse = z.infer<typeof AuthTokensResponseSchema>;
 // nicht unnötig mitführt.
 export const MeResponseSchema = PublicUserSchema.extend({
   enabledModules: z.array(ModuleKeySchema),
+  clubName: z.string().nullable(),
   clubNationalID: z.string().nullable(),
   clubNationalIDType: z.string().nullable(),
 });

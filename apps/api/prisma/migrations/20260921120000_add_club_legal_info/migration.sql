@@ -1,0 +1,15 @@
+-- AlterTable
+ALTER TABLE "clubs" ADD COLUMN     "addressLine1" TEXT,
+ADD COLUMN     "postalCode" TEXT,
+ADD COLUMN     "city" TEXT,
+ADD COLUMN     "representativeName" TEXT,
+ADD COLUMN     "contactEmail" TEXT,
+ADD COLUMN     "contactPhone" TEXT,
+ADD COLUMN     "registerNumber" TEXT,
+ADD COLUMN     "registerCourt" TEXT,
+ADD COLUMN     "vatId" TEXT,
+ADD COLUMN     "privacyContactEmail" TEXT,
+ADD COLUMN     "supervisoryAuthority" TEXT,
+ADD COLUMN     "dpoRequired" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN     "dpoName" TEXT,
+ADD COLUMN     "dpoContact" TEXT;

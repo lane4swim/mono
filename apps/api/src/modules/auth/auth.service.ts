@@ -148,7 +148,7 @@ export interface InvitationValidator {
 // (login/refresh/acceptInvitation/getMe) einzubetten (siehe
 // resolveClubContext() unten).
 export interface ClubModulesLookup {
-  findById(clubId: string): Promise<{ enabledModules: string[]; nationalID: string | null; nationalIDType: string | null } | null>;
+  findById(clubId: string): Promise<{ name: string; enabledModules: string[]; nationalID: string | null; nationalIDType: string | null } | null>;
 }
 
 export interface AuthServiceDeps {
@@ -195,13 +195,20 @@ export function toPublicUser(user: UserRecord) {
 // reisen in der Session-Antwort mit, damit das Frontend den eigenen Verein
 // gegen die Importdatei abgleichen kann, ohne einen eigenen Endpunkt zu
 // brauchen.
+//
+// `clubName` (docs/Plans/club-legal-info-plan.md): der Anzeigename des
+// eigenen Vereins, analog zu den beiden Feldern oben mitgeliefert, damit
+// das Frontend (z. B. modules/userManagement.js: die Überschrift der
+// rechtlichen Angaben) ihn zeigen kann, ohne selbst GET /api/clubs/:id/
+// legal-info oder einen Superadmin-only-Endpunkt abzufragen.
 async function resolveClubContext(
   clubs: ClubModulesLookup,
   clubId: string | null,
-): Promise<{ enabledModules: string[]; clubNationalID: string | null; clubNationalIDType: string | null }> {
+): Promise<{ enabledModules: string[]; clubName: string | null; clubNationalID: string | null; clubNationalIDType: string | null }> {
   const club = clubId ? await clubs.findById(clubId) : null;
   return {
     enabledModules: club?.enabledModules ?? [],
+    clubName: club?.name ?? null,
     clubNationalID: club?.nationalID ?? null,
     clubNationalIDType: club?.nationalIDType ?? null,
   };
