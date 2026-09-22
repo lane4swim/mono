@@ -35,6 +35,17 @@ export const catalogModule = {
   }
 };
 
+// Baut eine unabhängige Kopie einer Katalog-Übung für "Duplizieren" — id/
+// Zeitstempel übernimmt put() automatisch (siehe db.js), Kommentare werden
+// NICHT übernommen: sync.commentAuthorship.ts kennt für eine neue id
+// keinen bestehenden Datensatz und würde einen fremdautorisierten
+// Kommentar beim Push ablehnen (siehe auch importLibrary() in
+// libraryTransfer.js, das aus demselben Grund zurücksetzt).
+export function duplicateExercise(exercise) {
+  const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, deletedAt: _deletedAt, comments: _comments, ...rest } = exercise;
+  return { ...rest, name: t('common.copyOf', { name: exercise.name }), comments: [] };
+}
+
 function renderList(container, exercises) {
   const wrap = el('div');
   let viewMode = loadCatalogView();
@@ -109,6 +120,7 @@ function renderList(container, exercises) {
         ].filter(Boolean)),
         el('div', { class: 'flex gap-8', style: 'margin-top:10px' }, [
           el('button', { class: 'btn btn-ghost btn-sm', onclick: () => openExerciseModal(ex, refresh) }, t('common.edit')),
+          el('button', { class: 'btn btn-ghost btn-sm', onclick: () => duplicate(ex) }, t('common.duplicate')),
           el('button', { class: 'btn btn-danger btn-sm', onclick: () => confirmAction(t('catalog.deleteConfirm', { name: ex.name }), async () => { await remove('exercises', ex.id); toast(t('catalog.deleted')); refresh(); }) }, t('common.delete')),
         ]),
       ]);
@@ -135,6 +147,7 @@ function renderList(container, exercises) {
         el('td', {}, el('div', { class: 'pill-group' }, (ex.equipment || []).map(eq => badge(trLabel(EQUIPMENT_ITEMS, eq, 'equipment'), 'pb')))),
         el('td', {}, el('div', { class: 'flex gap-8' }, [
           el('button', { class: 'btn btn-ghost btn-sm', onclick: () => openExerciseModal(ex, refresh) }, t('common.edit')),
+          el('button', { class: 'btn btn-ghost btn-sm', onclick: () => duplicate(ex) }, t('common.duplicate')),
           el('button', { class: 'btn btn-danger btn-sm', onclick: () => confirmAction(t('catalog.deleteConfirm', { name: ex.name }), async () => { await remove('exercises', ex.id); toast(t('catalog.deleted')); refresh(); }) }, t('common.delete')),
         ])),
       ]));
@@ -144,6 +157,8 @@ function renderList(container, exercises) {
   }
 
   draw();
+
+  async function duplicate(ex) { await put('exercises', duplicateExercise(ex)); toast(t('catalog.duplicated')); refresh(); }
 
   async function refresh() { const e2 = await getAll('exercises'); clear(container); renderList(container, e2); }
 }

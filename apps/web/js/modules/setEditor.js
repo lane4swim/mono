@@ -211,15 +211,28 @@ export function formatQuantity(entry) {
 // Deep-clones a list of entries with fresh ids — used when copying a
 // template's sets into a new plan day, so editing the plan can never
 // mutate the original template (or another day) via shared references.
-export function cloneItems(items) {
+//
+// `resetComments` (used when duplicating a whole Plan/Template — see
+// duplicatePlan()/duplicateTemplate()/duplicateSectionTemplate()): clears
+// each plain set's `comments` instead of carrying the source's over.
+// Required, not just tidy — sync.commentAuthorship.ts (apps/api) only
+// allows a pushed comment to keep a foreign authorId when it already
+// exists on the server record with the SAME id; a duplicate always has a
+// brand-new id, so any carried-over foreign-authored comment would be
+// rejected by the push (see also importLibrary() in libraryTransfer.js,
+// which resets comments for the same reason).
+export function cloneItems(items, { resetComments = false } = {}) {
   return (items || []).map(entry => {
     if (entry.kind === 'block') {
-      return { ...entry, id: localId('block'), sets: (entry.sets || []).map(s => ({ ...s, id: localId('set') })) };
+      return {
+        ...entry, id: localId('block'),
+        sets: (entry.sets || []).map(s => resetComments ? { ...s, id: localId('set'), comments: [] } : { ...s, id: localId('set') }),
+      };
     }
     if (entry.kind === 'section') {
-      return { ...entry, id: localId('section'), entries: cloneItems(entry.entries || []) };
+      return { ...entry, id: localId('section'), entries: cloneItems(entry.entries || [], { resetComments }) };
     }
-    return { ...entry, id: localId('set') };
+    return resetComments ? { ...entry, id: localId('set'), comments: [] } : { ...entry, id: localId('set') };
   });
 }
 
