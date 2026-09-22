@@ -92,7 +92,9 @@ function renderView(container, athletes, results) {
   draw();
 
   async function refresh() {
+    const isCurrent = beginRender(container);
     const [a2, r2] = await Promise.all([getAll('athletes'), getAll('results')]);
+    if (!isCurrent()) return;
     clear(container);
     renderView(container, a2, r2);
   }

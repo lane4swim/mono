@@ -56,7 +56,9 @@ function renderList(container, competitions) {
   container.appendChild(wrap);
 
   async function refresh() {
+    const isCurrent = beginRender(container);
     const c2 = await getAll('competitions');
+    if (!isCurrent()) return;
     clear(container);
     renderList(container, c2);
   }
@@ -77,7 +79,10 @@ function renderCompTable(list, emptyMsg) {
 }
 
 async function renderDetail(container, compId) {
+  const isCurrent = beginRender(container);
   const [competitions, athletes, results, entries] = await Promise.all([getAll('competitions'), getAll('athletes'), getAll('results'), getAll('entries')]);
+  if (!isCurrent()) return;
+  clear(container);
   const comp = competitions.find(c => c.id === compId);
   if (!comp) { container.appendChild(emptyState(t('common.notFoundTitle'), t('competitions.notFoundMsg'), el('button', { class: 'btn btn-primary', onclick: () => navigate('competitions') }, t('common.back')))); return; }
   const compResults = results.filter(r => r.competitionId === compId);
@@ -171,7 +176,7 @@ async function renderDetail(container, compId) {
 
   container.appendChild(wrap);
 
-  async function refreshDetail() { clear(container); renderDetail(container, compId); }
+  function refreshDetail() { return renderDetail(container, compId); }
 }
 
 function groupByHeat(entries) {

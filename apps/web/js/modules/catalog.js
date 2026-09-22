@@ -160,7 +160,13 @@ function renderList(container, exercises) {
 
   async function duplicate(ex) { await put('exercises', duplicateExercise(ex)); toast(t('catalog.duplicated')); refresh(); }
 
-  async function refresh() { const e2 = await getAll('exercises'); clear(container); renderList(container, e2); }
+  async function refresh() {
+    const isCurrent = beginRender(container);
+    const e2 = await getAll('exercises');
+    if (!isCurrent()) return;
+    clear(container);
+    renderList(container, e2);
+  }
 }
 
 function openExerciseModal(exercise, onSaved) {

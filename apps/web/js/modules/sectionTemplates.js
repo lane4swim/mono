@@ -149,7 +149,13 @@ function renderList(container, sectionTemplates, exercises) {
 
   async function duplicate(st) { await put('sectionTemplates', duplicateSectionTemplate(st)); toast(t('sectionTemplates.duplicated')); refresh(); }
 
-  async function refresh() { const [st2, e2] = await Promise.all([getAll('sectionTemplates'), getAll('exercises')]); clear(container); renderList(container, st2, e2); }
+  async function refresh() {
+    const isCurrent = beginRender(container);
+    const [st2, e2] = await Promise.all([getAll('sectionTemplates'), getAll('exercises')]);
+    if (!isCurrent()) return;
+    clear(container);
+    renderList(container, st2, e2);
+  }
 }
 
 function openSectionTemplateModal(sectionTemplate, exercises, onSaved) {

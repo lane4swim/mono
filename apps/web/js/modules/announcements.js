@@ -75,7 +75,9 @@ function renderList(container, announcements, groups) {
   draw();
 
   async function refresh() {
+    const isCurrent = beginRender(container);
     const [a2, g2] = await Promise.all([getAll('announcements'), getAll('groups')]);
+    if (!isCurrent()) return;
     clear(container);
     renderList(container, a2, g2);
   }

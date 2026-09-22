@@ -103,6 +103,7 @@ function renderView(container, clubs, invitations, members, legalInfo) {
   container.appendChild(wrap);
 
   async function refresh() {
+    const isCurrent = beginRender(container);
     clear(container);
     try {
       const [c2, i2, m2, l2] = await Promise.all([
@@ -111,8 +112,10 @@ function renderView(container, clubs, invitations, members, legalInfo) {
         isSuperAdmin() ? Promise.resolve({ users: [] }) : api.listClubMembers(),
         isSuperAdmin() ? Promise.resolve({ legalInfo: null }) : api.getClubLegalInfo(getCurrentUser().clubId),
       ]);
+      if (!isCurrent()) return;
       renderView(container, c2.clubs, i2.invitations, m2.users, l2.legalInfo);
     } catch (err) {
+      if (!isCurrent()) return;
       renderError(container, err);
     }
   }

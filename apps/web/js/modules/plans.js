@@ -93,11 +93,20 @@ function renderList(container, plans, groups, templates, exercises, sectionTempl
     host.appendChild(card);
   });
 
-  async function refresh() { const [p2, g2, t2, e2, st2] = await Promise.all([getAll('plans'), getAll('groups'), getAll('templates'), getAll('exercises'), getAll('sectionTemplates')]); clear(container); renderList(container, p2, g2, t2, e2, st2); }
+  async function refresh() {
+    const isCurrent = beginRender(container);
+    const [p2, g2, t2, e2, st2] = await Promise.all([getAll('plans'), getAll('groups'), getAll('templates'), getAll('exercises'), getAll('sectionTemplates')]);
+    if (!isCurrent()) return;
+    clear(container);
+    renderList(container, p2, g2, t2, e2, st2);
+  }
 }
 
 async function renderDetail(container, planId) {
+  const isCurrent = beginRender(container);
   const [plans, groups, templates, exercises, sectionTemplates] = await Promise.all([getAll('plans'), getAll('groups'), getAll('templates'), getAll('exercises'), getAll('sectionTemplates')]);
+  if (!isCurrent()) return;
+  clear(container);
   const plan = plans.find(p => p.id === planId);
   if (!plan) { container.appendChild(emptyState(t('common.notFoundTitle'), t('plans.notFoundMsg'), el('button', { class: 'btn btn-primary', onclick: () => navigate('plans') }, t('common.back')))); return; }
   const group = groups.find(g => g.id === plan.groupId);
@@ -108,7 +117,7 @@ async function renderDetail(container, planId) {
     el('div', {}, [el('div', { class: 'page-eyebrow' }, group?.name || t('plans.noGroup')), el('h1', { class: 'mt-0' }, plan.name)]),
     el('div', { class: 'page-actions' }, [
       el('button', { class: 'btn btn-ghost', onclick: () => exportPlanToPdf(plan, group, exercises) }, t('plans.exportPdf')),
-      el('button', { class: 'btn btn-ghost', onclick: () => openPlanModal(plan, groups, templates, exercises, sectionTemplates, () => { clear(container); renderDetail(container, planId); }) }, t('common.edit')),
+      el('button', { class: 'btn btn-ghost', onclick: () => openPlanModal(plan, groups, templates, exercises, sectionTemplates, () => renderDetail(container, planId)) }, t('common.edit')),
       el('button', { class: 'btn btn-ghost', onclick: async () => { const copy = await put('plans', duplicatePlan(plan)); toast(t('plans.duplicated')); navigate('plans', copy.id); } }, t('common.duplicate')),
       el('button', { class: 'btn btn-danger', onclick: () => confirmAction(t('plans.deleteConfirm'), async () => { await remove('plans', planId); toast(t('plans.deleted')); navigate('plans'); }) }, t('common.delete')),
     ]),

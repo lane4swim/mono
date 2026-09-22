@@ -191,8 +191,19 @@ export function defaultModuleFor(roles) {
 // Sitzungsgültigkeits-Prüfung, die app.js davor schaltet (`if
 // (!isLoggedIn()) return;`) — diese Prüfung ergibt für app-demo.js keinen
 // Sinn (keine echte, ablaufende Sitzung) und bleibt daher dort weg.
+//
+// Issue #82: beginRender(viewEl) entwertet hier jeden noch laufenden
+// Modul-Render/-refresh() auf demselben Element. Für die EIGENE Prüfung
+// nach `await mod.render()` taugt dieses Token aber nicht — das Modul ruft
+// beginRender() auf demselben Container erneut auf und überschreibt es,
+// wodurch focus()/updateSyncBadge() unten bisher nie liefen. Daher ein
+// eigener, nur von renderRoute() hochgezählter Zähler je Element.
+const routeGenerations = new WeakMap();
 export async function renderRoute(viewEl, route) {
-  const isCurrent = beginRender(viewEl);
+  beginRender(viewEl);
+  const generation = (routeGenerations.get(viewEl) || 0) + 1;
+  routeGenerations.set(viewEl, generation);
+  const isCurrent = () => routeGenerations.get(viewEl) === generation;
   // Löst einen ggf. vom Wettkampf-/Trainingsmodus gehaltenen Screen Wake
   // Lock (siehe wakeLock.js) bei JEDEM Routenwechsel — der neue Modul-Render
   // unten fordert ihn selbst erneut an, falls er ihn weiterhin braucht

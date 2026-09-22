@@ -4,7 +4,7 @@
 // Kein Router-Modul im üblichen Sinn (registerModule/roles) — diese beiden
 // Ansichten müssen funktionieren, BEVOR eine Sitzung besteht, und werden
 // daher direkt von app.js gerendert, je nach Sitzungs-/URL-Zustand.
-import { el } from '../dom.js';
+import { el, beginRender } from '../dom.js';
 import { toast } from '../ui.js';
 import { openModal } from '../modal.js';
 import { field, textInput } from '../forms.js';
@@ -200,6 +200,10 @@ export function renderResetPasswordScreen(container, token, onSuccess) {
 
 // ---- Einladung annehmen ----------------------------------------------
 export async function renderAcceptInvitationScreen(container, token, onSuccess) {
+  // Issue #82: siehe dom.js: beginRender() — zwei schnell aufeinander
+  // folgende Aufrufe (z. B. Sprachwechsel während die Vorschau lädt)
+  // dürfen nicht beide ihre Box anhängen.
+  const isCurrent = beginRender(container);
   container.innerHTML = '';
   const box = el('div', { class: 'auth-box' });
   box.appendChild(el('h1', { class: 'mt-0' }, t('auth.acceptInviteTitle')));
@@ -208,12 +212,14 @@ export async function renderAcceptInvitationScreen(container, token, onSuccess) 
   try {
     preview = await api.getInvitationPreview(token);
   } catch {
+    if (!isCurrent()) return;
     box.appendChild(el('p', { class: 'form-error' }, t('auth.invitationInvalid')));
     box.appendChild(el('a', { href: '#/', class: 'btn btn-ghost', style: 'margin-top:16px' }, t('auth.backToLogin')));
     container.appendChild(box);
     appendLegalFooterLink(container);
     return;
   }
+  if (!isCurrent()) return;
 
   box.appendChild(el('p', {}, t('auth.acceptInviteIntro', {
     email: preview.email,

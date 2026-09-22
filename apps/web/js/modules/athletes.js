@@ -87,17 +87,21 @@ function renderList(container, athletes, groups) {
   drawTable();
 
   async function refresh() {
+    const isCurrent = beginRender(container);
     const [a2, g2] = await Promise.all([getAll('athletes'), getAll('groups')]);
+    if (!isCurrent()) return;
     clear(container);
     renderList(container, a2, g2);
   }
 }
 
 async function renderDetail(container, athleteId, athletes, groups) {
+  const isCurrent = beginRender(container);
   const athlete = athletes.find(a => a.id === athleteId);
   if (!athlete) { container.appendChild(emptyState(t('common.notFoundTitle'), t('athletes.notFoundMsg'), el('button', { class: 'btn btn-primary', onclick: () => navigate('athletes') }, t('athletes.backToOverview')))); return; }
 
   const [results, actionItems, sessions] = await Promise.all([getAll('results'), getAll('actionItems'), getAll('sessions')]);
+  if (!isCurrent()) return;
   const group = groups.find(g => g.id === athlete.groupId);
   const myResults = results.filter(r => r.athleteId === athleteId);
   const myActions = actionItems.filter(a => a.athleteId === athleteId);

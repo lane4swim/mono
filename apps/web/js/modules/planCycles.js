@@ -4,7 +4,7 @@
 // (navigate('plans', 'cycles', ...), siehe plans.js), das Paket bleibt
 // 'plans' (packages/shared-types/src/modules.ts).
 import { getAll, put, remove } from '../db.js';
-import { el, clear } from '../dom.js';
+import { el, clear, beginRender } from '../dom.js';
 import { emptyState, laneWave, toast } from '../ui.js';
 import { openModal, confirmAction } from '../modal.js';
 import { field, textInput, selectInput, dateInput, formActions } from '../forms.js';
@@ -72,7 +72,13 @@ function renderCyclesList(container, cycles, templates) {
     ]));
   });
 
-  async function refresh() { const [c2, t2] = await Promise.all(['planCycles', 'templates'].map(getAll)); clear(container); renderCyclesList(container, c2, t2); }
+  async function refresh() {
+    const isCurrent = beginRender(container);
+    const [c2, t2] = await Promise.all(['planCycles', 'templates'].map(getAll));
+    if (!isCurrent()) return;
+    clear(container);
+    renderCyclesList(container, c2, t2);
+  }
 }
 
 function renderCycleDetail(container, cycleId, cycles, templates, groups) {
@@ -119,7 +125,9 @@ function renderCycleDetail(container, cycleId, cycles, templates, groups) {
   // unsichtbar) — analog zu plans.js: renderDetail(), das ebenfalls frisch
   // lädt statt eine übergebene Liste wiederzuverwenden.
   async function refreshDetail() {
+    const isCurrent = beginRender(container);
     const [cycles2, templates2, groups2] = await Promise.all(['planCycles', 'templates', 'groups'].map(getAll));
+    if (!isCurrent()) return;
     clear(container);
     renderCycleDetail(container, cycleId, cycles2, templates2, groups2);
   }

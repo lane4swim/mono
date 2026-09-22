@@ -132,7 +132,13 @@ function renderView(container, queue) {
   }
   draw();
 
-  async function refresh() { const q2 = await getSyncQueue(); clear(container); renderView(container, q2); }
+  async function refresh() {
+    const isCurrent = beginRender(container);
+    const q2 = await getSyncQueue();
+    if (!isCurrent()) return;
+    clear(container);
+    renderView(container, q2);
+  }
 }
 
 // Führt einen echten Sync-Zyklus aus (Push dann Pull, siehe

@@ -54,11 +54,20 @@ function renderList(container, sessions, groups, athletes) {
   table.appendChild(tbody);
   host.appendChild(el('div', { class: 'table-wrap card' }, table));
 
-  async function refresh() { const [s2, g2, a2] = await Promise.all(['sessions', 'groups', 'athletes'].map(getAll)); clear(container); renderList(container, s2, g2, a2); }
+  async function refresh() {
+    const isCurrent = beginRender(container);
+    const [s2, g2, a2] = await Promise.all(['sessions', 'groups', 'athletes'].map(getAll));
+    if (!isCurrent()) return;
+    clear(container);
+    renderList(container, s2, g2, a2);
+  }
 }
 
 async function renderDetail(container, sessionId) {
+  const isCurrent = beginRender(container);
   const [sessions, groups, athletes, plans] = await Promise.all(['sessions', 'groups', 'athletes', 'plans'].map(getAll));
+  if (!isCurrent()) return;
+  clear(container);
   const session = sessions.find(s => s.id === sessionId);
   if (!session) { container.appendChild(emptyState(t('common.notFoundTitle'), t('sessions.notFoundMsg'), el('button', { class: 'btn btn-primary', onclick: () => navigate('sessions') }, t('common.back')))); return; }
   const group = groups.find(g => g.id === session.groupId);
@@ -69,7 +78,7 @@ async function renderDetail(container, sessionId) {
   wrap.appendChild(el('div', { class: 'page-head' }, [
     el('div', {}, [el('div', { class: 'page-eyebrow' }, group?.name || t('plans.noGroup')), el('h1', { class: 'mt-0' }, fmtDateLong(session.date))]),
     el('div', { class: 'page-actions' }, [
-      el('button', { class: 'btn btn-ghost', onclick: () => openSessionModal(session, groups, athletes, () => { clear(container); renderDetail(container, sessionId); }) }, t('common.edit')),
+      el('button', { class: 'btn btn-ghost', onclick: () => openSessionModal(session, groups, athletes, () => renderDetail(container, sessionId)) }, t('common.edit')),
       el('button', { class: 'btn btn-danger', onclick: () => confirmAction(t('sessions.deleteConfirm'), async () => { await remove('sessions', sessionId); toast(t('sessions.deleted')); navigate('sessions'); }) }, t('common.delete')),
     ]),
   ]));

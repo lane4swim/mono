@@ -84,7 +84,13 @@ function renderList(container, templates, exercises, sectionTemplates) {
 
   async function duplicate(tpl) { await put('templates', duplicateTemplate(tpl)); toast(t('templates.duplicated')); refresh(); }
 
-  async function refresh() { const [t2, e2, st2] = await Promise.all([getAll('templates'), getAll('exercises'), getAll('sectionTemplates')]); clear(container); renderList(container, t2, e2, st2); }
+  async function refresh() {
+    const isCurrent = beginRender(container);
+    const [t2, e2, st2] = await Promise.all([getAll('templates'), getAll('exercises'), getAll('sectionTemplates')]);
+    if (!isCurrent()) return;
+    clear(container);
+    renderList(container, t2, e2, st2);
+  }
 }
 
 function openTemplateModal(template, exercises, sectionTemplates, onSaved) {

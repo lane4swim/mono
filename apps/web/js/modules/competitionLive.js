@@ -17,7 +17,7 @@
 // from here for its start-list "jump into live mode" links, since that
 // grouping is exactly the running order this module renders.
 import { getAll, put } from '../db.js';
-import { el, clear } from '../dom.js';
+import { el, clear, beginRender } from '../dom.js';
 import { secToTime, isPersonalBest } from '../swimTime.js';
 import { fullName, badge, emptyState, laneWave, toast } from '../ui.js';
 import { navigate } from '../router.js';
@@ -89,9 +89,14 @@ export async function renderLiveMode(container, compId, groupIndex) {
   // einzuschalten — siehe wakeLock.js zur zentralen Freigabe beim
   // Verlassen (shell.js: renderRoute()).
   acquireWakeLock();
+  // Issue #82: siehe dom.js: beginRender() — ein überholter, langsamerer
+  // Aufruf (schnelles Blättern zwischen Läufen, Vor-/Zurück-Navigation)
+  // darf nach einem neueren Render nicht mehr ins DOM schreiben.
+  const isCurrent = beginRender(container);
   const [competitions, athletes, entries, results, trainers] = await Promise.all([
     getAll('competitions'), getAll('athletes'), getAll('entries'), getAll('results'), fetchAssignableTrainers(),
   ]);
+  if (!isCurrent()) return;
   const comp = competitions.find(c => c.id === compId);
   const wrap = el('div');
   wrap.appendChild(el('button', { class: 'btn btn-ghost btn-sm mb-16', onclick: () => navigate('competitions', compId) }, t('competitions.backToComp')));

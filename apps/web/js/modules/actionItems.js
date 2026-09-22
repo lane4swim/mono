@@ -104,11 +104,20 @@ function renderList(container, items, athletes, trainers) {
   }
   draw();
 
-  async function refresh() { const [i2, a2] = await Promise.all([getAll('actionItems'), getAll('athletes')]); clear(container); renderList(container, i2, a2, trainers); }
+  async function refresh() {
+    const isCurrent = beginRender(container);
+    const [i2, a2] = await Promise.all([getAll('actionItems'), getAll('athletes')]);
+    if (!isCurrent()) return;
+    clear(container);
+    renderList(container, i2, a2, trainers);
+  }
 }
 
 async function renderDetail(container, itemId, trainers) {
+  const isCurrent = beginRender(container);
   const [items, athletes] = await Promise.all([getAll('actionItems'), getAll('athletes')]);
+  if (!isCurrent()) return;
+  clear(container);
   const item = items.find(i => i.id === itemId);
   if (!item) { container.appendChild(emptyState(t('common.notFoundTitle'), t('actionitems.notFoundMsg'), el('button', { class: 'btn btn-primary', onclick: () => navigate('actionitems') }, t('common.back')))); return; }
   const athlete = athletes.find(a => a.id === item.athleteId);
@@ -120,7 +129,7 @@ async function renderDetail(container, itemId, trainers) {
   wrap.appendChild(el('div', { class: 'page-head' }, [
     el('div', {}, [el('div', { class: 'page-eyebrow' }, fullName(athlete)), el('h1', { class: 'mt-0' }, item.title)]),
     el('div', { class: 'page-actions' }, [
-      el('button', { class: 'btn btn-ghost', onclick: () => openItemModal(item, athletes, trainers, () => { clear(container); renderDetail(container, itemId, trainers); }) }, t('common.edit')),
+      el('button', { class: 'btn btn-ghost', onclick: () => openItemModal(item, athletes, trainers, () => renderDetail(container, itemId, trainers)) }, t('common.edit')),
       el('button', { class: 'btn btn-danger', onclick: () => confirmAction(t('actionitems.deleteConfirm'), async () => { await remove('actionItems', itemId); toast(t('actionitems.deleted')); navigate('actionitems'); }) }, t('common.delete')),
     ]),
   ]));

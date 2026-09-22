@@ -54,6 +54,17 @@ export function clear(node){ while (node.firstChild) node.removeChild(node.first
 // hintereinander feuert) — Inhalte anhängt, nachdem ein neuerer Render
 // die Ansicht bereits gezeichnet hat; genau das führte zu doppeltem
 // Modulinhalt beim Sprachwechsel.
+//
+// Das gilt für JEDEN Einstiegspunkt, der nach einem `await` neu zeichnet —
+// nicht nur für render() selbst, sondern auch für renderDetail(),
+// renderLiveMode() und die refresh()-Helfer nach einem Modal-Speichern
+// (Issue #82): diese rufen beginRender() selbst auf und leeren den
+// Container erst NACH dem Datenabruf und der isCurrent()-Prüfung, sonst
+// überschreibt ein verspäteter refresh() eine inzwischen geöffnete andere
+// Ansicht. Jeder Aufruf ersetzt das Token des Containers; ein weiter
+// außen gehaltenes isCurrent() (z. B. aus render()) wird dadurch falsch
+// und darf nach dem Weiterreichen an einen solchen Einstiegspunkt nicht
+// mehr zum Zeichnen verwendet werden.
 const renderTokens = new WeakMap();
 export function beginRender(container) {
   const token = Symbol('render');
