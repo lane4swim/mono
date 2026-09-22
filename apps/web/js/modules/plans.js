@@ -21,6 +21,27 @@ function poolLengthOptions() {
   return [{ value: '', label: t('plans.poolLengthNotSet') }, ...trOptions(COURSES, 'courses')];
 }
 
+// Baut eine unabhängige Kopie eines Trainingsplans für "Duplizieren" — id/
+// Zeitstempel übernimmt put() automatisch (siehe db.js). weekStart bleibt
+// unverändert (die Person passt das Datum bei Bedarf selbst über
+// "Bearbeiten" an), status wird auf "aktiv" zurückgesetzt (eine Kopie
+// eines archivierten Plans landet sonst sofort wieder im Archiv, wo sie
+// kaum auffällt). Jeder Tag wird per cloneItems(..., { resetComments:
+// true }) tief kopiert: frische Eintrags-ids (sonst teilen sich Original
+// und Kopie dieselben Objekte) UND geleerte Kommentare — analog zu
+// duplicateTemplate() in templates.js (siehe dortiger Kommentar zur
+// Kommentar-Autorenschaft), gilt hier zusätzlich für plan.comments selbst.
+export function duplicatePlan(plan) {
+  const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, deletedAt: _deletedAt, ...rest } = plan;
+  return {
+    ...rest,
+    name: t('common.copyOf', { name: plan.name }),
+    status: 'aktiv',
+    comments: [],
+    days: (plan.days || []).map(d => ({ ...d, sets: cloneItems(d.sets || [], { resetComments: true }) })),
+  };
+}
+
 export const plansModule = {
   id: 'plans',
   roles: ['trainer', 'admin', 'athlete'],
@@ -88,6 +109,7 @@ async function renderDetail(container, planId) {
     el('div', { class: 'page-actions' }, [
       el('button', { class: 'btn btn-ghost', onclick: () => exportPlanToPdf(plan, group, exercises) }, t('plans.exportPdf')),
       el('button', { class: 'btn btn-ghost', onclick: () => openPlanModal(plan, groups, templates, exercises, sectionTemplates, () => { clear(container); renderDetail(container, planId); }) }, t('common.edit')),
+      el('button', { class: 'btn btn-ghost', onclick: async () => { const copy = await put('plans', duplicatePlan(plan)); toast(t('plans.duplicated')); navigate('plans', copy.id); } }, t('common.duplicate')),
       el('button', { class: 'btn btn-danger', onclick: () => confirmAction(t('plans.deleteConfirm'), async () => { await remove('plans', planId); toast(t('plans.deleted')); navigate('plans'); }) }, t('common.delete')),
     ]),
   ]));

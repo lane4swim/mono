@@ -14,7 +14,7 @@ import { vi } from 'vitest';
 
 vi.mock('../js/demoMode.js', () => ({ IS_DEMO: false }));
 
-const { moveEntry, insertEntry, totalDistance, totalDuration, formatQuantity, formatTotalDuration, durationToMinSec, minSecToDuration } = await import('../js/modules/setEditor.js');
+const { moveEntry, insertEntry, totalDistance, totalDuration, formatQuantity, formatTotalDuration, durationToMinSec, minSecToDuration, cloneItems } = await import('../js/modules/setEditor.js');
 
 const set = (id, distance = 100) => ({ kind: 'set', id, description: id, distance, reps: 1 });
 const ids = (list) => list.map(e => e.id);
@@ -115,6 +115,43 @@ describe('insertEntry()', () => {
     const list = [set('a', 100), set('c', 100)];
     insertEntry(list, 1, set('b', 200));
     expect(totalDistance(list)).toBe(400);
+  });
+});
+
+describe('cloneItems()', () => {
+  it('vergibt frische ids und lässt das Original unverändert', () => {
+    const section = { kind: 'section', id: 'sec', heading: 'Hauptteil', entries: [set('a')] };
+    const block = { kind: 'block', id: 'blk', repeatCount: 2, sets: [set('b')] };
+    const list = [set('x'), section, block];
+    const cloned = cloneItems(list);
+
+    expect(cloned[0].id).not.toBe('x');
+    expect(cloned[1].id).not.toBe('sec');
+    expect(cloned[1].entries[0].id).not.toBe('a');
+    expect(cloned[2].id).not.toBe('blk');
+    expect(cloned[2].sets[0].id).not.toBe('b');
+    expect(list[0].id).toBe('x'); // Original unverändert
+  });
+
+  it('behält Kommentare standardmäßig bei (resetComments nicht gesetzt)', () => {
+    const withComments = { ...set('a'), comments: [{ id: 'c1', text: 'Hinweis' }] };
+    const [cloned] = cloneItems([withComments]);
+    expect(cloned.comments).toEqual([{ id: 'c1', text: 'Hinweis' }]);
+  });
+
+  // Für "Duplizieren" (duplicatePlan()/duplicateTemplate()/
+  // duplicateSectionTemplate()) müssen Kommentare geleert werden, sonst
+  // lehnt sync.commentAuthorship.ts (apps/api) einen fremdautorisierten
+  // Kommentar unter der neuen id ab — siehe Kommentar bei cloneItems().
+  it('leert Kommentare auf jeder Verschachtelungsebene, wenn resetComments gesetzt ist', () => {
+    const section = { kind: 'section', id: 'sec', heading: 'H', entries: [{ ...set('a'), comments: [{ id: 'c1' }] }] };
+    const block = { kind: 'block', id: 'blk', repeatCount: 2, sets: [{ ...set('b'), comments: [{ id: 'c2' }] }] };
+    const plain = { ...set('x'), comments: [{ id: 'c3' }] };
+    const [clonedPlain, clonedSection, clonedBlock] = cloneItems([plain, section, block], { resetComments: true });
+
+    expect(clonedPlain.comments).toEqual([]);
+    expect(clonedSection.entries[0].comments).toEqual([]);
+    expect(clonedBlock.sets[0].comments).toEqual([]);
   });
 });
 

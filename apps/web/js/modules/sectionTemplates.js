@@ -36,6 +36,14 @@ export const sectionTemplatesModule = {
   }
 };
 
+// Baut eine unabhängige Kopie einer Abschnitts-Vorlage für "Duplizieren" —
+// analog zu duplicateTemplate() in templates.js (siehe dortiger
+// Kommentar zur Kommentar-Autorenschaft).
+export function duplicateSectionTemplate(sectionTemplate) {
+  const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, deletedAt: _deletedAt, ...rest } = sectionTemplate;
+  return { ...rest, name: t('common.copyOf', { name: sectionTemplate.name }), entries: cloneItems(sectionTemplate.entries || [], { resetComments: true }) };
+}
+
 function renderList(container, sectionTemplates, exercises) {
   const wrap = el('div');
   let viewMode = loadView();
@@ -107,6 +115,7 @@ function renderList(container, sectionTemplates, exercises) {
       card.appendChild(renderEntryList(st.entries || [], exercises, { allowSection: false }));
       card.appendChild(el('div', { class: 'flex gap-8' }, [
         el('button', { class: 'btn btn-ghost btn-sm', onclick: () => openSectionTemplateModal(st, exercises, refresh) }, t('common.edit')),
+        el('button', { class: 'btn btn-ghost btn-sm', onclick: () => duplicate(st) }, t('common.duplicate')),
         el('button', { class: 'btn btn-danger btn-sm', onclick: () => confirmAction(t('sectionTemplates.deleteConfirm', { name: st.name }), async () => { await remove('sectionTemplates', st.id); toast(t('sectionTemplates.deleted')); refresh(); }) }, t('common.delete')),
       ]));
       grid.appendChild(card);
@@ -127,6 +136,7 @@ function renderList(container, sectionTemplates, exercises) {
         el('td', {}, `${totalDistance(st.entries || [])} m`),
         el('td', {}, el('div', { class: 'flex gap-8' }, [
           el('button', { class: 'btn btn-ghost btn-sm', onclick: () => openSectionTemplateModal(st, exercises, refresh) }, t('common.edit')),
+          el('button', { class: 'btn btn-ghost btn-sm', onclick: () => duplicate(st) }, t('common.duplicate')),
           el('button', { class: 'btn btn-danger btn-sm', onclick: () => confirmAction(t('sectionTemplates.deleteConfirm', { name: st.name }), async () => { await remove('sectionTemplates', st.id); toast(t('sectionTemplates.deleted')); refresh(); }) }, t('common.delete')),
         ])),
       ]));
@@ -136,6 +146,8 @@ function renderList(container, sectionTemplates, exercises) {
   }
 
   draw();
+
+  async function duplicate(st) { await put('sectionTemplates', duplicateSectionTemplate(st)); toast(t('sectionTemplates.duplicated')); refresh(); }
 
   async function refresh() { const [st2, e2] = await Promise.all([getAll('sectionTemplates'), getAll('exercises')]); clear(container); renderList(container, st2, e2); }
 }
