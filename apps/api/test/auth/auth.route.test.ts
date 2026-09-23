@@ -277,6 +277,51 @@ describe('Rate-Limiting auf /auth/login', () => {
   });
 });
 
+// Issue #90: IP-Obergrenze zusätzlich zum IP+E-Mail-Limit. Ohne sie bekam
+// jede neue E-Mail-Adresse ein frisches Budget — beliebig viele (teure)
+// argon2id-Prüfungen pro IP.
+describe('IP-Obergrenze auf /auth/login und /auth/forgot-password (30/min)', () => {
+  const loginFrom = (app: FastifyInstance, remoteAddress: string, email: string) =>
+    app.inject({ method: 'POST', url: '/auth/login', remoteAddress, payload: { email, password: 'falsch', consent: true, consentVersion: CURRENT_CONSENT_VERSION } });
+
+  it('blockiert /auth/login nach 30 Versuchen mit jeweils anderer E-Mail-Adresse von derselben IP (429)', async () => {
+    const { app } = await buildTestApp();
+    const statusCodes = [];
+    for (let i = 0; i < 31; i++) statusCodes.push((await loginFrom(app, '203.0.113.7', `zufall-${i}@example.org`)).statusCode);
+    expect(statusCodes.slice(0, 30).every((code) => code === 401)).toBe(true);
+    expect(statusCodes[30]).toBe(429);
+
+    const blocked = await loginFrom(app, '203.0.113.7', 'noch-eine@example.org');
+    expect(blocked.statusCode).toBe(429);
+    expect(Number(blocked.headers['retry-after'])).toBeGreaterThan(0);
+
+    // Eine andere IP hat ihr eigenes, unverbrauchtes Budget.
+    expect((await loginFrom(app, '198.51.100.9', 'andere-ip@example.org')).statusCode).toBe(401);
+    await app.close();
+  }, 120_000);
+
+  it('blockiert /auth/forgot-password nach 30 Anfragen mit jeweils anderer E-Mail-Adresse von derselben IP (429)', async () => {
+    const { app } = await buildTestApp();
+    const statusCodes = [];
+    for (let i = 0; i < 31; i++) {
+      const response = await app.inject({ method: 'POST', url: '/auth/forgot-password', remoteAddress: '203.0.113.8', payload: { email: `reset-${i}@example.org` } });
+      statusCodes.push(response.statusCode);
+    }
+    expect(statusCodes.slice(0, 30).every((code) => code === 200)).toBe(true);
+    expect(statusCodes[30]).toBe(429);
+    await app.close();
+  });
+
+  it('lässt das IP+E-Mail-Limit der Route weiterhin greifen (beide Limits aktiv)', async () => {
+    const { app } = await buildTestApp();
+    const statusCodes = [];
+    for (let i = 0; i < 6; i++) statusCodes.push((await loginFrom(app, '203.0.113.9', 'beide-limits@example.org')).statusCode);
+    expect(statusCodes.slice(0, 5).every((code) => code === 401)).toBe(true);
+    expect(statusCodes[5]).toBe(429);
+    await app.close();
+  });
+});
+
 // Review 30.08.2026, Befund S2: Grenzwert von 10 auf 60/min angehoben
 // (siehe auth.route.ts für die Begründung — apiClient.js erneuert JEDE
 // Sitzung automatisch/proaktiv, mehrere Geräte hinter derselben NAT
