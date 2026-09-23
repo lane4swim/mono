@@ -1,6 +1,6 @@
 // Nachverfolgung der Trainingseinheiten & Feedback
 import { getAll, put, remove } from '../db.js';
-import { el, clear, beginRender } from '../dom.js';
+import { el, clear, beginRender, redraw } from '../dom.js';
 import { fmtDateLong, todayISO, toIsoDateTime } from '../dates.js';
 import { badge, emptyState, laneWave, average, fullName, toast } from '../ui.js';
 import { openModal, confirmAction } from '../modal.js';
@@ -17,9 +17,11 @@ export const sessionsModule = {
     const isCurrent = beginRender(container);
     clear(container);
     if (isAthleteScoped()) return renderAthleteView(container, isCurrent);
+    // Detailansicht lädt ihre Daten selbst (siehe renderDetail()) — vor dem
+    // Listenabruf verzweigen, sonst würde jeder Store doppelt gelesen.
+    if (params[0]) return renderDetail(container, params[0]);
     const [sessions, groups, athletes] = await Promise.all(['sessions', 'groups', 'athletes'].map(getAll));
     if (!isCurrent()) return;
-    if (params[0]) return renderDetail(container, params[0]);
     renderList(container, sessions, groups, athletes);
   }
 };
@@ -54,12 +56,8 @@ function renderList(container, sessions, groups, athletes) {
   table.appendChild(tbody);
   host.appendChild(el('div', { class: 'table-wrap card' }, table));
 
-  async function refresh() {
-    const isCurrent = beginRender(container);
-    const [s2, g2, a2] = await Promise.all(['sessions', 'groups', 'athletes'].map(getAll));
-    if (!isCurrent()) return;
-    clear(container);
-    renderList(container, s2, g2, a2);
+  function refresh() {
+    return redraw(container, () => Promise.all(['sessions', 'groups', 'athletes'].map(getAll)), ([s2, g2, a2]) => renderList(container, s2, g2, a2));
   }
 }
 

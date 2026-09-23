@@ -1,7 +1,7 @@
 // Identifikation & Dokumentation von
 // Handlungsfeldern (Entwicklungsschwerpunkte pro Athlet:in)
 import { getAll, put, remove } from '../db.js';
-import { el, clear, beginRender } from '../dom.js';
+import { el, clear, beginRender, redraw } from '../dom.js';
 import { fmtDateShort, todayISO, toIsoDateTime } from '../dates.js';
 import { badge, emptyState, laneWave, fullName, toast } from '../ui.js';
 import { openModal, confirmAction } from '../modal.js';
@@ -26,9 +26,11 @@ export const actionItemsModule = {
       const mine = items.filter(i => i.athleteId === user?.athleteId);
       return renderAthleteList(container, mine);
     }
+    // Detailansicht lädt ihre Daten selbst (siehe renderDetail()) — vor dem
+    // Listenabruf verzweigen, sonst würde jeder Store doppelt gelesen.
+    if (params[0]) return renderDetail(container, params[0], fetchAssignableTrainers());
     const [items, athletes, trainers] = await Promise.all([getAll('actionItems'), getAll('athletes'), fetchAssignableTrainers()]);
     if (!isCurrent()) return;
-    if (params[0]) return renderDetail(container, params[0], trainers);
     renderList(container, items, athletes, trainers);
   }
 };
@@ -104,18 +106,17 @@ function renderList(container, items, athletes, trainers) {
   }
   draw();
 
-  async function refresh() {
-    const isCurrent = beginRender(container);
-    const [i2, a2] = await Promise.all([getAll('actionItems'), getAll('athletes')]);
-    if (!isCurrent()) return;
-    clear(container);
-    renderList(container, i2, a2, trainers);
+  function refresh() {
+    return redraw(container, () => Promise.all([getAll('actionItems'), getAll('athletes')]), ([i2, a2]) => renderList(container, i2, a2, trainers));
   }
 }
 
-async function renderDetail(container, itemId, trainers) {
+// `trainersOrPromise`: beim ersten Aufruf aus render() das noch laufende
+// fetchAssignableTrainers() (parallel zu den eigenen Abrufen aufgelöst),
+// beim Neuzeichnen nach dem Bearbeiten die bereits geladene Liste.
+async function renderDetail(container, itemId, trainersOrPromise) {
   const isCurrent = beginRender(container);
-  const [items, athletes] = await Promise.all([getAll('actionItems'), getAll('athletes')]);
+  const [items, athletes, trainers] = await Promise.all([getAll('actionItems'), getAll('athletes'), trainersOrPromise]);
   if (!isCurrent()) return;
   clear(container);
   const item = items.find(i => i.id === itemId);

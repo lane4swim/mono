@@ -1,6 +1,6 @@
 // Athleten-, Team- und Gruppenverwaltung
 import { getAll, put, remove } from '../db.js';
-import { el, clear, beginRender } from '../dom.js';
+import { el, clear, beginRender, redraw } from '../dom.js';
 import { ageFromBirthdate, fmtDateShort, todayISO, toIsoDateTime } from '../dates.js';
 import { secToTime } from '../swimTime.js';
 import { fullName, badge, emptyState, laneWave, groupBy, statCard, toast } from '../ui.js';
@@ -86,12 +86,8 @@ function renderList(container, athletes, groups) {
   }
   drawTable();
 
-  async function refresh() {
-    const isCurrent = beginRender(container);
-    const [a2, g2] = await Promise.all([getAll('athletes'), getAll('groups')]);
-    if (!isCurrent()) return;
-    clear(container);
-    renderList(container, a2, g2);
+  function refresh() {
+    return redraw(container, () => Promise.all([getAll('athletes'), getAll('groups')]), ([a2, g2]) => renderList(container, a2, g2));
   }
 }
 

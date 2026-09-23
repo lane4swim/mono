@@ -71,3 +71,17 @@ export function beginRender(container) {
   renderTokens.set(container, token);
   return () => renderTokens.get(container) === token;
 }
+
+// Neuzeichnen eines Containers nach dem obigen Muster in einem Schritt —
+// für die refresh()-Helfer, die nach einem Modal-Speichern Daten neu
+// laden und die Ansicht ersetzen (Issue #82): holt ein Token, wartet auf
+// `load()`, bricht ab, falls inzwischen ein neuerer Render/eine Navigation
+// den Container übernommen hat, und leert ihn erst dann für `draw(data)`
+// (die alte Ansicht bleibt also bis zum Eintreffen der Daten sichtbar).
+export async function redraw(container, load, draw) {
+  const isCurrent = beginRender(container);
+  const data = await load();
+  if (!isCurrent()) return;
+  clear(container);
+  draw(data);
+}

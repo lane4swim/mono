@@ -1,6 +1,6 @@
 // Zeiten- und Leistungserfassung
 import { getAll, put, remove } from '../db.js';
-import { el, clear, beginRender } from '../dom.js';
+import { el, clear, beginRender, redraw } from '../dom.js';
 import { fmtDateShort, todayISO, toIsoDateTime } from '../dates.js';
 import { secToTime, timeToSec } from '../swimTime.js';
 import { fullName, toast, badge, emptyState, laneWave } from '../ui.js';
@@ -91,12 +91,8 @@ function renderView(container, athletes, results) {
   }
   draw();
 
-  async function refresh() {
-    const isCurrent = beginRender(container);
-    const [a2, r2] = await Promise.all([getAll('athletes'), getAll('results')]);
-    if (!isCurrent()) return;
-    clear(container);
-    renderView(container, a2, r2);
+  function refresh() {
+    return redraw(container, () => Promise.all([getAll('athletes'), getAll('results')]), ([a2, r2]) => renderView(container, a2, r2));
   }
 }
 
