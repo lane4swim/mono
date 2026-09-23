@@ -1,7 +1,7 @@
 // Identifikation & Dokumentation von
 // Handlungsfeldern (Entwicklungsschwerpunkte pro Athlet:in)
 import { getAll, put, remove } from '../db.js';
-import { el, clear, beginRender } from '../dom.js';
+import { el, clear, beginRender, redraw } from '../dom.js';
 import { fmtDateShort, todayISO, toIsoDateTime } from '../dates.js';
 import { badge, emptyState, laneWave, fullName, toast } from '../ui.js';
 import { openModal, confirmAction } from '../modal.js';
@@ -26,9 +26,11 @@ export const actionItemsModule = {
       const mine = items.filter(i => i.athleteId === user?.athleteId);
       return renderAthleteList(container, mine);
     }
+    // Detailansicht lädt ihre Daten selbst (siehe renderDetail()) — vor dem
+    // Listenabruf verzweigen, sonst würde jeder Store doppelt gelesen.
+    if (params[0]) return renderDetail(container, params[0], fetchAssignableTrainers());
     const [items, athletes, trainers] = await Promise.all([getAll('actionItems'), getAll('athletes'), fetchAssignableTrainers()]);
     if (!isCurrent()) return;
-    if (params[0]) return renderDetail(container, params[0], trainers);
     renderList(container, items, athletes, trainers);
   }
 };
@@ -104,11 +106,19 @@ function renderList(container, items, athletes, trainers) {
   }
   draw();
 
-  async function refresh() { const [i2, a2] = await Promise.all([getAll('actionItems'), getAll('athletes')]); clear(container); renderList(container, i2, a2, trainers); }
+  function refresh() {
+    return redraw(container, () => Promise.all([getAll('actionItems'), getAll('athletes')]), ([i2, a2]) => renderList(container, i2, a2, trainers));
+  }
 }
 
-async function renderDetail(container, itemId, trainers) {
-  const [items, athletes] = await Promise.all([getAll('actionItems'), getAll('athletes')]);
+// `trainersOrPromise`: beim ersten Aufruf aus render() das noch laufende
+// fetchAssignableTrainers() (parallel zu den eigenen Abrufen aufgelöst),
+// beim Neuzeichnen nach dem Bearbeiten die bereits geladene Liste.
+async function renderDetail(container, itemId, trainersOrPromise) {
+  const isCurrent = beginRender(container);
+  const [items, athletes, trainers] = await Promise.all([getAll('actionItems'), getAll('athletes'), trainersOrPromise]);
+  if (!isCurrent()) return;
+  clear(container);
   const item = items.find(i => i.id === itemId);
   if (!item) { container.appendChild(emptyState(t('common.notFoundTitle'), t('actionitems.notFoundMsg'), el('button', { class: 'btn btn-primary', onclick: () => navigate('actionitems') }, t('common.back')))); return; }
   const athlete = athletes.find(a => a.id === item.athleteId);
@@ -120,7 +130,7 @@ async function renderDetail(container, itemId, trainers) {
   wrap.appendChild(el('div', { class: 'page-head' }, [
     el('div', {}, [el('div', { class: 'page-eyebrow' }, fullName(athlete)), el('h1', { class: 'mt-0' }, item.title)]),
     el('div', { class: 'page-actions' }, [
-      el('button', { class: 'btn btn-ghost', onclick: () => openItemModal(item, athletes, trainers, () => { clear(container); renderDetail(container, itemId, trainers); }) }, t('common.edit')),
+      el('button', { class: 'btn btn-ghost', onclick: () => openItemModal(item, athletes, trainers, () => renderDetail(container, itemId, trainers)) }, t('common.edit')),
       el('button', { class: 'btn btn-danger', onclick: () => confirmAction(t('actionitems.deleteConfirm'), async () => { await remove('actionItems', itemId); toast(t('actionitems.deleted')); navigate('actionitems'); }) }, t('common.delete')),
     ]),
   ]));

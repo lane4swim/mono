@@ -1,6 +1,6 @@
 // Übungskatalog
 import { getAll, put, remove } from '../db.js';
-import { el, clear, beginRender, icon } from '../dom.js';
+import { el, clear, beginRender, icon, redraw } from '../dom.js';
 import { badge, emptyState, laneWave, toast } from '../ui.js';
 import { openModal, confirmAction } from '../modal.js';
 import { field, textInput, selectInput, formActions } from '../forms.js';
@@ -160,7 +160,9 @@ function renderList(container, exercises) {
 
   async function duplicate(ex) { await put('exercises', duplicateExercise(ex)); toast(t('catalog.duplicated')); refresh(); }
 
-  async function refresh() { const e2 = await getAll('exercises'); clear(container); renderList(container, e2); }
+  function refresh() {
+    return redraw(container, () => getAll('exercises'), (e2) => renderList(container, e2));
+  }
 }
 
 function openExerciseModal(exercise, onSaved) {

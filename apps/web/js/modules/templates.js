@@ -1,6 +1,6 @@
 // wiederverwendbare Trainingsplan-Vorlagen
 import { getAll, put, remove } from '../db.js';
-import { el, clear, beginRender } from '../dom.js';
+import { el, clear, beginRender, redraw } from '../dom.js';
 import { badge, emptyState, laneWave, toast } from '../ui.js';
 import { openModal, confirmAction } from '../modal.js';
 import { field, textInput, selectInput, formActions } from '../forms.js';
@@ -84,7 +84,9 @@ function renderList(container, templates, exercises, sectionTemplates) {
 
   async function duplicate(tpl) { await put('templates', duplicateTemplate(tpl)); toast(t('templates.duplicated')); refresh(); }
 
-  async function refresh() { const [t2, e2, st2] = await Promise.all([getAll('templates'), getAll('exercises'), getAll('sectionTemplates')]); clear(container); renderList(container, t2, e2, st2); }
+  function refresh() {
+    return redraw(container, () => Promise.all([getAll('templates'), getAll('exercises'), getAll('sectionTemplates')]), ([t2, e2, st2]) => renderList(container, t2, e2, st2));
+  }
 }
 
 function openTemplateModal(template, exercises, sectionTemplates, onSaved) {

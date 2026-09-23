@@ -2,7 +2,7 @@
 // "Einschwimmen"), unabhängig von einem einzelnen Trainingsplan/einer
 // Trainingsplan-Vorlage anlegbar und dort per setEditor.js einfügbar.
 import { getAll, put, remove } from '../db.js';
-import { el, clear, beginRender, icon } from '../dom.js';
+import { el, clear, beginRender, icon, redraw } from '../dom.js';
 import { badge, emptyState, laneWave, toast } from '../ui.js';
 import { openModal, confirmAction } from '../modal.js';
 import { field, textInput, formActions } from '../forms.js';
@@ -149,7 +149,9 @@ function renderList(container, sectionTemplates, exercises) {
 
   async function duplicate(st) { await put('sectionTemplates', duplicateSectionTemplate(st)); toast(t('sectionTemplates.duplicated')); refresh(); }
 
-  async function refresh() { const [st2, e2] = await Promise.all([getAll('sectionTemplates'), getAll('exercises')]); clear(container); renderList(container, st2, e2); }
+  function refresh() {
+    return redraw(container, () => Promise.all([getAll('sectionTemplates'), getAll('exercises')]), ([st2, e2]) => renderList(container, st2, e2));
+  }
 }
 
 function openSectionTemplateModal(sectionTemplate, exercises, onSaved) {

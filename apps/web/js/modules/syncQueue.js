@@ -10,7 +10,7 @@ import { getSyncQueue, updateSyncEvent, clearSyncedEvents, remove } from '../db.
 import { runSync } from '../syncClient.js';
 import { ApiError, NetworkError, apiErrorMessage } from '../apiClient.js';
 import { IS_DEMO } from '../demoMode.js';
-import { el, clear, beginRender } from '../dom.js';
+import { el, clear, beginRender, redraw } from '../dom.js';
 import { badge, emptyState, laneWave, toast, statCard } from '../ui.js';
 import { confirmAction } from '../modal.js';
 import { t, getLocale } from '../i18n.js';
@@ -132,7 +132,9 @@ function renderView(container, queue) {
   }
   draw();
 
-  async function refresh() { const q2 = await getSyncQueue(); clear(container); renderView(container, q2); }
+  function refresh() {
+    return redraw(container, () => getSyncQueue(), (q2) => renderView(container, q2));
+  }
 }
 
 // Führt einen echten Sync-Zyklus aus (Push dann Pull, siehe

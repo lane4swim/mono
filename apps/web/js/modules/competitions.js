@@ -6,7 +6,7 @@
 // competitionLive.js; die Stoppuhr-Widgets jetzt in stopwatch.js). Diese
 // Datei behält nur noch die Vereinsverwaltung der Wettkämpfe selbst.
 import { getAll, put, remove } from '../db.js';
-import { el, clear, beginRender } from '../dom.js';
+import { el, clear, beginRender, redraw } from '../dom.js';
 import { fmtDateLong, todayISO, toIsoDateTime } from '../dates.js';
 import { secToTime, timeToSec, isPersonalBest } from '../swimTime.js';
 import { fullName, toast, badge, emptyState, laneWave } from '../ui.js';
@@ -29,9 +29,11 @@ export const competitionsModule = {
     if (params[0] && params[1] === 'live') {
       return renderLiveMode(container, params[0], parseInt(params[2], 10) || 0);
     }
+    // Detailansicht lädt ihre Daten selbst (siehe renderDetail()) — vor dem
+    // Listenabruf verzweigen, sonst würde jeder Store doppelt gelesen.
+    if (params[0]) return renderDetail(container, params[0]);
     const competitions = await getAll('competitions');
     if (!isCurrent()) return;
-    if (params[0]) return renderDetail(container, params[0]);
     renderList(container, competitions);
   }
 };
@@ -55,10 +57,8 @@ function renderList(container, competitions) {
 
   container.appendChild(wrap);
 
-  async function refresh() {
-    const c2 = await getAll('competitions');
-    clear(container);
-    renderList(container, c2);
+  function refresh() {
+    return redraw(container, () => getAll('competitions'), (c2) => renderList(container, c2));
   }
 }
 
@@ -77,7 +77,10 @@ function renderCompTable(list, emptyMsg) {
 }
 
 async function renderDetail(container, compId) {
+  const isCurrent = beginRender(container);
   const [competitions, athletes, results, entries] = await Promise.all([getAll('competitions'), getAll('athletes'), getAll('results'), getAll('entries')]);
+  if (!isCurrent()) return;
+  clear(container);
   const comp = competitions.find(c => c.id === compId);
   if (!comp) { container.appendChild(emptyState(t('common.notFoundTitle'), t('competitions.notFoundMsg'), el('button', { class: 'btn btn-primary', onclick: () => navigate('competitions') }, t('common.back')))); return; }
   const compResults = results.filter(r => r.competitionId === compId);
@@ -171,7 +174,7 @@ async function renderDetail(container, compId) {
 
   container.appendChild(wrap);
 
-  async function refreshDetail() { clear(container); renderDetail(container, compId); }
+  function refreshDetail() { return renderDetail(container, compId); }
 }
 
 function groupByHeat(entries) {

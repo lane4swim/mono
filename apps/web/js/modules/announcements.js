@@ -3,7 +3,7 @@
 // Kommentar-Threads an Übungen/Plänen/Ergebnissen — ein Announcement
 // hängt an keiner anderen Entität, nur optional an einer Gruppe.
 import { getAll, put, remove } from '../db.js';
-import { el, clear, beginRender } from '../dom.js';
+import { el, clear, beginRender, redraw } from '../dom.js';
 import { fmtDateTime } from '../dates.js';
 import { badge, emptyState, laneWave, toast } from '../ui.js';
 import { openModal, confirmAction } from '../modal.js';
@@ -74,10 +74,8 @@ function renderList(container, announcements, groups) {
   }
   draw();
 
-  async function refresh() {
-    const [a2, g2] = await Promise.all([getAll('announcements'), getAll('groups')]);
-    clear(container);
-    renderList(container, a2, g2);
+  function refresh() {
+    return redraw(container, () => Promise.all([getAll('announcements'), getAll('groups')]), ([a2, g2]) => renderList(container, a2, g2));
   }
 }
 

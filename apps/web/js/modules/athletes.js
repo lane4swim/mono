@@ -1,6 +1,6 @@
 // Athleten-, Team- und Gruppenverwaltung
 import { getAll, put, remove } from '../db.js';
-import { el, clear, beginRender } from '../dom.js';
+import { el, clear, beginRender, redraw } from '../dom.js';
 import { ageFromBirthdate, fmtDateShort, todayISO, toIsoDateTime } from '../dates.js';
 import { secToTime } from '../swimTime.js';
 import { fullName, badge, emptyState, laneWave, groupBy, statCard, toast } from '../ui.js';
@@ -86,18 +86,18 @@ function renderList(container, athletes, groups) {
   }
   drawTable();
 
-  async function refresh() {
-    const [a2, g2] = await Promise.all([getAll('athletes'), getAll('groups')]);
-    clear(container);
-    renderList(container, a2, g2);
+  function refresh() {
+    return redraw(container, () => Promise.all([getAll('athletes'), getAll('groups')]), ([a2, g2]) => renderList(container, a2, g2));
   }
 }
 
 async function renderDetail(container, athleteId, athletes, groups) {
+  const isCurrent = beginRender(container);
   const athlete = athletes.find(a => a.id === athleteId);
   if (!athlete) { container.appendChild(emptyState(t('common.notFoundTitle'), t('athletes.notFoundMsg'), el('button', { class: 'btn btn-primary', onclick: () => navigate('athletes') }, t('athletes.backToOverview')))); return; }
 
   const [results, actionItems, sessions] = await Promise.all([getAll('results'), getAll('actionItems'), getAll('sessions')]);
+  if (!isCurrent()) return;
   const group = groups.find(g => g.id === athlete.groupId);
   const myResults = results.filter(r => r.athleteId === athleteId);
   const myActions = actionItems.filter(a => a.athleteId === athleteId);
