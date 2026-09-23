@@ -260,6 +260,21 @@ describe('Rate-Limiting auf /auth/login', () => {
 
     await app.close();
   });
+
+  // Issue #89: Groß-/Kleinschreibungs- und Leerzeichen-Varianten derselben
+  // Adresse treffen dasselbe Konto und müssen sich daher ein Budget teilen.
+  it('zählt Schreibvarianten derselben E-Mail-Adresse gemeinsam (429 beim 6. Versuch)', async () => {
+    const { app } = await buildTestApp();
+    const variants = ['opfer@example.org', 'Opfer@example.org', 'OPFER@EXAMPLE.ORG', ' opfer@example.org', 'oPfEr@Example.Org ', 'opfer@EXAMPLE.org'];
+    const statusCodes = [];
+    for (const email of variants) {
+      const response = await app.inject({ method: 'POST', url: '/auth/login', payload: { email, password: 'falsch', consent: true, consentVersion: CURRENT_CONSENT_VERSION } });
+      statusCodes.push(response.statusCode);
+    }
+    expect(statusCodes.slice(0, 5).every((code) => code === 401)).toBe(true);
+    expect(statusCodes[5]).toBe(429);
+    await app.close();
+  });
 });
 
 // Review 30.08.2026, Befund S2: Grenzwert von 10 auf 60/min angehoben
@@ -336,6 +351,20 @@ describe('Rate-Limiting auf /auth/forgot-password (3/15min)', () => {
     const results = [];
     for (let i = 0; i < 4; i++) results.push(await attempt());
     const statusCodes = results.map((r) => r.statusCode);
+    expect(statusCodes.slice(0, 3).every((code) => code === 200)).toBe(true);
+    expect(statusCodes[3]).toBe(429);
+    await app.close();
+  });
+
+  // Issue #89: Schreibvarianten dürfen das Limit nicht umgehen (sonst
+  // beliebig viele Reset-E-Mails an dieselbe Person).
+  it('zählt Schreibvarianten derselben E-Mail-Adresse gemeinsam (429 beim 4. Versuch)', async () => {
+    const { app } = await buildTestApp();
+    const variants = ['flut2@example.org', 'Flut2@example.org', ' FLUT2@example.org', 'flut2@Example.org '];
+    const statusCodes = [];
+    for (const email of variants) {
+      statusCodes.push((await app.inject({ method: 'POST', url: '/auth/forgot-password', payload: { email } })).statusCode);
+    }
     expect(statusCodes.slice(0, 3).every((code) => code === 200)).toBe(true);
     expect(statusCodes[3]).toBe(429);
     await app.close();

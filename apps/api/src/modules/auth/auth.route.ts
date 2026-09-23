@@ -13,6 +13,7 @@ import {
   ChangePasswordRequestSchema,
   ChangeEmailRequestSchema,
   UpdateUserRolesRequestSchema,
+  NormalizedEmailSchema,
 } from '@lane1/shared-types';
 import type { AuthService } from './auth.service.js';
 import { requireAnyRole } from '../../plugins/authorize.js';
@@ -49,6 +50,18 @@ function accessTokenRateLimitKey(request: FastifyRequest): string {
   const header = request.headers.authorization;
   if (!header?.startsWith('Bearer ')) return `${request.ip}:no-token`;
   return createHash('sha256').update(header).digest('hex');
+}
+
+// Schlüssel für /auth/login und /auth/forgot-password: IP + E-Mail, die
+// E-Mail normalisiert über dasselbe Schema wie die Request-Validierung.
+// Der rohe Body-Wert würde sonst jeder Groß-/Kleinschreibungs- oder
+// Leerzeichen-Variante derselben Adresse ein eigenes Budget geben, obwohl
+// alle dasselbe Konto treffen (findByEmail() vergleicht case-insensitiv) —
+// das Limit wäre damit beliebig umgehbar (Issue #89). Ungültige/fehlende
+// Werte teilen sich einen gemeinsamen Zähler pro IP.
+export function ipAndEmailRateLimitKey(request: FastifyRequest): string {
+  const parsed = NormalizedEmailSchema.safeParse((request.body as { email?: unknown } | undefined)?.email);
+  return `${request.ip}:${parsed.success ? parsed.data : 'invalid'}`;
 }
 
 export async function authRoutes(app: FastifyInstance, opts: { authService: AuthService }) {
@@ -92,10 +105,7 @@ export async function authRoutes(app: FastifyInstance, opts: { authService: Auth
         rateLimit: {
           max: 5,
           timeWindow: '1 minute',
-          keyGenerator: (request) => {
-            const email = (request.body as { email?: string } | undefined)?.email ?? 'unknown';
-            return `${request.ip}:${email}`;
-          },
+          keyGenerator: ipAndEmailRateLimitKey,
         },
       },
     },
@@ -189,10 +199,7 @@ export async function authRoutes(app: FastifyInstance, opts: { authService: Auth
         rateLimit: {
           max: 3,
           timeWindow: '15 minutes',
-          keyGenerator: (request) => {
-            const email = (request.body as { email?: string } | undefined)?.email ?? 'unknown';
-            return `${request.ip}:${email}`;
-          },
+          keyGenerator: ipAndEmailRateLimitKey,
         },
       },
     },
