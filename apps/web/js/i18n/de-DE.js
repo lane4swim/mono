@@ -48,6 +48,7 @@ export default {
       internal_error: 'Ein unerwarteter Fehler ist aufgetreten.',
       module_not_enabled: 'Das Qualifikationsmanagement ist für diesen Verein nicht gebucht.',
       qualification_invalid_date_range: 'Das Ablaufdatum darf nicht vor dem Erwerbsdatum liegen.',
+      server_busy: 'Der Server ist gerade ausgelastet. Bitte in einigen Sekunden erneut versuchen.',
     },
     // Übersetzung der stabilen `code`-Werte einzelner Sync-Push-Ergebnisse
     // (status: 'error', siehe packages/shared-types/src/syncEvent.ts:

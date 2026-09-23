@@ -53,10 +53,12 @@ import {
   AthleteNotInClubError,
   UserNotParentError,
 } from '../modules/parents/parents.service.js';
+import { PasswordHasherBusyError } from '../auth/passwordHasherPool.js';
 
 interface HttpErrorMapping {
   status: number;
   code: string;
+  retryAfterSeconds?: number;
 }
 
 // Ein Konstruktor als Schlüssel (nicht der Klassenname als String) —
@@ -119,9 +121,12 @@ const HTTP_ERROR_REGISTRY = new Map<abstract new (...args: never[]) => Error, Ht
   [ParentNotInClubError, { status: 404, code: 'not_found' }],
   [AthleteNotInClubError, { status: 400, code: 'athlete_club_mismatch' }],
   [UserNotParentError, { status: 400, code: 'user_not_parent' }],
+  // Warteschlange des Passwort-Worker-Pools voll (auth/passwordHasherPool.ts).
+  [PasswordHasherBusyError, { status: 503, code: 'server_busy', retryAfterSeconds: 5 }],
 ]);
 
 function sendMappedError(err: Error, mapping: HttpErrorMapping, reply: FastifyReply) {
+  if (mapping.retryAfterSeconds !== undefined) reply.header('retry-after', mapping.retryAfterSeconds);
   return reply.code(mapping.status).send({ error: mapping.code, message: err.message });
 }
 

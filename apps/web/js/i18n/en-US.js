@@ -35,6 +35,7 @@ export default {
       internal_error: 'An unexpected error occurred.',
       module_not_enabled: 'Qualification management is not booked for this club.',
       qualification_invalid_date_range: 'The expiry date cannot be before the acquired date.',
+      server_busy: 'The server is busy right now. Please try again in a few seconds.',
     },
     // See the matching comment in de-DE.js — keep both files' syncErrors
     // in sync with apps/api/src/modules/sync/sync.service.ts.
