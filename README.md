@@ -79,6 +79,11 @@ npm run dev:web
 npm run docker:up
 ```
 
+Der einmalige `migrate`-Service wendet dabei zuerst die Prisma-Migrationen
+an; der `api`-Service startet erst, wenn er erfolgreich beendet ist. Das
+API-Image selbst migriert nicht — die Laufzeit-Rolle braucht so keine
+DDL-Rechte. Migrationen einzeln anstoßen: `docker compose run --rm migrate`.
+
 ## Tests
 
 ```bash

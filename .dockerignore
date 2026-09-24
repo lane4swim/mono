@@ -1,0 +1,18 @@
+# Build-Kontext für apps/api/Dockerfile (`COPY . .` in der build-Stage):
+# Geheimnisse und lokale Artefakte dürfen weder in den Kontext noch in eine
+# Layer der build-Stage gelangen — diese bleibt im Build-Cache erhalten und
+# kann per `--target build` oder `--cache-to … mode=max` exportiert werden.
+.git
+**/node_modules
+**/dist
+coverage
+**/coverage
+*.log
+
+# Zugangsdaten (DB, SMTP, VAPID, Migrations-Rolle) und das RS256-
+# Signierschlüsselpaar, das scripts/setup-*.sh im Checkout anlegen.
+**/.env
+**/.env.*
+!**/.env.example
+apps/api/keys/
+**/*.pem

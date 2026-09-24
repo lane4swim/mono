@@ -5,6 +5,11 @@ on:
     branches: [main]
   pull_request:
 
+# Der Job führt fremden Code aus (npm-Abhängigkeiten, Test-Suite) — der
+# GITHUB_TOKEN bekommt deshalb nur Leserechte, unabhängig vom Repo-Default.
+permissions:
+  contents: read
+
 jobs:
   lint-test-build:
     runs-on: ubuntu-latest
@@ -28,7 +33,7 @@ jobs:
       CORS_ORIGIN: http://localhost:5173
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Voller Verlauf statt des Standard-Shallow-Checkouts (Tiefe 1) —
           # der Befund-U5-Schritt unten vergleicht per `git diff` gegen die
@@ -79,13 +84,17 @@ jobs:
           fi
           echo "CACHE_VERSION wurde angehoben."
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22"
           cache: "npm"
 
       - name: Install dependencies (alle Workspaces)
-        run: npm ci
+        # --ignore-scripts wie im Dockerfile: keine install-/postinstall-
+        # Skripte von Abhängigkeiten. Prisma lädt seine Engines beim ersten
+        # `prisma generate` selbst nach, esbuild bringt sein Binary über
+        # optionale Plattform-Pakete mit.
+        run: npm ci --ignore-scripts
 
       - name: Abhängigkeits-Audit (npm audit)
         # Ergänzt nach dem Sicherheitsreview in Abschnitt 15/12 des
