@@ -25,6 +25,7 @@ import { generateFreshKeyPair } from '../../src/auth/keys.js';
 import { verifyAccessToken } from '../../src/auth/tokens.js';
 import { generateInvitationToken, hashRefreshToken } from '../../src/auth/tokens.js';
 import { CURRENT_CONSENT_VERSION, LoginRequestSchema } from '@lane1/shared-types';
+import { PasswordTooShortForRoleError, CommonPasswordError } from '../../src/auth/passwordPolicy.js';
 
 const CLUB_ID = '11111111-1111-1111-1111-111111111111';
 const INVITER_ID = '99999999-9999-9999-9999-999999999999';
@@ -1212,5 +1213,52 @@ describe('authService — Audit-Log für Anmelde-/Kontoereignisse (Issue #96)', 
     const all = await auditLogEntries.list({ limit: 100 });
     expect(all.map((e) => e.action)).toEqual(expect.arrayContaining(['user.passwordChanged', 'user.emailChanged']));
     expect(all.find((e) => e.action === 'user.emailChanged')?.metadata).toEqual({ oldEmail: 'wechsel@example.org', newEmail: 'neu@example.org' });
+  });
+});
+
+// Issue #97: Mindestlänge 12 für Administrationskonten und Abgleich gegen
+// bekannte Leak-Passwörter — in jedem Ablauf, der ein Passwort setzt.
+describe('authService — Passwort-Anforderungen (Issue #97)', () => {
+  it('acceptInvitation(): verlangt 12 Zeichen für eine admin-Einladung, 8 für andere Rollen', async () => {
+    const { service, invitations } = makeService();
+    const adminToken = await seedInvitation(invitations, { email: 'neu-admin@example.org', role: 'admin' });
+    await expect(
+      service.acceptInvitation({ token: adminToken, name: 'Neu Admin', password: 'Kx7!mQ2#vLp', consent: true }),
+    ).rejects.toThrow(PasswordTooShortForRoleError);
+    await expect(
+      service.acceptInvitation({ token: adminToken, name: 'Neu Admin', password: 'Kx7!mQ2#vLp9', consent: true }),
+    ).resolves.toBeTruthy();
+
+    const trainerToken = await seedInvitation(invitations, { email: 'neu-trainer@example.org', role: 'trainer' });
+    await expect(
+      service.acceptInvitation({ token: trainerToken, name: 'Neu Trainer', password: 'Kx7!mQ2#', consent: true }),
+    ).resolves.toBeTruthy();
+  });
+
+  it('acceptInvitation(): lehnt ein Leak-Passwort ab, ohne ein Konto anzulegen', async () => {
+    const { service, invitations, users } = makeService();
+    const token = await seedInvitation(invitations, { email: 'leak@example.org', role: 'athlete' });
+    await expect(
+      service.acceptInvitation({ token, name: 'Leak', password: 'Password123', consent: true }),
+    ).rejects.toThrow(CommonPasswordError);
+    expect(await users.findByEmail('leak@example.org')).toBeNull();
+  });
+
+  it('resetPassword(): ein abgelehntes Passwort verbraucht den Link nicht', async () => {
+    const { service, invitations, mailer } = makeService();
+    await registerViaInvitation(service, invitations, { email: 'reset-policy@example.org' });
+    await service.requestPasswordReset('reset-policy@example.org');
+    await new Promise((r) => setTimeout(r, 0));
+    const token = mailer.sentPasswordResetEmails.at(-1)!.resetUrl.split('/reset-password/')[1]!;
+
+    await expect(service.resetPassword(token, 'iloveyou123')).rejects.toThrow(CommonPasswordError);
+    await expect(service.resetPassword(token, 'ein-neues-passwort')).resolves.toBeTruthy();
+  });
+
+  it('changePassword(): verlangt 12 Zeichen, sobald das Konto admin-Rechte hat', async () => {
+    const { service, invitations } = makeService();
+    const { user } = await registerViaInvitation(service, invitations, { email: 'wird-admin@example.org', role: 'admin' });
+    await expect(service.changePassword(user.id, 'ein-sicheres-passwort', 'Kx7!mQ2#')).rejects.toThrow(PasswordTooShortForRoleError);
+    await expect(service.changePassword(user.id, 'ein-sicheres-passwort', 'Kx7!mQ2#vLp9')).resolves.toBeTruthy();
   });
 });
