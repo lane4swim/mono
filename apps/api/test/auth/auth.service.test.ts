@@ -399,6 +399,28 @@ describe('authService.refresh', () => {
     // Wiederverwendungsversuch selbst wurde abgelehnt.
     await expect(service.refresh(second.refreshToken)).rejects.toThrow(InvalidRefreshTokenError);
   });
+
+  // Issue #92: zwei gleichzeitige refresh()-Aufrufe mit demselben Token
+  // passierten beide die revokedAt-Prüfung und erhielten beide ein neues
+  // Token-Paar — ein Angreifer mit gestohlenem Token konnte die
+  // Token-Familie so abzweigen, ohne die Reuse-Detection auszulösen.
+  it('stellt bei zwei gleichzeitigen Aufrufen mit demselben Token nur EIN neues Token-Paar aus und widerruft die Familie', async () => {
+    const { service, invitations } = makeService();
+    const { refreshToken } = await registerViaInvitation(service, invitations);
+
+    const results = await Promise.allSettled([service.refresh(refreshToken), service.refresh(refreshToken)]);
+
+    const fulfilled = results.filter((r) => r.status === 'fulfilled');
+    const rejected = results.filter((r) => r.status === 'rejected');
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect((rejected[0] as PromiseRejectedResult).reason).toBeInstanceOf(InvalidRefreshTokenError);
+
+    // Der Verlierer hat ein bereits rotiertes Token benutzt — wie bei der
+    // Reuse-Detection wird auch das Token des Gewinners widerrufen.
+    const winner = (fulfilled[0] as PromiseFulfilledResult<Awaited<ReturnType<typeof service.refresh>>>).value;
+    await expect(service.refresh(winner.refreshToken)).rejects.toThrow(InvalidRefreshTokenError);
+  });
 });
 
 describe('authService.logout', () => {
@@ -759,6 +781,34 @@ describe('authService.resetPassword', () => {
     // ungenutzte Link darf danach nicht mehr funktionieren.
     await service.resetPassword(firstToken, 'ein-neues-passwort');
     await expect(service.resetPassword(secondToken, 'noch-ein-anderes-passwort')).rejects.toThrow(InvalidOrExpiredResetTokenError);
+  });
+
+  // Issue #92: zwei gleichzeitige Einlöseversuche desselben Links
+  // passierten beide die usedAt-Prüfung — beide änderten das Passwort,
+  // beide erhielten eine Sitzung.
+  it('lässt bei zwei gleichzeitigen Einlöseversuchen desselben Links nur EINEN erfolgreich sein', async () => {
+    const { service, invitations, mailer } = makeService();
+    await registerViaInvitation(service, invitations, { email: 'parallel@example.org' });
+    const token = await requestAndExtractToken(service, mailer, 'parallel@example.org');
+
+    const results = await Promise.allSettled([
+      service.resetPassword(token, 'passwort-von-anfrage-a'),
+      service.resetPassword(token, 'passwort-von-anfrage-b'),
+    ]);
+
+    const fulfilled = results.filter((r) => r.status === 'fulfilled');
+    const rejected = results.filter((r) => r.status === 'rejected');
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect((rejected[0] as PromiseRejectedResult).reason).toBeInstanceOf(InvalidOrExpiredResetTokenError);
+
+    // Gilt genau das Passwort der erfolgreichen Anfrage.
+    const winningPassword = results[0].status === 'fulfilled' ? 'passwort-von-anfrage-a' : 'passwort-von-anfrage-b';
+    const losingPassword = winningPassword === 'passwort-von-anfrage-a' ? 'passwort-von-anfrage-b' : 'passwort-von-anfrage-a';
+    const login = (password: string) =>
+      service.login({ email: 'parallel@example.org', password, consent: true, consentVersion: CURRENT_CONSENT_VERSION });
+    await expect(login(winningPassword)).resolves.toBeTruthy();
+    await expect(login(losingPassword)).rejects.toThrow(InvalidCredentialsError);
   });
 });
 

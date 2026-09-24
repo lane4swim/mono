@@ -112,6 +112,15 @@ export class InMemoryRefreshTokenRepository implements RefreshTokenRepository {
     if (existing) this.tokensById.set(id, { ...existing, revokedAt: new Date() });
   }
 
+  // Prüfen und Schreiben ohne dazwischenliegendes await — im Single-Thread-
+  // Modell von Node damit so atomar wie das bedingte UPDATE in Prisma.
+  async consume(id: string): Promise<boolean> {
+    const existing = this.tokensById.get(id);
+    if (!existing || existing.revokedAt) return false;
+    this.tokensById.set(id, { ...existing, revokedAt: new Date() });
+    return true;
+  }
+
   async revokeAllForUser(userId: string): Promise<void> {
     for (const [tokenId, token] of this.tokensById.entries()) {
       if (token.userId === userId && !token.revokedAt) {
@@ -144,9 +153,11 @@ export class InMemoryPasswordResetTokenRepository implements PasswordResetTokenR
     return null;
   }
 
-  async markUsed(id: string): Promise<void> {
+  async consume(id: string): Promise<boolean> {
     const existing = this.tokensById.get(id);
-    if (existing) this.tokensById.set(id, { ...existing, usedAt: new Date() });
+    if (!existing || existing.usedAt) return false;
+    this.tokensById.set(id, { ...existing, usedAt: new Date() });
+    return true;
   }
 
   // Sicherheitsreview 2026-08-27, Befund N4 — siehe Kommentar am

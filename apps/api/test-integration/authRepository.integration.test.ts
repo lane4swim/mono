@@ -6,7 +6,11 @@
 // "die beiden Prüfungen waren bereits einmal auseinandergelaufen").
 import { describe, it, expect, afterEach, afterAll } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { PrismaUserRepository } from '../src/modules/auth/auth.repository.js';
+import {
+  PrismaUserRepository,
+  PrismaRefreshTokenRepository,
+  PrismaPasswordResetTokenRepository,
+} from '../src/modules/auth/auth.repository.js';
 import { getTestPrisma, closeTestPrisma, truncateAll, createTestClub } from './helpers.js';
 
 const prisma = getTestPrisma();
@@ -167,5 +171,57 @@ describe('User.athleteId — Unique-Constraint (Schema-Integrität)', () => {
 
     const reloaded = await repo.findById(user.id);
     expect(reloaded?.athleteId).toBeNull();
+  });
+});
+
+// Issue #92: consume() ist die atomare Einlösung einmaliger Tokens — das
+// bedingte UPDATE (… WHERE revokedAt/usedAt IS NULL) darf bei gleichzeitigen
+// Aufrufen genau EINEM Aufrufer `true` liefern. Das lässt sich nur gegen die
+// echte Datenbank prüfen, nicht gegen das In-Memory-Double.
+describe('PrismaRefreshTokenRepository.consume()', () => {
+  const tokens = new PrismaRefreshTokenRepository(prisma);
+
+  it('liefert bei gleichzeitigen Aufrufen genau einmal true', async () => {
+    const club = await createTestClub();
+    const user = await seedUser(club.id);
+    const token = await tokens.create(user.id, `hash-${randomUUID()}`, new Date(Date.now() + 60_000));
+
+    const results = await Promise.all(Array.from({ length: 5 }, () => tokens.consume(token.id)));
+
+    expect(results.filter(Boolean)).toHaveLength(1);
+    expect((await tokens.findByHash(token.tokenHash))?.revokedAt).not.toBeNull();
+  });
+
+  it('liefert false für ein bereits widerrufenes Token', async () => {
+    const club = await createTestClub();
+    const user = await seedUser(club.id);
+    const token = await tokens.create(user.id, `hash-${randomUUID()}`, new Date(Date.now() + 60_000));
+    await tokens.revoke(token.id);
+
+    expect(await tokens.consume(token.id)).toBe(false);
+  });
+});
+
+describe('PrismaPasswordResetTokenRepository.consume()', () => {
+  const tokens = new PrismaPasswordResetTokenRepository(prisma);
+
+  it('liefert bei gleichzeitigen Aufrufen genau einmal true', async () => {
+    const club = await createTestClub();
+    const user = await seedUser(club.id);
+    const token = await tokens.create(user.id, `hash-${randomUUID()}`, new Date(Date.now() + 60_000));
+
+    const results = await Promise.all(Array.from({ length: 5 }, () => tokens.consume(token.id)));
+
+    expect(results.filter(Boolean)).toHaveLength(1);
+    expect((await tokens.findByHash(token.tokenHash))?.usedAt).not.toBeNull();
+  });
+
+  it('liefert false für ein bereits verwendetes Token', async () => {
+    const club = await createTestClub();
+    const user = await seedUser(club.id);
+    const token = await tokens.create(user.id, `hash-${randomUUID()}`, new Date(Date.now() + 60_000));
+    await tokens.markAllUsedForUser(user.id);
+
+    expect(await tokens.consume(token.id)).toBe(false);
   });
 });
