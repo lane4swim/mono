@@ -6,7 +6,7 @@ describe('SyncEventSchema', () => {
     const event = {
       id: 'evt_a1b2',
       store: 'athletes',
-      entityId: 'ath_9f3c',
+      entityId: '9f3c0000-0000-4000-8000-000000000001',
       action: 'create',
       payload: { firstName: 'Mara', lastName: 'Vogel' },
       clientUpdatedAt: new Date().toISOString(),
@@ -18,7 +18,7 @@ describe('SyncEventSchema', () => {
     const event = {
       id: 'evt_c3d4',
       store: 'results',
-      entityId: 'res_1',
+      entityId: '9f3c0000-0000-4000-8000-000000000002',
       action: 'delete',
       payload: null,
       clientUpdatedAt: new Date().toISOString(),
@@ -30,7 +30,7 @@ describe('SyncEventSchema', () => {
     const event = {
       id: 'evt_x',
       store: 'not_a_real_store',
-      entityId: 'x',
+      entityId: '9f3c0000-0000-4000-8000-000000000003',
       action: 'update',
       payload: {},
       clientUpdatedAt: new Date().toISOString(),
@@ -41,9 +41,21 @@ describe('SyncEventSchema', () => {
   it('lehnt ein Event ohne id ab (Idempotenz-Schlüssel ist Pflicht)', () => {
     const event = {
       store: 'athletes',
-      entityId: 'ath_1',
+      entityId: '9f3c0000-0000-4000-8000-000000000004',
       action: 'update',
       payload: {},
+      clientUpdatedAt: new Date().toISOString(),
+    };
+    expect(SyncEventSchema.safeParse(event).success).toBe(false);
+  });
+
+  it('lehnt eine entityId ab, die keine UUID ist', () => {
+    const event = {
+      id: 'evt_z',
+      store: 'athletes',
+      entityId: 'ath_1',
+      action: 'delete',
+      payload: null,
       clientUpdatedAt: new Date().toISOString(),
     };
     expect(SyncEventSchema.safeParse(event).success).toBe(false);
@@ -53,7 +65,7 @@ describe('SyncEventSchema', () => {
     const event = {
       id: 'evt_y',
       store: 'athletes',
-      entityId: 'ath_1',
+      entityId: '9f3c0000-0000-4000-8000-000000000004',
       action: 'update',
       payload: {},
       clientUpdatedAt: 'gestern',

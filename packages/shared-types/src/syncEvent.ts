@@ -28,7 +28,8 @@ export type SyncAction = z.infer<typeof SyncActionSchema>;
 export const SyncEventSchema = z.object({
   id: z.string().min(1), // client-generierte UUID, dient als Idempotenz-Schlüssel
   store: SyncStoreSchema,
-  entityId: z.string().min(1),
+  // Alle synchronisierten Entitäten tragen UUIDs als id (siehe entities.ts).
+  entityId: z.string().uuid(),
   action: SyncActionSchema,
   payload: z.record(z.unknown()).nullable(), // bei action === 'delete' ist payload null
   clientUpdatedAt: z.string().datetime(),

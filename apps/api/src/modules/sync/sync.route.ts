@@ -140,14 +140,15 @@ export async function syncRoutes(app: FastifyInstance, opts: SyncRoutesOptions) 
     const body = parseInput(SyncPushRequestSchema, request.body, reply);
     if (!body) return;
     const requester = await requesterFrom(request);
-    const results = await syncService.push(body.events, requester);
+    const createdEventIds = new Set<string>();
+    const results = await syncService.push(body.events, requester, { onCreated: (eventId) => createdEventIds.add(eventId) });
 
     // Phase 2, Abschnitt 2.4: fire-and-forget — läuft NACH dem Senden der
     // Sync-Antwort (siehe .then() statt await) und blockiert diese daher
     // nicht; ein Fehler hier darf einen ansonsten erfolgreichen Sync-Push
     // nicht scheitern lassen (nur geloggt).
     if (announcementNotify) {
-      notifyAnnouncementCreated(announcementNotify, body.events, results, requester.clubId, requester.userId).catch((err) => {
+      notifyAnnouncementCreated(announcementNotify, body.events, createdEventIds, requester.clubId, requester.userId).catch((err) => {
         app.log.error({ err }, 'Push-Benachrichtigung für neues Announcement fehlgeschlagen');
       });
     }

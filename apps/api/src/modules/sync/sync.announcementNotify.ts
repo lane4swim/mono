@@ -3,7 +3,6 @@
 // sync.service.ts (dessen push() reine Push/Pull-Mechanik bleibt, siehe
 // dortiger Datei-Kopfkommentar) — sync.route.ts ruft diese Funktion NACH
 // syncService.push() fire-and-forget auf, siehe dort.
-import type { SyncEventResult } from '@lane1/shared-types';
 import type { PushSender } from '../../push/pusher.js';
 import type { PushSubscriptionRepository } from '../push/push.repository.js';
 import type { AnnouncementRecipientsGateway } from './announcementRecipients.repository.js';
@@ -15,9 +14,12 @@ export interface AnnouncementNotifyDeps {
 }
 
 // Nimmt die ROHEN, bereits an syncService.push() übergebenen Events
-// entgegen (nicht nur die Ergebnisse) — nur von dort lässt sich das
-// Payload (title/groupId) eines NEU angelegten Announcements ablesen; die
-// SyncEventResult-Liste selbst trägt außer dem Status kein Payload mehr.
+// entgegen — nur von dort lässt sich das Payload (title/groupId) eines NEU
+// angelegten Announcements ablesen. Welche davon tatsächlich eine neue Zeile
+// angelegt haben, meldet push() über `onCreated` (createdEventIds): der
+// Status "applied" allein reicht nicht, er gilt auch für Idempotenz-
+// Wiederholungen und für ein "create" auf eine bereits bestehende entityId —
+// beides löste sonst erneut eine Benachrichtigung aus.
 // `unknown[]` statt `SyncEvent[]`: sync.route.ts validiert `body.events`
 // bewusst nicht vollständig VOR syncService.push() (das übernimmt dessen
 // eigene, event-weise Validierung) — die Felder werden hier defensiv
@@ -25,16 +27,18 @@ export interface AnnouncementNotifyDeps {
 export async function notifyAnnouncementCreated(
   deps: AnnouncementNotifyDeps,
   events: readonly unknown[],
-  results: readonly SyncEventResult[],
+  createdEventIds: ReadonlySet<string>,
   clubId: string,
   authorUserId: string,
 ): Promise<void> {
-  const resultById = new Map(results.map((r) => [r.eventId, r]));
-
+  // Dieselbe event-id kann im Batch mehrfach vorkommen (Wiederholung
+  // innerhalb eines Requests) — benachrichtigt wird trotzdem nur einmal.
+  const notified = new Set<string>();
   for (const raw of events) {
-    const event = raw as { id?: unknown; store?: unknown; action?: unknown; payload?: unknown } | null;
-    if (!event || event.store !== 'announcements' || event.action !== 'create') continue;
-    if (typeof event.id !== 'string' || resultById.get(event.id)?.status !== 'applied') continue;
+    const event = raw as { id?: unknown; store?: unknown; payload?: unknown } | null;
+    if (!event || event.store !== 'announcements') continue;
+    if (typeof event.id !== 'string' || !createdEventIds.has(event.id) || notified.has(event.id)) continue;
+    notified.add(event.id);
 
     const payload = event.payload as { title?: unknown; groupId?: unknown } | null;
     const title = typeof payload?.title === 'string' ? payload.title : '';
