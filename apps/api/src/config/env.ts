@@ -80,6 +80,12 @@ const EnvSchema = z.object({
   SYNC_EVENT_RETENTION_DAYS: z.coerce.number().int().positive().default(90),
   SYNC_TOMBSTONE_RETENTION_DAYS: z.coerce.number().int().positive().default(180),
 
+  // Aufbewahrung des Audit-Logs (Issue #96): ältere Einträge löscht der
+  // tägliche Lauf von scripts/purgeDeletedData.ts. Ein Jahr reicht, um
+  // Vorfälle einer Saison nachzuvollziehen, ohne personenbezogene Daten
+  // (Namen/E-Mail-Adressen in den Einträgen) unbegrenzt anzuhäufen.
+  AUDIT_LOG_RETENTION_DAYS: z.coerce.number().int().positive().default(365),
+
   // Web-Push (Phase 2, Abschnitt 1.2 — docs/Plans/phase2-plan.md), VAPID-
   // Schlüsselpaar. Einmalig erzeugt über `npx web-push generate-vapid-keys`
   // (im Ordner apps/api, das Paket ist bereits Abhängigkeit). Bleiben beide

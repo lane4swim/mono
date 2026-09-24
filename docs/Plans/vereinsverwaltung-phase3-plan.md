@@ -307,6 +307,13 @@ Abs. 2 DSGVO — überwiegt hier bewusst, analog dazu, wie
 `QualificationReminderLog` ebenfalls dauerhaft/ohne eigene Löschlogik
 geführt wird).
 
+> **Überholt durch Issue #96:** Einträge werden inzwischen (a) nach
+> `AUDIT_LOG_RETENTION_DAYS` (Standard 365 Tage) vom täglichen
+> `purge-deleted-data`-Lauf gelöscht und (b) beim Hard-Purge eines Kontos
+> pseudonymisiert (`jobs/auditLogPseudonymization.ts`: Name, E-Mail und
+> Konto-ID der Person werden durch ein je Purge zufälliges Pseudonym
+> ersetzt, der Eintrag selbst bleibt). Siehe Abschnitt 2.8.
+
 **Kein Zod-Schema in `packages/shared-types/src/entities.ts`** (kein
 Sync-Store, siehe 2.1) — stattdessen ein schlankes Response-Schema in
 einem neuen `packages/shared-types/src/auditLog.ts` (nur für die
@@ -419,6 +426,26 @@ im Demo-Modus).
   `auditLog` ergänzt. Gesamte Testsuite bleibt grün: `apps/api` 574/574
   (inkl. Typecheck & Lint fehlerfrei), Prisma-Schema valide.
 
+### 2.8 Erweiterung (Issue #96)
+
+- **Weitere Aktionstypen:** `auth.loginFailed` (nur bestehende Konten,
+  ohne await protokolliert, damit kein Timing-Orakel entsteht),
+  `auth.refreshTokenReuse`, `auth.passwordResetRequested`,
+  `auth.passwordReset`, `user.passwordChanged`, `user.emailChanged`,
+  `club.created`, `club.modulesChanged`, `club.identityChanged`,
+  `club.legalInfoChanged` (nur Namen der geänderten Felder),
+  `parentLink.added`/`removed`, `qualification.*` und
+  `refereeAssignment.*` (nur die Admin-Pfade für andere Mitglieder).
+  Erfolgreiche Logins werden bewusst nicht protokolliert.
+- **Schreibfehler** (Issue #65, Befund 3): `record()` wirft nicht mehr,
+  sondern loggt den Fehler — die bereits abgeschlossene Fachaktion
+  erscheint nicht als 500.
+- **Labels:** fehlt ein Label, löst `record()` die ID selbst als Konto auf.
+  Personen ohne Konto im Kontext werden als sprachneutrale Marker
+  (`__unknown__`, `__system__`, `__deleted_account__#…`) gespeichert und im
+  Frontend übersetzt.
+- **Aufbewahrung und Löschung:** siehe Hinweis in Abschnitt 2.3.
+
 ## 3. Rollen & Berechtigungen (zusammenfassend)
 
 | Feature | `admin` | `superadmin` | `trainer` | `athlete` |
@@ -435,8 +462,5 @@ im Demo-Modus).
   die Zurückstellung) — verwaiste IDs bleiben bestehen, sind aber nie
   sichtbar und ohne Berechtigungswirkung.
 - Protokollierung des Hard-Purge selbst (Abschnitt 2.2).
-- Retention/Archivierung alter Audit-Log-Einträge — unbegrenztes
-  Wachstum ist für die zu erwartende Ereignisrate (Einladungen,
-  Rollenänderungen, Löschanfragen sind seltene Aktionen) in dieser Phase
-  kein Problem; bei Bedarf später nachrüstbar, ohne das Datenmodell zu
-  ändern.
+- ~~Retention/Archivierung alter Audit-Log-Einträge~~ — mit Issue #96
+  nachgerüstet (siehe Abschnitt 2.8).

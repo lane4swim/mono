@@ -326,13 +326,16 @@ describe('invitationsService — Audit-Log', () => {
     expect(revokeEntry).toMatchObject({ targetId: invitation.id, targetLabel: 'a@a.de' });
   });
 
-  it('protokolliert createClub() als Einladung erstellt', async () => {
+  it('protokolliert createClub() als Vereinsanlage UND Einladung (Issue #96)', async () => {
     const { service, auditLogEntries } = makeService();
     const result = await service.createClub({ name: 'SV Wasserfreunde', adminEmail: 'admin@sv.de', adminName: 'Petra Klein' }, SUPERADMIN);
 
     const entries = await auditLogEntries.list({ clubId: result.club.id, limit: 10 });
-    expect(entries).toHaveLength(1);
-    expect(entries[0]).toMatchObject({ action: 'invitation.created', targetLabel: 'admin@sv.de' });
+    expect(entries).toHaveLength(2);
+    expect(entries).toEqual(expect.arrayContaining([
+      expect.objectContaining({ action: 'club.created', targetId: result.club.id, targetLabel: 'SV Wasserfreunde' }),
+      expect.objectContaining({ action: 'invitation.created', targetLabel: 'admin@sv.de' }),
+    ]));
   });
 });
 
@@ -491,5 +494,40 @@ describe('invitationsService — einladende Person wird je Aktion nur einmal gel
     await service.createClub({ name: 'SV Wasserfreunde', adminEmail: 'admin@sv.de', adminName: 'Petra Klein' }, SUPERADMIN);
 
     expect(findById).toHaveBeenCalledTimes(1);
+  });
+});
+
+// Issue #65, Befund 3: schlägt der Audit-Log-INSERT fehl, ist die Einladung
+// trotzdem angelegt und versendet — der Aufruf darf dann nicht scheitern
+// (ein Client-Retry erzeugte sonst eine zweite Einladung).
+describe('invitationsService — Audit-Log-Fehler', () => {
+  it('createInvitation() gelingt, auch wenn der Audit-Log-Eintrag nicht geschrieben werden kann', async () => {
+    const { service, clubs, invitations, mailer, auditLogEntries } = makeService();
+    const club = await clubs.create({ name: 'Club A' });
+    vi.spyOn(auditLogEntries, 'create').mockRejectedValueOnce(new Error('DB kurz weg'));
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const invitation = await service.createInvitation({ email: 'trainer@a.de', role: 'trainer' }, { ...ADMIN_OF_CLUB_A, clubId: club.id });
+
+    expect(await invitations.findById(invitation.id)).not.toBeNull();
+    expect(mailer.sentEmails).toHaveLength(1);
+    consoleError.mockRestore();
+  });
+});
+
+// Issue #96: Moduländerung und Vereinskennung werden protokolliert.
+describe('invitationsService — Vereinsänderungen im Audit-Log (Issue #96)', () => {
+  it('protokolliert Modul- und Kennungsänderungen mit altem und neuem Wert', async () => {
+    const { service, clubs, auditLogEntries } = makeService();
+    const club = await clubs.create({ name: 'Club A' });
+
+    await service.updateClubModules(club.id, ['training'], SUPERADMIN);
+    await service.updateClubIdentity(club.id, { nationalID: '1234', nationalIDType: 'DSV' }, { ...ADMIN_OF_CLUB_A, clubId: club.id });
+
+    const entries = await auditLogEntries.list({ clubId: club.id, limit: 10 });
+    const modules = entries.find((e) => e.action === 'club.modulesChanged');
+    const identity = entries.find((e) => e.action === 'club.identityChanged');
+    expect(modules).toMatchObject({ actorId: SUPERADMIN.id, targetId: club.id, targetLabel: 'Club A', metadata: { newModules: ['training'] } });
+    expect(identity?.metadata).toEqual({ old: { nationalID: null, nationalIDType: null }, new: { nationalID: '1234', nationalIDType: 'DSV' } });
   });
 });

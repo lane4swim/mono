@@ -49,6 +49,17 @@ function renderError(container, err) {
 // docs/Plans/vereinsverwaltung-phase3-plan.md, Abschnitt 2.3 — action-
 // spezifische Zusatzdaten (metadata) menschenlesbar zusammenfassen, statt
 // rohes JSON anzuzeigen.
+// Server-seitige Marker (auditLog.service.ts, jobs/auditLogPseudonymization.ts)
+// statt fest gespeicherter Anzeigetexte — hier in die UI-Sprache übersetzt.
+const DELETED_ACCOUNT_PREFIX = '__deleted_account__#';
+function describePerson(label) {
+  if (!label) return '—';
+  if (label === '__unknown__') return t('auditLog.unknownActor');
+  if (label === '__system__') return t('auditLog.systemActor');
+  if (label.startsWith(DELETED_ACCOUNT_PREFIX)) return t('auditLog.deletedAccount', { ref: label.slice(DELETED_ACCOUNT_PREFIX.length) });
+  return label;
+}
+
 function describeEntry(entry) {
   const meta = entry.metadata || {};
   switch (entry.action) {
@@ -63,6 +74,45 @@ function describeEntry(entry) {
       });
     case 'user.deletionRequested':
       return t('auditLog.action.deletionRequested');
+    case 'auth.loginFailed':
+      return t('auditLog.action.loginFailed');
+    case 'auth.refreshTokenReuse':
+      return t('auditLog.action.refreshTokenReuse');
+    case 'auth.passwordResetRequested':
+      return t('auditLog.action.passwordResetRequested');
+    case 'auth.passwordReset':
+      return t('auditLog.action.passwordReset');
+    case 'user.passwordChanged':
+      return t('auditLog.action.passwordChanged');
+    case 'user.emailChanged':
+      return t('auditLog.action.emailChanged');
+    case 'club.created':
+      return t('auditLog.action.clubCreated');
+    case 'club.modulesChanged':
+      return t('auditLog.action.clubModulesChanged', {
+        oldModules: (meta.oldModules || []).join(', ') || '—',
+        newModules: (meta.newModules || []).join(', ') || '—',
+      });
+    case 'club.identityChanged':
+      return t('auditLog.action.clubIdentityChanged');
+    case 'club.legalInfoChanged':
+      return t('auditLog.action.clubLegalInfoChanged', { fields: (meta.fields || []).join(', ') || '—' });
+    case 'parentLink.added':
+      return t('auditLog.action.parentLinkAdded');
+    case 'parentLink.removed':
+      return t('auditLog.action.parentLinkRemoved');
+    case 'qualification.created':
+      return t('auditLog.action.qualificationCreated', { type: meta.type || '—' });
+    case 'qualification.updated':
+      return t('auditLog.action.qualificationUpdated', { type: meta.type || '—' });
+    case 'qualification.deleted':
+      return t('auditLog.action.qualificationDeleted', { type: meta.type || '—' });
+    case 'refereeAssignment.created':
+      return t('auditLog.action.refereeAssignmentCreated', { competition: meta.competitionName || '—' });
+    case 'refereeAssignment.updated':
+      return t('auditLog.action.refereeAssignmentUpdated', { competition: meta.competitionName || '—' });
+    case 'refereeAssignment.deleted':
+      return t('auditLog.action.refereeAssignmentDeleted', { competition: meta.competitionName || '—' });
     default:
       return entry.action;
   }
@@ -101,8 +151,8 @@ function renderView(container, initialEntries) {
       tbody.appendChild(el('tr', {}, [
         el('td', {}, fmtDateTime(e.createdAt)),
         el('td', {}, describeEntry(e)),
-        el('td', {}, e.actorLabel || '—'),
-        el('td', {}, e.targetLabel || '—'),
+        el('td', {}, describePerson(e.actorLabel)),
+        el('td', {}, describePerson(e.targetLabel)),
       ]));
     });
     table.appendChild(tbody);

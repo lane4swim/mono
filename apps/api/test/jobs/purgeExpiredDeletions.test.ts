@@ -314,3 +314,31 @@ describe('purgeExpiredDeletions — Tombstones (Verbesserung: Löschungen bleibe
     );
   });
 });
+
+// Issue #96: Audit-Log-Einträge überleben den Purge, aber ohne Name,
+// E-Mail-Adresse und Konto-ID der gelöschten Person.
+describe('purgeExpiredDeletions — Audit-Log-Pseudonymisierung (Issue #96)', () => {
+  it('pseudonymisiert Einträge von und über die Person mit EINEM gemeinsamen Pseudonym und lässt fremde Einträge unverändert', async () => {
+    const at = new Date('2026-06-01T00:00:00.000Z');
+    const db = makeDb({
+      users: [{ id: 'u1', clubId: 'club-1', athleteId: null, name: 'Mara Vogel', email: 'mara@example.org' }],
+      deletionRequests: [{ id: 'req1', userId: 'u1', purgeAfter: PAST }],
+      auditLogEntries: [
+        { id: 'a1', clubId: 'club-1', actorId: 'u1', actorLabel: 'Mara Vogel <mara@example.org>', action: 'user.passwordChanged', targetId: 'u1', targetLabel: 'Mara Vogel <mara@example.org>', metadata: {}, createdAt: at },
+        { id: 'a2', clubId: 'club-1', actorId: 'admin-1', actorLabel: 'Admina <admin@a.de>', action: 'invitation.created', targetId: 'inv-1', targetLabel: 'mara@example.org', metadata: { role: 'trainer', email: 'mara@example.org' }, createdAt: at },
+        { id: 'a3', clubId: 'club-1', actorId: 'admin-1', actorLabel: 'Admina <admin@a.de>', action: 'invitation.created', targetId: 'inv-2', targetLabel: 'jonas@example.org', metadata: { role: 'athlete', email: 'jonas@example.org' }, createdAt: at },
+      ],
+    });
+    const gateway = new InMemoryErasureJobGateway(db);
+    await purgeExpiredDeletions(gateway, NOW);
+
+    const [own, invitation, other] = db.auditLogEntries!;
+    expect(own).toMatchObject({ actorId: null, targetId: null, action: 'user.passwordChanged' });
+    expect(own!.actorLabel).toMatch(/^__deleted_account__#[0-9a-f]{8}$/);
+    expect(own!.targetLabel).toBe(own!.actorLabel);
+    expect(invitation).toMatchObject({ actorId: 'admin-1', targetId: 'inv-1', targetLabel: own!.actorLabel, metadata: { role: 'trainer' } });
+    expect(other).toMatchObject({ targetLabel: 'jonas@example.org', metadata: { role: 'athlete', email: 'jonas@example.org' } });
+    expect(JSON.stringify(db.auditLogEntries)).not.toContain('mara@example.org');
+    expect(JSON.stringify(db.auditLogEntries)).not.toContain('Mara Vogel');
+  });
+});

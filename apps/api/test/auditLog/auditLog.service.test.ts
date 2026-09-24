@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createAuditLogService, ClubIdRequiredError, type AuditLogService } from '../../src/modules/auditLog/auditLog.service.js';
 import { InMemoryAuditLogRepository } from '../../src/modules/auditLog/auditLog.repository.memory.js';
 
@@ -93,5 +93,23 @@ describe('list()', () => {
     }
     const result = await service.list({ roles: ['admin'], clubId: CLUB_A }, { limit: 2 });
     expect(result).toHaveLength(2);
+  });
+});
+
+// Issue #65, Befund 3: ein fehlschlagender Protokoll-INSERT darf die bereits
+// abgeschlossene Fachaktion nicht als Fehler erscheinen lassen.
+describe('record() — Schreibfehler', () => {
+  it('wirft nicht, sondern loggt den Fehler', async () => {
+    const entries = new InMemoryAuditLogRepository();
+    vi.spyOn(entries, 'create').mockRejectedValueOnce(new Error('DB kurz weg'));
+    const service = createAuditLogService({ entries });
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await expect(
+      service.record({ clubId: 'club-a', actorId: 'a', actorLabel: 'a', action: 'invitation.created', targetId: 'inv-1', targetLabel: 'x' }),
+    ).resolves.toBeUndefined();
+
+    expect(consoleError).toHaveBeenCalledWith(expect.stringContaining('invitation.created'), expect.any(Error));
+    consoleError.mockRestore();
   });
 });

@@ -3,6 +3,7 @@
 import type { ParentOverviewResponse, ParentLink } from '@lane1/shared-types';
 import type { ParentLinkRepository } from './parents.repository.js';
 import type { ParentOverviewGateway } from './parents.overview.repository.js';
+import type { AuditLogWriter } from '../auditLog/auditLog.service.js';
 
 // Minimale, für dieses Modul ausreichende Nachschlagemöglichkeiten —
 // analog AthleteLookup in invitations.repository.ts: keine Abhängigkeit
@@ -19,6 +20,7 @@ export interface ParentsServiceDeps {
   overview: ParentOverviewGateway;
   users: ParentsUserLookup;
   athletes: ParentsAthleteLookup;
+  auditLog: AuditLogWriter;
 }
 
 export class ParentNotInClubError extends Error {}
@@ -70,12 +72,27 @@ export function createParentsService(deps: ParentsServiceDeps) {
       if (!athlete || athlete.clubId !== requester.clubId) throw new AthleteNotInClubError();
 
       await deps.parentLinks.create(targetUserId, athleteId);
+      // Eine Verknüpfung gibt dem Elternkonto Zugriff auf die Daten des Kindes.
+      await deps.auditLog.record({
+        clubId: requester.clubId,
+        actorId: requester.userId,
+        action: 'parentLink.added',
+        targetId: targetUserId,
+        metadata: { athleteId },
+      });
     },
 
     async removeLink(targetUserId: string, athleteId: string, requester: RequesterContext): Promise<void> {
       const target = await deps.users.findById(targetUserId);
       if (!target || target.clubId !== requester.clubId) throw new ParentNotInClubError();
       await deps.parentLinks.remove(targetUserId, athleteId);
+      await deps.auditLog.record({
+        clubId: requester.clubId,
+        actorId: requester.userId,
+        action: 'parentLink.removed',
+        targetId: targetUserId,
+        metadata: { athleteId },
+      });
     },
   };
 }

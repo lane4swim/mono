@@ -15,14 +15,17 @@
 //     invitations.service.ts: updateClubIdentity().
 import type { ClubLegalInfoRepository, ClubLegalInfoRecord, UpdateClubLegalInfoInput } from './clubLegalInfo.repository.js';
 import { ForbiddenError, ClubNotFoundError } from '../invitations/invitations.service.js';
+import type { AuditLogWriter } from '../auditLog/auditLog.service.js';
 
 export interface RequesterContext {
+  id: string;
   roles: string[];
   clubId: string | null;
 }
 
 export interface ClubLegalInfoServiceDeps {
   legalInfo: ClubLegalInfoRepository;
+  auditLog: AuditLogWriter;
 }
 
 export function createClubLegalInfoService(deps: ClubLegalInfoServiceDeps) {
@@ -42,7 +45,24 @@ export function createClubLegalInfoService(deps: ClubLegalInfoServiceDeps) {
       }
       const existing = await deps.legalInfo.findByClubId(clubId);
       if (!existing) throw new ClubNotFoundError();
-      return deps.legalInfo.update(clubId, data);
+      const updated = await deps.legalInfo.update(clubId, data);
+      // Nur die Namen der tatsächlich geänderten Felder, nicht die Inhalte:
+      // Impressum/Datenschutzhinweis sind lang und ohnehin im Verein sichtbar.
+      // Das Formular schickt stets alle Felder mit, daher der Vergleich.
+      const before = existing as unknown as Record<string, unknown>;
+      const changedFields = Object.entries(data)
+        .filter(([key, value]) => value !== undefined && before[key] !== value)
+        .map(([key]) => key);
+      if (changedFields.length === 0) return updated;
+      await deps.auditLog.record({
+        clubId,
+        actorId: requester.id,
+        action: 'club.legalInfoChanged',
+        targetId: clubId,
+        targetLabel: '',
+        metadata: { fields: changedFields },
+      });
+      return updated;
     },
   };
 }

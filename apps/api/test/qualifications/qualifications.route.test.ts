@@ -7,6 +7,8 @@ import { createQualificationsService } from '../../src/modules/qualifications/qu
 import { InMemoryUserQualificationRepository, InMemoryQualificationReminderSettingRepository } from '../../src/modules/qualifications/qualifications.repository.memory.js';
 import { generateFreshKeyPair, type KeyPair } from '../../src/auth/keys.js';
 import { signAccessToken } from '../../src/auth/tokens.js';
+import { createAuditLogService } from '../../src/modules/auditLog/auditLog.service.js';
+import { InMemoryAuditLogRepository } from '../../src/modules/auditLog/auditLog.repository.memory.js';
 
 const testEnv = loadEnv({
   NODE_ENV: 'test',
@@ -27,7 +29,7 @@ async function buildTestApp({ enabledModules = ['qualifications'] }: { enabledMo
 
   const qualifications = new InMemoryUserQualificationRepository();
   const reminderSettings = new InMemoryQualificationReminderSettingRepository();
-  const qualificationsService = createQualificationsService({ qualifications, reminderSettings, users });
+  const qualificationsService = createQualificationsService({ qualifications, reminderSettings, users, auditLog: createAuditLogService({ entries: new InMemoryAuditLogRepository() }) });
 
   const app = await buildApp(testEnv, { qualificationsService, clubs, keyPair });
   return { app, keyPair, club, admin, trainer, referee };

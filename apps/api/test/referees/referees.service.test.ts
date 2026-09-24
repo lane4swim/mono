@@ -9,6 +9,8 @@ import {
 import { InMemoryRefereeAssignmentRepository, InMemoryCompetitionRepository } from '../../src/modules/referees/referees.repository.memory.js';
 import { InMemoryUserRepository } from '../../src/modules/auth/auth.repository.memory.js';
 import { UserNotFoundError } from '../../src/modules/auth/auth.service.js';
+import { createAuditLogService } from '../../src/modules/auditLog/auditLog.service.js';
+import { InMemoryAuditLogRepository } from '../../src/modules/auditLog/auditLog.repository.memory.js';
 
 const CLUB_A = '11111111-1111-1111-1111-111111111111';
 const CLUB_B = '22222222-2222-2222-2222-222222222222';
@@ -38,8 +40,9 @@ async function buildFixture() {
     { id: COMPETITION_IN_CLUB_A, clubId: CLUB_A },
     { id: COMPETITION_IN_CLUB_B, clubId: CLUB_B },
   ]);
-  const service = createRefereesService({ assignments, users, competitions });
-  return { service, users, assignments, admin, referee, otherClubReferee };
+  const auditLogEntries = new InMemoryAuditLogRepository();
+  const service = createRefereesService({ assignments, users, competitions, auditLog: createAuditLogService({ entries: auditLogEntries, users }) });
+  return { service, users, assignments, admin, referee, otherClubReferee, auditLogEntries };
 }
 
 let fixture: Awaited<ReturnType<typeof buildFixture>>;
@@ -170,5 +173,28 @@ describe('createForMember() / updateForMember() / removeForMember()', () => {
     await expect(
       service.createForMember('99999999-9999-9999-9999-999999999999', baseInput(), { id: admin.id, roles: ['admin'], clubId: admin.clubId }),
     ).rejects.toBeInstanceOf(UserNotFoundError);
+  });
+});
+
+// Issue #96: Einsätze, die ein Admin "im Namen von" verwaltet, landen im
+// Audit-Log — die Selbsterfassung nicht.
+describe('Audit-Log (Issue #96)', () => {
+  it('protokolliert Anlegen, Ändern und Löschen im Namen eines Mitglieds', async () => {
+    const { admin, referee, auditLogEntries } = fixture;
+    const requester = { id: admin.id, roles: ['admin'], clubId: admin.clubId };
+    const created = await service.createForMember(referee.id, baseInput(), requester);
+    await service.updateForMember(referee.id, created.id, { note: 'nachgetragen' }, requester);
+    await service.removeForMember(referee.id, created.id, requester);
+
+    const entries = await auditLogEntries.list({ limit: 10 });
+    expect(entries.map((e) => e.action).sort()).toEqual(['refereeAssignment.created', 'refereeAssignment.deleted', 'refereeAssignment.updated']);
+    expect(entries[0]).toMatchObject({ actorId: admin.id, targetId: referee.id, targetLabel: `${referee.name} <${referee.email}>` });
+    expect(entries[0]!.metadata).toMatchObject({ assignmentId: created.id, competitionName: created.competitionName });
+  });
+
+  it('protokolliert die Selbsterfassung eigener Einsätze nicht', async () => {
+    const { referee, auditLogEntries } = fixture;
+    await service.createOwn(baseInput(), { id: referee.id, roles: ['referee'], clubId: referee.clubId });
+    expect(await auditLogEntries.list({ limit: 10 })).toEqual([]);
   });
 });

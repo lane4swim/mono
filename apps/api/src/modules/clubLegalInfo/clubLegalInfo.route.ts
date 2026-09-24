@@ -12,9 +12,9 @@ export interface ClubLegalInfoRoutesOptions {
   clubLegalInfoService: ClubLegalInfoService;
 }
 
-function requesterFrom(request: { user?: { roles: string[]; clubId: string | null } }): RequesterContext {
+function requesterFrom(request: { user?: { sub: string; roles: string[]; clubId: string | null } }): RequesterContext {
   const user = request.user!;
-  return { roles: user.roles, clubId: user.clubId };
+  return { id: user.sub, roles: user.roles, clubId: user.clubId };
 }
 
 export async function clubLegalInfoRoutes(app: FastifyInstance, opts: ClubLegalInfoRoutesOptions) {

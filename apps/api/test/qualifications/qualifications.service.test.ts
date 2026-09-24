@@ -3,6 +3,8 @@ import { createQualificationsService, QualificationForbiddenError, Qualification
 import { InMemoryUserQualificationRepository, InMemoryQualificationReminderSettingRepository } from '../../src/modules/qualifications/qualifications.repository.memory.js';
 import { InMemoryUserRepository } from '../../src/modules/auth/auth.repository.memory.js';
 import { UserNotFoundError } from '../../src/modules/auth/auth.service.js';
+import { createAuditLogService } from '../../src/modules/auditLog/auditLog.service.js';
+import { InMemoryAuditLogRepository } from '../../src/modules/auditLog/auditLog.repository.memory.js';
 
 const CLUB_A = '11111111-1111-1111-1111-111111111111';
 const CLUB_B = '22222222-2222-2222-2222-222222222222';
@@ -15,8 +17,9 @@ async function buildFixture() {
 
   const qualifications = new InMemoryUserQualificationRepository();
   const reminderSettings = new InMemoryQualificationReminderSettingRepository();
-  const service = createQualificationsService({ qualifications, reminderSettings, users });
-  return { service, users, qualifications, reminderSettings, admin, trainer, otherClubTrainer };
+  const auditLogEntries = new InMemoryAuditLogRepository();
+  const service = createQualificationsService({ qualifications, reminderSettings, users, auditLog: createAuditLogService({ entries: auditLogEntries, users }) });
+  return { service, users, qualifications, reminderSettings, admin, trainer, otherClubTrainer, auditLogEntries };
 }
 
 let fixture: Awaited<ReturnType<typeof buildFixture>>;
@@ -141,5 +144,38 @@ describe('Erinnerungs-Schwellen (Abschnitt 2.4 des Plans)', () => {
     await service.setReminderSetting('trainer_a', [30], { id: admin.id, roles: ['admin'], clubId: admin.clubId });
     const listed = await service.listReminderSettings({ id: admin.id, roles: ['admin'], clubId: admin.clubId });
     expect(listed).toEqual([{ type: 'trainer_a', thresholdsDays: [30] }]);
+  });
+});
+
+// Issue #96: Admin-Änderungen an Qualifikationen anderer Mitglieder landen im
+// Audit-Log, mit aufgelösten Labels für handelnde und betroffene Person.
+describe('Audit-Log (Issue #96)', () => {
+  it('protokolliert Anlegen, Ändern und Löschen einer Qualifikation', async () => {
+    const { admin, trainer, auditLogEntries } = fixture;
+    const requester = { id: admin.id, roles: ['admin'], clubId: admin.clubId };
+    const created = await service.create(trainer.id, { type: 'erste_hilfe', note: '', acquiredOn: new Date('2024-01-01'), expiresOn: null, renewalCourseOrganizedOn: null }, requester);
+    await service.update(trainer.id, created.id, { note: 'verlängert' }, requester);
+    await service.remove(trainer.id, created.id, requester);
+
+    const entries = await auditLogEntries.list({ limit: 10 });
+    expect(entries.map((e) => e.action).sort()).toEqual(['qualification.created', 'qualification.deleted', 'qualification.updated']);
+    for (const entry of entries) {
+      expect(entry).toMatchObject({
+        clubId: admin.clubId,
+        actorId: admin.id,
+        actorLabel: `${admin.name} <${admin.email}>`,
+        targetId: trainer.id,
+        targetLabel: `${trainer.name} <${trainer.email}>`,
+        metadata: { qualificationId: created.id, type: 'erste_hilfe' },
+      });
+    }
+  });
+
+  it('protokolliert nichts für eine abgelehnte Aktion', async () => {
+    const { trainer, auditLogEntries } = fixture;
+    await expect(
+      service.create(trainer.id, { type: 'erste_hilfe', note: '', acquiredOn: new Date('2024-01-01'), expiresOn: null, renewalCourseOrganizedOn: null }, { id: trainer.id, roles: ['trainer'], clubId: trainer.clubId }),
+    ).rejects.toThrow();
+    expect(await auditLogEntries.list({ limit: 10 })).toEqual([]);
   });
 });

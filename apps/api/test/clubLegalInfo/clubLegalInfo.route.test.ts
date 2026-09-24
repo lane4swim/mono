@@ -5,6 +5,8 @@ import { createClubLegalInfoService } from '../../src/modules/clubLegalInfo/club
 import { InMemoryClubLegalInfoRepository } from '../../src/modules/clubLegalInfo/clubLegalInfo.repository.memory.js';
 import { generateFreshKeyPair, type KeyPair } from '../../src/auth/keys.js';
 import { signAccessToken } from '../../src/auth/tokens.js';
+import { createAuditLogService } from '../../src/modules/auditLog/auditLog.service.js';
+import { InMemoryAuditLogRepository } from '../../src/modules/auditLog/auditLog.repository.memory.js';
 
 const testEnv = loadEnv({
   NODE_ENV: 'test',
@@ -21,7 +23,7 @@ async function buildTestApp() {
   const legalInfo = new InMemoryClubLegalInfoRepository();
   legalInfo.seedClub(CLUB_A);
   legalInfo.seedClub(CLUB_B);
-  const clubLegalInfoService = createClubLegalInfoService({ legalInfo });
+  const clubLegalInfoService = createClubLegalInfoService({ legalInfo, auditLog: createAuditLogService({ entries: new InMemoryAuditLogRepository() }) });
 
   const app = await buildApp(testEnv, { clubLegalInfoService, keyPair });
   return { app, keyPair, legalInfo };

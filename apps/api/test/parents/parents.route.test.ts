@@ -46,6 +46,7 @@ async function buildTestApp() {
       'trainer-1': { clubId: club.id, roles: ['trainer'] },
     }),
     athletes: makeAthletes({ [CHILD_ID]: { clubId: club.id, firstName: 'Mara', lastName: 'Vogel' } }),
+    auditLog: { record: async () => {} },
   });
 
   const app = await buildApp(testEnv, { clubs, keyPair, parentsService });

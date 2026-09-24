@@ -13,6 +13,7 @@ import type {
 } from './referees.repository.js';
 import type { UserRepository } from '../auth/auth.repository.js';
 import { UserNotFoundError } from '../auth/auth.service.js';
+import type { AuditLogWriter } from '../auditLog/auditLog.service.js';
 
 export class RefereeAssignmentNotFoundError extends Error {
   constructor() {
@@ -67,6 +68,7 @@ export interface RefereesServiceDeps {
   // qualifications.service.ts: QualificationsServiceDeps.users).
   users: UserRepository;
   competitions: CompetitionRepository;
+  auditLog: AuditLogWriter;
 }
 
 // Entfernt `deletedAt` aus der Antwort — reine interne Buchhaltung ohne
@@ -94,6 +96,23 @@ export function createRefereesService(deps: RefereesServiceDeps) {
       throw new RefereeAssignmentForbiddenError('Diese Person gehört nicht zu Ihrem Verein.');
     }
     return targetUser;
+  }
+
+  // Nur die Admin-Pfade ("im Namen von", Plan Abschnitt 5.5) landen im
+  // Audit-Log — die Selbsterfassung eigener Einsätze nicht.
+  async function recordMemberChange(
+    requester: RequesterContext,
+    targetUserId: string,
+    action: 'refereeAssignment.created' | 'refereeAssignment.updated' | 'refereeAssignment.deleted',
+    assignment: RefereeAssignmentRecord,
+  ) {
+    await deps.auditLog.record({
+      clubId: requester.clubId,
+      actorId: requester.id,
+      action,
+      targetId: targetUserId,
+      metadata: { assignmentId: assignment.id, competitionName: assignment.competitionName, date: assignment.date.toISOString() },
+    });
   }
 
   async function findOwnedOrThrow(targetUserId: string, id: string): Promise<RefereeAssignmentRecord> {
@@ -156,6 +175,7 @@ export function createRefereesService(deps: RefereesServiceDeps) {
         createdByAdminId: requester.id,
         ...input,
       });
+      await recordMemberChange(requester, targetUserId, 'refereeAssignment.created', created);
       return toPublic(created);
     },
 
@@ -167,14 +187,16 @@ export function createRefereesService(deps: RefereesServiceDeps) {
       const existing = await findOwnedOrThrow(targetUserId, id);
       if (patch.competitionId !== undefined) await assertCompetitionWithinClub(patch.competitionId, existing.clubId);
       const updated = await deps.assignments.update(id, { ...patch, createdByAdminId: requester.id });
+      await recordMemberChange(requester, targetUserId, 'refereeAssignment.updated', updated);
       return toPublic(updated);
     },
 
     // DELETE /api/users/:userId/referee-assignments/:id
     async removeForMember(targetUserId: string, id: string, requester: RequesterContext): Promise<void> {
       await requireAdminOfSameClub(requester, targetUserId);
-      await findOwnedOrThrow(targetUserId, id);
+      const existing = await findOwnedOrThrow(targetUserId, id);
       await deps.assignments.softDelete(id);
+      await recordMemberChange(requester, targetUserId, 'refereeAssignment.deleted', existing);
     },
   };
 }
