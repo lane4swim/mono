@@ -3,7 +3,6 @@ import { notifyAnnouncementCreated } from '../../src/modules/sync/sync.announcem
 import { InMemoryAnnouncementRecipientsGateway } from '../../src/modules/sync/announcementRecipients.repository.memory.js';
 import { InMemoryPushSender } from '../../src/push/pusher.memory.js';
 import { InMemoryPushSubscriptionRepository } from '../../src/modules/push/push.repository.memory.js';
-import type { SyncEventResult } from '@lane1/shared-types';
 
 const CLUB_ID = 'club1';
 const AUTHOR_ID = 'author1';
@@ -20,7 +19,9 @@ function createEvent(overrides: Record<string, unknown> = {}) {
   };
 }
 
-const appliedResult = (eventId: string): SyncEventResult => ({ eventId, status: 'applied' });
+// Event-ids, für die syncService.push() über onCreated eine NEU angelegte
+// Zeile gemeldet hat.
+const created = (...eventIds: string[]): ReadonlySet<string> => new Set(eventIds);
 
 async function subscriptionsFor(userId: string): Promise<InMemoryPushSubscriptionRepository> {
   const repo = new InMemoryPushSubscriptionRepository();
@@ -36,43 +37,42 @@ describe('notifyAnnouncementCreated()', () => {
     const recipients = new InMemoryAnnouncementRecipientsGateway(new Map([[`${CLUB_ID}:`, ['recipient1', AUTHOR_ID]]]));
 
     const event = createEvent();
-    await notifyAnnouncementCreated({ pusher, pushSubscriptions, recipients }, [event], [appliedResult('evt1')], CLUB_ID, AUTHOR_ID);
+    await notifyAnnouncementCreated({ pusher, pushSubscriptions, recipients }, [event], created('evt1'), CLUB_ID, AUTHOR_ID);
 
     expect(pusher.sent).toHaveLength(1);
     expect(pusher.sent[0]?.subscriptions).toHaveLength(1); // nur recipient1, AUTHOR_ID wurde ausgeschlossen
   });
 
-  it('ignoriert Events, die nicht "applied" sind (z. B. abgelehnt)', async () => {
+  // Issue #95: "applied" gilt auch für Idempotenz-Wiederholungen und für
+  // ein "create" auf eine bestehende entityId — maßgeblich ist allein, ob
+  // push() eine neue Zeile gemeldet hat.
+  it('ignoriert Events, für die push() keine neu angelegte Zeile gemeldet hat', async () => {
+    const pusher = new InMemoryPushSender();
+    const pushSubscriptions = await subscriptionsFor('recipient1');
+    const recipients = new InMemoryAnnouncementRecipientsGateway(new Map([[`${CLUB_ID}:`, ['recipient1']]]));
+
+    await notifyAnnouncementCreated({ pusher, pushSubscriptions, recipients }, [createEvent()], created(), CLUB_ID, AUTHOR_ID);
+    expect(pusher.sent).toHaveLength(0);
+  });
+
+  it('ignoriert Events anderer Stores', async () => {
+    const pusher = new InMemoryPushSender();
+    const pushSubscriptions = await subscriptionsFor('recipient1');
+    const recipients = new InMemoryAnnouncementRecipientsGateway(new Map([[`${CLUB_ID}:`, ['recipient1']]]));
+
+    const otherStoreEvent = createEvent({ id: 'evt3', store: 'plans' });
+    await notifyAnnouncementCreated({ pusher, pushSubscriptions, recipients }, [otherStoreEvent], created('evt3'), CLUB_ID, AUTHOR_ID);
+    expect(pusher.sent).toHaveLength(0);
+  });
+
+  it('benachrichtigt nur einmal, wenn dieselbe event-id mehrfach im Batch steht', async () => {
     const pusher = new InMemoryPushSender();
     const pushSubscriptions = await subscriptionsFor('recipient1');
     const recipients = new InMemoryAnnouncementRecipientsGateway(new Map([[`${CLUB_ID}:`, ['recipient1']]]));
 
     const event = createEvent();
-    await notifyAnnouncementCreated(
-      { pusher, pushSubscriptions, recipients },
-      [event],
-      [{ eventId: 'evt1', status: 'error', message: 'x', code: 'y' }],
-      CLUB_ID,
-      AUTHOR_ID,
-    );
-    expect(pusher.sent).toHaveLength(0);
-  });
-
-  it('ignoriert Events anderer Stores/Aktionen', async () => {
-    const pusher = new InMemoryPushSender();
-    const pushSubscriptions = await subscriptionsFor('recipient1');
-    const recipients = new InMemoryAnnouncementRecipientsGateway(new Map([[`${CLUB_ID}:`, ['recipient1']]]));
-
-    const updateEvent = createEvent({ id: 'evt2', action: 'update' });
-    const otherStoreEvent = createEvent({ id: 'evt3', store: 'plans' });
-    await notifyAnnouncementCreated(
-      { pusher, pushSubscriptions, recipients },
-      [updateEvent, otherStoreEvent],
-      [appliedResult('evt2'), appliedResult('evt3')],
-      CLUB_ID,
-      AUTHOR_ID,
-    );
-    expect(pusher.sent).toHaveLength(0);
+    await notifyAnnouncementCreated({ pusher, pushSubscriptions, recipients }, [event, event], created('evt1'), CLUB_ID, AUTHOR_ID);
+    expect(pusher.sent).toHaveLength(1);
   });
 
   it('verschickt an die Empfänger:innen einer spezifischen Gruppe, wenn groupId gesetzt ist', async () => {
@@ -81,7 +81,7 @@ describe('notifyAnnouncementCreated()', () => {
     const recipients = new InMemoryAnnouncementRecipientsGateway(new Map([[`${CLUB_ID}:group1`, ['groupMember1']]]));
 
     const event = createEvent({ payload: { ...createEvent().payload, groupId: 'group1' } });
-    await notifyAnnouncementCreated({ pusher, pushSubscriptions, recipients }, [event], [appliedResult('evt1')], CLUB_ID, AUTHOR_ID);
+    await notifyAnnouncementCreated({ pusher, pushSubscriptions, recipients }, [event], created('evt1'), CLUB_ID, AUTHOR_ID);
     expect(pusher.sent).toHaveLength(1);
   });
 
@@ -91,7 +91,7 @@ describe('notifyAnnouncementCreated()', () => {
     const recipients = new InMemoryAnnouncementRecipientsGateway(new Map([[`${CLUB_ID}:`, ['recipient1']]]));
 
     const event = createEvent();
-    await notifyAnnouncementCreated({ pusher, pushSubscriptions, recipients }, [event], [appliedResult('evt1')], CLUB_ID, AUTHOR_ID);
+    await notifyAnnouncementCreated({ pusher, pushSubscriptions, recipients }, [event], created('evt1'), CLUB_ID, AUTHOR_ID);
     expect(pusher.sent).toHaveLength(0);
   });
 });

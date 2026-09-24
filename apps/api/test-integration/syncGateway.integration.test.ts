@@ -11,8 +11,9 @@
 import { describe, it, expect, afterEach, afterAll } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
-import { ENTITY_STORE_NAMES } from '@lane1/shared-types';
+import { ENTITY_STORE_NAMES, MODULE_KEYS } from '@lane1/shared-types';
 import { PrismaSyncGateway } from '../src/modules/sync/sync.gateway.js';
+import { createSyncService } from '../src/modules/sync/sync.service.js';
 import { getTestPrisma, closeTestPrisma, truncateAll, createTestClub } from './helpers.js';
 
 const prisma = getTestPrisma();
@@ -407,5 +408,50 @@ describe('PrismaSyncGateway.applyAndMarkProcessed() (Code-Review, Befund C3)', (
     );
 
     expect(await prisma.parentLink.findMany({ where: { userId: parentUser.id } })).toHaveLength(1);
+  });
+});
+
+// Issue #93: syncService.push() gegen den ECHTEN Prisma-Pfad — ein update
+// schreibt die Payload ohne `id`, und eine von der entityId abweichende
+// payload.id kann den Primärschlüssel nicht mehr verändern.
+describe('syncService.push() mit PrismaSyncGateway (Issue #93)', () => {
+  const service = createSyncService({ gateway });
+
+  function trainer(clubId: string) {
+    return { userId: randomUUID(), clubId, roles: ['trainer'] as const, athleteId: null, enabledModules: MODULE_KEYS };
+  }
+  function groupEvent(action: 'create' | 'update', entityId: string, payload: Record<string, unknown>) {
+    const now = new Date().toISOString();
+    return { id: randomUUID(), store: 'groups', entityId, action, payload: { ...payload, createdAt: now, updatedAt: now }, clientUpdatedAt: now };
+  }
+
+  it('legt an und aktualisiert per update, ohne die id zu verändern', async () => {
+    const club = await createTestClub();
+    const payload = groupPayload(club.id);
+    const onCreated: string[] = [];
+
+    const createEvent = groupEvent('create', payload.id, payload);
+    const [created] = await service.push([createEvent], trainer(club.id), { onCreated: (id) => onCreated.push(id) });
+    const [updated] = await service.push([groupEvent('update', payload.id, { ...payload, name: 'Neu' })], trainer(club.id), {
+      onCreated: (id) => onCreated.push(id),
+    });
+
+    expect(created!.status).toBe('applied');
+    expect(updated!.status).toBe('applied');
+    expect((await gateway.findById('groups', payload.id, club.id))?.name).toBe('Neu');
+    expect(onCreated).toEqual([createEvent.id]);
+  });
+
+  it('lehnt ein update mit abweichender payload.id ab und lässt den Primärschlüssel unverändert', async () => {
+    const club = await createTestClub();
+    const payload = groupPayload(club.id);
+    await service.push([groupEvent('create', payload.id, payload)], trainer(club.id));
+
+    const otherId = randomUUID();
+    const [result] = await service.push([groupEvent('update', payload.id, { ...payload, id: otherId, name: 'Manipuliert' })], trainer(club.id));
+
+    expect(result).toMatchObject({ status: 'error', code: 'invalid_payload' });
+    expect((await gateway.findById('groups', payload.id, club.id))?.name).toBe('Leistungsgruppe');
+    expect(await gateway.findById('groups', otherId, club.id)).toBeNull();
   });
 });

@@ -65,11 +65,9 @@ EXPOSE 3000
 # node:22-slim bringt einen fertigen, unprivilegierten `node`-User mit —
 # der Container läuft NICHT als root (Code-Review, Befund W7).
 USER node
-# `migrate deploy` wendet die committete Migrationshistorie (apps/api/
-# prisma/migrations/, oben mitkopiert) nicht-interaktiv an, BEVOR der
-# Server startet (Code-Review, Befund W5) — ersetzt den früher nötigen,
-# manuell auszuführenden `prisma db push`-Schritt. Ein leerer Container
-# (frischer docker-compose-Postgres) bekommt sein Schema dadurch
-# automatisch beim ersten Start; ein Neustart mit bereits vollständig
-# migrierter Datenbank ist ein No-op.
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/index.js"]
+# Startet NUR den Server — Migrationen laufen bewusst NICHT hier, sondern
+# als eigener, einmaliger Schritt mit MIGRATE_DATABASE_URL (Rolle
+# lane1_migrator), z. B. `docker compose run --rm migrate` bzw. der
+# `migrate`-Service in docker-compose.yml. So braucht die Laufzeit-Rolle
+# (DATABASE_URL, lane1_app) nur DML-Rechte, keine DDL-Rechte auf das Schema.
+CMD ["node", "dist/index.js"]

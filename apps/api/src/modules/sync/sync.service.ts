@@ -189,6 +189,14 @@ function validatePayload(ctx: PushCtx): SyncEventResult | null {
   // setzen sie serverseitig sowohl bei create() als auch bei update()
   // automatisch.
   const { createdAt: _createdAt, updatedAt: _updatedAt, ...rest } = parsedPayload.data as Record<string, unknown>;
+  // Die Payload-id muss den Datensatz bezeichnen, auf den sich das Event
+  // bezieht. Sonst änderte ein update auf entityId X per `data.id = Y` den
+  // Primärschlüssel von X (andere Geräte behielten X als Geisterkopie), und
+  // die Eigentums-/Autor:innen-Prüfungen, die `existing` über entityId laden,
+  // bewerteten eine andere Zeile als die geschriebene.
+  if (rest.id !== event.entityId) {
+    return { eventId: event.id, status: 'error', message: 'Payload-id stimmt nicht mit der entityId des Events überein.', code: 'invalid_payload' };
+  }
   ctx.validatedPayload = rest;
   return null;
 }
@@ -235,9 +243,19 @@ const PUSH_GUARDS: PushGuard[] = [
   requireForeignKeysWithinClub,
 ];
 
+export interface SyncPushOptions {
+  // Wird je Event aufgerufen, dessen Schreibvorgang tatsächlich eine NEUE
+  // Zeile angelegt hat — nicht für Idempotenz-Wiederholungen, nicht für ein
+  // "create" auf eine bereits bestehende entityId (läuft als update) und nicht
+  // für einen gleichzeitigen Doppelversuch, dessen Ledger-Eintrag ein anderer
+  // Aufruf zuerst schrieb. Die Ergebnisliste selbst meldet all diese Fälle
+  // gleichermaßen als "applied".
+  onCreated?: (eventId: string) => void;
+}
+
 export function createSyncService(deps: { gateway: SyncGateway }) {
   return {
-    async push(events: unknown[], requester: SyncRequester): Promise<SyncEventResult[]> {
+    async push(events: unknown[], requester: SyncRequester, options: SyncPushOptions = {}): Promise<SyncEventResult[]> {
       const results: SyncEventResult[] = [];
 
       // Vorab-Batch-Abfragen statt je Event ein isEventProcessed() und ein
@@ -470,6 +488,7 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
               ledgerEvent,
             );
             processedEventIds.add(event.id);
+            if (outcome === 'applied') options.onCreated?.(event.id);
             // 'already-processed': ein GLEICHZEITIGER Versuch hat den
             // Ledger-Eintrag zuerst geschrieben — DIESER Aufruf hat seine
             // eigene, hier lokal erzeugte newId dadurch NIE tatsächlich
@@ -486,15 +505,19 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
             );
             continue;
           } else if (existing) {
+            // Ohne id: der Primärschlüssel ist durch `where: { id: entityId }`
+            // festgelegt und wird nie über die Payload geändert.
+            const { id: _id, ...updateData } = validatedPayload as Record<string, unknown>;
             await deps.gateway.applyAndMarkProcessed(
-              { kind: 'update', store, id: event.entityId, clubId: requester.clubId, payload: validatedPayload as Record<string, unknown> },
+              { kind: 'update', store, id: event.entityId, clubId: requester.clubId, payload: updateData },
               ledgerEvent,
             );
             processedEventIds.add(event.id);
             results.push({ eventId: event.id, status: 'applied' });
           } else {
-            await deps.gateway.applyAndMarkProcessed({ kind: 'create', store, payload: validatedPayload as Record<string, unknown> }, ledgerEvent);
+            const outcome = await deps.gateway.applyAndMarkProcessed({ kind: 'create', store, payload: validatedPayload as Record<string, unknown> }, ledgerEvent);
             processedEventIds.add(event.id);
+            if (outcome === 'applied') options.onCreated?.(event.id);
             results.push({ eventId: event.id, status: 'applied' });
           }
         } catch (err) {

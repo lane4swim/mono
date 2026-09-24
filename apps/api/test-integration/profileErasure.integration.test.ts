@@ -15,6 +15,7 @@ import { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import { PrismaProfileDataGateway, ErasureAlreadyRequestedError } from '../src/modules/profile/profile.repository.js';
 import { PrismaErasureJobGateway } from '../src/jobs/erasure.repository.js';
+import { PrismaSyncGateway } from '../src/modules/sync/sync.gateway.js';
 import { ANONYMIZED_COMMENT_AUTHOR } from '../src/jobs/commentAnonymization.js';
 import { getTestPrisma, closeTestPrisma, truncateAll, createTestClub } from './helpers.js';
 
@@ -543,5 +544,47 @@ describe('PrismaErasureJobGateway.findDuePendingRequests()', () => {
 
     const due = await erasureGateway.findDuePendingRequests(now);
     expect(due.map((d) => d.userId)).toEqual([dueUser.id]);
+  });
+});
+
+// Issue #94: interne Trainer:innen-Notizen (Athlete.notes) gegen den echten
+// Prisma-Pfad — nicht im Export, sofort geleert beim Löschen des Profils.
+describe('Athlete.notes (Issue #94)', () => {
+  it('exportUserData() liefert das Athletenprofil ohne notes', async () => {
+    const club = await createTestClub();
+    const { user, athlete } = await seedAthleteUser(club.id);
+    await prisma.athlete.update({ where: { id: athlete!.id }, data: { notes: 'Intern: Wende üben' } });
+
+    const exported = await profileGateway.exportUserData(user.id);
+
+    expect(exported.athlete).toMatchObject({ id: athlete!.id, firstName: 'Mara' });
+    expect(exported.athlete).not.toHaveProperty('notes');
+  });
+
+  it('requestErasure() leert die notes sofort', async () => {
+    const club = await createTestClub();
+    const { user, athlete } = await seedAthleteUser(club.id);
+    await prisma.athlete.update({ where: { id: athlete!.id }, data: { notes: 'Intern: Wende üben' } });
+
+    await profileGateway.requestErasure(user.id, 30);
+
+    const stored = await prisma.athlete.findUnique({ where: { id: athlete!.id } });
+    expect(stored?.notes).toBe('');
+    expect(stored?.deletedAt).not.toBeNull();
+  });
+
+  it('ein Sync-delete auf "athletes" leert die notes', async () => {
+    const club = await createTestClub();
+    const athlete = await prisma.athlete.create({ data: { clubId: club.id, firstName: 'Mara', lastName: 'Vogel', notes: 'Intern: Wende üben' } });
+    const syncGateway = new PrismaSyncGateway(prisma);
+
+    await syncGateway.applyAndMarkProcessed(
+      { kind: 'softDelete', store: 'athletes', id: athlete.id, clubId: club.id },
+      { id: randomUUID(), clubId: club.id, store: 'athletes', action: 'delete' },
+    );
+
+    const stored = await prisma.athlete.findUnique({ where: { id: athlete.id } });
+    expect(stored?.notes).toBe('');
+    expect(stored?.deletedAt).not.toBeNull();
   });
 });

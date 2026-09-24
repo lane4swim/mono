@@ -47,6 +47,21 @@ export interface ProfileDataGateway {
   requestErasure(userId: string, retentionDays: number): Promise<ErasureRequestRecord>;
 }
 
+// Athlete.notes sind interne Notizen der Trainer:innen. Die Sync-API
+// redigiert sie für die Rolle "athlete" (sync.athleteScope.ts), und der
+// Datenexport tut dasselbe — sonst ließe sich die Redaktion über
+// GET /api/me/export umgehen. Bewusste Vereinsentscheidung (Issue #94): Die
+// Notizen werden nicht im Selbstbedienungs-Export ausgeliefert; eine
+// Auskunft nach Art. 15 DSGVO dazu erteilt der Verein auf Anfrage. Gelöscht
+// werden sie sofort, wenn das Athletenprofil gelöscht wird (requestErasure()
+// unten, Soft-Delete per Sync in sync.gateway.ts), nicht erst beim
+// Hard-Purge.
+export function withoutCoachNotes(athlete: Record<string, unknown> | null): Record<string, unknown> | null {
+  if (!athlete) return null;
+  const { notes: _notes, ...rest } = athlete;
+  return rest;
+}
+
 export class UserNotFoundForExportError extends Error {
   constructor() {
     super('Nutzer:in wurde nicht gefunden.');
@@ -118,7 +133,7 @@ export class PrismaProfileDataGateway implements ProfileDataGateway {
             `
           : Promise.resolve([]),
       ]);
-      athlete = athleteRow;
+      athlete = withoutCoachNotes(athleteRow);
       results = resultRows;
       entries = entryRows;
       actionItems = actionItemRows;
@@ -167,7 +182,9 @@ export class PrismaProfileDataGateway implements ProfileDataGateway {
     const created = await this.prisma.$transaction(async (tx: any) => {
       await tx.user.update({ where: { id: userId }, data: { deletedAt: now } });
       if (user.athleteId) {
-        await tx.athlete.update({ where: { id: user.athleteId }, data: { deletedAt: now } });
+        // Trainer:innen-Notizen sofort löschen, nicht erst beim Hard-Purge
+        // (siehe withoutCoachNotes() oben).
+        await tx.athlete.update({ where: { id: user.athleteId }, data: { deletedAt: now, notes: '' } });
         await tx.result.updateMany({ where: { athleteId: user.athleteId }, data: { deletedAt: now } });
         await tx.startlistEntry.updateMany({ where: { athleteId: user.athleteId }, data: { deletedAt: now } });
         await tx.actionItem.updateMany({ where: { athleteId: user.athleteId }, data: { deletedAt: now } });

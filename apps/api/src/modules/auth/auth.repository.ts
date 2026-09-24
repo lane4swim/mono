@@ -84,6 +84,11 @@ export interface RefreshTokenRepository {
   create(userId: string, tokenHash: string, expiresAt: Date): Promise<RefreshTokenRecord>;
   findByHash(tokenHash: string): Promise<RefreshTokenRecord | null>;
   revoke(id: string): Promise<void>;
+  // Widerruft das Token atomar NUR, wenn es noch nicht widerrufen ist, und
+  // meldet, ob DIESER Aufruf es widerrufen hat. refresh() liefert ein neues
+  // Token-Paar nur bei `true` aus — sonst lösen zwei gleichzeitige Anfragen
+  // mit demselben Token beide ein (lesen → prüfen → schreiben).
+  consume(id: string): Promise<boolean>;
   revokeAllForUser(userId: string): Promise<void>;
 }
 
@@ -102,22 +107,13 @@ export interface PasswordResetTokenRecord {
 export interface PasswordResetTokenRepository {
   create(userId: string, tokenHash: string, expiresAt: Date): Promise<PasswordResetTokenRecord>;
   findByHash(tokenHash: string): Promise<PasswordResetTokenRecord | null>;
-  markUsed(id: string): Promise<void>;
-  // Sicherheitsreview 2026-08-27, Befund N4: markUsed(id) allein
-  // invalidierte nur GENAU das eingelöste Token — bei mehreren innerhalb
-  // der TTL angeforderten Reset-Links (z. B. 3 pro 15 Minuten, siehe
-  // Rate-Limit auf /auth/forgot-password) blieben die übrigen bis zu ihrem
-  // eigenen Ablauf gültig und lösten JEWEILS erneut einen Passwortwechsel
-  // samt Auto-Login aus. Ein Passwort-Reset gilt als mögliches
-  // Kompromittierungssignal (siehe resetPassword()-Kommentar in
-  // auth.service.ts) — genau dann sollen auch alle ANDEREN, noch nicht
-  // eingelösten Reset-Links desselben Kontos verfallen, nicht nur der
-  // gerade benutzte. Ersetzt markUsed(existing.id) in resetPassword()
-  // vollständig (deckt das eingelöste Token mit ab, da dessen usedAt zu
-  // diesem Zeitpunkt noch null ist) und wird zusätzlich von
-  // changePassword() aufgerufen — ein regulärer Passwortwechsel soll
-  // ebenso keinen zuvor angeforderten, noch offenen Reset-Link überleben
-  // lassen.
+  // Markiert das Token atomar NUR, wenn es noch unbenutzt ist, und meldet,
+  // ob DIESER Aufruf es eingelöst hat — zwei gleichzeitige Einlöseversuche
+  // desselben Links können so nicht beide erfolgreich sein.
+  consume(id: string): Promise<boolean>;
+  // Entwertet zusätzlich jeden ANDEREN offenen Reset-Link des Kontos: nach
+  // einem Passwortwechsel (Reset oder regulär) soll keiner davon erneut
+  // einen Wechsel samt Auto-Login auslösen können.
   markAllUsedForUser(userId: string): Promise<void>;
 }
 
@@ -219,6 +215,13 @@ export class PrismaRefreshTokenRepository implements RefreshTokenRepository {
   async revoke(id: string): Promise<void> {
     await this.prisma.refreshToken.update({ where: { id }, data: { revokedAt: new Date() } });
   }
+  async consume(id: string): Promise<boolean> {
+    const { count } = await this.prisma.refreshToken.updateMany({
+      where: { id, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    return count === 1;
+  }
   async revokeAllForUser(userId: string): Promise<void> {
     await this.prisma.refreshToken.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } });
   }
@@ -233,8 +236,12 @@ export class PrismaPasswordResetTokenRepository implements PasswordResetTokenRep
   async findByHash(tokenHash: string): Promise<PasswordResetTokenRecord | null> {
     return this.prisma.passwordResetToken.findUnique({ where: { tokenHash } });
   }
-  async markUsed(id: string): Promise<void> {
-    await this.prisma.passwordResetToken.update({ where: { id }, data: { usedAt: new Date() } });
+  async consume(id: string): Promise<boolean> {
+    const { count } = await this.prisma.passwordResetToken.updateMany({
+      where: { id, usedAt: null },
+      data: { usedAt: new Date() },
+    });
+    return count === 1;
   }
 
   async markAllUsedForUser(userId: string): Promise<void> {

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { InMemoryMailSender } from '../../src/mail/mailer.memory.js';
 import {
   createInvitationsService,
@@ -468,5 +468,28 @@ describe('invitationsService.updateClubModules', () => {
   it('wirft ClubNotFoundError für eine unbekannte clubId', async () => {
     const { service } = makeService();
     await expect(service.updateClubModules('unbekannte-id', ['athletes'], SUPERADMIN)).rejects.toThrow(ClubNotFoundError);
+  });
+});
+
+// Issue #65, Befund 4: Mail-Locale und Audit-Log-Label kamen aus zwei
+// identischen findById()-Aufrufen für dieselbe Person.
+describe('invitationsService — einladende Person wird je Aktion nur einmal geladen', () => {
+  it('createInvitation() lädt die einladende Person genau einmal', async () => {
+    const { service, clubs, users } = makeService();
+    const club = await clubs.create({ name: 'Club A' });
+    const findById = vi.spyOn(users, 'findById');
+
+    await service.createInvitation({ email: 'trainer@a.de', role: 'trainer' }, { ...ADMIN_OF_CLUB_A, clubId: club.id });
+
+    expect(findById).toHaveBeenCalledTimes(1);
+  });
+
+  it('createClub() lädt die einladende Person genau einmal', async () => {
+    const { service, users } = makeService();
+    const findById = vi.spyOn(users, 'findById');
+
+    await service.createClub({ name: 'SV Wasserfreunde', adminEmail: 'admin@sv.de', adminName: 'Petra Klein' }, SUPERADMIN);
+
+    expect(findById).toHaveBeenCalledTimes(1);
   });
 });

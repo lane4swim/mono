@@ -4,7 +4,7 @@ import type {
   PersonalDataExport,
   ErasureRequestRecord,
 } from './profile.repository.js';
-import { UserNotFoundForExportError, ErasureAlreadyRequestedError } from './profile.repository.js';
+import { UserNotFoundForExportError, ErasureAlreadyRequestedError, withoutCoachNotes } from './profile.repository.js';
 
 export interface InMemoryUserRow {
   id: string;
@@ -75,7 +75,7 @@ export class InMemoryProfileDataGateway implements ProfileDataGateway {
     let attendance: Array<Record<string, unknown>> = [];
 
     if (user.athleteId) {
-      athlete = this.db.athletes.find((a) => a.id === user.athleteId) ?? null;
+      athlete = withoutCoachNotes(this.db.athletes.find((a) => a.id === user.athleteId) ?? null);
       results = this.db.results.filter((r) => r.athleteId === user.athleteId);
       entries = this.db.entries.filter((e) => e.athleteId === user.athleteId);
       actionItems = this.db.actionItems.filter((a) => a.athleteId === user.athleteId);
@@ -117,7 +117,10 @@ export class InMemoryProfileDataGateway implements ProfileDataGateway {
     user.deletedAt = now;
     if (user.athleteId) {
       const athlete = this.db.athletes.find((a) => a.id === user.athleteId);
-      if (athlete) athlete.deletedAt = now;
+      if (athlete) {
+        athlete.deletedAt = now;
+        athlete.notes = '';
+      }
       this.db.results.filter((r) => r.athleteId === user.athleteId).forEach((r) => (r.deletedAt = now));
       this.db.entries.filter((e) => e.athleteId === user.athleteId).forEach((e) => (e.deletedAt = now));
       this.db.actionItems.filter((a) => a.athleteId === user.athleteId).forEach((a) => (a.deletedAt = now));

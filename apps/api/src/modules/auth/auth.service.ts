@@ -394,7 +394,7 @@ export function createAuthService(deps: AuthServiceDeps) {
 
       // Reuse-Detection: ein Token wird AUSSCHLIESSLICH durch Rotation
       // widerrufen (siehe
-      // deps.refreshTokens.revoke() unten) oder durch Logout — ein Aufruf
+      // deps.refreshTokens.consume() unten) oder durch Logout — ein Aufruf
       // mit einem bereits rotierten Token ist damit das einzige verlässliche
       // Signal für einen Token-Diebstahl: löst ein Angreifer ein gestohlenes
       // Refresh Token vor dem rechtmäßigen Gerät ein, würde er über die
@@ -429,8 +429,25 @@ export function createAuthService(deps: AuthServiceDeps) {
       // wurde — ein wiederverwendetes (z. B. gestohlenes) altes Token
       // funktioniert danach nicht mehr (siehe Reuse-Detection oben, die
       // genau DIESEN Fall abfängt).
-      await deps.refreshTokens.revoke(existing.id);
+      //
+      // consume() widerruft atomar und nur, falls das Token noch aktiv ist.
+      // Die revokedAt-Prüfung oben allein reicht nicht: zwei gleichzeitige
+      // Anfragen mit demselben Token sähen dort beide `null` und bekämen
+      // beide ein neues Token-Paar — ein Angreifer könnte die Token-Familie
+      // so unbemerkt abzweigen. Wer hier verliert, hat ein bereits
+      // rotiertes Token benutzt: dieselbe Reaktion wie bei der
+      // Reuse-Detection.
+      //
+      // Das neue Paar wird bewusst VOR consume() ausgestellt: so existiert
+      // das neue Refresh Token des Gewinners bereits, wenn der Verlierer
+      // revokeAllForUser() aufruft, und wird mit widerrufen. Andersherum
+      // könnte der Widerruf vor dem Speichern des neuen Tokens laufen und
+      // es überleben lassen.
       const tokens = await issueTokens(user);
+      if (!(await deps.refreshTokens.consume(existing.id))) {
+        await deps.refreshTokens.revokeAllForUser(existing.userId);
+        throw new InvalidRefreshTokenError();
+      }
       const clubContext = await resolveClubContext(deps.clubs, user.clubId);
       return { ...tokens, user: toPublicUser(user), ...clubContext };
     },
@@ -523,13 +540,21 @@ export function createAuthService(deps: AuthServiceDeps) {
       const user = await deps.users.findById(existing.userId);
       if (!user) throw new InvalidOrExpiredResetTokenError(); // Konto zwischenzeitlich gelöscht
 
+      // Hashen VOR dem Einlösen: argon2id ist der langsame Schritt, und ein
+      // bereits eingelöstes Token soll nicht an einem Fehler beim Hashen
+      // verfallen.
       const passwordHash = await hashPassword(newPassword);
+      // Atomar einlösen, BEVOR das Passwort geändert wird — die usedAt-Prüfung
+      // oben allein ließe zwei gleichzeitige Anfragen mit demselben Link
+      // beide durch (beide ändern das Passwort, beide erhalten eine Sitzung).
+      if (!(await deps.passwordResetTokens.consume(existing.id))) {
+        throw new InvalidOrExpiredResetTokenError();
+      }
       const updated = await deps.users.update(user.id, { passwordHash });
-      // markAllUsedForUser() statt markUsed(existing.id): deckt das gerade
-      // eingelöste Token mit ab und entwertet jeden ANDEREN offenen Reset-Link
-      // desselben Kontos. Sonst bliebe bei mehreren angeforderten Reset-Mails
-      // jeder weitere Link gültig und löste trotz des neuen Passworts erneut
-      // einen Wechsel samt Auto-Login aus.
+      // Entwertet jeden ANDEREN offenen Reset-Link desselben Kontos. Sonst
+      // bliebe bei mehreren angeforderten Reset-Mails jeder weitere Link
+      // gültig und löste trotz des neuen Passworts erneut einen Wechsel samt
+      // Auto-Login aus.
       await deps.passwordResetTokens.markAllUsedForUser(user.id);
       await deps.refreshTokens.revokeAllForUser(user.id);
 

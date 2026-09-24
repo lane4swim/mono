@@ -70,8 +70,8 @@ export interface InvitationsServiceDeps {
   // Admin ein neues Konto an das Athletenprofil eines FREMDEN Vereins
   // koppelt.
   athletes: AthleteRepository;
-  // Nur für den Blick auf die Locale der einladenden Person (siehe
-  // resolveRequesterLocale() unten) — keine sonstige Nutzerverwaltung
+  // Nur für Locale und Audit-Log-Label der einladenden Person (siehe
+  // resolveRequester() unten) — keine sonstige Nutzerverwaltung
   // gehört in diesen Service.
   users: UserRepository;
   mailer: MailSender;
@@ -91,23 +91,26 @@ function buildInviteUrl(frontendBaseUrl: string, token: string): string {
   return `${frontendBaseUrl.replace(/\/+$/, '')}/#/accept-invite/${token}`;
 }
 
+// Die einladende Person wird je Aktion EINMAL geladen und für beides
+// genutzt, Mail-Locale und Audit-Log-Label (vorher zwei identische
+// findById()-Aufrufe direkt hintereinander).
+//
 // Die eingeladene Person hat noch kein Konto und damit keine eigene
 // Locale — die Sprache der einladenden Person (User.locale) ist die
 // einzige zu diesem Zeitpunkt bekannte, plausible Wahl für die
 // Einladungs-E-Mail. mailer.ts fällt bei einer unbekannten/fehlenden
 // Locale ohnehin auf Deutsch zurück, daher hier bewusst kein weiterer
 // Fallback nötig.
-async function resolveRequesterLocale(users: UserRepository, requesterId: string): Promise<string | undefined> {
+//
+// Das Audit-Log-Label (docs/Plans/vereinsverwaltung-phase3-plan.md,
+// Abschnitt 2.3) ist ein Schnappschuss "Name <E-Mail>", damit ein Eintrag
+// auch nach Löschung/Umbenennung des Akteur-Kontos lesbar bleibt, ohne Join.
+async function resolveRequester(users: UserRepository, requesterId: string): Promise<{ locale: string | undefined; actorLabel: string }> {
   const requesterUser = await users.findById(requesterId);
-  return requesterUser?.locale;
-}
-
-// Schnappschuss-Label für das Audit-Log (docs/Plans/vereinsverwaltung-
-// phase3-plan.md, Abschnitt 2.3) — "Name <E-Mail>", damit ein Eintrag auch
-// nach Löschung/Umbenennung des Akteur-Kontos lesbar bleibt, ohne Join.
-async function resolveActorLabel(users: UserRepository, requesterId: string): Promise<string> {
-  const requesterUser = await users.findById(requesterId);
-  return requesterUser ? `${requesterUser.name} <${requesterUser.email}>` : requesterId;
+  return {
+    locale: requesterUser?.locale,
+    actorLabel: requesterUser ? `${requesterUser.name} <${requesterUser.email}>` : requesterId,
+  };
 }
 
 // Zentrale Gültigkeitsprüfung — von preview() UND von authService beim
@@ -226,6 +229,7 @@ export function createInvitationsService(deps: InvitationsServiceDeps) {
         }),
       );
 
+      const requesterInfo = await resolveRequester(deps.users, requester.id);
       await deps.mailer.sendInvitationEmail({
         to: input.adminEmail,
         recipientName: input.adminName,
@@ -233,13 +237,13 @@ export function createInvitationsService(deps: InvitationsServiceDeps) {
         clubName: club.name,
         inviteUrl: buildInviteUrl(deps.frontendBaseUrl, plainToken),
         expiresAt,
-        locale: await resolveRequesterLocale(deps.users, requester.id),
+        locale: requesterInfo.locale,
       });
 
       await deps.auditLog.record({
         clubId: club.id,
         actorId: requester.id,
-        actorLabel: await resolveActorLabel(deps.users, requester.id),
+        actorLabel: requesterInfo.actorLabel,
         action: 'invitation.created',
         targetId: invitation.id,
         targetLabel: invitation.email,
@@ -295,13 +299,14 @@ export function createInvitationsService(deps: InvitationsServiceDeps) {
         expiresAt,
       });
 
+      const requesterInfo = await resolveRequester(deps.users, requester.id);
       await deps.mailer.sendInvitationEmail({
         to: input.email,
         role: input.role,
         clubName: club?.name ?? '(neuer Verein)',
         inviteUrl: buildInviteUrl(deps.frontendBaseUrl, plainToken),
         expiresAt,
-        locale: await resolveRequesterLocale(deps.users, requester.id),
+        locale: requesterInfo.locale,
       });
 
       // Nach der eigentlichen Transaktion (siehe auditLog.service.ts:
@@ -310,7 +315,7 @@ export function createInvitationsService(deps: InvitationsServiceDeps) {
       await deps.auditLog.record({
         clubId: targetClubId,
         actorId: requester.id,
-        actorLabel: await resolveActorLabel(deps.users, requester.id),
+        actorLabel: requesterInfo.actorLabel,
         action: 'invitation.created',
         targetId: invitation.id,
         targetLabel: invitation.email,
@@ -361,7 +366,7 @@ export function createInvitationsService(deps: InvitationsServiceDeps) {
       await deps.auditLog.record({
         clubId: invitation.clubId,
         actorId: requester.id,
-        actorLabel: await resolveActorLabel(deps.users, requester.id),
+        actorLabel: (await resolveRequester(deps.users, requester.id)).actorLabel,
         action: 'invitation.revoked',
         targetId: invitation.id,
         targetLabel: invitation.email,

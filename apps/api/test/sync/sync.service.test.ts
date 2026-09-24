@@ -1249,7 +1249,7 @@ describe('syncService — Rollen-Scopierung für "athlete" (Sicherheitsregressio
     const { service } = makeService();
     const now = new Date().toISOString();
     const results = await service.push(
-      [{ id: 'evt-unknown-store', store: 'users', entityId: 'irgendeine-id', action: 'create', payload: { foo: 'bar' }, clientUpdatedAt: now }],
+      [{ id: 'evt-unknown-store', store: 'users', entityId: '77777777-7777-7777-7777-777777777777', action: 'create', payload: { foo: 'bar' }, clientUpdatedAt: now }],
       asTrainer(CLUB_A),
     );
     expect(results[0]!.status).toBe('error');
@@ -2287,5 +2287,174 @@ describe('describeSyncError()', () => {
   it('behandelt einen Fehler mit anderem Code nicht als Fremdschlüssel-Verletzung', () => {
     const fakeError = { code: 'P2002', message: 'Unique constraint failed' };
     expect(describeSyncError(fakeError)).toEqual({ message: 'Der Vorgang konnte nicht angewendet werden (interner Fehler).', code: 'sync_internal_error' });
+  });
+});
+
+// Issue #93: payload.id war nicht an event.entityId gebunden — ein update
+// auf entityId X mit payload.id = Y änderte den Primärschlüssel von X.
+describe('syncService.push — payload.id muss der entityId entsprechen (Issue #93)', () => {
+  const OTHER_ID = '88888888-8888-8888-8888-888888888888';
+
+  it('lehnt ein update ab, dessen payload.id von der entityId abweicht, und lässt den Datensatz unverändert', async () => {
+    const { service, gateway } = makeService();
+    const original = makeGroupPayload({ updatedAt: '2026-01-01T00:00:00.000Z' });
+    gateway.seed('groups', { ...original, updatedAt: new Date(original.updatedAt), deletedAt: null });
+
+    const tampered = makeGroupPayload({ id: OTHER_ID, name: 'Umbenannt', updatedAt: '2026-06-01T00:00:00.000Z' });
+    const results = await service.push(
+      [{ id: 'evt-pk', store: 'groups', entityId: original.id, action: 'update', payload: tampered, clientUpdatedAt: tampered.updatedAt }],
+      asTrainer(CLUB_A),
+    );
+
+    expect(results[0]).toMatchObject({ status: 'error', code: 'invalid_payload' });
+    expect((await gateway.findById('groups', original.id))?.name).toBe('Leistungsgruppe');
+    expect(await gateway.findById('groups', OTHER_ID)).toBeNull();
+  });
+
+  it('lehnt ein create ab, dessen payload.id von der entityId abweicht', async () => {
+    const { service, gateway } = makeService();
+    const payload = makeGroupPayload();
+    const results = await service.push(
+      [{ id: 'evt-pk-create', store: 'groups', entityId: OTHER_ID, action: 'create', payload, clientUpdatedAt: payload.updatedAt }],
+      asTrainer(CLUB_A),
+    );
+
+    expect(results[0]).toMatchObject({ status: 'error', code: 'invalid_payload' });
+    expect(await gateway.findById('groups', payload.id)).toBeNull();
+    expect(await gateway.findById('groups', OTHER_ID)).toBeNull();
+  });
+
+  it('lehnt eine entityId ab, die keine UUID ist', async () => {
+    const { service } = makeService();
+    const results = await service.push(
+      [{ id: 'evt-not-uuid', store: 'groups', entityId: 'keine-uuid', action: 'delete', payload: null, clientUpdatedAt: new Date().toISOString() }],
+      asTrainer(CLUB_A),
+    );
+    expect(results[0]!.status).toBe('error');
+  });
+});
+
+// Issue #95: Push-Benachrichtigungen hingen am Status "applied", der auch
+// für Idempotenz-Wiederholungen und für ein "create" auf eine bestehende
+// entityId gilt. onCreated meldet nur tatsächlich neu angelegte Zeilen.
+describe('syncService.push — onCreated (Issue #95)', () => {
+  it('meldet eine Neuanlage genau einmal, auch wenn dasselbe Event erneut gesendet wird', async () => {
+    const { service } = makeService();
+    const payload = makeGroupPayload();
+    const event = { id: 'evt-created', store: 'groups' as const, entityId: payload.id, action: 'create' as const, payload, clientUpdatedAt: payload.updatedAt };
+    const onCreated = vi.fn();
+
+    await service.push([event], asTrainer(CLUB_A), { onCreated });
+    const replay = await service.push([event], asTrainer(CLUB_A), { onCreated });
+
+    expect(replay[0]!.status).toBe('applied');
+    expect(onCreated).toHaveBeenCalledTimes(1);
+    expect(onCreated).toHaveBeenCalledWith('evt-created');
+  });
+
+  it('meldet eine Wiederholung derselben event-id innerhalb eines Batches nur einmal', async () => {
+    const { service } = makeService();
+    const payload = makeGroupPayload();
+    const event = { id: 'evt-dup-batch', store: 'groups' as const, entityId: payload.id, action: 'create' as const, payload, clientUpdatedAt: payload.updatedAt };
+    const onCreated = vi.fn();
+
+    await service.push([event, event], asTrainer(CLUB_A), { onCreated });
+
+    expect(onCreated).toHaveBeenCalledTimes(1);
+  });
+
+  it('meldet ein "create" auf eine bereits bestehende entityId NICHT als Neuanlage', async () => {
+    const { service, gateway } = makeService();
+    const existing = makeGroupPayload({ updatedAt: '2026-01-01T00:00:00.000Z' });
+    gateway.seed('groups', { ...existing, updatedAt: new Date(existing.updatedAt), deletedAt: null });
+    const onCreated = vi.fn();
+
+    const payload = makeGroupPayload({ name: 'Anderer Titel', updatedAt: '2026-06-01T00:00:00.000Z' });
+    const results = await service.push(
+      [{ id: 'evt-create-existing', store: 'groups', entityId: payload.id, action: 'create', payload, clientUpdatedAt: payload.updatedAt }],
+      asTrainer(CLUB_A),
+      { onCreated },
+    );
+
+    expect(results[0]!.status).toBe('applied');
+    expect(onCreated).not.toHaveBeenCalled();
+  });
+
+  it('meldet abgelehnte Events nicht', async () => {
+    const { service } = makeService();
+    const payload = makeGroupPayload({ clubId: CLUB_B });
+    const onCreated = vi.fn();
+
+    await service.push(
+      [{ id: 'evt-rejected', store: 'groups', entityId: payload.id, action: 'create', payload, clientUpdatedAt: payload.updatedAt }],
+      asTrainer(CLUB_A),
+      { onCreated },
+    );
+
+    expect(onCreated).not.toHaveBeenCalled();
+  });
+});
+
+// Issue #65, Befund 1: Group.trainerIds wurde nicht gegen den eigenen
+// Verein geprüft — anders als jede andere User-/Entitätsreferenz.
+describe('syncService.push — Group.trainerIds nur aus dem eigenen Verein (Issue #65)', () => {
+  const OWN_TRAINER = '99999999-0000-0000-0000-00000000000a';
+  const FOREIGN_TRAINER = '99999999-0000-0000-0000-00000000000b';
+
+  it('akzeptiert trainerIds des eigenen Vereins', async () => {
+    const { service, gateway } = makeService();
+    gateway.seedUser(OWN_TRAINER, CLUB_A);
+    const payload = makeGroupPayload({ trainerIds: [OWN_TRAINER] });
+
+    const results = await service.push(
+      [{ id: 'evt-trainers-own', store: 'groups', entityId: payload.id, action: 'create', payload, clientUpdatedAt: payload.updatedAt }],
+      asTrainer(CLUB_A),
+    );
+    expect(results[0]!.status).toBe('applied');
+  });
+
+  it('lehnt eine Gruppe ab, deren trainerIds einen User eines FREMDEN Vereins enthalten', async () => {
+    const { service, gateway } = makeService();
+    gateway.seedUser(OWN_TRAINER, CLUB_A);
+    gateway.seedUser(FOREIGN_TRAINER, CLUB_B);
+    const payload = makeGroupPayload({ trainerIds: [OWN_TRAINER, FOREIGN_TRAINER] });
+
+    const results = await service.push(
+      [{ id: 'evt-trainers-foreign', store: 'groups', entityId: payload.id, action: 'create', payload, clientUpdatedAt: payload.updatedAt }],
+      asTrainer(CLUB_A),
+    );
+    expect(results[0]).toMatchObject({ status: 'error', code: 'foreign_entity_missing' });
+    expect(await gateway.findById('groups', payload.id)).toBeNull();
+  });
+
+  it('lehnt eine nicht existierende User-ID in trainerIds ab (dieselbe Meldung, kein Existenz-Orakel)', async () => {
+    const { service } = makeService();
+    const payload = makeGroupPayload({ trainerIds: [FOREIGN_TRAINER] });
+
+    const results = await service.push(
+      [{ id: 'evt-trainers-missing', store: 'groups', entityId: payload.id, action: 'create', payload, clientUpdatedAt: payload.updatedAt }],
+      asTrainer(CLUB_A),
+    );
+    expect(results[0]).toMatchObject({ status: 'error', code: 'foreign_entity_missing' });
+  });
+});
+
+// Issue #94: ein per Sync gelöschtes Athletenprofil bleibt als Soft-Delete
+// dauerhaft bestehen — die internen Trainer:innen-Notizen nicht.
+describe('syncService.push — Löschen eines Athletenprofils leert notes (Issue #94)', () => {
+  it('setzt notes beim delete eines "athletes"-Datensatzes auf ""', async () => {
+    const { service, gateway } = makeService();
+    const athlete = makeAthletePayload({ notes: 'Intern: Wende üben' });
+    gateway.seed('athletes', { ...athlete, updatedAt: new Date(athlete.updatedAt), deletedAt: null });
+
+    const results = await service.push(
+      [{ id: 'evt-del-athlete', store: 'athletes', entityId: athlete.id, action: 'delete', payload: null, clientUpdatedAt: new Date().toISOString() }],
+      asAdmin(CLUB_A),
+    );
+
+    expect(results[0]!.status).toBe('applied');
+    const stored = await gateway.findById('athletes', athlete.id);
+    expect(stored?.deletedAt).toBeInstanceOf(Date);
+    expect((stored as { notes?: unknown } | null)?.notes).toBe('');
   });
 });
