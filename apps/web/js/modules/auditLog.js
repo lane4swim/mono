@@ -70,6 +70,10 @@ function describeEntry(entry) {
 
 function renderView(container, initialEntries) {
   let entries = initialEntries;
+  // Weitere Seiten gibt es nur, solange die ZULETZT geladene Seite voll war.
+  // Die Gesamtlänge taugt dafür nicht: bei genau 50 (100, …) Einträgen
+  // bliebe der Button sonst nach einer leeren Antwort ewig stehen.
+  let hasMore = initialEntries.length === PAGE_SIZE;
   const wrap = el('div');
   wrap.appendChild(el('div', { class: 'page-head' }, [
     el('div', {}, [el('div', { class: 'page-eyebrow' }, t('auditLog.eyebrow')), el('h1', { class: 'mt-0' }, t('auditLog.title'))]),
@@ -107,13 +111,14 @@ function renderView(container, initialEntries) {
 
   function drawLoadMore() {
     clear(loadMoreHost);
-    if (entries.length === 0 || entries.length % PAGE_SIZE !== 0) return;
+    if (!hasMore) return;
     const btn = el('button', { class: 'btn btn-ghost', onclick: async () => {
       btn.disabled = true;
       try {
         const before = entries[entries.length - 1].createdAt;
         const { entries: more } = await api.listAuditLog({ before, limit: PAGE_SIZE });
         entries = entries.concat(more);
+        hasMore = more.length === PAGE_SIZE;
         drawTable();
         drawLoadMore();
       } catch (err) {

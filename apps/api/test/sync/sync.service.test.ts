@@ -2394,3 +2394,67 @@ describe('syncService.push — onCreated (Issue #95)', () => {
     expect(onCreated).not.toHaveBeenCalled();
   });
 });
+
+// Issue #65, Befund 1: Group.trainerIds wurde nicht gegen den eigenen
+// Verein geprüft — anders als jede andere User-/Entitätsreferenz.
+describe('syncService.push — Group.trainerIds nur aus dem eigenen Verein (Issue #65)', () => {
+  const OWN_TRAINER = '99999999-0000-0000-0000-00000000000a';
+  const FOREIGN_TRAINER = '99999999-0000-0000-0000-00000000000b';
+
+  it('akzeptiert trainerIds des eigenen Vereins', async () => {
+    const { service, gateway } = makeService();
+    gateway.seedUser(OWN_TRAINER, CLUB_A);
+    const payload = makeGroupPayload({ trainerIds: [OWN_TRAINER] });
+
+    const results = await service.push(
+      [{ id: 'evt-trainers-own', store: 'groups', entityId: payload.id, action: 'create', payload, clientUpdatedAt: payload.updatedAt }],
+      asTrainer(CLUB_A),
+    );
+    expect(results[0]!.status).toBe('applied');
+  });
+
+  it('lehnt eine Gruppe ab, deren trainerIds einen User eines FREMDEN Vereins enthalten', async () => {
+    const { service, gateway } = makeService();
+    gateway.seedUser(OWN_TRAINER, CLUB_A);
+    gateway.seedUser(FOREIGN_TRAINER, CLUB_B);
+    const payload = makeGroupPayload({ trainerIds: [OWN_TRAINER, FOREIGN_TRAINER] });
+
+    const results = await service.push(
+      [{ id: 'evt-trainers-foreign', store: 'groups', entityId: payload.id, action: 'create', payload, clientUpdatedAt: payload.updatedAt }],
+      asTrainer(CLUB_A),
+    );
+    expect(results[0]).toMatchObject({ status: 'error', code: 'foreign_entity_missing' });
+    expect(await gateway.findById('groups', payload.id)).toBeNull();
+  });
+
+  it('lehnt eine nicht existierende User-ID in trainerIds ab (dieselbe Meldung, kein Existenz-Orakel)', async () => {
+    const { service } = makeService();
+    const payload = makeGroupPayload({ trainerIds: [FOREIGN_TRAINER] });
+
+    const results = await service.push(
+      [{ id: 'evt-trainers-missing', store: 'groups', entityId: payload.id, action: 'create', payload, clientUpdatedAt: payload.updatedAt }],
+      asTrainer(CLUB_A),
+    );
+    expect(results[0]).toMatchObject({ status: 'error', code: 'foreign_entity_missing' });
+  });
+});
+
+// Issue #94: ein per Sync gelöschtes Athletenprofil bleibt als Soft-Delete
+// dauerhaft bestehen — die internen Trainer:innen-Notizen nicht.
+describe('syncService.push — Löschen eines Athletenprofils leert notes (Issue #94)', () => {
+  it('setzt notes beim delete eines "athletes"-Datensatzes auf ""', async () => {
+    const { service, gateway } = makeService();
+    const athlete = makeAthletePayload({ notes: 'Intern: Wende üben' });
+    gateway.seed('athletes', { ...athlete, updatedAt: new Date(athlete.updatedAt), deletedAt: null });
+
+    const results = await service.push(
+      [{ id: 'evt-del-athlete', store: 'athletes', entityId: athlete.id, action: 'delete', payload: null, clientUpdatedAt: new Date().toISOString() }],
+      asAdmin(CLUB_A),
+    );
+
+    expect(results[0]!.status).toBe('applied');
+    const stored = await gateway.findById('athletes', athlete.id);
+    expect(stored?.deletedAt).toBeInstanceOf(Date);
+    expect((stored as { notes?: unknown } | null)?.notes).toBe('');
+  });
+});

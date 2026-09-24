@@ -4,7 +4,7 @@
 // Das Vereins-Scoping in sync.permissions.ts deckt nur die clubId des
 // Top-Level-Datensatzes selbst ab. Mehrere Stores referenzieren aber
 // ZUSÄTZLICH andere fachliche Entitäten über eine ID (athleteId, groupId,
-// competitionId, planId, assignedTrainerId) — die Zod-Schemas in
+// competitionId, planId, assignedTrainerId, trainerIds) — die Zod-Schemas in
 // packages/shared-types/src/entities.ts prüfen dafür nur das UUID-Format,
 // nicht die Zugehörigkeit zum eigenen Verein. Ohne diese Prüfung könnte
 // z. B. ein Trainer aus Verein A ein Ergebnis mit clubId=A, aber einer
@@ -33,6 +33,7 @@ import type { SyncGateway } from './sync.gateway.js';
 export type ForeignKeyRef =
   | { kind: 'entity'; field: string; store: EntityStoreName } // referenziert einen der zehn fachlichen Sync-Stores
   | { kind: 'user'; field: string } // referenziert users.id (kein Sync-Store, siehe findClubIdForUser())
+  | { kind: 'userList'; field: string } // wie 'user', aber ein Array von users.id (z. B. Group.trainerIds)
   | { kind: 'nested'; store: EntityStoreName; extract: (payload: Record<string, unknown>) => string[] }; // mehrere Referenzen verschachtelt im Payload, siehe collectSetExerciseIds() unten
 
 // "templates.sets" und "plans.days[].sets" tragen dieselbe SetEntry[]-Struktur
@@ -69,6 +70,11 @@ function collectSetExerciseIds(sets: unknown): string[] {
 
 const FOREIGN_KEY_REFS: Partial<Record<EntityStoreName, ForeignKeyRef[]>> = {
   athletes: [{ kind: 'entity', field: 'groupId', store: 'groups' }],
+  // Heute hängt keine Berechtigung an trainerIds, und die Anzeige löst die
+  // IDs nur gegen die eigene Trainer:innen-Liste auf. Geprüft wird trotzdem:
+  // ein späteres Feature, das die IDs serverseitig auflöst, soll keine
+  // vereinsfremden User-IDs erben.
+  groups: [{ kind: 'userList', field: 'trainerIds' }],
   results: [
     { kind: 'entity', field: 'athleteId', store: 'athletes' },
     { kind: 'entity', field: 'competitionId', store: 'competitions' },
@@ -176,6 +182,11 @@ export async function assertForeignKeysWithinClub(
   for (const ref of refs) {
     if (ref.kind === 'nested') {
       for (const value of ref.extract(payload)) addEntityId(ref.store, value);
+      continue;
+    }
+    if (ref.kind === 'userList') {
+      const values = payload[ref.field];
+      if (Array.isArray(values)) for (const value of values) userIds.add(value as string);
       continue;
     }
 

@@ -379,7 +379,11 @@ export class PrismaSyncGateway implements SyncGateway, SyncGatewayTestSurface {
         // clubId in der where-Klausel: siehe update() oben.
         await delegate.update({ where: { id: operation.id, clubId: operation.clubId }, data: operation.payload });
       } else {
-        await delegate.update({ where: { id: operation.id, clubId: operation.clubId }, data: { deletedAt: new Date() } });
+        // Athlete.notes (interne Trainer:innen-Notizen) werden beim Löschen
+        // des Profils sofort geleert: die Zeile bleibt als Soft-Delete
+        // dauerhaft bestehen, die Notizen sollen es nicht (Issue #94).
+        const data = operation.store === 'athletes' ? { deletedAt: new Date(), notes: '' } : { deletedAt: new Date() };
+        await delegate.update({ where: { id: operation.id, clubId: operation.clubId }, data });
         // Aufräumarbeit (Code-Review): eine gelöschte Athletin/ein
         // gelöschter Athlet ist per Soft-Delete NUR "deletedAt" gesetzt,
         // keine echte SQL-DELETE — ParentLink.athlete trägt zwar

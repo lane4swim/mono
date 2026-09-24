@@ -4,8 +4,20 @@
 // invitations.service.ts/auth.service.ts), es gibt bewusst KEINEN
 // POST/PUT-Endpunkt für dieses Modul.
 import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
 import type { AuditLogService, RequesterContext } from './auditLog.service.js';
 import { requireAnyRole } from '../../plugins/authorize.js';
+import { parseInput } from '../../plugins/parseInput.js';
+
+// Ungeprüft führten `?before=kein-datum` (Invalid Date) und `?limit=abc`
+// (NaN) zu einem ungefangenen Prisma-Fehler (500) statt einer 400, und ein
+// negatives `limit` hätte Prisma als "von hinten holen" gedeutet. Die
+// Obergrenze (200) setzt weiterhin auditLogService.list().
+const AuditLogQuerySchema = z.object({
+  clubId: z.string().uuid().optional(),
+  before: z.string().datetime().optional(),
+  limit: z.coerce.number().int().positive().optional(),
+});
 
 export interface AuditLogRoutesOptions {
   auditLogService: AuditLogService;
@@ -23,11 +35,13 @@ export async function auditLogRoutes(app: FastifyInstance, opts: AuditLogRoutesO
     '/api/audit-log',
     { preHandler: [app.authenticate, requireAnyRole('admin', 'superadmin')] },
     async (request, reply) => {
-      const { clubId, before, limit } = request.query;
+      const query = parseInput(AuditLogQuerySchema, request.query, reply);
+      if (!query) return;
+      const { clubId, before, limit } = query;
       const entries = await auditLogService.list(requesterFrom(request), {
         clubId,
         before: before ? new Date(before) : undefined,
-        limit: limit ? Number(limit) : undefined,
+        limit,
       });
       return reply.code(200).send({ entries });
     },

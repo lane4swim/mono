@@ -63,4 +63,32 @@ describe('GET /api/audit-log', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json().entries).toHaveLength(1);
   });
+
+  // Issue #65, Befund 2: ungültige Query-Parameter liefern eine 400 statt
+  // eines ungefangenen Fehlers.
+  it.each([
+    ['before=kein-datum'],
+    ['limit=abc'],
+    ['limit=-5'],
+    ['limit=0'],
+    ['limit=1.5'],
+    ['clubId=keine-uuid'],
+  ])('antwortet auf ?%s mit 400', async (query) => {
+    const { app, keyPair } = await buildTestApp();
+    const token = await tokenFor(keyPair, 'superadmin', null);
+    const response = await app.inject({ method: 'GET', url: `/api/audit-log?${query}`, headers: { authorization: `Bearer ${token}` } });
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error).toBe('validation_failed');
+    await app.close();
+  });
+
+  it('akzeptiert gültige before/limit-Werte', async () => {
+    const { app, keyPair } = await buildTestApp();
+    const token = await tokenFor(keyPair, 'admin', CLUB_A);
+    const before = encodeURIComponent(new Date(Date.now() + 60_000).toISOString());
+    const response = await app.inject({ method: 'GET', url: `/api/audit-log?before=${before}&limit=10`, headers: { authorization: `Bearer ${token}` } });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().entries).toHaveLength(1);
+    await app.close();
+  });
 });

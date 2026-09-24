@@ -158,3 +158,36 @@ describe('InMemoryProfileDataGateway.requestErasure', () => {
     await expect(gateway.requestErasure(USER_ID, 30)).rejects.toThrow(ErasureAlreadyRequestedError);
   });
 });
+
+// Issue #94: Athlete.notes sind interne Trainer:innen-Notizen — die
+// Sync-API redigiert sie für Athlet:innen, der Export darf sie nicht
+// ausliefern, und beim Löschen des Profils werden sie sofort geleert.
+describe('InMemoryProfileDataGateway — Trainer:innen-Notizen (Issue #94)', () => {
+  it('liefert das Athletenprofil im Export OHNE notes', async () => {
+    const db = makeDb({
+      users: [makeAthleteUser()],
+      athletes: [{ id: ATHLETE_ID, firstName: 'Mara', lastName: 'Vogel', notes: 'Intern: Wende üben', deletedAt: null }],
+    });
+    const gateway = new InMemoryProfileDataGateway(db);
+
+    const result = await gateway.exportUserData(USER_ID);
+
+    expect(result.athlete).toMatchObject({ id: ATHLETE_ID, firstName: 'Mara' });
+    expect(result.athlete).not.toHaveProperty('notes');
+    // Der gespeicherte Datensatz selbst bleibt unverändert.
+    expect(db.athletes[0]!.notes).toBe('Intern: Wende üben');
+  });
+
+  it('leert die notes sofort bei der Löschanfrage, nicht erst beim Hard-Purge', async () => {
+    const db = makeDb({
+      users: [makeAthleteUser()],
+      athletes: [{ id: ATHLETE_ID, firstName: 'Mara', lastName: 'Vogel', notes: 'Intern: Wende üben', deletedAt: null }],
+    });
+    const gateway = new InMemoryProfileDataGateway(db);
+
+    await gateway.requestErasure(USER_ID, 30);
+
+    expect(db.athletes[0]!.notes).toBe('');
+    expect(db.athletes[0]!.deletedAt).toBeInstanceOf(Date);
+  });
+});

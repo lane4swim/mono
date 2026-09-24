@@ -177,7 +177,10 @@ export class InMemorySyncGateway implements SyncGateway {
   private async softDelete(store: EntityStoreName, id: string, clubId: string): Promise<void> {
     const existing = this.table(store).get(id);
     if (existing && existing.clubId === clubId) {
-      this.table(store).set(id, { ...existing, deletedAt: new Date() });
+      // Spiegelt PrismaSyncGateway.applyAndMarkProcessed(): Athlete.notes
+      // werden beim Soft-Delete geleert (Issue #94).
+      const cleared = store === 'athletes' ? { notes: '' } : {};
+      this.table(store).set(id, { ...existing, ...cleared, deletedAt: new Date() });
     }
   }
 
