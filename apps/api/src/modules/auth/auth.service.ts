@@ -24,7 +24,7 @@ import { hashPassword, verifyPassword } from '../../auth/password.js';
 import { signAccessToken, generateRefreshToken, hashRefreshToken, generatePasswordResetToken, hashPasswordResetToken } from '../../auth/tokens.js';
 import type { KeyPair } from '../../auth/keys.js';
 import type { MailSender } from '../../mail/mailer.js';
-import type { AuditLogWriter } from '../auditLog/auditLog.service.js';
+import { type AuditLogWriter, userLabel, UNKNOWN_ACTOR_LABEL, SYSTEM_ACTOR_LABEL } from '../auditLog/auditLog.service.js';
 
 // Fest einprogrammierter, gültig kodierter argon2id-Hash für ein beliebiges
 // Dummy-Passwort — dient AUSSCHLIESSLICH dazu, login() bei einer unbekannten
@@ -228,6 +228,22 @@ export function createAuthService(deps: AuthServiceDeps) {
     return { accessToken, refreshToken: refresh.plainToken, expiresIn: deps.accessTtlSeconds };
   }
 
+  // Wiederverwendung eines bereits rotierten Refresh Tokens = möglicher
+  // Token-Diebstahl (siehe refresh()). Alle Sitzungen sind zu diesem
+  // Zeitpunkt bereits widerrufen; der Eintrag macht den Vorfall für
+  // Admins nachvollziehbar.
+  async function recordRefreshTokenReuse(userId: string): Promise<void> {
+    const user = await deps.users.findById(userId);
+    await deps.auditLog.record({
+      clubId: user?.clubId ?? null,
+      actorId: null,
+      actorLabel: SYSTEM_ACTOR_LABEL,
+      action: 'auth.refreshTokenReuse',
+      targetId: userId,
+      targetLabel: user ? userLabel(user) : userId,
+    });
+  }
+
   // Gemeinsame Basis von listClubMembers() und listAssignableTrainers(), die
   // sich nur in Filter, Sortierung und Projektion unterscheiden. `project` ist
   // parametrisiert, damit /api/users/trainers (ein reines Auswahl-Dropdown)
@@ -367,7 +383,21 @@ export function createAuthService(deps: AuthServiceDeps) {
       }
 
       const passwordOk = await verifyPassword(input.password, user.passwordHash);
-      if (!passwordOk) throw new InvalidCredentialsError();
+      if (!passwordOk) {
+        // Ohne await: ein zusätzlicher DB-Schreibvorgang NUR für bestehende
+        // Konten machte deren Fehlversuche messbar langsamer als die für
+        // unbekannte Adressen (siehe Dummy-Hash oben) — ein Existenz-Orakel.
+        // record() wirft nie (siehe auditLog.service.ts).
+        void deps.auditLog.record({
+          clubId: user.clubId,
+          actorId: null,
+          actorLabel: UNKNOWN_ACTOR_LABEL,
+          action: 'auth.loginFailed',
+          targetId: user.id,
+          targetLabel: userLabel(user),
+        });
+        throw new InvalidCredentialsError();
+      }
 
       // LoginRequestSchema hat input.consentVersion bereits gegen
       // CURRENT_CONSENT_VERSION geprüft — der Nachweis unten hält damit eine
@@ -417,6 +447,7 @@ export function createAuthService(deps: AuthServiceDeps) {
       // harmlose Nebeneinanderherlaufen der App zu.
       if (existing.revokedAt) {
         await deps.refreshTokens.revokeAllForUser(existing.userId);
+        await recordRefreshTokenReuse(existing.userId);
         throw new InvalidRefreshTokenError();
       }
 
@@ -446,6 +477,7 @@ export function createAuthService(deps: AuthServiceDeps) {
       const tokens = await issueTokens(user);
       if (!(await deps.refreshTokens.consume(existing.id))) {
         await deps.refreshTokens.revokeAllForUser(existing.userId);
+        await recordRefreshTokenReuse(existing.userId);
         throw new InvalidRefreshTokenError();
       }
       const clubContext = await resolveClubContext(deps.clubs, user.clubId);
@@ -503,6 +535,15 @@ export function createAuthService(deps: AuthServiceDeps) {
       // die untenstehende, rein serverseitige Log-Zeile gewesen. Ein
       // Fehlschlag AN JEDER Stelle dieser Kette (Schreiben ODER Versand)
       // wird weiterhin nur geloggt, nie an den Client durchgereicht.
+      // Ebenfalls ohne await, aus demselben Grund wie der Mailversand.
+      void deps.auditLog.record({
+        clubId: user.clubId,
+        actorId: null,
+        actorLabel: UNKNOWN_ACTOR_LABEL,
+        action: 'auth.passwordResetRequested',
+        targetId: user.id,
+        targetLabel: userLabel(user),
+      });
       deps.passwordResetTokens
         .create(user.id, tokenHash, expiresAt)
         .then(() =>
@@ -557,6 +598,14 @@ export function createAuthService(deps: AuthServiceDeps) {
       // Auto-Login aus.
       await deps.passwordResetTokens.markAllUsedForUser(user.id);
       await deps.refreshTokens.revokeAllForUser(user.id);
+      await deps.auditLog.record({
+        clubId: updated.clubId,
+        actorId: updated.id,
+        actorLabel: userLabel(updated),
+        action: 'auth.passwordReset',
+        targetId: updated.id,
+        targetLabel: userLabel(updated),
+      });
 
       const tokens = await issueTokens(updated);
       const clubContext = await resolveClubContext(deps.clubs, updated.clubId);
@@ -585,6 +634,14 @@ export function createAuthService(deps: AuthServiceDeps) {
       // der gültig, obwohl das Konto längst ein neues Passwort hat.
       await deps.passwordResetTokens.markAllUsedForUser(userId);
       await deps.refreshTokens.revokeAllForUser(userId);
+      await deps.auditLog.record({
+        clubId: updated.clubId,
+        actorId: userId,
+        actorLabel: userLabel(updated),
+        action: 'user.passwordChanged',
+        targetId: userId,
+        targetLabel: userLabel(updated),
+      });
 
       // Ohne diesen Hinweis erführe die rechtmäßige Person von einer
       // Übernahme erst beim nächsten eigenen Anmeldeversuch. Bewusst ohne
@@ -653,6 +710,15 @@ export function createAuthService(deps: AuthServiceDeps) {
       }
 
       await deps.refreshTokens.revokeAllForUser(userId);
+      await deps.auditLog.record({
+        clubId: updated.clubId,
+        actorId: userId,
+        actorLabel: userLabel(updated),
+        action: 'user.emailChanged',
+        targetId: userId,
+        targetLabel: userLabel(updated),
+        metadata: { oldEmail: user.email, newEmail: updated.email },
+      });
 
       // Geht an user.email, die Adresse VOR dem Wechsel — nicht an
       // updated.email: im Übernahme-Fall gehört die neue Adresse bereits der

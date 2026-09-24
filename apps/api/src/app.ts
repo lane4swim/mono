@@ -185,6 +185,7 @@ export async function buildApp(env: Env, overrides: BuildAppOverrides = {}): Pro
     overrides.auditLogService ??
     createAuditLogService({
       entries: new PrismaAuditLogRepository(getPrisma()),
+      users: new PrismaUserRepository(getPrisma()),
     });
 
   const invitationsService =
@@ -249,6 +250,7 @@ export async function buildApp(env: Env, overrides: BuildAppOverrides = {}): Pro
       qualifications: new PrismaUserQualificationRepository(getPrisma()),
       reminderSettings: new PrismaQualificationReminderSettingRepository(getPrisma()),
       users: new PrismaUserRepository(getPrisma()),
+      auditLog: auditLogService,
     });
 
   const refereesService =
@@ -257,12 +259,14 @@ export async function buildApp(env: Env, overrides: BuildAppOverrides = {}): Pro
       assignments: new PrismaRefereeAssignmentRepository(getPrisma()),
       users: new PrismaUserRepository(getPrisma()),
       competitions: new PrismaCompetitionRepository(getPrisma()),
+      auditLog: auditLogService,
     });
 
   const clubLegalInfoService =
     overrides.clubLegalInfoService ??
     createClubLegalInfoService({
       legalInfo: new PrismaClubLegalInfoRepository(getPrisma()),
+      auditLog: auditLogService,
     });
 
   const pushSubscriptions = overrides.pushSubscriptions ?? new PrismaPushSubscriptionRepository(getPrisma());
@@ -275,6 +279,7 @@ export async function buildApp(env: Env, overrides: BuildAppOverrides = {}): Pro
       overview: new PrismaParentOverviewGateway(getPrisma()),
       users: new PrismaUserRepository(getPrisma()),
       athletes: new PrismaParentsAthleteLookup(getPrisma()),
+      auditLog: auditLogService,
     });
 
   await app.register(healthRoutes);

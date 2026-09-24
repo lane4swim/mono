@@ -7,6 +7,8 @@ import { createRefereesService } from '../../src/modules/referees/referees.servi
 import { InMemoryRefereeAssignmentRepository, InMemoryCompetitionRepository } from '../../src/modules/referees/referees.repository.memory.js';
 import { generateFreshKeyPair, type KeyPair } from '../../src/auth/keys.js';
 import { signAccessToken } from '../../src/auth/tokens.js';
+import { createAuditLogService } from '../../src/modules/auditLog/auditLog.service.js';
+import { InMemoryAuditLogRepository } from '../../src/modules/auditLog/auditLog.repository.memory.js';
 
 const testEnv = loadEnv({
   NODE_ENV: 'test',
@@ -34,7 +36,7 @@ async function buildTestApp({ enabledModules = ['kampfrichter'] }: { enabledModu
     { id: COMPETITION_IN_CLUB, clubId: club.id },
     { id: COMPETITION_IN_OTHER_CLUB, clubId: otherClub.id },
   ]);
-  const refereesService = createRefereesService({ assignments, users, competitions });
+  const refereesService = createRefereesService({ assignments, users, competitions, auditLog: createAuditLogService({ entries: new InMemoryAuditLogRepository() }) });
 
   const app = await buildApp(testEnv, { refereesService, clubs, keyPair });
   return { app, keyPair, club, otherClub, admin, referee, otherClubReferee };

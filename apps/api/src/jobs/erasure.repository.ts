@@ -6,6 +6,7 @@
 // ausgeführt über scripts/purgeDeletedData.ts (per Cron) und
 // orchestriert von jobs/purgeExpiredDeletions.ts.
 import type { PrismaClient, Prisma } from '@prisma/client';
+import { newAuditPseudonym, pseudonymizeAuditEntry } from './auditLogPseudonymization.js';
 import { anonymizePlanCommentAuthors, anonymizeExerciseCommentAuthors, anonymizeTemplateCommentAuthors, anonymizeSectionTemplateCommentAuthors } from './commentAnonymization.js';
 
 // Platzhalter, auf den `Invitation.email` beim Hard-Purge gesetzt wird
@@ -270,6 +271,32 @@ export class PrismaErasureJobGateway implements ErasureJobGateway {
         where: { email: user.email },
         data: { email: ANONYMIZED_INVITATION_EMAIL, athleteId: null },
       });
+
+      // Audit-Log (Issue #96): Einträge über oder von dieser Person bleiben
+      // erhalten, Name/E-Mail/Konto-ID werden durch ein Pseudonym ersetzt
+      // (siehe auditLogPseudonymization.ts). Vor dem user.delete() unten, da
+      // actorId dort per onDelete: SetNull ohnehin genullt würde und der
+      // Abgleich darüber dann nicht mehr möglich wäre. Nicht auf clubId
+      // gescoped, aus demselben Grund wie die Einladungen darüber.
+      const auditRows = await tx.$queryRaw<Array<{ id: string; actorId: string | null; actorLabel: string; targetId: string | null; targetLabel: string; metadata: unknown }>>`
+        SELECT id, "actorId", "actorLabel", "targetId", "targetLabel", metadata FROM "audit_log_entries"
+        WHERE "actorId" = ${user.id}
+           OR "targetId" = ${user.id}
+           OR lower("targetLabel") = lower(${user.email})
+           OR lower(metadata->>'email') = lower(${user.email})
+           OR lower(metadata->>'oldEmail') = lower(${user.email})
+           OR lower(metadata->>'newEmail') = lower(${user.email})
+      `;
+      const pseudonym = newAuditPseudonym();
+      for (const row of auditRows) {
+        const replaced = pseudonymizeAuditEntry(row, { id: user.id, email: user.email }, pseudonym);
+        if (replaced) {
+          await tx.auditLogEntry.update({
+            where: { id: row.id },
+            data: { ...replaced, metadata: replaced.metadata as Prisma.InputJsonValue },
+          });
+        }
+      }
 
       // Löscht in derselben Transaktion auch den zugehörigen
       // DataDeletionRequest-Datensatz (onDelete: Cascade im Schema).

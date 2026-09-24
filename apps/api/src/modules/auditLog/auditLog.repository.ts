@@ -37,6 +37,8 @@ export interface ListAuditLogOptions {
 export interface AuditLogRepository {
   create(input: CreateAuditLogEntryInput): Promise<AuditLogEntryRecord>;
   list(options: ListAuditLogOptions): Promise<AuditLogEntryRecord[]>;
+  // Aufbewahrungsfrist (Issue #96), siehe jobs/purgeAuditLog.ts.
+  deleteOlderThan(cutoff: Date): Promise<number>;
 }
 
 export class PrismaAuditLogRepository implements AuditLogRepository {
@@ -59,5 +61,10 @@ export class PrismaAuditLogRepository implements AuditLogRepository {
       orderBy: { createdAt: 'desc' },
       take: options.limit,
     });
+  }
+
+  async deleteOlderThan(cutoff: Date): Promise<number> {
+    const result = await this.prisma.auditLogEntry.deleteMany({ where: { createdAt: { lt: cutoff } } });
+    return result.count;
   }
 }

@@ -1,5 +1,7 @@
 import { ANONYMIZED_INVITATION_EMAIL, type ErasureJobGateway, type DueErasureRequest } from './erasure.repository.js';
 import type { TombstoneRecord } from '../modules/sync/sync.gateway.js';
+import type { AuditLogEntryRecord } from '../modules/auditLog/auditLog.repository.js';
+import { newAuditPseudonym, pseudonymizeAuditEntry } from './auditLogPseudonymization.js';
 import { anonymizePlanCommentAuthors, anonymizeExerciseCommentAuthors, anonymizeTemplateCommentAuthors, anonymizeSectionTemplateCommentAuthors } from './commentAnonymization.js';
 
 export interface InMemoryErasureDatabase {
@@ -31,6 +33,8 @@ export interface InMemoryErasureDatabase {
   // sync.service.ts's pull() sichtbar wird. Optional, da nicht jeder Test
   // diese Verzahnung braucht.
   tombstones?: TombstoneRecord[];
+  // Optional (Issue #96) — siehe auditLogPseudonymization.ts.
+  auditLogEntries?: AuditLogEntryRecord[];
 }
 
 export class InMemoryErasureJobGateway implements ErasureJobGateway {
@@ -115,6 +119,15 @@ export class InMemoryErasureJobGateway implements ErasureJobGateway {
           invitation.email = ANONYMIZED_INVITATION_EMAIL;
           invitation.athleteId = null;
         }
+      }
+    }
+
+    // Issue #96 — siehe Prisma-Pendant und auditLogPseudonymization.ts.
+    if (typeof user.email === 'string' && this.db.auditLogEntries) {
+      const pseudonym = newAuditPseudonym();
+      for (const entry of this.db.auditLogEntries) {
+        const replaced = pseudonymizeAuditEntry(entry, { id: user.id, email: user.email }, pseudonym);
+        if (replaced) Object.assign(entry, replaced);
       }
     }
 

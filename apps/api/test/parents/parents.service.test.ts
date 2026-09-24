@@ -1,8 +1,13 @@
+import { createAuditLogService } from '../../src/modules/auditLog/auditLog.service.js';
+import { InMemoryAuditLogRepository } from '../../src/modules/auditLog/auditLog.repository.memory.js';
 import { describe, it, expect } from 'vitest';
 import { createParentsService, ParentNotInClubError, AthleteNotInClubError, UserNotParentError } from '../../src/modules/parents/parents.service.js';
 import { InMemoryParentLinkRepository } from '../../src/modules/parents/parents.repository.memory.js';
 import { InMemoryParentOverviewGateway } from '../../src/modules/parents/parents.overview.repository.memory.js';
 import type { ParentChildOverview } from '@lane1/shared-types';
+
+// Für Tests, die das Audit-Log nicht betrachten.
+const NO_AUDIT = { record: async () => {} };
 
 const CLUB_A = 'club-a';
 const CLUB_B = 'club-b';
@@ -42,7 +47,7 @@ describe('parentsService.getOverview()', () => {
     const parentLinks = new InMemoryParentLinkRepository();
     await parentLinks.create(PARENT_ID, CHILD_A_ID);
     const overview = new InMemoryParentOverviewGateway(new Map([[CHILD_A_ID, makeOverview(CHILD_A_ID)]]));
-    const service = createParentsService({ parentLinks, overview, users: makeUsers({}), athletes: makeAthletes({}) });
+    const service = createParentsService({ parentLinks, overview, users: makeUsers({}), athletes: makeAthletes({}), auditLog: NO_AUDIT });
 
     const result = await service.getOverview({ userId: PARENT_ID, clubId: CLUB_A });
     expect(result.children).toHaveLength(1);
@@ -53,7 +58,7 @@ describe('parentsService.getOverview()', () => {
     const parentLinks = new InMemoryParentLinkRepository();
     await parentLinks.create(PARENT_ID, CHILD_A_ID);
     const overview = new InMemoryParentOverviewGateway(new Map()); // liefert null für CHILD_A_ID
-    const service = createParentsService({ parentLinks, overview, users: makeUsers({}), athletes: makeAthletes({}) });
+    const service = createParentsService({ parentLinks, overview, users: makeUsers({}), athletes: makeAthletes({}), auditLog: NO_AUDIT });
 
     const result = await service.getOverview({ userId: PARENT_ID, clubId: CLUB_A });
     expect(result.children).toHaveLength(0);
@@ -65,6 +70,7 @@ describe('parentsService.getOverview()', () => {
       overview: new InMemoryParentOverviewGateway(),
       users: makeUsers({}),
       athletes: makeAthletes({}),
+      auditLog: NO_AUDIT,
     });
     const result = await service.getOverview({ userId: PARENT_ID, clubId: CLUB_A });
     expect(result.children).toEqual([]);
@@ -84,8 +90,10 @@ describe('parentsService — Admin-Verknüpfungsverwaltung', () => {
       [CHILD_A_ID]: { clubId: CLUB_A, firstName: 'Mara', lastName: 'Vogel' },
       [CHILD_B_ID]: { clubId: CLUB_B, firstName: 'Jonas', lastName: 'Beck' },
     });
-    const service = createParentsService({ parentLinks, overview, users, athletes });
-    return { service, parentLinks };
+    const auditLogEntries = new InMemoryAuditLogRepository();
+    const auditLog = createAuditLogService({ entries: auditLogEntries });
+    const service = createParentsService({ parentLinks, overview, users, athletes, auditLog });
+    return { service, parentLinks, auditLogEntries };
   }
 
   it('legt eine Verknüpfung an, wenn Konto und Athletenprofil zum eigenen Verein gehören', async () => {
@@ -121,5 +129,29 @@ describe('parentsService — Admin-Verknüpfungsverwaltung', () => {
     await service.addLink(PARENT_ID, CHILD_A_ID, { userId: 'admin-1', clubId: CLUB_A });
     await service.removeLink(PARENT_ID, CHILD_A_ID, { userId: 'admin-1', clubId: CLUB_A });
     expect(await parentLinks.listByUser(PARENT_ID)).toHaveLength(0);
+  });
+});
+
+// Issue #96: Eine Elternverknüpfung gibt Zugriff auf die Daten eines Kindes —
+// Anlegen und Entfernen werden protokolliert.
+describe('parentsService — Audit-Log (Issue #96)', () => {
+  it('protokolliert das Hinzufügen und Entfernen einer Verknüpfung', async () => {
+    const parentLinks = new InMemoryParentLinkRepository();
+    const auditLogEntries = new InMemoryAuditLogRepository();
+    const service = createParentsService({
+      parentLinks,
+      overview: new InMemoryParentOverviewGateway(),
+      users: makeUsers({ [PARENT_ID]: { clubId: CLUB_A, roles: ['parent'] } }),
+      athletes: makeAthletes({ [CHILD_A_ID]: { clubId: CLUB_A, firstName: 'Mara', lastName: 'Vogel' } }),
+      auditLog: createAuditLogService({ entries: auditLogEntries }),
+    });
+    const admin = { userId: 'admin-1', clubId: CLUB_A };
+
+    await service.addLink(PARENT_ID, CHILD_A_ID, admin);
+    await service.removeLink(PARENT_ID, CHILD_A_ID, admin);
+
+    const entries = await auditLogEntries.list({ limit: 10 });
+    expect(entries.map((e) => e.action).sort()).toEqual(['parentLink.added', 'parentLink.removed']);
+    expect(entries[0]).toMatchObject({ clubId: CLUB_A, actorId: 'admin-1', targetId: PARENT_ID, metadata: { athleteId: CHILD_A_ID } });
   });
 });

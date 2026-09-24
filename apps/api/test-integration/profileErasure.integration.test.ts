@@ -588,3 +588,36 @@ describe('Athlete.notes (Issue #94)', () => {
     expect(stored?.deletedAt).not.toBeNull();
   });
 });
+
+// Issue #96: der Hard-Purge pseudonymisiert Audit-Log-Einträge über echte
+// SQL-Abfragen (inkl. case-insensitivem E-Mail-Abgleich in JSON-Metadaten).
+describe('PrismaErasureJobGateway.purgeUserAndDependents() — Audit-Log (Issue #96)', () => {
+  it('pseudonymisiert Einträge von/über die Person und lässt fremde unverändert', async () => {
+    const club = await createTestClub();
+    const { user } = await seedAthleteUser(club.id);
+    const admin = await prisma.user.create({
+      data: { clubId: club.id, name: 'Admina', email: `admin-${randomUUID()}@example.org`, passwordHash: 'h', role: 'admin', roles: ['admin'] },
+    });
+    const own = await prisma.auditLogEntry.create({
+      data: { clubId: club.id, actorId: user.id, actorLabel: `Mara Vogel <${user.email}>`, action: 'user.emailChanged', targetId: user.id, targetLabel: `Mara Vogel <${user.email}>`, metadata: { oldEmail: 'alt@example.org', newEmail: user.email } },
+    });
+    const invitation = await prisma.auditLogEntry.create({
+      data: { clubId: club.id, actorId: admin.id, actorLabel: 'Admina', action: 'invitation.created', targetId: randomUUID(), targetLabel: user.email.toUpperCase(), metadata: { role: 'athlete', email: user.email.toUpperCase() } },
+    });
+    const other = await prisma.auditLogEntry.create({
+      data: { clubId: club.id, actorId: admin.id, actorLabel: 'Admina', action: 'invitation.created', targetId: randomUUID(), targetLabel: 'jonas@example.org', metadata: { role: 'athlete', email: 'jonas@example.org' } },
+    });
+
+    await profileGateway.requestErasure(user.id, 0);
+    await erasureGateway.purgeUserAndDependents(user.id);
+
+    const ownAfter = await prisma.auditLogEntry.findUnique({ where: { id: own.id } });
+    const invitationAfter = await prisma.auditLogEntry.findUnique({ where: { id: invitation.id } });
+    const otherAfter = await prisma.auditLogEntry.findUnique({ where: { id: other.id } });
+
+    expect(ownAfter).toMatchObject({ actorId: null, targetId: null, metadata: {} });
+    expect(ownAfter!.actorLabel).toMatch(/^__deleted_account__#[0-9a-f]{8}$/);
+    expect(invitationAfter).toMatchObject({ actorId: admin.id, targetLabel: ownAfter!.actorLabel, metadata: { role: 'athlete' } });
+    expect(otherAfter).toMatchObject({ targetLabel: 'jonas@example.org', metadata: { role: 'athlete', email: 'jonas@example.org' } });
+  });
+});

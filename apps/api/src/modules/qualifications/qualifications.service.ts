@@ -14,6 +14,7 @@ import type {
 } from './qualifications.repository.js';
 import type { UserRepository } from '../auth/auth.repository.js';
 import { UserNotFoundError } from '../auth/auth.service.js';
+import type { AuditLogWriter } from '../auditLog/auditLog.service.js';
 
 export class QualificationNotFoundError extends Error {
   constructor() {
@@ -65,6 +66,7 @@ export interface QualificationsServiceDeps {
   // Nutzerverwaltung gehört in diesen Service (analog invitations.service.ts:
   // InvitationsServiceDeps.users).
   users: UserRepository;
+  auditLog: AuditLogWriter;
 }
 
 // Entfernt `deletedAt` aus der Antwort — reine interne Buchhaltung ohne
@@ -93,6 +95,18 @@ async function findOwnedOrThrow(deps: QualificationsServiceDeps, targetUserId: s
   return existing;
 }
 
+// Nur die Admin-Pfade (Qualifikationen ANDERER Mitglieder) landen im
+// Audit-Log; es gibt keinen Selbstbedienungs-Schreibpfad.
+async function recordMemberChange(
+  deps: QualificationsServiceDeps,
+  requester: RequesterContext,
+  targetUserId: string,
+  action: 'qualification.created' | 'qualification.updated' | 'qualification.deleted',
+  metadata: Record<string, unknown>,
+) {
+  await deps.auditLog.record({ clubId: requester.clubId, actorId: requester.id, action, targetId: targetUserId, metadata });
+}
+
 function assertChronology(acquiredOn: Date, expiresOn: Date | null) {
   if (expiresOn && expiresOn.getTime() < acquiredOn.getTime()) throw new QualificationInvalidDateRangeError();
 }
@@ -116,6 +130,7 @@ export function createQualificationsService(deps: QualificationsServiceDeps) {
       await requireAdminOfSameClub(deps, requester, targetUserId);
       assertChronology(input.acquiredOn, input.expiresOn);
       const created = await deps.qualifications.create({ userId: targetUserId, ...input });
+      await recordMemberChange(deps, requester, targetUserId, 'qualification.created', { qualificationId: created.id, type: created.type });
       return toPublic(created);
     },
 
@@ -126,13 +141,15 @@ export function createQualificationsService(deps: QualificationsServiceDeps) {
       const mergedExpiresOn = patch.expiresOn !== undefined ? patch.expiresOn : existing.expiresOn;
       assertChronology(mergedAcquiredOn, mergedExpiresOn);
       const updated = await deps.qualifications.update(id, patch);
+      await recordMemberChange(deps, requester, targetUserId, 'qualification.updated', { qualificationId: id, type: updated.type });
       return toPublic(updated);
     },
 
     async remove(targetUserId: string, id: string, requester: RequesterContext): Promise<void> {
       await requireAdminOfSameClub(deps, requester, targetUserId);
-      await findOwnedOrThrow(deps, targetUserId, id);
+      const existing = await findOwnedOrThrow(deps, targetUserId, id);
       await deps.qualifications.softDelete(id);
+      await recordMemberChange(deps, requester, targetUserId, 'qualification.deleted', { qualificationId: id, type: existing.type });
     },
 
     // GET /api/qualification-settings — Erinnerungs-Schwellen des EIGENEN

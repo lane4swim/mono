@@ -1148,3 +1148,69 @@ describe('authService.updateUserRoles', () => {
     expect(updated.roles).toEqual(['trainer']);
   });
 });
+
+// Issue #96: sicherheitsrelevante Anmelde-/Kontoereignisse landen im
+// Audit-Log. Erfolgreiche Logins bewusst nicht (Produktentscheidung).
+describe('authService — Audit-Log für Anmelde-/Kontoereignisse (Issue #96)', () => {
+  async function actions(entries: InMemoryAuditLogRepository) {
+    // Nicht awaitete record()-Aufrufe (Fehl-Login, Reset-Anfrage) abschließen lassen.
+    await new Promise((r) => setTimeout(r, 0));
+    return (await entries.list({ limit: 100 })).map((e) => e.action);
+  }
+
+  it('protokolliert einen fehlgeschlagenen Login für ein bestehendes Konto, nicht aber einen erfolgreichen', async () => {
+    const { service, invitations, auditLogEntries } = makeService();
+    await registerViaInvitation(service, invitations, { email: 'audit@example.org' });
+
+    await service.login({ email: 'audit@example.org', password: 'ein-sicheres-passwort', consent: true, consentVersion: CURRENT_CONSENT_VERSION });
+    await expect(
+      service.login({ email: 'audit@example.org', password: 'falsch-falsch', consent: true, consentVersion: CURRENT_CONSENT_VERSION }),
+    ).rejects.toThrow(InvalidCredentialsError);
+
+    const logged = await actions(auditLogEntries);
+    expect(logged.filter((a) => a === 'auth.loginFailed')).toHaveLength(1);
+    const [entry] = (await auditLogEntries.list({ limit: 100 })).filter((e) => e.action === 'auth.loginFailed');
+    expect(entry).toMatchObject({ clubId: CLUB_ID, actorId: null, targetLabel: 'Test Person <audit@example.org>' });
+  });
+
+  it('protokolliert keinen Eintrag für einen Login-Versuch mit unbekannter Adresse', async () => {
+    const { service, auditLogEntries } = makeService();
+    await expect(
+      service.login({ email: 'niemand@example.org', password: 'egal-egal', consent: true, consentVersion: CURRENT_CONSENT_VERSION }),
+    ).rejects.toThrow(InvalidCredentialsError);
+    expect(await actions(auditLogEntries)).toEqual([]);
+  });
+
+  it('protokolliert die Wiederverwendung eines rotierten Refresh Tokens', async () => {
+    const { service, invitations, auditLogEntries } = makeService();
+    const first = await registerViaInvitation(service, invitations);
+    await service.refresh(first.refreshToken);
+    await expect(service.refresh(first.refreshToken)).rejects.toThrow(InvalidRefreshTokenError);
+
+    expect(await actions(auditLogEntries)).toContain('auth.refreshTokenReuse');
+  });
+
+  it('protokolliert Reset-Anfrage und abgeschlossenen Reset', async () => {
+    const { service, invitations, mailer, auditLogEntries } = makeService();
+    await registerViaInvitation(service, invitations, { email: 'reset-audit@example.org' });
+    await service.requestPasswordReset('reset-audit@example.org');
+    await new Promise((r) => setTimeout(r, 0));
+    const token = mailer.sentPasswordResetEmails.at(-1)!.resetUrl.split('/reset-password/')[1]!;
+    await service.resetPassword(token, 'ein-neues-passwort');
+
+    const logged = await actions(auditLogEntries);
+    expect(logged).toContain('auth.passwordResetRequested');
+    expect(logged).toContain('auth.passwordReset');
+  });
+
+  it('protokolliert Passwort- und E-Mail-Wechsel, inkl. alter und neuer Adresse', async () => {
+    const { service, invitations, auditLogEntries } = makeService();
+    const { user } = await registerViaInvitation(service, invitations, { email: 'wechsel@example.org' });
+    await service.changePassword(user.id, 'ein-sicheres-passwort', 'ein-neues-passwort');
+    await service.changeEmail(user.id, 'ein-neues-passwort', 'neu@example.org');
+
+    const all = await auditLogEntries.list({ limit: 100 });
+    expect(all.map((e) => e.action)).toEqual(expect.arrayContaining(['user.passwordChanged', 'user.emailChanged']));
+    expect(all.find((e) => e.action === 'user.emailChanged')?.metadata).toEqual({ oldEmail: 'wechsel@example.org', newEmail: 'neu@example.org' });
+  });
+});

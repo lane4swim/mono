@@ -1,11 +1,13 @@
-// Führt zwei voneinander unabhängige Aufräum-Läufe aus, die absichtlich in
-// EINEM Skript/Cron-Eintrag statt zweien gebündelt sind (identische
-// tägliche Kadenz, kein Mehrwert durch getrennte Cron-Jobs):
+// Führt drei voneinander unabhängige Aufräum-Läufe aus, die absichtlich in
+// EINEM Skript/Cron-Eintrag gebündelt sind (identische tägliche Kadenz,
+// kein Mehrwert durch getrennte Cron-Jobs):
 //   1. Zeitversetzter Hard-Purge aller fälligen Löschanfragen (Art. 17
 //      DSGVO).
 //   2. Entfernen veralteter Sync-Bookkeeping-Zeilen (SyncedEvent,
 //      SyncTombstone — siehe jobs/syncBookkeeping.repository.ts), die
 //      sonst unbegrenzt wachsen würden.
+//   3. Löschen von Audit-Log-Einträgen nach AUDIT_LOG_RETENTION_DAYS
+//      (jobs/purgeAuditLog.ts).
 //
 // Gedacht für einen täglichen Cron-Job, z. B.:
 //
@@ -18,6 +20,8 @@ import { PrismaErasureJobGateway } from '../src/jobs/erasure.repository.js';
 import { purgeExpiredDeletions } from '../src/jobs/purgeExpiredDeletions.js';
 import { PrismaSyncBookkeepingGateway } from '../src/jobs/syncBookkeeping.repository.js';
 import { purgeSyncBookkeeping } from '../src/jobs/purgeSyncBookkeeping.js';
+import { purgeAuditLog } from '../src/jobs/purgeAuditLog.js';
+import { PrismaAuditLogRepository } from '../src/modules/auditLog/auditLog.repository.js';
 
 async function main() {
   const env = loadEnv();
@@ -48,6 +52,9 @@ async function main() {
       `[purge] ${bookkeepingResult.deletedSyncedEvents} veraltete(s) SyncedEvent(s) und ` +
         `${bookkeepingResult.deletedSyncTombstones} veraltete(s) SyncTombstone(s) entfernt.`,
     );
+
+    const deletedAuditEntries = await purgeAuditLog(new PrismaAuditLogRepository(prisma), env.AUDIT_LOG_RETENTION_DAYS, new Date());
+    console.log(`[purge] ${deletedAuditEntries} Audit-Log-Eintrag/-Einträge älter als ${env.AUDIT_LOG_RETENTION_DAYS} Tage entfernt.`);
   } finally {
     await prisma.$disconnect();
   }

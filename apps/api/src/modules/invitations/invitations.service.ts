@@ -244,6 +244,15 @@ export function createInvitationsService(deps: InvitationsServiceDeps) {
         clubId: club.id,
         actorId: requester.id,
         actorLabel: requesterInfo.actorLabel,
+        action: 'club.created',
+        targetId: club.id,
+        targetLabel: club.name,
+        metadata: { enabledModules: club.enabledModules },
+      });
+      await deps.auditLog.record({
+        clubId: club.id,
+        actorId: requester.id,
+        actorLabel: requesterInfo.actorLabel,
         action: 'invitation.created',
         targetId: invitation.id,
         targetLabel: invitation.email,
@@ -397,7 +406,16 @@ export function createInvitationsService(deps: InvitationsServiceDeps) {
       requireActionRole(requester, ACTION_ROLES.updateClub, 'Nur Superadministrator:innen dürfen die Module eines Vereins ändern.');
       const club = await deps.clubs.findById(clubId);
       if (!club) throw new ClubNotFoundError();
-      return deps.clubs.updateEnabledModules(clubId, enabledModules);
+      const updated = await deps.clubs.updateEnabledModules(clubId, enabledModules);
+      await deps.auditLog.record({
+        clubId,
+        actorId: requester.id,
+        action: 'club.modulesChanged',
+        targetId: clubId,
+        targetLabel: club.name,
+        metadata: { oldModules: club.enabledModules, newModules: updated.enabledModules },
+      });
+      return updated;
     },
 
     // Setzt/ändert die externe Vereinskennung (DSV-Vereinskennzahl o. ä.)
@@ -416,7 +434,19 @@ export function createInvitationsService(deps: InvitationsServiceDeps) {
       }
       const club = await deps.clubs.findById(clubId);
       if (!club) throw new ClubNotFoundError();
-      return deps.clubs.updateIdentity(clubId, identity);
+      const updated = await deps.clubs.updateIdentity(clubId, identity);
+      await deps.auditLog.record({
+        clubId,
+        actorId: requester.id,
+        action: 'club.identityChanged',
+        targetId: clubId,
+        targetLabel: club.name,
+        metadata: {
+          old: { nationalID: club.nationalID, nationalIDType: club.nationalIDType },
+          new: { nationalID: updated.nationalID, nationalIDType: updated.nationalIDType },
+        },
+      });
+      return updated;
     },
   };
 }

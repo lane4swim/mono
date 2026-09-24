@@ -20,4 +20,10 @@ export class InMemoryAuditLogRepository implements AuditLogRepository {
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
       .slice(0, options.limit);
   }
+
+  async deleteOlderThan(cutoff: Date): Promise<number> {
+    const before = this.rows.length;
+    this.rows = this.rows.filter((r) => r.createdAt.getTime() >= cutoff.getTime());
+    return before - this.rows.length;
+  }
 }
