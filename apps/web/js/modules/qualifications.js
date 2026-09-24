@@ -8,7 +8,7 @@
 // Einstellungen für die Erinnerungs-Schwellen je Qualifikationstyp.
 import { el, clear, beginRender } from '../dom.js';
 import { fmtDateShort, dateOnly, toIsoDateTime, todayISO } from '../dates.js';
-import { badge, emptyState, laneWave, toast } from '../ui.js';
+import { badge, emptyState, laneWave, toast, tabbedView } from '../ui.js';
 import { openModal, confirmAction } from '../modal.js';
 import { field, textInput, selectInput, dateInput, formActions } from '../forms.js';
 import { isAdmin } from '../state.js';
@@ -121,11 +121,13 @@ function renderView(container, admin, own, members, settings) {
   wrap.appendChild(laneWave());
   wrap.appendChild(el('p', {}, admin ? t('qualifications.introAdmin') : t('qualifications.introSelf')));
 
-  wrap.appendChild(renderOwnSection(own, settings, admin));
-  if (admin) {
-    wrap.appendChild(renderMembersSection(members, settings, refresh));
-    wrap.appendChild(renderSettingsSection(settings, refresh));
-  }
+  // Nicht-Admins haben nur den eigenen Reiter — tabbedView() lässt die
+  // Reiterleiste dann ganz weg.
+  wrap.appendChild(tabbedView('qualifications', [
+    { id: 'own', label: t('qualifications.tabOwn'), render: () => renderOwnSection(own, settings, admin) },
+    admin && { id: 'members', label: t('qualifications.tabMembers'), render: () => renderMembersSection(members, settings, refresh) },
+    admin && { id: 'settings', label: t('qualifications.tabSettings'), render: () => renderSettingsSection(settings, refresh) },
+  ]));
 
   container.appendChild(wrap);
 

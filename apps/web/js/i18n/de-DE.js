@@ -167,8 +167,9 @@ export default {
     noAthleteProfile: 'Kein Athletenprofil mit diesem Konto verknüpft.',
   },
   athletes: {
+    tabAthletes: 'Athlet:innen ({count})', tabGroups: 'Gruppen ({count})',
     eyebrow: '{count} Athlet:innen', title: 'Athleten & Team',
-    manageGroups: 'Gruppen verwalten', addAthlete: '+ Athlet:in anlegen',
+    addAthlete: '+ Athlet:in anlegen',
     allWithCount: 'Alle ({count})', noAthletesTitle: 'Keine Athlet:innen',
     noAthletesInGroup: 'In dieser Gruppe sind noch keine Athlet:innen erfasst.',
     colName: 'Name', colAge: 'Alter', colGroup: 'Gruppe', colStatus: 'Status',
@@ -461,6 +462,7 @@ export default {
     pbBadge: 'Bestzeit',
   },
   stats: {
+    tabAttendance: 'Anwesenheit', tabLoad: 'Belastung', tabPerformance: 'Leistung',
     eyebrow: 'Auswertungen', title: 'Statistiken',
     attendanceTitle: 'Anwesenheitsquote pro Gruppe (letzte Einheiten)', noSessions: 'Noch keine Trainingseinheiten erfasst.',
     attendanceTrendTitle: 'Anwesenheitstrend über Zeit', filterGroup: 'Gruppe',
@@ -480,6 +482,7 @@ export default {
     faster: '−{delta}s schneller', slower: '+{delta}s langsamer', unchanged: 'unverändert',
   },
   usermgmt: {
+    tabClubs: 'Vereine', tabMembers: 'Mitglieder', tabClub: 'Vereinsangaben', tabInvitations: 'Einladungen',
     eyebrow: 'Verwaltung', title: 'Nutzerverwaltung',
     demoDisabled: 'Die Nutzerverwaltung ist in dieser Demo nicht verfügbar — sie läuft über echte Vereins-/Einladungsdaten, für die diese Demo kein Backend hat.',
     superadminIntro: 'Als Superadministrator:in legen Sie neue Vereine an und laden deren ersten Admin per zeitlich befristetem Link ein.',
@@ -603,6 +606,7 @@ export default {
     demoDisabled: 'In dieser Demo ist die Synchronisierung deaktiviert — alle Daten bleiben ausschließlich lokal in diesem Browser gespeichert.',
   },
   profile: {
+    tabAccount: 'Konto', tabSecurity: 'Anmeldung & Sicherheit', tabNotifications: 'Benachrichtigungen', tabData: 'Meine Daten',
     eyebrow: 'Mein Konto', title: 'Mein Profil',
     formName: 'Name', formEmail: 'E-Mail-Adresse',
     roleLabel: 'Rolle', accountSection: 'Kontodaten',
@@ -656,6 +660,7 @@ export default {
     editEquipment: 'Ausrüstung bearbeiten',
   },
   qualifications: {
+    tabOwn: 'Meine Qualifikationen', tabMembers: 'Mitglieder', tabSettings: 'Einstellungen',
     eyebrow: 'Qualifikationsmanagement', title: 'Qualifikationen',
     demoDisabled: 'Das Qualifikationsmanagement ist in dieser Demo nicht verfügbar — es läuft über echte Vereinsdaten, für die diese Demo kein Backend hat.',
     introAdmin: 'Erfasse Trainerlizenzen, Rettungsschwimmscheine und weitere Nachweise mit Erwerbs- und Ablaufdatum für alle Vereinsmitglieder.',
@@ -719,6 +724,7 @@ export default {
     },
   },
   kampfrichter: {
+    tabOwnAssignments: 'Meine Einsätze', tabOwnQualifications: 'Meine Qualifikationen', tabReferees: 'Kampfrichter:innen',
     eyebrow: 'Kampfrichter-Modul', title: 'Kampfrichter',
     demoDisabled: 'Das Kampfrichter-Modul ist in dieser Demo nicht verfügbar — es läuft über echte Vereinsdaten, für die diese Demo kein Backend hat.',
     introAdmin: 'Übersicht aller Kampfrichter:innen des Vereins mit ihrem Qualifikationsstatus und ihren Wettkampfeinsätzen.',

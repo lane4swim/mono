@@ -32,6 +32,71 @@ export function laneWave(onDark){
   return wrap;
 }
 
+// ---- Tabs innerhalb eines Moduls ----
+// Teilt eine Modulseite mit mehreren fachlich getrennten Aufgaben (z. B.
+// Nutzerverwaltung: Mitglieder / Verein / Einladungen) in Reiter auf.
+// `tabs`: [{ id, label, render: () => Node }] — falsy Einträge werden
+// übersprungen, damit Aufrufer rollenabhängige Reiter direkt inline als
+// `cond && {...}` angeben können. Bleibt nur ein Reiter übrig, entfällt
+// die Reiterleiste ganz (z. B. Qualifikationen für Nicht-Admins).
+//
+// Panels werden erst beim ersten Aktivieren gebaut und danach nur noch
+// ein-/ausgeblendet — so bleiben halb ausgefüllte Formulare beim Wechsel
+// erhalten, und teure Abrufe eines Reiters laufen nur, wenn er geöffnet
+// wird. Der aktive Reiter je `key` bleibt für die Sitzung gemerkt, damit
+// ein refresh() nach dem Speichern (baut die ganze Ansicht neu) oder ein
+// Hin- und Zurücknavigieren nicht jedes Mal auf den ersten Reiter springt.
+const activeTabByKey = new Map();
+
+export function tabbedView(key, tabs) {
+  const list = tabs.filter(Boolean);
+  if (list.length === 0) return el('div');
+  if (list.length === 1) return list[0].render();
+
+  const wrap = el('div', { class: 'tabs' });
+  const bar = el('div', { class: 'tab-bar', role: 'tablist' });
+  const panels = new Map();
+  const buttons = new Map();
+
+  function select(id, focus = false) {
+    activeTabByKey.set(key, id);
+    for (const tab of list) {
+      const isActive = tab.id === id;
+      const btn = buttons.get(tab.id);
+      btn.classList.toggle('active', isActive);
+      btn.setAttribute('aria-selected', String(isActive));
+      btn.tabIndex = isActive ? 0 : -1;
+      if (isActive && !panels.has(tab.id)) {
+        const panel = el('div', { class: 'tab-panel', role: 'tabpanel', id: `tabpanel-${key}-${tab.id}`, 'aria-labelledby': `tab-${key}-${tab.id}` }, tab.render());
+        panels.set(tab.id, panel);
+        wrap.appendChild(panel);
+      }
+      if (panels.has(tab.id)) panels.get(tab.id).hidden = !isActive;
+    }
+    if (focus) buttons.get(id).focus();
+  }
+
+  list.forEach((tab, i) => {
+    const btn = el('button', {
+      type: 'button', class: 'tab', role: 'tab', id: `tab-${key}-${tab.id}`, 'aria-controls': `tabpanel-${key}-${tab.id}`,
+      onclick: () => select(tab.id),
+      onkeydown: (e) => {
+        const delta = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+        if (!delta) return;
+        e.preventDefault();
+        select(list[(i + delta + list.length) % list.length].id, true);
+      },
+    }, tab.label);
+    buttons.set(tab.id, btn);
+    bar.appendChild(btn);
+  });
+  wrap.appendChild(bar);
+
+  const remembered = activeTabByKey.get(key);
+  select(list.some(tab => tab.id === remembered) ? remembered : list[0].id);
+  return wrap;
+}
+
 // ---- Toast-Meldungen ----
 export function toast(msg, variant = 'info') {
   const host = document.getElementById('toast-region');
