@@ -32,4 +32,20 @@ describe('password hashing (argon2id)', () => {
   it('verify() wirft nicht, sondern liefert false bei einem ungültigen Hash-Format', async () => {
     await expect(verifyPassword('irgendwas', 'kein-gueltiger-argon2-hash')).resolves.toBe(false);
   });
+
+  it('nutzt unverändert die argon2id-Parameter m=65536, t=3, p=1 (bestehende Hashes bleiben gültig)', async () => {
+    expect(await hashPassword('parameter-check')).toMatch(/^\$argon2id\$v=19\$m=65536,t=3,p=1\$/);
+  });
+
+  // Issue #90: das Hashing läuft im Worker-Pool, der Haupt-Thread bleibt
+  // währenddessen reaktionsfähig (vorher: keine einzige Timer-Ausführung
+  // während einer ~300-ms-Prüfung).
+  it('blockiert die Event-Loop des Haupt-Threads nicht', async () => {
+    const hash = await hashPassword('event-loop'); // Worker ist danach warm
+    let ticks = 0;
+    const interval = setInterval(() => { ticks++; }, 5);
+    await Promise.all([verifyPassword('event-loop', hash), verifyPassword('falsch', hash)]);
+    clearInterval(interval);
+    expect(ticks).toBeGreaterThan(5);
+  });
 }, 20000);

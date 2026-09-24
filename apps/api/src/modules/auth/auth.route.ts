@@ -1,7 +1,7 @@
 // Phase 1: echte Authentifizierungs-Routen (ersetzen die 501-Platzhalter
 // aus Phase 0). Siehe Abschnitt 5 des Backend-Entwicklungsplans.
 import { createHash } from 'node:crypto';
-import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type { FastifyInstance, FastifyRequest, onRequestAsyncHookHandler } from 'fastify';
 import {
   AcceptInvitationRequestSchema,
   LoginRequestSchema,
@@ -13,6 +13,7 @@ import {
   ChangePasswordRequestSchema,
   ChangeEmailRequestSchema,
   UpdateUserRolesRequestSchema,
+  NormalizedEmailSchema,
 } from '@lane1/shared-types';
 import type { AuthService } from './auth.service.js';
 import { requireAnyRole } from '../../plugins/authorize.js';
@@ -51,6 +52,52 @@ function accessTokenRateLimitKey(request: FastifyRequest): string {
   return createHash('sha256').update(header).digest('hex');
 }
 
+// Schlüssel für /auth/login und /auth/forgot-password: IP + E-Mail, die
+// E-Mail normalisiert über dasselbe Schema wie die Request-Validierung.
+// Der rohe Body-Wert würde sonst jeder Groß-/Kleinschreibungs- oder
+// Leerzeichen-Variante derselben Adresse ein eigenes Budget geben, obwohl
+// alle dasselbe Konto treffen (findByEmail() vergleicht case-insensitiv) —
+// das Limit wäre damit beliebig umgehbar (Issue #89). Ungültige/fehlende
+// Werte teilen sich einen gemeinsamen Zähler pro IP.
+export function ipAndEmailRateLimitKey(request: FastifyRequest): string {
+  const parsed = NormalizedEmailSchema.safeParse((request.body as { email?: unknown } | undefined)?.email);
+  return `${request.ip}:${parsed.success ? parsed.data : 'invalid'}`;
+}
+
+// Zusätzliche, reine IP-Obergrenze für /auth/login und /auth/forgot-password
+// (Issue #90). Deren eigenes Limit ist nach IP + E-Mail geschlüsselt (damit
+// sich ein Verein hinter gemeinsamer NAT-IP nicht selbst aussperrt) und
+// ersetzt für diese Routen das globale 100/min-Limit — mit jeder Anfrage
+// eine andere E-Mail-Adresse lieferte so pro IP ein unbegrenztes Budget.
+// Bei /auth/login kostet jeder Versuch eine argon2id-Prüfung (~300 ms
+// Rechenzeit), wodurch eine einzelne IP den Server auslasten konnte.
+//
+// Bewusst über app.createRateLimit() statt eines zweiten app.rateLimit()-
+// Hooks: alle Hooks des Plugins teilen sich ein Flag pro Request und laufen
+// nur einmal — ein vorgeschalteter zweiter Hook hätte das E-Mail-Limit der
+// Route stillschweigend übersprungen. createRateLimit() zählt nur und hat
+// einen eigenen Zähler-Speicher je Aufruf.
+//
+// Läuft als onRequest-Hook, also vor dem Body-Parsing: eine Anfrage über
+// der Grenze wird abgewiesen, bevor Arbeit anfällt.
+const AUTH_PER_IP_MAX_PER_MINUTE = 30;
+
+function perIpAuthCeiling(app: FastifyInstance): onRequestAsyncHookHandler {
+  const limiter = app.createRateLimit({
+    max: AUTH_PER_IP_MAX_PER_MINUTE,
+    timeWindow: '1 minute',
+    keyGenerator: (request) => request.ip,
+  });
+  return async (request, reply) => {
+    const result = await limiter(request);
+    if (result.isAllowed || !result.isExceeded) return;
+    // Gleiche Form wie die 429-Antworten des Plugins selbst (ein Fehler mit
+    // statusCode, von plugins/httpErrorHandler.ts in JSON übersetzt).
+    reply.header('retry-after', result.ttlInSeconds);
+    throw Object.assign(new Error(`Rate limit exceeded, retry in ${result.ttlInSeconds} seconds`), { statusCode: 429 });
+  };
+}
+
 export async function authRoutes(app: FastifyInstance, opts: { authService: AuthService }) {
   const { authService } = opts;
 
@@ -83,6 +130,7 @@ export async function authRoutes(app: FastifyInstance, opts: { authService: Auth
   app.post(
     '/auth/login',
     {
+      onRequest: perIpAuthCeiling(app),
       // Abschnitt 5.2: Rate-Limiting speziell gegen Brute-Force auf Login —
       // Schlüssel kombiniert IP + E-Mail, damit ein Angreifer nicht durch
       // Verteilung auf viele E-Mails oder viele IPs den Grenzwert umgeht,
@@ -92,10 +140,7 @@ export async function authRoutes(app: FastifyInstance, opts: { authService: Auth
         rateLimit: {
           max: 5,
           timeWindow: '1 minute',
-          keyGenerator: (request) => {
-            const email = (request.body as { email?: string } | undefined)?.email ?? 'unknown';
-            return `${request.ip}:${email}`;
-          },
+          keyGenerator: ipAndEmailRateLimitKey,
         },
       },
     },
@@ -185,14 +230,12 @@ export async function authRoutes(app: FastifyInstance, opts: { authService: Auth
   app.post(
     '/auth/forgot-password',
     {
+      onRequest: perIpAuthCeiling(app),
       config: {
         rateLimit: {
           max: 3,
           timeWindow: '15 minutes',
-          keyGenerator: (request) => {
-            const email = (request.body as { email?: string } | undefined)?.email ?? 'unknown';
-            return `${request.ip}:${email}`;
-          },
+          keyGenerator: ipAndEmailRateLimitKey,
         },
       },
     },
