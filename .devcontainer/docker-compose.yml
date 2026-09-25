@@ -8,9 +8,20 @@ services:
   api:
     # Ohne aktives Profil startet "docker compose up" diesen Service nicht
     # mehr mit — verhindert, dass beim Codespace-Start unnötig das
-    # Produktions-Dockerfile gebaut wird. Weiterhin nutzbar über
-    # `docker compose --profile production-like up api` (z. B. um das
-    # Produktions-Image lokal zu testen).
+    # Produktions-Dockerfile gebaut wird. Das Produktions-Image lässt sich
+    # im Codespace über das Root-Compose-File testen (aus der Projektwurzel:
+    # `docker compose up --build api`), nicht über dieses Overlay (falscher
+    # Build-Kontext, siehe "migrate" unten).
+    profiles: ["production-like"]
+
+  migrate:
+    # Gleiches Profil wie "api" (der davon abhängt). Ohne das baut jeder
+    # Codespace-Start das Produktions-Image für diesen Service — und das
+    # scheitert: bei mehreren Compose-Files werden relative Pfade relativ
+    # zum ERSTEN File aufgelöst (hier .devcontainer/), "context: ." aus
+    # ../docker-compose.yml zeigt also auf .devcontainer/, wo es kein
+    # apps/api/Dockerfile gibt. Die Migrationen übernimmt im Codespace
+    # ohnehin der postCreateCommand (siehe devcontainer.json).
     profiles: ["production-like"]
 
   app:

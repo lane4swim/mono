@@ -20,7 +20,7 @@
 // spätere, eigenständige Ergänzung.
 import { el, clear, beginRender } from '../dom.js';
 import { fmtDateShort, dateOnly, toIsoDateTime, todayISO } from '../dates.js';
-import { emptyState, laneWave, toast } from '../ui.js';
+import { emptyState, laneWave, toast, tabbedView } from '../ui.js';
 import { openModal, confirmAction } from '../modal.js';
 import { field, textInput, selectInput, dateInput, formActions } from '../forms.js';
 import { isAdmin, hasRole } from '../state.js';
@@ -100,13 +100,13 @@ function renderView(container, ctx) {
   wrap.appendChild(laneWave());
   wrap.appendChild(el('p', {}, admin && !isReferee ? t('kampfrichter.introAdmin') : t('kampfrichter.introSelf')));
 
-  if (isReferee) {
-    wrap.appendChild(renderOwnQualificationsSection(ownQualifications, settings));
-    wrap.appendChild(renderOwnAssignmentsSection(ownAssignments, refresh));
-  }
-  if (admin) {
-    wrap.appendChild(renderRefereesOverviewSection(referees, settings, refresh));
-  }
+  // Eigene Einsätze zuerst: das ist die häufigste Aufgabe einer
+  // Kampfrichter:in; die Qualifikationen sind reine Anzeige.
+  wrap.appendChild(tabbedView('kampfrichter', [
+    isReferee && { id: 'assignments', label: t('kampfrichter.tabOwnAssignments'), render: () => renderOwnAssignmentsSection(ownAssignments, refresh) },
+    isReferee && { id: 'qualifications', label: t('kampfrichter.tabOwnQualifications'), render: () => renderOwnQualificationsSection(ownQualifications, settings) },
+    admin && { id: 'referees', label: t('kampfrichter.tabReferees'), render: () => renderRefereesOverviewSection(referees, settings, refresh) },
+  ]));
 
   container.appendChild(wrap);
 

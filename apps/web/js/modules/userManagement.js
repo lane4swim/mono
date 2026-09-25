@@ -5,7 +5,7 @@
 // lokal in IndexedDB zu simulieren.
 import { el, clear, beginRender } from '../dom.js';
 import { fmtDateShort } from '../dates.js';
-import { badge, emptyState, laneWave, toast, fullName } from '../ui.js';
+import { badge, emptyState, laneWave, toast, fullName, tabbedView } from '../ui.js';
 import { openModal, confirmAction } from '../modal.js';
 import { field, textInput, selectInput, formActions } from '../forms.js';
 import { isSuperAdmin, isAdmin, getCurrentUser, setClubIdentity } from '../state.js';
@@ -87,16 +87,19 @@ function renderView(container, clubs, invitations, members, legalInfo) {
   wrap.appendChild(laneWave());
   wrap.appendChild(el('p', {}, isSuperAdmin() ? t('usermgmt.superadminIntro') : t('usermgmt.adminIntro')));
 
-  if (isSuperAdmin()) {
-    wrap.appendChild(renderClubsSection(clubs, refresh));
-  } else {
-    wrap.appendChild(renderMembersSection(members, refresh));
-    wrap.appendChild(renderClubIdentitySection());
-    wrap.appendChild(renderClubLegalInfoSection(legalInfo));
-  }
-
-  wrap.appendChild(renderInviteSection(clubs, refresh));
-  wrap.appendChild(renderInvitationsList(invitations, clubs, refresh));
+  // Reiter je Aufgabe: superadmin verwaltet Vereine, admin den eigenen
+  // Verein (Mitglieder + Vereinsangaben); Einladungen gibt es für beide.
+  const pendingCount = invitations.filter((i) => statusOf(i) === 'pending').length;
+  wrap.appendChild(tabbedView('usermgmt', [
+    isSuperAdmin() && { id: 'clubs', label: t('usermgmt.tabClubs'), render: () => renderClubsSection(clubs, refresh) },
+    !isSuperAdmin() && { id: 'members', label: t('usermgmt.tabMembers'), render: () => renderMembersSection(members, refresh) },
+    !isSuperAdmin() && { id: 'club', label: t('usermgmt.tabClub'), render: () => el('div', {}, [renderClubIdentitySection(), renderClubLegalInfoSection(legalInfo)]) },
+    {
+      id: 'invitations',
+      label: pendingCount ? `${t('usermgmt.tabInvitations')} (${pendingCount})` : t('usermgmt.tabInvitations'),
+      render: () => el('div', {}, [renderInviteSection(clubs, refresh), renderInvitationsList(invitations, clubs, refresh)]),
+    },
+  ]));
 
   wrap.appendChild(el('p', { class: 'hint', style: 'margin-top:24px' }, t('usermgmt.note')));
 

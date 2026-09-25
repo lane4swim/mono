@@ -3,7 +3,7 @@ import { getAll, put, remove } from '../db.js';
 import { el, clear, beginRender, redraw } from '../dom.js';
 import { ageFromBirthdate, fmtDateShort, todayISO, toIsoDateTime } from '../dates.js';
 import { secToTime } from '../swimTime.js';
-import { fullName, badge, emptyState, laneWave, groupBy, statCard, toast } from '../ui.js';
+import { fullName, badge, emptyState, laneWave, groupBy, statCard, toast, tabbedView } from '../ui.js';
 import { openModal, confirmAction } from '../modal.js';
 import { field, textInput, selectInput, dateInput, formActions } from '../forms.js';
 import { isAdminOrSuperAdmin } from '../state.js';
@@ -30,11 +30,19 @@ function renderList(container, athletes, groups) {
   wrap.appendChild(el('div', { class: 'page-head' }, [
     el('div', {}, [el('div', { class: 'page-eyebrow' }, t('athletes.eyebrow', { count: athletes.length })), el('h1', { class: 'mt-0' }, t('athletes.title'))]),
     el('div', { class: 'page-actions' }, [
-      el('button', { class: 'btn btn-ghost', onclick: () => openGroupModal(groups, refresh) }, t('athletes.manageGroups')),
       isAdminOrSuperAdmin() ? el('button', { class: 'btn btn-primary', onclick: () => openAthleteModal(null, groups, refresh) }, t('athletes.addAthlete')) : null,
     ].filter(Boolean)),
   ]));
   wrap.appendChild(laneWave());
+
+  // Reiter: Athlet:innen-Liste und Gruppenverwaltung (vormals ein Modal
+  // hinter "Gruppen verwalten"). Die Detailansicht einer Person bleibt
+  // eine eigene Route (#/athletes/:id).
+  const athletesPanel = el('div');
+  wrap.appendChild(tabbedView('athletes', [
+    { id: 'athletes', label: t('athletes.tabAthletes', { count: athletes.length }), render: () => athletesPanel },
+    { id: 'groups', label: t('athletes.tabGroups', { count: groups.length }), render: () => buildGroupManager(groups, refresh) },
+  ]));
 
   // group filter pills
   const activeGroupId = { value: 'all' };
@@ -45,10 +53,10 @@ function renderList(container, athletes, groups) {
     const count = athletes.filter(a => a.groupId === g.id).length;
     pillRow.appendChild(el('button', { class: 'pill', onclick: () => selectGroup(g.id) }, `${g.name} (${count})`));
   });
-  wrap.appendChild(pillRow);
+  athletesPanel.appendChild(pillRow);
 
   const tableHost = el('div');
-  wrap.appendChild(tableHost);
+  athletesPanel.appendChild(tableHost);
   container.appendChild(wrap);
 
   function selectGroup(gid) {
@@ -238,15 +246,17 @@ function buildTrainerCheckboxes(trainers, selectedIds) {
 // docs/Plans/vereinsverwaltung-phase3-plan.md, Abschnitt 1.3: neben
 // Anlegen/Löschen jetzt auch Bearbeiten bestehender Gruppen (Name/
 // Beschreibung/zuständige Trainer:innen) — vormals nicht möglich.
-async function openGroupModal(groups, onSaved) {
-  // fetchAssignableTrainers() fällt bei fehlendem Netzwerk/Demo-Modus auf
-  // die anfragende Person selbst zurück (siehe actionItems.js) — die
-  // Gruppenverwaltung bleibt dadurch auch offline nutzbar, nur die
-  // Trainer-Auswahl ist dann auf die eigene Person beschränkt.
-  const trainers = await fetchAssignableTrainers();
-  const body = el('div');
-  const list = el('div', { class: 'mb-16' });
+//
+// Inline im Reiter "Gruppen" von renderList() (vormals ein Modal) — der
+// Knoten wird sofort zurückgegeben, Liste und Formular erscheinen, sobald
+// die Trainer:innen-Auswahl geladen ist.
+function buildGroupManager(groups, onSaved) {
+  const body = el('div', { class: 'card' }, [
+    el('h3', { class: 'mt-0' }, t('athletes.groupsModalTitle')),
+  ]);
+  const list = el('div', { class: 'mb-16' }, el('p', {}, t('common.loading')));
   const formHost = el('div');
+  let trainers = [];
 
   function trainerNames(ids) {
     return (ids || []).map((id) => trainers.find((tr) => tr.id === id)?.name).filter(Boolean).join(', ');
@@ -295,9 +305,16 @@ async function openGroupModal(groups, onSaved) {
     formHost.appendChild(form);
   }
 
-  drawList();
   body.appendChild(list);
   body.appendChild(formHost);
-  drawForm(null);
-  openModal({ title: t('athletes.groupsModalTitle'), bodyNode: body });
+  // fetchAssignableTrainers() fällt bei fehlendem Netzwerk/Demo-Modus auf
+  // die anfragende Person selbst zurück (siehe actionItems.js) — die
+  // Gruppenverwaltung bleibt dadurch auch offline nutzbar, nur die
+  // Trainer-Auswahl ist dann auf die eigene Person beschränkt.
+  fetchAssignableTrainers().then((loaded) => {
+    trainers = loaded;
+    drawList();
+    drawForm(null);
+  });
+  return body;
 }

@@ -146,8 +146,9 @@ export default {
     noAthleteProfile: 'No athlete profile linked to this account.',
   },
   athletes: {
+    tabAthletes: 'Athletes ({count})', tabGroups: 'Groups ({count})',
     eyebrow: '{count} athletes', title: 'Athletes & Team',
-    manageGroups: 'Manage groups', addAthlete: '+ Add athlete',
+    addAthlete: '+ Add athlete',
     allWithCount: 'All ({count})', noAthletesTitle: 'No athletes',
     noAthletesInGroup: 'No athletes recorded in this group yet.',
     colName: 'Name', colAge: 'Age', colGroup: 'Group', colStatus: 'Status',
@@ -440,6 +441,7 @@ export default {
     pbBadge: 'Personal Best',
   },
   stats: {
+    tabAttendance: 'Attendance', tabLoad: 'Training load', tabPerformance: 'Performance',
     eyebrow: 'Analytics', title: 'Statistics',
     attendanceTitle: 'Attendance Rate by Group (recent sessions)', noSessions: 'No training sessions recorded yet.',
     attendanceTrendTitle: 'Attendance Trend Over Time', filterGroup: 'Group',
@@ -459,6 +461,7 @@ export default {
     faster: '−{delta}s faster', slower: '+{delta}s slower', unchanged: 'unchanged',
   },
   usermgmt: {
+    tabClubs: 'Clubs', tabMembers: 'Members', tabClub: 'Club details', tabInvitations: 'Invitations',
     eyebrow: 'Administration', title: 'User Management',
     demoDisabled: 'User management is not available in this demo — it runs on real club/invitation data that this demo has no backend for.',
     superadminIntro: 'As a super administrator, you create new clubs and invite their first admin via a time-limited link.',
@@ -582,6 +585,7 @@ export default {
     demoDisabled: 'Sync is disabled in this demo — all data stays stored locally in this browser only.',
   },
   profile: {
+    tabAccount: 'Account', tabSecurity: 'Sign-in & security', tabNotifications: 'Notifications', tabData: 'My data',
     eyebrow: 'My Account', title: 'My Profile',
     formName: 'Name', formEmail: 'Email address',
     roleLabel: 'Role', accountSection: 'Account details',
@@ -635,6 +639,7 @@ export default {
     editEquipment: 'Edit equipment',
   },
   qualifications: {
+    tabOwn: 'My qualifications', tabMembers: 'Members', tabSettings: 'Settings',
     eyebrow: 'Qualification management', title: 'Qualifications',
     demoDisabled: 'Qualification management is not available in this demo — it runs on real club data that this demo has no backend for.',
     introAdmin: 'Track coaching licenses, lifeguard certificates and other credentials with acquired/expiry dates for all club members.',
@@ -698,6 +703,7 @@ export default {
     },
   },
   kampfrichter: {
+    tabOwnAssignments: 'My assignments', tabOwnQualifications: 'My qualifications', tabReferees: 'Referees',
     eyebrow: 'Officiating', title: 'Officiating',
     demoDisabled: 'Officiating is not available in this demo — it runs on real club data that this demo has no backend for.',
     introAdmin: 'Overview of all club referees with their qualification status and competition assignments.',

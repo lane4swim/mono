@@ -17,7 +17,7 @@
 // reflects team/roster decisions rather than personal account info.
 import { getAll } from '../db.js';
 import { el, clear, beginRender } from '../dom.js';
-import { laneWave, badge, fullName, toast } from '../ui.js';
+import { laneWave, badge, fullName, toast, tabbedView } from '../ui.js';
 import { openModal } from '../modal.js';
 import { field, textInput } from '../forms.js';
 import { getCurrentUser, updateProfile, setUserLocale, logout, changePassword, changeEmail } from '../state.js';
@@ -290,13 +290,6 @@ function renderView(container, athletes, results, entries, actionItems, sessions
   });
 
   card.appendChild(form);
-  wrap.appendChild(card);
-
-  // ---- E-Mail-Wechsel (Sicherheitsreview 2026-08-27, Befund H2) ----
-  wrap.appendChild(buildChangeEmailCard());
-
-  // ---- Passwortwechsel (Sicherheitsreview 2026-08, Befund M5) ----
-  wrap.appendChild(buildChangePasswordCard());
 
   // ---- Language preference ----
   const langCard = el('div', { class: 'card' }, [
@@ -314,11 +307,9 @@ function renderView(container, athletes, results, entries, actionItems, sessions
     langButtons.appendChild(pill);
   });
   langCard.appendChild(langButtons);
-  wrap.appendChild(langCard);
 
   // ---- Push-Benachrichtigungen (Phase 2, Abschnitt 1.6) ----
   const notificationsCard = buildNotificationsCard();
-  if (notificationsCard) wrap.appendChild(notificationsCard);
 
   // ---- Meine Daten: Auskunft (Export) & Löschung (Art. 15 + 17 DSGVO) ----
   const dataCard = el('div', { class: 'card' }, [el('h3', { class: 'mt-0' }, t('profileData.section'))]);
@@ -347,7 +338,17 @@ function renderView(container, athletes, results, entries, actionItems, sessions
   const deleteBtn = el('button', { class: 'btn btn-danger', onclick: () => openDeleteAccountModal() }, t('profileData.deleteButton'));
 
   dataCard.appendChild(el('div', { class: 'flex gap-8', style: 'flex-wrap:wrap' }, [exportBtn, deleteBtn]));
-  wrap.appendChild(dataCard);
+
+  // Reiter: Konto (Stammdaten + Sprache), Anmeldung (E-Mail/Passwort —
+  // beide per aktuellem Passwort abgesichert), Benachrichtigungen (nur
+  // wenn Push verfügbar ist, siehe buildNotificationsCard()) und die
+  // DSGVO-Aktionen zu den eigenen Daten.
+  wrap.appendChild(tabbedView('profile', [
+    { id: 'account', label: t('profile.tabAccount'), render: () => el('div', {}, [card, langCard]) },
+    { id: 'security', label: t('profile.tabSecurity'), render: () => el('div', {}, [buildChangeEmailCard(), buildChangePasswordCard()]) },
+    notificationsCard && { id: 'notifications', label: t('profile.tabNotifications'), render: () => notificationsCard },
+    { id: 'data', label: t('profile.tabData'), render: () => dataCard },
+  ]));
 
   container.appendChild(wrap);
 }

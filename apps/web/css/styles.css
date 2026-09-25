@@ -231,6 +231,14 @@ tr.live-row-done .live-set-desc{ text-decoration: line-through; color: var(--c-s
 .pill{ font-size: var(--fs-xs); padding: 4px 10px; border-radius:999px; background: var(--c-foam-2); color: var(--c-slate); border:1px solid var(--c-line); cursor:pointer; }
 .pill.active{ background: var(--c-deep); color: var(--c-white); border-color: var(--c-deep); }
 
+/* Reiter innerhalb eines Moduls (ui.js: tabbedView()) */
+.tab-bar{ display:flex; gap:4px; border-bottom:1px solid var(--c-line); margin-bottom:16px; overflow-x:auto; scrollbar-width:none; }
+.tab-bar::-webkit-scrollbar{ display:none; }
+.tab{ flex:0 0 auto; background:none; border:0; border-bottom:2px solid transparent; margin-bottom:-1px; padding:10px 14px; font:inherit; font-size: var(--fs-sm); font-weight:600; color: var(--c-slate); cursor:pointer; white-space:nowrap; }
+.tab:hover{ color: var(--c-ink); }
+.tab.active{ color: var(--c-deep); border-bottom-color: var(--c-chlorine); }
+.tab:focus-visible{ outline:2px solid var(--c-chlorine); outline-offset:-2px; border-radius: var(--radius-sm) var(--radius-sm) 0 0; }
+
 .empty-state{ text-align:center; padding: 50px 20px; color: var(--c-slate); }
 .empty-state .ic{ width:44px; height:44px; color: var(--c-slate-2); margin-bottom:10px; }
 .empty-state h3{ color: var(--c-ink); margin-bottom:6px; }

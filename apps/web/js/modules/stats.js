@@ -3,7 +3,7 @@ import { getAll } from '../db.js';
 import { el, clear, beginRender } from '../dom.js';
 import { fmtDateShort } from '../dates.js';
 import { secToTime } from '../swimTime.js';
-import { badge, emptyState, laneWave, fullName, groupBy, average } from '../ui.js';
+import { badge, emptyState, laneWave, fullName, groupBy, average, tabbedView } from '../ui.js';
 import { field, selectInput } from '../forms.js';
 import { svgBarChart, svgLineChart } from '../charts.js';
 import { EVENTS } from '../refdata.js';
@@ -30,6 +30,14 @@ function renderView(container, athletes, results, sessions, groups, plans) {
   wrap.appendChild(el('div', { class: 'page-head' }, [el('div', {}, [el('div', { class: 'page-eyebrow' }, t('stats.eyebrow')), el('h1', { class: 'mt-0' }, t('stats.title'))])]));
   wrap.appendChild(laneWave());
 
+  // Drei Reiter nach Fragestellung: Wer kommt zum Training (Anwesenheit),
+  // wie hart wird trainiert (Belastung), was kommt im Wettkampf dabei
+  // heraus (Leistung). Alle Karten werden sofort gebaut (rein lokale Daten,
+  // billig) und hier nur auf die Reiter verteilt.
+  const attendanceTab = el('div');
+  const loadTab = el('div');
+  const performanceTab = el('div');
+
   // -------- Attendance rate per group --------
   const attCard = el('div', { class: 'card mb-16' }, [el('h3', { class: 'mt-0' }, t('stats.attendanceTitle'))]);
   // Ineffizienz-Korrektur: lief vormals als `sessions.filter(...)` INNERHALB
@@ -51,7 +59,7 @@ function renderView(container, athletes, results, sessions, groups, plans) {
   });
   if (bars.every(b => b.value === 0) && sessions.length === 0) attCard.appendChild(el('p', {}, t('stats.noSessions')));
   else attCard.appendChild(svgBarChart({ bars, yFormat: (v) => v + '%', color: 'var(--c-petrol)' }));
-  wrap.appendChild(attCard);
+  attendanceTab.appendChild(attCard);
 
   // -------- Anwesenheitstrend über Zeit je Gruppe (Phase 1, Abschnitt 3.3) --------
   const trendCard = el('div', { class: 'card mb-16' }, [el('h3', { class: 'mt-0' }, t('stats.attendanceTrendTitle'))]);
@@ -61,7 +69,7 @@ function renderView(container, athletes, results, sessions, groups, plans) {
   }
   const trendHost = el('div');
   trendCard.appendChild(trendHost);
-  wrap.appendChild(trendCard);
+  attendanceTab.appendChild(trendCard);
 
   function drawTrend() {
     clear(trendHost);
@@ -82,7 +90,7 @@ function renderView(container, athletes, results, sessions, groups, plans) {
     ]),
     badge(t('stats.attendanceFlagBadge'), 'open'),
   ])));
-  wrap.appendChild(flagCard);
+  attendanceTab.appendChild(flagCard);
 
   // -------- Trainingsumfang je Gruppe (Phase 1, Abschnitt 3.2) --------
   const loadCard = el('div', { class: 'card mb-16' }, [el('h3', { class: 'mt-0' }, t('stats.loadVolumeTitle'))]);
@@ -92,7 +100,7 @@ function renderView(container, athletes, results, sessions, groups, plans) {
   }
   const loadHost = el('div');
   loadCard.appendChild(loadHost);
-  wrap.appendChild(loadCard);
+  loadTab.appendChild(loadCard);
 
   function drawLoad() {
     clear(loadHost);
@@ -108,7 +116,7 @@ function renderView(container, athletes, results, sessions, groups, plans) {
   rpeCard.appendChild(field(t('stats.filterAthleteOptional'), selectInput([{ value: '', label: t('stats.teamAverage') }, ...athletes.map(a => ({ value: a.id, label: fullName(a) }))], rpeAthleteId, { onchange: (e) => { rpeAthleteId = e.target.value; drawRpe(); } })));
   const rpeHost = el('div');
   rpeCard.appendChild(rpeHost);
-  wrap.appendChild(rpeCard);
+  loadTab.appendChild(rpeCard);
 
   function drawRpe() {
     clear(rpeHost);
@@ -135,7 +143,7 @@ function renderView(container, athletes, results, sessions, groups, plans) {
   combinedCard.appendChild(combinedVolHost);
   combinedCard.appendChild(el('p', { class: 'text-slate text-sm mb-16' }, t('stats.loadVsRpeRpeLabel')));
   combinedCard.appendChild(combinedRpeHost);
-  wrap.appendChild(combinedCard);
+  loadTab.appendChild(combinedCard);
 
   function drawCombined() {
     clear(combinedVolHost); clear(combinedRpeHost);
@@ -152,7 +160,7 @@ function renderView(container, athletes, results, sessions, groups, plans) {
   const months = Object.keys(byMonth).sort().slice(-6);
   if (months.length === 0) volCard.appendChild(el('p', {}, t('stats.noTimes')));
   else volCard.appendChild(svgBarChart({ bars: months.map(m => ({ label: m.slice(5) + '/' + m.slice(2, 4), value: byMonth[m].length })), color: 'var(--c-chlorine-d)' }));
-  wrap.appendChild(volCard);
+  performanceTab.appendChild(volCard);
 
   // -------- Individual progress explorer --------
   const exploreCard = el('div', { class: 'card' }, [el('h3', { class: 'mt-0' }, t('stats.exploreTitle'))]);
@@ -164,7 +172,13 @@ function renderView(container, athletes, results, sessions, groups, plans) {
   exploreCard.appendChild(controls);
   const exploreHost = el('div');
   exploreCard.appendChild(exploreHost);
-  wrap.appendChild(exploreCard);
+  performanceTab.appendChild(exploreCard);
+
+  wrap.appendChild(tabbedView('stats', [
+    { id: 'attendance', label: t('stats.tabAttendance'), render: () => attendanceTab },
+    { id: 'load', label: t('stats.tabLoad'), render: () => loadTab },
+    { id: 'performance', label: t('stats.tabPerformance'), render: () => performanceTab },
+  ]));
   container.appendChild(wrap);
 
   function drawExplore() {
