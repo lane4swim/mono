@@ -158,7 +158,6 @@ function appendChecklistGroups(host, rows, exercises, checkedIds) {
 function buildChecklistTable(rows, exercises, checkedIds) {
   const table = el('table');
   table.appendChild(el('thead', {}, el('tr', {}, [
-    el('th', {}, ''),
     el('th', {}, t('plans.colDescription')),
     el('th', {}, t('plans.colIntensity')),
     el('th', {}, t('plans.colDistance')),
