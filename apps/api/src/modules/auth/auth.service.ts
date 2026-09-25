@@ -21,6 +21,7 @@ import {
 } from '../invitations/invitations.service.js';
 import type { ProfileDataGateway } from '../profile/profile.repository.js';
 import { hashPassword, verifyPassword } from '../../auth/password.js';
+import { assertPasswordPolicy } from '../../auth/passwordPolicy.js';
 import { signAccessToken, generateRefreshToken, hashRefreshToken, generatePasswordResetToken, hashPasswordResetToken } from '../../auth/tokens.js';
 import type { KeyPair } from '../../auth/keys.js';
 import type { MailSender } from '../../mail/mailer.js';
@@ -306,6 +307,7 @@ export function createAuthService(deps: AuthServiceDeps) {
       // ein eigenes Konto hat.
       const isParentInvitation = invitation.role === 'parent';
 
+      assertPasswordPolicy(input.password, [invitation.role]);
       const passwordHash = await hashPassword(input.password);
       let user: UserRecord;
       try {
@@ -581,6 +583,8 @@ export function createAuthService(deps: AuthServiceDeps) {
       const user = await deps.users.findById(existing.userId);
       if (!user) throw new InvalidOrExpiredResetTokenError(); // Konto zwischenzeitlich gelöscht
 
+      // Vor dem Einlösen: ein abgelehntes Passwort soll den Link nicht verbrauchen.
+      assertPasswordPolicy(newPassword, user.roles);
       // Hashen VOR dem Einlösen: argon2id ist der langsame Schritt, und ein
       // bereits eingelöstes Token soll nicht an einem Fehler beim Hashen
       // verfallen.
@@ -627,6 +631,7 @@ export function createAuthService(deps: AuthServiceDeps) {
       const currentPasswordOk = await verifyPassword(currentPassword, user.passwordHash);
       if (!currentPasswordOk) throw new InvalidCurrentPasswordError();
 
+      assertPasswordPolicy(newPassword, user.roles);
       const passwordHash = await hashPassword(newPassword);
       const updated = await deps.users.update(userId, { passwordHash });
       // Ein regulärer Passwortwechsel entwertet auch einen zuvor

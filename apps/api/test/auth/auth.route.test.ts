@@ -117,6 +117,28 @@ describe('POST /auth/register (einladungsbasiert)', () => {
     expect(response.json().user.email).toBe('neu@example.org');
   });
 
+  // Issue #97: Verstöße gegen die Passwort-Anforderungen als 400 mit
+  // stabilem Code, den das Frontend übersetzt.
+  it('liefert 400 password_common für ein Leak-Passwort', async () => {
+    const token = await seedInvitationToken(invitations, { email: 'leak@example.org' });
+    const response = await app.inject({
+      method: 'POST', url: '/auth/register',
+      payload: { token, name: 'Leak', password: 'Password123', consent: true },
+    });
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error).toBe('password_common');
+  });
+
+  it('liefert 400 password_too_short_for_role für ein 11-stelliges Admin-Passwort', async () => {
+    const token = await seedInvitationToken(invitations, { email: 'admin-kurz@example.org', role: 'admin' });
+    const response = await app.inject({
+      method: 'POST', url: '/auth/register',
+      payload: { token, name: 'Admin', password: 'Kx7!mQ2#vLp', consent: true },
+    });
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error).toBe('password_too_short_for_role');
+  });
+
   it('liefert 410 bei unbekanntem/erfundenem Token', async () => {
     const response = await app.inject({
       method: 'POST', url: '/auth/register',

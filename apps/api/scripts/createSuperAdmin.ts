@@ -37,6 +37,18 @@
 import { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 import { hashPassword } from '../src/auth/password.js';
+import { assertPasswordPolicy, PRIVILEGED_PASSWORD_MIN_LENGTH } from '../src/auth/passwordPolicy.js';
+
+// Dieselben Regeln wie für jedes andere Superadmin-Passwort (Issue #97):
+// mind. 12 Zeichen und keines aus bekannten Datenlecks.
+function superadminPasswordError(password: string): string | null {
+  try {
+    assertPasswordPolicy(password, ['superadmin']);
+    return null;
+  } catch (err) {
+    return err instanceof Error ? err.message : String(err);
+  }
+}
 
 const USAGE =
   'Verwendung: npm run create-superadmin -- --email=<email> --name="<Name>" [--force]\n' +
@@ -126,9 +138,10 @@ async function resolvePassword(): Promise<string> {
   stdin.resume();
   try {
     for (;;) {
-      const first = await readHiddenLine('Superadmin-Passwort (mind. 8 Zeichen, wird nicht angezeigt): ');
-      if (first.length < 8) {
-        console.error('Das Passwort muss mindestens 8 Zeichen lang sein — bitte erneut eingeben.');
+      const first = await readHiddenLine(`Superadmin-Passwort (mind. ${PRIVILEGED_PASSWORD_MIN_LENGTH} Zeichen, wird nicht angezeigt): `);
+      const policyError = superadminPasswordError(first);
+      if (policyError) {
+        console.error(`${policyError} Bitte erneut eingeben.`);
         continue;
       }
       const second = await readHiddenLine('Superadmin-Passwort (Bestätigung): ');
@@ -175,8 +188,9 @@ async function main() {
   // Eingabe in resolvePassword() prüft die Länge bereits vor der
   // Bestätigung, ein per Umgebungsvariable vorgegebener Wert durchläuft
   // diese Prüfung sonst gar nicht.
-  if (password.length < 8) {
-    console.error('Das Passwort muss mindestens 8 Zeichen lang sein.');
+  const policyError = superadminPasswordError(password);
+  if (policyError) {
+    console.error(policyError);
     process.exit(1);
   }
 

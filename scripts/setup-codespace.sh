@@ -386,10 +386,10 @@ fi
 
 if [[ -z "${SUPERADMIN_PASSWORD:-}" ]]; then
   while true; do
-    read -rsp "  Superadmin-Passwort (mind. 8 Zeichen, wird nicht angezeigt): " SUPERADMIN_PASSWORD
+    read -rsp "  Superadmin-Passwort (mind. 12 Zeichen, wird nicht angezeigt): " SUPERADMIN_PASSWORD
     echo
-    if [[ ${#SUPERADMIN_PASSWORD} -lt 8 ]]; then
-      echo "  Das Passwort muss mindestens 8 Zeichen lang sein — bitte erneut eingeben." >&2
+    if [[ ${#SUPERADMIN_PASSWORD} -lt 12 ]]; then
+      echo "  Das Passwort muss mindestens 12 Zeichen lang sein — bitte erneut eingeben." >&2
       continue
     fi
     read -rsp "  Superadmin-Passwort (Bestätigung): " SUPERADMIN_PASSWORD_CONFIRM
@@ -405,8 +405,8 @@ fi
 # Sicherheitsnetz auch für den nicht-interaktiven Pfad (SUPERADMIN_PASSWORD
 # per Umgebungsvariable vorgegeben) — die Schleife oben validiert nur den
 # interaktiv eingegebenen Fall.
-if [[ ${#SUPERADMIN_PASSWORD} -lt 8 ]]; then
-  echo "  Fehler: SUPERADMIN_PASSWORD muss mindestens 8 Zeichen lang sein (siehe apps/api/scripts/createSuperAdmin.ts)." >&2
+if [[ ${#SUPERADMIN_PASSWORD} -lt 12 ]]; then
+  echo "  Fehler: SUPERADMIN_PASSWORD muss mindestens 12 Zeichen lang sein (siehe apps/api/scripts/createSuperAdmin.ts)." >&2
   exit 1
 fi
 # Sicherheitskorrektur (Sicherheitsreview 2026-08-28, Befund M1): das

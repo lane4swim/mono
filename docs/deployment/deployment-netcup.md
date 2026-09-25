@@ -31,7 +31,7 @@ Vorausgesetzt sind die Abschnitte 1–5 (Server angelegt, SSH-Zugang als `deploy
 Das Script fragt dabei interaktiv nach allem, was nicht automatisch ermittelt werden kann:
 
 - **Domain** (Abschnitt 5) — nötig für `CORS_ORIGIN`/`FRONTEND_BASE_URL` und den Nginx-`server_name`.
-- **Superadmin-E-Mail-Adresse und -Passwort** (Schritt 8.1) — das Passwort wird mit verdeckter Eingabe und Bestätigung abgefragt, mindestens 8 Zeichen; es gibt bewusst **kein** Default-Passwort (Sicherheitsreview 2026-08, Befund H1).
+- **Superadmin-E-Mail-Adresse und -Passwort** (Schritt 8.1) — das Passwort wird mit verdeckter Eingabe und Bestätigung abgefragt, mindestens 12 Zeichen und keines aus bekannten Datenlecks; es gibt bewusst **kein** Default-Passwort (Sicherheitsreview 2026-08, Befund H1).
 - **SMTP-Zugangsdaten** (optional, Schritt 7.2) — wird gefragt, ob Einladungs-E-Mails direkt jetzt per SMTP versendet werden sollen; bei „Nein" bzw. ohne Antwort landen Einladungen vorerst nur im Server-Log (später jederzeit in `apps/api/.env` nachtragbar).
 
 Datenbank-Passwörter, das JWT-Schlüsselpaar und das VAPID-Schlüsselpaar (Web-Push, Phase 2/Abschnitt 1.2) werden automatisch erzeugt (nie interaktiv abgefragt) und landen ausschließlich in `apps/api/.env`, `apps/api/.env.migrate` bzw. `apps/api/keys/` — alle mit `chmod 600`/`700` geschützt. Für einen nicht-interaktiven Lauf (z. B. um alles vorab per Umgebungsvariable festzulegen) lassen sich sämtliche Werte auch vorgeben, siehe Kopfkommentar in `scripts/setup-netcup.sh`.

@@ -54,6 +54,7 @@ import {
   UserNotParentError,
 } from '../modules/parents/parents.service.js';
 import { PasswordHasherBusyError } from '../auth/passwordHasherPool.js';
+import { PasswordTooShortForRoleError, CommonPasswordError } from '../auth/passwordPolicy.js';
 
 interface HttpErrorMapping {
   status: number;
@@ -123,6 +124,9 @@ const HTTP_ERROR_REGISTRY = new Map<abstract new (...args: never[]) => Error, Ht
   [UserNotParentError, { status: 400, code: 'user_not_parent' }],
   // Warteschlange des Passwort-Worker-Pools voll (auth/passwordHasherPool.ts).
   [PasswordHasherBusyError, { status: 503, code: 'server_busy', retryAfterSeconds: 5 }],
+  // Anforderungen an neue Passwörter (auth/passwordPolicy.ts, Issue #97).
+  [PasswordTooShortForRoleError, { status: 400, code: 'password_too_short_for_role' }],
+  [CommonPasswordError, { status: 400, code: 'password_common' }],
 ]);
 
 function sendMappedError(err: Error, mapping: HttpErrorMapping, reply: FastifyReply) {

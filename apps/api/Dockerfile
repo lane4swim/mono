@@ -48,6 +48,9 @@ ENV HOST=0.0.0.0
 COPY --from=build --chown=node:node /repo/apps/api/dist ./dist
 COPY --from=build --chown=node:node /repo/apps/api/package.json ./package.json
 COPY --from=build --chown=node:node /repo/apps/api/prisma ./prisma
+# Liste bekannter Leak-Passwörter (auth/passwordPolicy.ts liest sie zur
+# Laufzeit relativ zu dist/auth/, siehe data/README.md).
+COPY --from=build --chown=node:node /repo/apps/api/data ./data
 # Produktions-node_modules (siehe prod-deps-Stage oben) — enthält u. a. die
 # `@lane1/shared-types`/`@lane1/sync-protocol`-Symlinks, die npm relativ
 # anlegt (`../../packages/…`); die Zielverzeichnisse dafür werden direkt

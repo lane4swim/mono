@@ -49,6 +49,8 @@ export default {
       module_not_enabled: 'Das Qualifikationsmanagement ist für diesen Verein nicht gebucht.',
       qualification_invalid_date_range: 'Das Ablaufdatum darf nicht vor dem Erwerbsdatum liegen.',
       server_busy: 'Der Server ist gerade ausgelastet. Bitte in einigen Sekunden erneut versuchen.',
+      password_too_short_for_role: 'Für Konten mit Administrationsrechten muss das Passwort mindestens 12 Zeichen lang sein.',
+      password_common: 'Dieses Passwort ist aus bekannten Datenlecks bekannt und zu leicht zu erraten. Bitte ein anderes wählen.',
     },
     // Übersetzung der stabilen `code`-Werte einzelner Sync-Push-Ergebnisse
     // (status: 'error', siehe packages/shared-types/src/syncEvent.ts:
@@ -84,7 +86,7 @@ export default {
     // erzwungener Komplexitätsregeln (Zahlen/Sonderzeichen) — eine längere
     // Passphrase aus mehreren Wörtern ist leichter zu merken und mindestens
     // ebenso sicher.
-    passwordHint: 'Mindestens 8 Zeichen. Eine längere Passphrase aus mehreren Wörtern ist eine gute Wahl.',
+    passwordHint: 'Mindestens 8 Zeichen, für Administrationskonten mindestens 12. Häufig verwendete Passwörter werden abgelehnt. Eine längere Passphrase aus mehreren Wörtern ist eine gute Wahl.',
     acceptInviteButton: 'Konto aktivieren', acceptInviteSuccess: 'Willkommen, {name}!',
     invitationInvalid: 'Diese Einladung ist ungültig, abgelaufen oder wurde bereits verwendet.',
     backToLogin: 'Zurück zur Anmeldung', noClubYetLabel: 'wird noch angelegt',

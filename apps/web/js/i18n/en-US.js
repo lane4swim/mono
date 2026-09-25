@@ -36,6 +36,8 @@ export default {
       module_not_enabled: 'Qualification management is not booked for this club.',
       qualification_invalid_date_range: 'The expiry date cannot be before the acquired date.',
       server_busy: 'The server is busy right now. Please try again in a few seconds.',
+      password_too_short_for_role: 'Accounts with administration rights need a password of at least 12 characters.',
+      password_common: 'This password appears in known data breaches and is too easy to guess. Please choose a different one.',
     },
     // See the matching comment in de-DE.js — keep both files' syncErrors
     // in sync with apps/api/src/modules/sync/sync.service.ts.
@@ -61,7 +63,7 @@ export default {
     acceptInviteTitle: 'Accept invitation',
     acceptInviteIntro: 'You were invited as {role} for "{club}" ({email}). Please set a password to activate your account.',
     yourName: 'Your name', chooseNewPassword: 'New password',
-    passwordHint: 'At least 8 characters. A longer passphrase made of several words is a good choice.',
+    passwordHint: 'At least 8 characters, at least 12 for administration accounts. Commonly used passwords are rejected. A longer passphrase made of several words is a good choice.',
     acceptInviteButton: 'Activate account', acceptInviteSuccess: 'Welcome, {name}!',
     invitationInvalid: 'This invitation is invalid, expired, or has already been used.',
     backToLogin: 'Back to sign in', noClubYetLabel: 'being created',
