@@ -84,6 +84,18 @@ jobs:
           fi
           echo "CACHE_VERSION wurde angehoben."
 
+      - name: Keine neuen Review-Verweise in Kommentaren
+        # Kommentare erklären den Code, wie er jetzt ist; die Herkunft einer
+        # Regel steht in der Commit-Message. Geprüft werden nur hinzugefügte
+        # Zeilen, der bestehende Rest (docs/todo.md) blockiert also nichts.
+        run: |
+          BASE_SHA="${{ github.event.pull_request.base.sha || github.event.before }}"
+          if [ -z "$BASE_SHA" ] || ! git cat-file -e "$BASE_SHA" 2>/dev/null; then
+            echo "Keine nutzbare Basis-Referenz — Prüfung übersprungen."
+            exit 0
+          fi
+          scripts/check-review-markers.sh "$BASE_SHA"
+
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22"
