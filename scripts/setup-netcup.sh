@@ -27,7 +27,7 @@
 #     falls nicht per DOMAIN=training.mein-verein.de vorgegeben.
 #   - Superadmin-E-Mail-Adresse und -Passwort (Schritt 8.1): interaktiv
 #     abgefragt (Passwort ohne Terminal-Echo, mit Bestätigung) — es gibt
-#     bewusst KEIN Default-Passwort (Sicherheitsreview 2026-08, Befund H1).
+#     bewusst KEIN Default-Passwort.
 #   - SMTP-Zugangsdaten (optional, für tatsächlich versendete Einladungs-
 #     E-Mails statt nur Server-Log-Eintrag): wird bei fehlender
 #     SMTP_HOST-Umgebungsvariable interaktiv erfragt, ob jetzt eingerichtet
@@ -55,17 +55,15 @@ cd "$REPO_ROOT"
 
 log() { printf '\n\033[1;34m==> %s\033[0m\n' "$1"; }
 
-# Sicherheitskorrektur (Code-Review 2026-09-02, Befund D2): Escapt einen
+# Escapt einen
 # Wert für die sichere Einbettung in ein einfach gequotetes SQL-Zeichenketten-
 # Literal (verdoppelt eingebettete `'`, die Standard-SQL-Escapierung) — NUR
 # für Werte gedacht, die per Heredoc auf STDIN von `psql` gereicht werden
 # (siehe die beiden CREATE-USER-Aufrufe unten), NIEMALS für ein `-c`-
 # Kommandozeilenargument. Letzteres wäre über `ps aux`/`/proc/<pid>/cmdline`
-# für JEDES lokale Konto lesbar — dieselbe Fehlerklasse, die bereits für das
-# Superadmin-Passwort behoben wurde (Commit 45dc106, „fix(scripts): stop
-# passing superadmin password as a CLI argument"), hier aber übersehen
-# blieb. Ein Heredoc auf STDIN erscheint dagegen nicht in der Prozess-
-# Argumentliste.
+# für JEDES lokale Konto lesbar (siehe auch die Übergabe des
+# Superadmin-Passworts in Schritt 8.1). Ein Heredoc auf STDIN erscheint
+# dagegen nicht in der Prozess-Argumentliste.
 sql_quote() { printf '%s' "$1" | sed "s/'/''/g"; }
 
 # --- Domain -------------------------------------------------------------
@@ -88,8 +86,7 @@ DB_USER="lane1_app"
 # Schritt 6.2/Abschnitt weiter unten) — per DB_PASSWORD=... vorgebbar, sonst
 # zufällig erzeugt.
 DB_PASSWORD="${DB_PASSWORD:-$(openssl rand -hex 16)}"
-# Sicherheitskorrektur (Sicherheitsreview 2026-08-28, Befund N1): eigene
-# Rolle NUR für `prisma migrate deploy` (Schritt 7.3) — DB_USER/lane1_app
+# Eigene Rolle NUR für `prisma migrate deploy` (Schritt 7.3) — DB_USER/lane1_app
 # oben ist die Rolle, mit der die Anwendung dauerhaft läuft (DATABASE_URL in
 # .env, Schritt 7.2) und bekommt bewusst KEINE DDL-Rechte. Analog zu
 # DB_PASSWORD per DB_MIGRATOR_PASSWORD=... vorgebbar, sonst zufällig erzeugt.
@@ -111,19 +108,17 @@ if ! command -v psql >/dev/null 2>&1; then
 fi
 sudo systemctl enable --now postgresql
 
-# Sicherheitskorrektur (Sicherheitsreview 2026-08-28, Befund N1): ZWEI
-# Rollen statt einer. ${DB_MIGRATOR_USER} wendet ausschließlich das
+# ZWEI Rollen statt einer. ${DB_MIGRATOR_USER} wendet ausschließlich das
 # Datenbankschema an (prisma migrate deploy, Schritt 7.3) und braucht dafür
 # DDL-Rechte (Tabellen anlegen/ändern) — deshalb Eigentümerin der
 # Datenbank. ${DB_USER} ist die Rolle, mit der die Anwendung selbst zur
 # Laufzeit läuft (DATABASE_URL in .env, Schritt 7.2) und bekommt bewusst
 # NUR Lese-/Schreibrechte auf Zeilenebene, keine DDL-Rechte — ein zur
-# Laufzeit erlangter Datenbankzugriff kann dadurch keine Tabellen mehr
+# Laufzeit erlangter Datenbankzugriff kann dadurch keine Tabellen
 # anlegen, ändern oder löschen.
 MIGRATOR_ROLE_CREATED=0
 if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='${DB_MIGRATOR_USER}'" | grep -q 1; then
-  # Sicherheitskorrektur (Befund D2, siehe sql_quote()-Kommentar oben):
-  # Passwort per Heredoc auf STDIN statt per `-c "..."` — Letzteres wäre als
+  # Passwort per Heredoc (siehe sql_quote()-Kommentar oben) auf STDIN statt per `-c "..."` — Letzteres wäre als
   # Kommandozeilenargument des psql-Prozesses für jedes lokale Konto sichtbar.
   sudo -u postgres psql <<SQL
 CREATE USER ${DB_MIGRATOR_USER} WITH ENCRYPTED PASSWORD '$(sql_quote "${DB_MIGRATOR_PASSWORD}")';
@@ -160,7 +155,7 @@ sudo -u postgres psql -d "${DB_NAME}" -c "GRANT SELECT, INSERT, UPDATE, DELETE O
 sudo -u postgres psql -d "${DB_NAME}" -c "ALTER DEFAULT PRIVILEGES FOR ROLE ${DB_MIGRATOR_USER} IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ${DB_USER};"
 
 # ${DB_MIGRATOR_USER}s Zugangsdaten bewusst NICHT in apps/api/.env (das
-# liest ausschließlich die Anwendung selbst, siehe Schritt 7.2/Befund N1) —
+# liest ausschließlich die Anwendung selbst, siehe Schritt 7.2) —
 # stattdessen in einer eigenen, chmod-600-geschützten Datei, damit sie bei
 # einer künftigen manuellen `prisma migrate deploy` (Abschnitt 13, nach
 # einer neuen, per `git pull` hinzugekommenen Migration) wiederauffindbar
@@ -194,13 +189,12 @@ elif [[ -f "$MIGRATOR_ENV_FILE" ]]; then
   # vor dieser Korrektur stammt.
   chmod 600 "$MIGRATOR_ENV_FILE"
   echo "  $MIGRATOR_ENV_FILE existiert bereits — wird nicht überschrieben."
-  # Sicherheitskorrektur (Code-Review 2026-09-02, Befund D1): das hier
-  # hinterlegte, TATSÄCHLICH gültige Passwort zurücklesen — DB_MIGRATOR_PASSWORD
+  # Das hier hinterlegte, TATSÄCHLICH gültige Passwort zurücklesen — DB_MIGRATOR_PASSWORD
   # oben ist in diesem Zweig ein frisch gewürfelter Wert, der NIE in die
   # Datenbank geschrieben wurde (der else-Zweig bei der Rollenanlage oben
   # lässt das bestehende Passwort bewusst unverändert). Schritt 7.3 unten
   # verwendet ab hier ausschließlich diese zurückgelesene
-  # MIGRATE_DATABASE_URL, nie mehr DB_MIGRATOR_PASSWORD direkt — sonst
+  # MIGRATE_DATABASE_URL, nie DB_MIGRATOR_PASSWORD direkt — sonst
   # scheiterte `prisma migrate deploy` bei JEDEM Wiederholungslauf
   # (Authentifizierungsfehler gegen die Datenbank), obwohl das Skript für
   # sich selbst "wiederholt ausführbar" in Anspruch nimmt (siehe
@@ -215,11 +209,8 @@ elif [[ -f "$MIGRATOR_ENV_FILE" ]]; then
     exit 1
   fi
 else
-  # Sicherheitskorrektur (Befund D1): vormals nur ein Hinweis (der Lauf
-  # ging munter weiter und scheiterte erst ~200 Zeilen später, in Schritt
-  # 7.3, an einem irreführenden Postgres-Authentifizierungsfehler) — jetzt
-  # ein Abbruch HIER, an der Stelle, an der das eigentliche Problem
-  # entsteht.
+  # Abbruch HIER, wo das Problem entsteht, statt erst in Schritt 7.3 an
+  # einem irreführenden Postgres-Authentifizierungsfehler zu scheitern.
   echo "Fehler: Rolle ${DB_MIGRATOR_USER} existiert bereits, aber $MIGRATOR_ENV_FILE fehlt —" >&2
   echo "das gültige Passwort ist diesem Lauf nicht bekannt und wird daher NICHT geraten." >&2
   echo "Für 'prisma migrate deploy' (Schritt 7.3 unten) entweder das alte Passwort in" >&2
@@ -259,31 +250,24 @@ if [[ -f "$ENV_FILE" ]]; then
 else
   ENV_WAS_CREATED=1
 
-  # Sicherheitskorrektur (Sicherheitsreview 2026-08-28, Befund H2,
-  # Empfehlung 3): das Schlüsselpaar wird direkt an seinem endgültigen,
-  # geschützten Ort erzeugt (apps/api/keys/) statt zuerst in ein temporäres
-  # Verzeichnis und von dort — als literal-"\n"-kodierter String — in
-  # $ENV_FILE kopiert zu werden. Zwei Vorteile gegenüber der Inline-Form:
-  # (1) kein Zwischenschritt, in dem der private Schlüssel zusätzlich
-  # unverschlüsselt an einem zweiten Ort liegt, (2) die Schlüsseldatei
-  # trägt eigene, engere Dateirechte (600, nur Eigentümer) UNABHÄNGIG von
-  # $ENV_FILE (das u. a. auch das Datenbank-Passwort enthält) —
-  # apps/api/.env verweist über JWT_PRIVATE_KEY_FILE/JWT_PUBLIC_KEY_FILE
-  # nur noch auf den Pfad, siehe apps/api/src/config/env.ts.
+  # Das Schlüsselpaar wird direkt an seinem endgültigen, geschützten Ort
+  # erzeugt (apps/api/keys/), nicht inline in $ENV_FILE: so liegt der
+  # private Schlüssel an keinem zweiten Ort, und die Schlüsseldatei trägt
+  # eigene, engere Dateirechte (600) UNABHÄNGIG von $ENV_FILE. apps/api/.env
+  # verweist über JWT_PRIVATE_KEY_FILE/JWT_PUBLIC_KEY_FILE nur auf den Pfad,
+  # siehe apps/api/src/config/env.ts.
   KEYS_DIR="${REPO_ROOT}/apps/api/keys"
   mkdir -p "$KEYS_DIR"
   chmod 700 "$KEYS_DIR"
   JWT_PRIVATE_KEY_FILE="${KEYS_DIR}/jwt_private.pem"
   JWT_PUBLIC_KEY_FILE="${KEYS_DIR}/jwt_public.pem"
-  # Sicherheitsreview 2026-08-29, Befund N2: `umask 077` VOR der Erzeugung,
-  # statt nur `chmod 600` danach. `openssl genpkey -out` legt die Datei
+  # `umask 077` VOR der Erzeugung, statt nur `chmod 600` danach. `openssl genpkey -out` legt die Datei
   # unter der geltenden umask an (üblich 0022 -> 0644, weltlesbar) — der
   # private Schlüssel, mit dem sich beliebige Access Tokens signieren
   # lassen (siehe plugins/authenticate.ts: prüft nur die Signatur, nie die
-  # Datenbank), lag dadurch zwischen Erzeugung und `chmod` für jedes
-  # andere lokale Konto offen. Das Fenster ist kurz, aber vermeidbar; die
-  # explizite Rechtevergabe unten bleibt zusätzlich stehen (korrigiert
-  # auch eine bereits vorhandene Datei aus der Zeit davor).
+  # Datenbank), läge sonst zwischen Erzeugung und `chmod` für jedes
+  # andere lokale Konto offen. Die explizite Rechtevergabe unten bleibt
+  # zusätzlich stehen (korrigiert auch eine bereits vorhandene Datei).
   (
     umask 077
     openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$JWT_PRIVATE_KEY_FILE"
@@ -328,8 +312,7 @@ else
   SMTP_PORT="${SMTP_PORT:-587}"
   SMTP_FROM_NAME="${SMTP_FROM_NAME:-Lane 1}"
 
-  # Sicherheitsreview 2026-08-29, Befund N2 — dieselbe Begründung wie beim
-  # Schlüsselpaar oben: `cat >` legt die Datei unter der geltenden umask an
+  # Dieselbe Begründung wie beim Schlüsselpaar oben: `cat >` legt die Datei unter der geltenden umask an
   # (üblich weltlesbar), und sie enthält u. a. das Datenbank- und ggf.
   # SMTP-Passwort. Der unbedingte `chmod 600` weiter unten bleibt
   # zusätzlich bestehen — er korrigiert auch eine bereits vorhandene Datei
@@ -351,7 +334,7 @@ JWT_REFRESH_TTL_DAYS=30
 CORS_ORIGIN="${PUBLIC_URL}"
 FRONTEND_BASE_URL="${PUBLIC_URL}"
 
-# Sicherheitsreview 2026-08-27, Befund H1 — Nginx (Schritt 9 unten) läuft
+# Nginx (Schritt 9 unten) läuft
 # auf demselben Host und ist der einzige tatsächliche Reverse-Proxy-Hop.
 # PFLICHT bei NODE_ENV=production (siehe apps/api/src/config/env.ts).
 TRUSTED_PROXY_IPS="127.0.0.1"
@@ -377,29 +360,25 @@ EOF
   echo "  $ENV_FILE geschrieben. Öffentliche Adresse: ${PUBLIC_URL}"
 fi
 
-# Sicherheitskorrektur (Sicherheitsreview 2026-08-28, Befund H2): $ENV_FILE
-# enthält u. a. das DATABASE_URL- und ggf. SMTP-Passwort und — bei einer
-# bereits vorhandenen Datei aus der Zeit vor Empfehlung 3 oben — möglich-
-# erweise weiterhin JWT_PRIVATE_KEY direkt inline (signiert sämtliche
-# Access Tokens). Ohne dies entsteht die Datei per `cat >` unter der
+# $ENV_FILE enthält u. a. das DATABASE_URL- und ggf. SMTP-Passwort und —
+# bei einer älteren, bereits vorhandenen Datei — möglicherweise
+# JWT_PRIVATE_KEY direkt inline (signiert sämtliche Access Tokens). Ohne dies entsteht die Datei per `cat >` unter der
 # jeweils geltenden umask, üblich 0644 (weltlesbar). Unbedingt (nicht nur
 # im ENV_WAS_CREATED-Zweig oben) — korrigiert bei einem erneuten Lauf auch
-# die Rechte einer bereits vorhandenen Datei aus der Zeit vor dieser
-# Korrektur.
+# die Rechte einer bereits vorhandenen, älteren Datei.
 chmod 600 "$ENV_FILE"
 
 # --- Schritt 7.3: Datenbank-Schema anlegen -----------------------------------
-# `migrate deploy` statt `db push` (Code-Review, Befund W5): wendet die
+# `migrate deploy` statt `db push`: wendet die
 # committete Migrationshistorie unter apps/api/prisma/migrations/ an.
 # DATABASE_URL wird hier bewusst mit der DDL-Rolle ${DB_MIGRATOR_USER}
-# ÜBERSCHRIEBEN (Sicherheitsreview 2026-08-28, Befund N1) — nur für genau
+# ÜBERSCHRIEBEN — nur für genau
 # diesen einen Befehl, nicht für apps/api/.env selbst (das weiterhin die
 # DML-only-Rolle ${DB_USER} trägt, siehe Schritt 7.2). Prismas eigenes
 # .env-Laden überschreibt eine bereits gesetzte Umgebungsvariable nicht.
 #
-# Sicherheitskorrektur (Code-Review 2026-09-02, Befund D1): verwendet
-# ausschließlich die oben aufgelöste ${MIGRATE_DATABASE_URL} — NICHT mehr
-# ${DB_MIGRATOR_PASSWORD} direkt. Bei einem Wiederholungslauf (Rolle
+# Verwendet ausschließlich die oben aufgelöste ${MIGRATE_DATABASE_URL},
+# NICHT ${DB_MIGRATOR_PASSWORD} direkt. Bei einem Wiederholungslauf (Rolle
 # existierte bereits) ist DB_MIGRATOR_PASSWORD ein frisch gewürfelter Wert,
 # der nie in die Datenbank geschrieben wurde; MIGRATE_DATABASE_URL trägt
 # stattdessen das aus apps/api/.env.migrate zurückgelesene, tatsächlich
@@ -412,7 +391,7 @@ log "Schritt 7.4: Backend bauen (inkl. packages/shared-types, packages/sync-prot
 npm run build --workspace=apps/api
 
 # --- Schritt 8: Backend mit PM2 starten ---------------------------------------
-# Sicherheitsreview 2026-08-28, Befund N2: --node-args="--env-file-if-exists=.env"
+# --node-args="--env-file-if-exists=.env"
 # ist Pflicht — weder config/env.ts noch der laufende Server laden
 # apps/api/.env von sich aus; ohne dieses Flag stürzt der Prozess sofort
 # mit "DATABASE_URL: Required" ab (empirisch geprüft). Nur beim
@@ -447,8 +426,7 @@ pm2 save
 log "Schritt 8.1: Ersten Superadmin anlegen"
 SUPERADMIN_NAME="${SUPERADMIN_NAME:-Vorname Nachname}"
 
-# Sicherheitskorrektur (Sicherheitsreview 2026-08, Befund H1): kein
-# Default-Passwort — ohne vorab gesetzte SUPERADMIN_EMAIL/SUPERADMIN_PASSWORD
+# Kein Default-Passwort — ohne vorab gesetzte SUPERADMIN_EMAIL/SUPERADMIN_PASSWORD
 # wird interaktiv nachgefragt; das Passwort wird dabei per `read -s` NICHT
 # auf dem Terminal angezeigt und zur Absicherung gegen Tippfehler ein
 # zweites Mal zur Bestätigung abgefragt.
@@ -485,8 +463,7 @@ if [[ ${#SUPERADMIN_PASSWORD} -lt 12 ]]; then
   echo "  Fehler: SUPERADMIN_PASSWORD muss mindestens 12 Zeichen lang sein (siehe apps/api/scripts/createSuperAdmin.ts)." >&2
   exit 1
 fi
-# Sicherheitskorrektur (Sicherheitsreview 2026-08-28, Befund M1): das
-# Passwort wird NICHT als --password=…-Argument übergeben — Argumente
+# Das Passwort wird NICHT als --password=…-Argument übergeben — Argumente
 # eines laufenden Prozesses sind auf Linux über /proc/<pid>/cmdline für
 # JEDEN lokalen Benutzer lesbar (`ps aux` genügt), für die gesamte, bei
 # argon2id nicht ganz kurze Laufzeit von createSuperAdmin.ts. Stattdessen
@@ -514,9 +491,7 @@ server {
     root ${REPO_ROOT}/apps/web;
     index index.html;
 
-    # Content-Security-Policy + Sicherheitsheader für das Frontend
-    # (Code-Review, Befund S3; Sicherheitsreview 2026-08-29, Befund N2) —
-    # siehe docs/deployment/deployment-netcup.md, Abschnitt 9 für die ausführliche
+    # Content-Security-Policy + Sicherheitsheader für das Frontend — siehe docs/deployment/deployment-netcup.md, Abschnitt 9 für die ausführliche
     # Begründung (u. a. warum style-src 'unsafe-inline' ein bewusster,
     # dokumentierter Kompromiss ist, und warum HSTS trotz aktuell nur
     # HTTP hier bereits gesetzt wird — certbot in Schritt 10 ergänzt die
@@ -584,8 +559,7 @@ sudo nginx -t
 sudo systemctl reload nginx
 
 log "Fertig bis einschließlich Schritt 9."
-# Sicherheitskorrektur (Sicherheitsreview 2026-08, Befund H1): nur noch die
-# E-Mail-Adresse, NIE das Passwort — vormals landete ein Klartext-Passwort
+# Nur die E-Mail-Adresse, NIE das Passwort — sonst landete ein Klartext-Passwort
 # hier im Terminal-Scrollback und in jedem Log, das die Skriptausgabe
 # mitschneidet.
 echo "Superadmin-Login: ${SUPERADMIN_EMAIL} (Passwort wie eingegeben/vorgegeben — wird hier nicht wiederholt)"
