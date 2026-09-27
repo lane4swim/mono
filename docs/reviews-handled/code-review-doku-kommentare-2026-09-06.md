@@ -1,5 +1,7 @@
 # Code-Review — Wartbarkeit von Dokumentation und Kommentaren (6. September 2026)
 
+**Abgeschlossen (27.09.2026), nach `docs/reviews-handled/` verschoben.** Alle Befunde sind behoben oder bewusst entschieden. Einzige Restarbeit ist die fortlaufende Entfernung von Review-Verweisen aus Code-Kommentaren; sie wird nicht mehr hier, sondern in `docs/todo.md` verfolgt. Neue Verweise verhindert der CI-Schritt `scripts/check-review-markers.sh`.
+
 **Auftrag.** Durchgehendes Review über das gesamte Repository mit Blick
 ausschließlich auf **Dokumentation und Kommentare**: Sind sie so
 geschrieben, dass sie eine Änderung am Code überleben? Wo sind sie länger

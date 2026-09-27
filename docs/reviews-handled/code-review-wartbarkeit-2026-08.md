@@ -1,10 +1,12 @@
 # Code-Review — Wartbarkeit, Redundanzen, Methodenlänge, Abhängigkeiten
 
+**Abgeschlossen (27.09.2026), nach `docs/reviews-handled/` verschoben.** Alle Befunde sind behoben oder bewusst entschieden. Einzige Restarbeit ist die fortlaufende Entfernung von Review-Verweisen aus Code-Kommentaren; sie wird nicht mehr hier, sondern in `docs/todo.md` verfolgt. Neue Verweise verhindert der CI-Schritt `scripts/check-review-markers.sh`.
+
 Stand: August 2026 · Umfang: `apps/api`, `apps/web`, `packages/*`, Build-/CI-Konfiguration
 · Schwerpunkte laut Auftrag: **Wartbarkeit, Redundanzen, überlange Methoden und Klassen,
 übermäßige Abhängigkeiten**.
 
-Ergänzt `docs/code-review-2026-08.md` (Sicherheit/Korrektheit/Effizienz/Stil). Befunde, die
+Ergänzt `docs/reviews-handled/code-review-2026-08.md` (Sicherheit/Korrektheit/Effizienz/Stil). Befunde, die
 dort bereits behoben wurden, sind hier nicht wiederholt; wo ein dortiger Befund nur teilweise
 umgesetzt wurde, ist das ausdrücklich vermerkt.
 
@@ -264,7 +266,7 @@ Kommentar dazu wurde korrigiert).
 
 **Fix:** Die Faustregel des Projekts umdrehen — ein Kommentar erklärt, *warum der Code so
 ist*, nie *wie er vorher war*. Die Historie steht in `git log` und in
-`docs/code-review-2026-08.md`, beides verlustfrei und durchsuchbar. Konkret:
+`docs/reviews-handled/code-review-2026-08.md`, beides verlustfrei und durchsuchbar. Konkret:
 
 - Sätze mit „vormals", „zuvor", „bislang", „Befund X" streichen; die verbleibende
   Begründung (falls es eine gibt) in einen Satz Gegenwartsform überführen.
