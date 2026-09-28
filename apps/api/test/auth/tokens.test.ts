@@ -20,6 +20,9 @@ import {
   hashInvitationToken,
   generatePasswordResetToken,
   hashPasswordResetToken,
+  signMfaToken,
+  verifyMfaToken,
+  InvalidMfaTokenError,
 } from '../../src/auth/tokens.js';
 import { generateFreshKeyPair } from '../../src/auth/keys.js';
 import type { AccessTokenClaims } from '@lane1/shared-types';
@@ -217,5 +220,27 @@ describe('Schlüssel-Caching (Befund P1)', () => {
     ]);
 
     expect(jose.importPKCS8).toHaveBeenCalledTimes(1);
+  });
+});
+
+// Issue #97: das mfaToken zwischen den beiden Anmeldeschritten.
+describe('signMfaToken() / verifyMfaToken()', () => {
+  it('liefert userId und jti zurück', async () => {
+    const keyPair = generateFreshKeyPair();
+    const { token, jti } = await signMfaToken('user-1', keyPair);
+    await expect(verifyMfaToken(token, keyPair)).resolves.toMatchObject({ userId: 'user-1', jti });
+  });
+
+  it('wird NICHT als Access Token akzeptiert — und ein Access Token nicht als mfaToken', async () => {
+    const keyPair = generateFreshKeyPair();
+    const { token } = await signMfaToken('user-1', keyPair);
+    await expect(verifyAccessToken(token, keyPair)).rejects.toThrow(InvalidAccessTokenError);
+    const access = await signAccessToken({ sub: 'user-1', roles: ['admin'], clubId: 'c', athleteId: null }, keyPair, 900);
+    await expect(verifyMfaToken(access, keyPair)).rejects.toThrow(InvalidMfaTokenError);
+  });
+
+  it('lehnt ein mit einem fremden Schlüssel signiertes mfaToken ab', async () => {
+    const { token } = await signMfaToken('user-1', generateFreshKeyPair());
+    await expect(verifyMfaToken(token, generateFreshKeyPair())).rejects.toThrow(InvalidMfaTokenError);
   });
 });

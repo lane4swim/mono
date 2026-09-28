@@ -48,7 +48,8 @@ export interface PasswordResetMailPayload {
 export interface AccountSecurityChangeMailPayload {
   to: string;
   recipientName?: string | null;
-  changeType: 'email' | 'password';
+  // 'mfa': Zwei-Faktor-Anmeldung eingerichtet, abgeschaltet oder zurückgesetzt (Issue #97).
+  changeType: 'email' | 'password' | 'mfa';
   locale?: string;
 }
 
@@ -246,9 +247,21 @@ export function buildPasswordResetHtmlBody(payload: PasswordResetMailPayload): s
 // auth.service.ts) — die Nachricht ist rein informativ und verweist auf
 // den einzigen heute verfügbaren Weg, tatsächlich etwas zu tun (die
 // eigene Vereinsleitung kontaktieren).
-const CHANGE_TYPE_LABEL: Record<SupportedLocale, Record<AccountSecurityChangeMailPayload['changeType'], string>> = {
-  'de-DE': { email: 'E-Mail-Adresse', password: 'Passwort' },
-  'en-US': { email: 'email address', password: 'password' },
+// Je Änderungsart ein vollständiger erster Satz (statt eines eingesetzten
+// Begriffs), damit Genus und Satzbau in beiden Sprachen stimmen. Nur beim
+// E-Mail-Wechsel der Hinweis, dass die Nachricht an die BISHERIGE Adresse
+// ging.
+const CHANGE_SENTENCE: Record<SupportedLocale, Record<AccountSecurityChangeMailPayload['changeType'], string>> = {
+  'de-DE': {
+    email: 'Die E-Mail-Adresse Ihres Lane-1-Kontos wurde soeben geändert. Diese Nachricht ging an Ihre BISHERIGE hinterlegte Adresse, unabhängig von der Änderung selbst.',
+    password: 'Das Passwort Ihres Lane-1-Kontos wurde soeben geändert.',
+    mfa: 'Die Zwei-Faktor-Anmeldung Ihres Lane-1-Kontos wurde soeben geändert (eingerichtet, abgeschaltet oder zurückgesetzt).',
+  },
+  'en-US': {
+    email: 'The email address for your Lane 1 account was just changed. This message went to your PREVIOUS address on file, independent of the change itself.',
+    password: 'The password for your Lane 1 account was just changed.',
+    mfa: 'Two-factor sign-in for your Lane 1 account was just changed (set up, turned off or reset).',
+  },
 };
 
 export function buildAccountSecurityChangeSubject(payload: AccountSecurityChangeMailPayload): string {
@@ -258,12 +271,12 @@ export function buildAccountSecurityChangeSubject(payload: AccountSecurityChange
 
 export function buildAccountSecurityChangeTextBody(payload: AccountSecurityChangeMailPayload): string {
   const locale = resolveLocale(payload.locale);
-  const changed = CHANGE_TYPE_LABEL[locale][payload.changeType];
+  const changed = CHANGE_SENTENCE[locale][payload.changeType];
   if (locale === 'en-US') {
     return [
       payload.recipientName ? `Hi ${payload.recipientName},` : 'Hi,',
       '',
-      `The ${changed} for your Lane 1 account was just changed. This message went to your PREVIOUS address on file, independent of the change itself.`,
+      changed,
       '',
       "If you made this change yourself, you can ignore this email — nothing further to do.",
       '',
@@ -276,7 +289,7 @@ export function buildAccountSecurityChangeTextBody(payload: AccountSecurityChang
   return [
     payload.recipientName ? `Hallo ${payload.recipientName},` : 'Hallo,',
     '',
-    `Das ${changed} Ihres Lane-1-Kontos wurde soeben geändert. Diese Nachricht ging an Ihre BISHERIGE hinterlegte Adresse, unabhängig von der Änderung selbst.`,
+    changed,
     '',
     'Wenn Sie diese Änderung selbst vorgenommen haben, können Sie diese E-Mail ignorieren — es ist nichts weiter zu tun.',
     '',
@@ -289,12 +302,11 @@ export function buildAccountSecurityChangeTextBody(payload: AccountSecurityChang
 
 export function buildAccountSecurityChangeHtmlBody(payload: AccountSecurityChangeMailPayload): string {
   const locale = resolveLocale(payload.locale);
-  const changed = CHANGE_TYPE_LABEL[locale][payload.changeType];
+  const changed = CHANGE_SENTENCE[locale][payload.changeType];
   if (locale === 'en-US') {
     return `
       <p>${payload.recipientName ? `Hi ${escapeHtml(payload.recipientName)},` : 'Hi,'}</p>
-      <p>The <strong>${escapeHtml(changed)}</strong> for your Lane 1 account was just changed. This message went to your
-         previous address on file, independent of the change itself.</p>
+      <p>${escapeHtml(changed)}</p>
       <p>If you made this change yourself, you can ignore this email.</p>
       <p style="color:#B3261E;font-weight:bold">If you did NOT make this change, your account may be compromised:
          please contact your club's administrator immediately.</p>
@@ -303,8 +315,7 @@ export function buildAccountSecurityChangeHtmlBody(payload: AccountSecurityChang
   }
   return `
     <p>${payload.recipientName ? `Hallo ${escapeHtml(payload.recipientName)},` : 'Hallo,'}</p>
-    <p>Das <strong>${escapeHtml(changed)}</strong> Ihres Lane-1-Kontos wurde soeben geändert. Diese Nachricht ging an
-       Ihre bisherige hinterlegte Adresse, unabhängig von der Änderung selbst.</p>
+    <p>${escapeHtml(changed)}</p>
     <p>Wenn Sie diese Änderung selbst vorgenommen haben, können Sie diese E-Mail ignorieren.</p>
     <p style="color:#B3261E;font-weight:bold">Falls Sie diese Änderung NICHT vorgenommen haben, könnte Ihr Konto
        kompromittiert sein: Bitte wenden Sie sich umgehend an Ihre Vereinsleitung.</p>

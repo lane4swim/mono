@@ -38,7 +38,15 @@ export type AuditLogAction =
   | 'qualification.deleted'
   | 'refereeAssignment.created'
   | 'refereeAssignment.updated'
-  | 'refereeAssignment.deleted';
+  | 'refereeAssignment.deleted'
+  // Zwei-Faktor-Anmeldung (Issue #97).
+  | 'mfa.enabled'
+  | 'mfa.disabled'
+  | 'mfa.reset'
+  | 'mfa.recoveryCodesRegenerated'
+  | 'club.mfaPolicyChanged'
+  | 'auth.mfaFailed'
+  | 'auth.recoveryCodeUsed';
 
 // Akteur:innen-Label für Einträge ohne angemeldete Person (Fehlversuch mit
 // unbekanntem Absender, vom Server erkannte Auffälligkeit). Sprachneutrale

@@ -57,6 +57,10 @@ export async function verifyAccessToken(token: string, keyPair: KeyPair): Promis
   try {
     const { payload } = await jwtVerify(token, publicKey, { algorithms: [ALG] });
     if (!payload.sub) throw new InvalidAccessTokenError('Token ohne "sub"-Claim.');
+    // Zweckgebundene Tokens (z. B. das mfaToken zwischen den beiden
+    // Anmeldeschritten, siehe signMfaToken() unten) sind mit demselben
+    // Schlüssel signiert, dürfen aber NIE als Access Token gelten.
+    if (payload.purpose !== undefined) throw new InvalidAccessTokenError('Zweckgebundenes Token ist kein Access Token.');
     return {
       sub: payload.sub,
       roles: payload.roles as AccessTokenClaims['roles'],
@@ -66,6 +70,43 @@ export async function verifyAccessToken(token: string, keyPair: KeyPair): Promis
   } catch (err) {
     if (err instanceof InvalidAccessTokenError) throw err;
     throw new InvalidAccessTokenError('Access Token ist ungültig oder abgelaufen.');
+  }
+}
+
+// Kurzlebiges Token zwischen Passwort- und Code-Schritt der Zwei-Faktor-
+// Anmeldung (Issue #97). Belegt nur "Passwort war korrekt" und taugt für
+// nichts anderes: `purpose: 'mfa'` lässt verifyAccessToken() es ablehnen,
+// und verifyMfaToken() verlangt genau diesen Zweck. `jti` identifiziert den
+// Anmeldeversuch für die Fehlversuchs-Grenze (modules/mfa/mfaChallenges.ts).
+export const MFA_TOKEN_TTL_SECONDS = 5 * 60;
+
+export class InvalidMfaTokenError extends Error {
+  constructor() {
+    super('Die Anmeldung ist abgelaufen oder ungültig. Bitte erneut mit E-Mail-Adresse und Passwort anmelden.');
+  }
+}
+
+export async function signMfaToken(userId: string, keyPair: KeyPair): Promise<{ token: string; jti: string }> {
+  const privateKey = await getPrivateKey(keyPair.privateKey);
+  const jti = randomBytes(16).toString('base64url');
+  const token = await new SignJWT({ purpose: 'mfa' })
+    .setProtectedHeader({ alg: ALG })
+    .setSubject(userId)
+    .setJti(jti)
+    .setIssuedAt()
+    .setExpirationTime(`${MFA_TOKEN_TTL_SECONDS}s`)
+    .sign(privateKey);
+  return { token, jti };
+}
+
+export async function verifyMfaToken(token: string, keyPair: KeyPair): Promise<{ userId: string; jti: string; expiresAt: Date }> {
+  const publicKey = await getPublicKey(keyPair.publicKey);
+  try {
+    const { payload } = await jwtVerify(token, publicKey, { algorithms: [ALG] });
+    if (payload.purpose !== 'mfa' || !payload.sub || !payload.jti || !payload.exp) throw new InvalidMfaTokenError();
+    return { userId: payload.sub, jti: payload.jti, expiresAt: new Date(payload.exp * 1000) };
+  } catch {
+    throw new InvalidMfaTokenError();
   }
 }
 

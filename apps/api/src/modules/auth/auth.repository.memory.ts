@@ -14,6 +14,7 @@ import type {
   RefreshTokenRecord,
   PasswordResetTokenRepository,
   PasswordResetTokenRecord,
+  MfaRecoveryCodeRepository,
 } from './auth.repository.js';
 
 export class InMemoryUserRepository implements UserRepository {
@@ -67,6 +68,32 @@ export class InMemoryUserRepository implements UserRepository {
   // Regression durchwinken, die die echte Implementierung längst
   // ausschließt (genau die Art Auseinanderlaufen, vor der mehrere andere
   // Kommentare in diesem Modul bereits warnen).
+  // Prüfen und Schreiben ohne dazwischenliegendes await — im Single-Thread-
+  // Modell so atomar wie die bedingten UPDATEs der Prisma-Implementierung.
+  async setPendingTotpSecret(id: string, secretEnc: string): Promise<boolean> {
+    const user = this.usersById.get(id);
+    if (!user || user.deletedAt || user.totpEnabledAt) return false;
+    this.usersById.set(id, { ...user, totpSecretEnc: secretEnc, totpLastUsedStep: null });
+    return true;
+  }
+  async enableTotp(id: string, step: number): Promise<boolean> {
+    const user = this.usersById.get(id);
+    if (!user || user.deletedAt || user.totpEnabledAt || !user.totpSecretEnc) return false;
+    this.usersById.set(id, { ...user, totpEnabledAt: new Date(), totpLastUsedStep: step });
+    return true;
+  }
+  async recordTotpStep(id: string, step: number): Promise<boolean> {
+    const user = this.usersById.get(id);
+    if (!user || !user.totpEnabledAt) return false;
+    if (user.totpLastUsedStep != null && user.totpLastUsedStep >= step) return false;
+    this.usersById.set(id, { ...user, totpLastUsedStep: step });
+    return true;
+  }
+  async clearTotp(id: string): Promise<void> {
+    const user = this.usersById.get(id);
+    if (user) this.usersById.set(id, { ...user, totpSecretEnc: null, totpEnabledAt: null, totpLastUsedStep: null });
+  }
+
   async update(id: string, input: UpdateUserInput): Promise<UserRecord> {
     const existing = this.usersById.get(id);
     if (!existing || existing.deletedAt) {
@@ -168,5 +195,26 @@ export class InMemoryPasswordResetTokenRepository implements PasswordResetTokenR
         this.tokensById.set(id, { ...token, usedAt: new Date() });
       }
     }
+  }
+}
+
+export class InMemoryMfaRecoveryCodeRepository implements MfaRecoveryCodeRepository {
+  private rows: Array<{ userId: string; codeHash: string; usedAt: Date | null }> = [];
+
+  async replaceAll(userId: string, codeHashes: string[]): Promise<void> {
+    this.rows = this.rows.filter((r) => r.userId !== userId);
+    this.rows.push(...codeHashes.map((codeHash) => ({ userId, codeHash, usedAt: null })));
+  }
+  async consume(userId: string, codeHash: string): Promise<boolean> {
+    const row = this.rows.find((r) => r.userId === userId && r.codeHash === codeHash && !r.usedAt);
+    if (!row) return false;
+    row.usedAt = new Date();
+    return true;
+  }
+  async countUnused(userId: string): Promise<number> {
+    return this.rows.filter((r) => r.userId === userId && !r.usedAt).length;
+  }
+  async deleteAll(userId: string): Promise<void> {
+    this.rows = this.rows.filter((r) => r.userId !== userId);
   }
 }

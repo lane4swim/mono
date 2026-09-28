@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { resolveTotpEncryptionKey } from '../src/auth/mfaKey.js';
 import { loadEnv } from '../src/config/env.js';
 
 const validEnv = {
@@ -210,5 +211,28 @@ describe('loadEnv', () => {
     it('lehnt einen nicht erkannten Wert ab, statt ihn stillschweigend als true zu interpretieren', () => {
       expect(() => loadEnv({ ...validEnv, SMTP_SECURE: 'yes' })).toThrow(/SMTP_SECURE/);
     });
+  });
+});
+
+// Issue #97: Zwei-Faktor-Anmeldung.
+describe('loadEnv — MFA_ENFORCE / TOTP_ENCRYPTION_KEY', () => {
+  it('schreibt TOTP standardmäßig vor und akzeptiert nur true/false', () => {
+    expect(loadEnv({ ...validEnv }).MFA_ENFORCE).toBe(true);
+    expect(loadEnv({ ...validEnv, MFA_ENFORCE: 'false' }).MFA_ENFORCE).toBe(false);
+    expect(() => loadEnv({ ...validEnv, MFA_ENFORCE: 'nein' })).toThrow();
+  });
+
+  it('lehnt einen TOTP_ENCRYPTION_KEY ab, der nicht 32 Byte lang ist', () => {
+    expect(() => loadEnv({ ...validEnv, TOTP_ENCRYPTION_KEY: Buffer.alloc(16).toString('base64') })).toThrow(/TOTP_ENCRYPTION_KEY/);
+    expect(loadEnv({ ...validEnv, TOTP_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64') }).TOTP_ENCRYPTION_KEY).toBeTruthy();
+  });
+});
+
+describe('resolveTotpEncryptionKey()', () => {
+  it('liefert in Produktion ohne Schlüssel null, sonst einen 32-Byte-Schlüssel', () => {
+    expect(resolveTotpEncryptionKey({ NODE_ENV: 'production', TOTP_ENCRYPTION_KEY: undefined })).toBeNull();
+    expect(resolveTotpEncryptionKey({ NODE_ENV: 'test', TOTP_ENCRYPTION_KEY: undefined })).toHaveLength(32);
+    const key = Buffer.alloc(32, 7);
+    expect(resolveTotpEncryptionKey({ NODE_ENV: 'production', TOTP_ENCRYPTION_KEY: key.toString('base64') })).toEqual(key);
   });
 });

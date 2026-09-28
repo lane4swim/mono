@@ -21,7 +21,7 @@ import { PrismaParentLinkRepository, PrismaParentsAthleteLookup } from './module
 import { PrismaParentOverviewGateway } from './modules/parents/parents.overview.repository.js';
 import { invitationsRoutes } from './modules/invitations/invitations.route.js';
 import { createAuthService, type AuthService } from './modules/auth/auth.service.js';
-import { PrismaUserRepository, PrismaRefreshTokenRepository, PrismaPasswordResetTokenRepository } from './modules/auth/auth.repository.js';
+import { PrismaUserRepository, PrismaRefreshTokenRepository, PrismaPasswordResetTokenRepository, PrismaMfaRecoveryCodeRepository } from './modules/auth/auth.repository.js';
 import { createInvitationsService, type InvitationsService } from './modules/invitations/invitations.service.js';
 import { PrismaClubRepository, PrismaInvitationRepository, PrismaAthleteRepository } from './modules/invitations/invitations.repository.js';
 import { createSyncService, type SyncService } from './modules/sync/sync.service.js';
@@ -47,6 +47,11 @@ import { ConsolePushSender } from './push/pusher.console.js';
 import type { PushSender } from './push/pusher.js';
 import { resolveKeyPair } from './auth/keys.js';
 import { getPrisma } from './db/prisma.js';
+import { resolveTotpEncryptionKey } from './auth/mfaKey.js';
+import { createMfaVerifier } from './modules/mfa/mfa.core.js';
+import { MfaChallengeStore } from './modules/mfa/mfaChallenges.js';
+import { createMfaService, type MfaService } from './modules/mfa/mfa.service.js';
+import { mfaRoutes } from './modules/mfa/mfa.route.js';
 
 export interface BuildAppOverrides {
   authService?: AuthService;
@@ -66,6 +71,7 @@ export interface BuildAppOverrides {
   pusher?: PushSender;
   pushSubscriptions?: PushSubscriptionRepository;
   keyPair?: ReturnType<typeof resolveKeyPair>;
+  mfaService?: MfaService;
 }
 
 // Standardmäßige Gültigkeitsdauer von Einladungen (kann später konfigurierbar
@@ -202,9 +208,20 @@ export async function buildApp(env: Env, overrides: BuildAppOverrides = {}): Pro
       memberInvitationTtlDays: MEMBER_INVITATION_TTL_DAYS,
     });
 
+  // Zwei-Faktor-Anmeldung (Issue #97): gemeinsame Prüfinstanz für den
+  // zweiten Anmeldeschritt (authService) und die Verwaltung (mfaService).
+  const mfaUsers = new PrismaUserRepository(getPrisma());
+  const mfaRecoveryCodes = new PrismaMfaRecoveryCodeRepository(getPrisma());
+  const mfaVerifier = createMfaVerifier({
+    users: mfaUsers,
+    recoveryCodes: mfaRecoveryCodes,
+    encryptionKey: resolveTotpEncryptionKey(env),
+  });
+
   const authService =
     overrides.authService ??
     createAuthService({
+      mfa: { verifier: mfaVerifier, challenges: new MfaChallengeStore() },
       users: new PrismaUserRepository(getPrisma()),
       refreshTokens: new PrismaRefreshTokenRepository(getPrisma()),
       // Dieselbe invitationsService-Instanz wie oben (nicht ein zweites,
@@ -231,6 +248,21 @@ export async function buildApp(env: Env, overrides: BuildAppOverrides = {}): Pro
       // Phase 2, Abschnitt 4.2: Eltern-Kind-Erstverknüpfung bei
       // Einladungsannahme (siehe acceptInvitation()).
       parentLinks: new PrismaParentLinkRepository(getPrisma()),
+    });
+
+  const mfaService =
+    overrides.mfaService ??
+    createMfaService({
+      users: mfaUsers,
+      recoveryCodes: mfaRecoveryCodes,
+      refreshTokens: new PrismaRefreshTokenRepository(getPrisma()),
+      clubs: new PrismaClubRepository(getPrisma()),
+      verifier: mfaVerifier,
+      auditLog: auditLogService,
+      mailer,
+      issueSession: (userId) => authService.issueSessionFor(userId),
+      enforce: env.MFA_ENFORCE,
+      issuer: env.SMTP_FROM_NAME,
     });
 
   const syncService =
@@ -297,6 +329,7 @@ export async function buildApp(env: Env, overrides: BuildAppOverrides = {}): Pro
   await app.register(clubLegalInfoRoutes, { clubLegalInfoService });
   await app.register(pushRoutes, { subscriptions: pushSubscriptions, vapidPublicKey: env.VAPID_PUBLIC_KEY ?? null });
   await app.register(parentsRoutes, { parentsService });
+  await app.register(mfaRoutes, { mfaService });
 
   return app;
 }

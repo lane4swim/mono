@@ -43,6 +43,10 @@ model Club {
   // für die 4-stellige DSV-Vereinskennzahl in nationalID.
   nationalID     String?
   nationalIDType String?
+  // Zwei-Faktor-Anmeldung (Issue #97): verlangt TOTP zusätzlich von allen
+  // Admins dieses Vereins (Superadmins immer). Wirkt nur, solange
+  // MFA_ENFORCE in der Server-Konfiguration nicht "false" ist.
+  mfaRequiredForAdmins Boolean @default(false)
   // Rechtliche Angaben (Impressum § 5 DDG + Datenschutzhinweis Art. 13
   // DSGVO) — bewusst auf dem Club-Modell statt in einer eigenen Tabelle,
   // analog zu nationalID/nationalIDType oben: genau EIN Satz Angaben je
@@ -152,6 +156,16 @@ model User {
   // (Login wird verweigert), der endgültige Hard-Purge aus der Datenbank
   // erfolgt zeitversetzt über DataDeletionRequest.purgeAfter.
   deletedAt                        DateTime?
+  // Zwei-Faktor-Anmeldung per TOTP (Issue #97). Das Secret liegt nur
+  // verschlüsselt vor (auth/secretBox.ts, TOTP_ENCRYPTION_KEY).
+  // totpEnabledAt null bei gesetztem Secret heißt: Einrichtung begonnen,
+  // aber noch nicht mit einem Code bestätigt. totpLastUsedStep ist der
+  // Zeitschritt des zuletzt angenommenen Codes — ein Code wird nur
+  // angenommen, wenn sein Schritt danach liegt (keine Wiederverwendung).
+  totpSecretEnc                    String?
+  totpEnabledAt                    DateTime?
+  totpLastUsedStep                 Int?
+  mfaRecoveryCodes                 MfaRecoveryCode[]
   refreshTokens                    RefreshToken[]
   sentInvitations                  Invitation[]         @relation("InvitationSender")
   deletionRequest                  DataDeletionRequest?
@@ -248,6 +262,23 @@ model PasswordResetToken {
 
   @@index([userId])
   @@map("password_reset_tokens")
+}
+
+// Einmal-Wiederherstellungscodes für die Zwei-Faktor-Anmeldung (Issue #97),
+// falls das Gerät mit der Authenticator-App verloren ist. Gespeichert wird
+// wie bei den Tokens oben nur der SHA-256-Hash; usedAt macht einen Code
+// verbraucht (atomar über ein bedingtes UPDATE, siehe auth.repository.ts).
+model MfaRecoveryCode {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash  String
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@unique([userId, codeHash])
+  @@index([userId])
+  @@map("mfa_recovery_codes")
 }
 
 model Invitation {

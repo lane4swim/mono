@@ -80,7 +80,9 @@ export class PrismaProfileDataGateway implements ProfileDataGateway {
   async exportUserData(userId: string): Promise<PersonalDataExport> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new UserNotFoundForExportError();
-    const { passwordHash: _passwordHash, ...publicUser } = user;
+    // Kein Passwort-Hash und kein (verschlüsseltes) TOTP-Secret im Export;
+    // ob TOTP eingerichtet ist (totpEnabledAt), gehört dagegen dazu.
+    const { passwordHash: _passwordHash, totpSecretEnc: _totpSecretEnc, totpLastUsedStep: _totpLastUsedStep, ...publicUser } = user as typeof user & { totpSecretEnc?: unknown; totpLastUsedStep?: unknown };
 
     // An userId (nicht athleteId) gehängt — gilt für jede Person mit Konto,
     // unabhängig von einer Athletenverknüpfung (siehe PersonalDataExport-

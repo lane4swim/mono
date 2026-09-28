@@ -41,7 +41,7 @@ export class InMemoryClubRepository implements ClubRepository {
 
   async create(input: CreateClubInput): Promise<ClubRecord> {
     const now = new Date();
-    const club: ClubRecord = { id: randomUUID(), name: input.name, enabledModules: [...(input.enabledModules ?? MODULE_KEYS)], nationalID: null, nationalIDType: null, createdAt: now, updatedAt: now };
+    const club: ClubRecord = { id: randomUUID(), name: input.name, enabledModules: [...(input.enabledModules ?? MODULE_KEYS)], nationalID: null, nationalIDType: null, mfaRequiredForAdmins: false, createdAt: now, updatedAt: now };
     this.clubsById.set(club.id, club);
     return { ...club };
   }
@@ -83,6 +83,14 @@ export class InMemoryClubRepository implements ClubRepository {
     const existing = this.clubsById.get(clubId);
     if (!existing) throw new Error(`InMemoryClubRepository.updateIdentity(): unbekannte clubId ${clubId}`);
     const updated: ClubRecord = { ...existing, nationalID: identity.nationalID, nationalIDType: identity.nationalIDType, updatedAt: new Date() };
+    this.clubsById.set(clubId, updated);
+    return { ...updated };
+  }
+
+  async setMfaRequiredForAdmins(clubId: string, required: boolean): Promise<ClubRecord> {
+    const existing = this.clubsById.get(clubId);
+    if (!existing) throw new Error(`InMemoryClubRepository.setMfaRequiredForAdmins(): unbekannte clubId ${clubId}`);
+    const updated: ClubRecord = { ...existing, mfaRequiredForAdmins: required, updatedAt: new Date() };
     this.clubsById.set(clubId, updated);
     return { ...updated };
   }

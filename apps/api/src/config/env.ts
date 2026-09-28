@@ -3,6 +3,7 @@
 // Fehlermeldung abbrechen, statt erst später mit einem kryptischen
 // Fehler mitten im Betrieb zu scheitern.
 import { z } from 'zod';
+import { parseSecretBoxKey } from '../auth/secretBox.js';
 
 const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -72,6 +73,22 @@ const EnvSchema = z.object({
   // unangemessene Verzögerung", aber mit kurzer Frist z. B. für
   // versehentliche Löschungen oder laufende Backup-Zyklen).
   DATA_ERASURE_RETENTION_DAYS: z.coerce.number().int().positive().default(30),
+
+  // Zwei-Faktor-Anmeldung (Issue #97). TOTP_ENCRYPTION_KEY verschlüsselt die
+  // TOTP-Secrets in der Datenbank (auth/secretBox.ts; 32 Byte, base64, z. B.
+  // `openssl rand -base64 32`). Fehlt er in Produktion, lässt sich TOTP
+  // nicht einrichten; in development/test gilt ein Wegwerf-Schlüssel je
+  // Prozessstart (siehe auth/mfaKey.ts). Wird der Schlüssel geändert oder
+  // entfernt, können Konten mit eingerichtetem TOTP ihre Codes nicht mehr
+  // nutzen und müssen zurückgesetzt werden.
+  TOTP_ENCRYPTION_KEY: z.string().optional(),
+  // Schreibt die Einrichtung von TOTP vor: für Superadmins und — je Verein
+  // einstellbar — für Admins. "false" hebt jede Pflicht auf (z. B. für eine
+  // Entwicklungsumgebung in GitHub Codespaces); TOTP bleibt freiwillig
+  // nutzbar. Fehlt der Wert, gilt "true". Wie SMTP_SECURE als Enum, damit
+  // ein Tippfehler beim Start scheitert statt still als "an" oder "aus" zu
+  // gelten.
+  MFA_ENFORCE: z.enum(['true', 'false']).default('true').transform((v) => v === 'true'),
 
   // Aufbewahrung für SyncedEvent (Idempotenz-Ledger von POST /api/sync/push)
   // und SyncTombstone (Löschmarkierungen); ohne sie wüchsen beide unbegrenzt.
@@ -148,6 +165,13 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
         'alle IP-basierten Rate-Limits per gefälschtem "X-Forwarded-For"-Header umgehbar, oder sie ' +
         'kollabieren auf einen einzigen, von Nginx geteilten Zähler (Sicherheitsreview 2026-08-27, Befund H1).',
     );
+  }
+  if (env.TOTP_ENCRYPTION_KEY) {
+    try {
+      parseSecretBoxKey(env.TOTP_ENCRYPTION_KEY);
+    } catch (err) {
+      throw new Error(`TOTP_ENCRYPTION_KEY ist ungültig: ${(err as Error).message}`, { cause: err });
+    }
   }
   // Bewusst KEIN Zwang zu SMTP_HOST in Produktion: der Betrieb ohne eigenen
   // Mailserver ist dokumentiert und unterstützt (deployment-macos.md —
