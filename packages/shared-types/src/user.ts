@@ -44,11 +44,10 @@ export type UserRoles = z.infer<typeof UserRolesSchema>;
 export const LocaleSchema = z.enum(['de-DE', 'en-US']);
 export type Locale = z.infer<typeof LocaleSchema>;
 
-// Sicherheitsreview 2026-08-29, Befund M2: E-Mail-Adressen wurden an
-// KEINER Stelle normalisiert. `User.email` trägt in PostgreSQL ein
-// `@unique` (siehe schema.prisma), und dessen Vergleich ist
-// zeichengenau — „Anna@verein.de" und „anna@verein.de" waren dadurch
-// zwei verschiedene Adressen. Drei konkrete Folgen:
+// E-Mail-Adressen werden bei der Eingabe normalisiert. `User.email` trägt in
+// PostgreSQL ein `@unique` (siehe schema.prisma), dessen Vergleich
+// zeichengenau ist: ohne Normalisierung wären „Anna@verein.de" und
+// „anna@verein.de" zwei verschiedene Adressen, mit drei Folgen:
 //
 //   1. Anmelde-Sackgasse: wer bei der Einladung als „Anna@verein.de"
 //      erfasst wurde und sich später als „anna@verein.de" anmeldet,

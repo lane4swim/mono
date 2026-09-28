@@ -15,13 +15,12 @@ export interface InvitationMailPayload {
   // Sprache der einladenden Person (User.locale) — die eingeladene Person
   // hat zu diesem Zeitpunkt noch kein Konto und damit keine eigene
   // Locale; die Sprache der/des Einladenden ist die einzige zu diesem
-  // Zeitpunkt bekannte, plausible Wahl (Code-Review, Befund W9). Optional
+  // Zeitpunkt bekannte, plausible Wahl. Optional
   // mit Fallback auf Deutsch, analog FALLBACK_LOCALE in js/i18n.js.
   locale?: string;
 }
 
-// "Passwort vergessen"-E-Mail (Sicherheitsreview 2026-08, Befund M5) —
-// eigener Payload-Typ statt Wiederverwendung von InvitationMailPayload:
+// "Passwort vergessen"-E-Mail — eigener Payload-Typ statt Wiederverwendung von InvitationMailPayload:
 // keine Rolle/kein Verein (der Reset betrifft ein bereits bestehendes
 // Konto), dafür "resetUrl" statt "inviteUrl".
 export interface PasswordResetMailPayload {
@@ -35,9 +34,9 @@ export interface PasswordResetMailPayload {
   locale?: string;
 }
 
-// Review 30.08.2026, Befund S4: eine Benachrichtigung an die BISHERIGE
-// E-Mail-Adresse bzw. an die (unveränderte) Adresse des Kontos, wenn das
-// Passwort gewechselt wird — der einzige Kanal, der einer rechtmäßigen
+// Benachrichtigung an die BISHERIGE E-Mail-Adresse bzw. an die
+// (unveränderte) Adresse des Kontos, wenn das Passwort gewechselt wird —
+// der einzige Kanal, der einer rechtmäßigen
 // Person nach einer Kontoübernahme über ein kurzzeitig entwendetes Access
 // Token noch bleibt (siehe changeEmail()/changePassword() in
 // auth.service.ts: beide widerrufen bereits alle ANDEREN Sitzungen, aber
@@ -106,9 +105,8 @@ const ROLE_LABEL: Record<SupportedLocale, Record<InvitationMailPayload['role'], 
   },
 };
 
-// Exportiert (wie buildHtmlBody() unten), damit die Lokalisierung
-// (Code-Review, Befund W9) direkt gegen die tatsächliche Text-/Betreff-
-// Ausgabe testbar ist.
+// Exportiert (wie buildHtmlBody() unten), damit die Lokalisierung direkt
+// gegen die tatsächliche Text-/Betreff-Ausgabe testbar ist.
 export function buildSubject(payload: InvitationMailPayload): string {
   const locale = resolveLocale(payload.locale);
   return locale === 'en-US'
@@ -177,8 +175,7 @@ export function buildHtmlBody(payload: InvitationMailPayload): string {
   `.trim();
 }
 
-// "Passwort vergessen"-E-Mail (Sicherheitsreview 2026-08, Befund M5) —
-// dieselbe Struktur (exportierte, einzeln testbare Subject/Text/HTML-
+// "Passwort vergessen"-E-Mail — dieselbe Struktur (exportierte, einzeln testbare Subject/Text/HTML-
 // Builder) wie bei der Einladungs-E-Mail oben, aus demselben Grund
 // (Lokalisierung direkt gegen die tatsächliche Ausgabe testbar).
 export function buildPasswordResetSubject(payload: PasswordResetMailPayload): string {
@@ -242,7 +239,7 @@ export function buildPasswordResetHtmlBody(payload: PasswordResetMailPayload): s
   `.trim();
 }
 
-// Review 30.08.2026, Befund S4 — dieselbe Struktur (exportierte, einzeln
+// Sicherheitsbenachrichtigung — dieselbe Struktur (exportierte, einzeln
 // testbare Subject/Text/HTML-Builder) wie bei den beiden E-Mail-Typen
 // oben. Bewusst OHNE Link/Aktion: es gibt (noch) keinen
 // Rückabwicklungsmechanismus (siehe dortiger Kommentar in
@@ -433,14 +430,10 @@ export function buildQualificationReminderHtmlBody(payload: QualificationReminde
   `.trim();
 }
 
-// Sicherheitskorrektur (Code-Review, Befund S8): escapte bislang keine
-// einfachen Anführungszeichen. Heute folgenlos, da jedes Attribut in
-// buildHtmlBody() doppelt gequotet ist (ein `'` bricht ein `"`-delimitiertes
-// Attribut nicht auf) — aber das ist eine Eigenschaft der heutigen
-// Aufrufer, nicht dieser Funktion: als benannte, allgemein wirkende
-// "escapeHtml"-Hilfsfunktion sollte sie unabhängig davon, wie sie gerade
-// verwendet wird, vollständig escapen, damit ein künftiger Aufrufer (z. B.
-// ein einfach gequotetes Attribut) nicht stillschweigend eine Lücke erbt.
+// Escapt auch einfache Anführungszeichen, obwohl buildHtmlBody() heute nur
+// doppelt gequotete Attribute nutzt: eine allgemein benannte Hilfsfunktion
+// soll vollständig escapen, damit ein künftiger Aufrufer (etwa ein einfach
+// gequotetes Attribut) nicht stillschweigend eine Lücke erbt.
 // `&#39;` statt `&apos;`: Erstere ist auch in älteren/eingeschränkten
 // HTML-Renderern (u. a. manche E-Mail-Clients) zuverlässig unterstützt,
 // `&apos;` erst seit HTML5 offiziell Teil des HTML-Standards (war zuvor
@@ -463,13 +456,10 @@ export interface SmtpConfig {
 // SMTP-Host konfiguriert ist (siehe app.ts) — sonst greift
 // ConsoleMailSender als Ausweichlösung für lokale Entwicklung/Demo.
 export class SmtpMailSender implements MailSender {
-  // Code-Review, Befund P4: nodemailer.createTransport() lief zuvor bei
-  // JEDER Einladung erneut (samt dynamischem Import) — jede E-Mail baute
-  // eine eigene SMTP-Verbindung auf, die anschließend offen im
-  // Verbindungspool des Prozesses verblieb (nie geschlossen). Der
-  // Transport ist zustandslos konfiguriert und gehört daher nur einmal
-  // angelegt, lazy (behält den schlanken Kaltstart) und mit `pool: true`
-  // für Verbindungs-Wiederverwendung über mehrere Sendevorgänge hinweg.
+  // Ein Transport für die Lebensdauer des Senders: lazy angelegt (schlanker
+  // Kaltstart) und mit `pool: true`, damit aufeinanderfolgende E-Mails
+  // Verbindungen wiederverwenden, statt je eine neue, nie geschlossene
+  // SMTP-Verbindung aufzubauen.
   private transportPromise: Promise<import('nodemailer').Transporter> | null = null;
 
   constructor(private readonly config: SmtpConfig) {}
@@ -481,9 +471,8 @@ export class SmtpMailSender implements MailSender {
           host: this.config.host,
           port: this.config.port,
           secure: this.config.secure,
-          // Sicherheitskorrektur (Sicherheitsreview 2026-08, Befund M4):
-          // ohne secure (Port 587/STARTTLS, der dokumentierte Standardfall
-          // — siehe .env.example) behandelt nodemailer STARTTLS bislang
+          // Ohne secure (Port 587/STARTTLS, der dokumentierte Standardfall
+          // — siehe .env.example) behandelt nodemailer STARTTLS sonst
           // OPPORTUNISTISCH: bietet der Server es nicht an (Fehlkonfiguration
           // oder ein aktiver STARTTLS-Stripping-Angreifer, der die
           // Server-Capabilities aus der Antwort entfernt), sendet
@@ -554,11 +543,9 @@ export class SmtpMailSender implements MailSender {
 // protokolliert, DASS eine Einladung ansteht, ohne sie tatsächlich zu
 // versenden, damit der Ablauf trotzdem end-to-end funktioniert.
 //
-// Sicherheitskorrektur (Sicherheitsreview 2026-08, Befund M3): protokollierte
-// zuvor den VOLLSTÄNDIGEN Einladungslink inklusive Klartext-Token — jede
-// Einladung (Admin-Konten eingeschlossen) landete dadurch dauerhaft im
-// Server-Log, unabhängig von NODE_ENV. Das Token wird jetzt bewusst NICHT
-// mehr geloggt: der Einladungslink ist über den "Link kopieren"-Button in
+// Der Einladungslink samt Klartext-Token wird bewusst NICHT geloggt, sonst
+// landete jede Einladung (Admin-Konten eingeschlossen) dauerhaft im
+// Server-Log. Der Link ist über den "Link kopieren"-Button in
 // der Nutzerverwaltungs-Oberfläche (apps/web/js/modules/userManagement.js:
 // showInviteLinkModal()) ohnehin bereits verfügbar — genau der dafür
 // vorgesehene Weg, eine Einladung z. B. per WhatsApp statt per E-Mail zu
@@ -579,8 +566,7 @@ export class ConsoleMailSender implements MailSender {
   // Einladungslink (den ein Admin bewusst an eine bekannte Zielperson
   // weiterreicht) gibt es hier keinen legitimen "manuell teilen"-Anwendungsfall.
   // Ohne SMTP-Konfiguration bleibt "Passwort vergessen" daher schlicht nicht
-  // nutzbar — das Token wird NICHT geloggt (Sicherheitsreview 2026-08,
-  // Befund M5, analog zur M3-Korrektur bei Einladungen).
+  // nutzbar — das Token wird, wie bei Einladungen, NICHT geloggt.
   async sendPasswordResetEmail(payload: PasswordResetMailPayload): Promise<void> {
     console.warn(
       `[mail] Kein SMTP konfiguriert — Passwort-Zurücksetzen-E-Mail an ${payload.to} konnte nicht versendet werden. ` +

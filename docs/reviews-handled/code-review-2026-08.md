@@ -1,5 +1,7 @@
 # Code-Review — Lane 1 Monorepo (August 2026)
 
+**Abgeschlossen (27.09.2026), nach `docs/reviews-handled/` verschoben.** Alle Befunde sind behoben oder bewusst entschieden. Einzige Restarbeit ist die fortlaufende Entfernung von Review-Verweisen aus Code-Kommentaren; sie wird nicht mehr hier, sondern in `docs/todo.md` verfolgt. Neue Verweise verhindert der CI-Schritt `scripts/check-review-markers.sh`.
+
 Umfang: `apps/api`, `apps/web`, `packages/*`, Build-/CI-/Deployment-Konfiguration
 (ca. 19.000 Zeilen). Schwerpunkte laut Auftrag: Sicherheitslücken, Ineffizienzen,
 redundanter Code, Code-Stil.
@@ -67,8 +69,8 @@ Befund:
 | W12 | `.github/workflows/ci.yml`/`static.yml` (`actions/checkout@v7` in beiden) |
 
 **W1 bleibt offen** — als fortlaufende Aufgabe, nicht als Einzelbefund: von
-`docs/code-review-wartbarkeit-2026-08.md` (dortiges **W3**, „Kommentar-Diät")
-und `docs/code-review-doku-kommentare-2026-09-06.md` (dortige „Restarbeit:
+`docs/reviews-handled/code-review-wartbarkeit-2026-08.md` (dortiges **W3**, „Kommentar-Diät")
+und `docs/reviews-handled/code-review-doku-kommentare-2026-09-06.md` (dortige „Restarbeit:
 226 Verweise in 56 Dateien") aufgegriffen und dort weitergeführt, siehe deren
 jeweiligen Status statt eines eigenen Trackings hier.
 
@@ -800,7 +802,7 @@ Update oben. Nur der letzte Halbsatz von Punkt 9 (**W3**, Frontend-Linting)
 zählt hier separat: das war nur der „ohne jede statische Prüfung"-Teil von
 W3, der jetzt durch `apps/web/package.json`s `lint`-Script behoben ist —
 nicht zu verwechseln mit dem gleichnamigen, weiterhin offenen **W3** aus
-`docs/code-review-wartbarkeit-2026-08.md` (Kommentar-Diät).
+`docs/reviews-handled/code-review-wartbarkeit-2026-08.md` (Kommentar-Diät).
 
 1. **C1** (Sync-Chunking) und **C2** (Fehler-Backoff) — echter Datenverlust,
    kleiner Fix.

@@ -15,41 +15,28 @@ import { ModuleKeySchema } from './modules.js';
 
 export const CURRENT_CONSENT_VERSION = '2026-07-15';
 
-// Code-Review, Befund R4: `.refine((v) => v === true, { message })` konnte
-// hier NIE fehlschlagen — z.literal(true) lässt bereits ausschließlich
-// `true` durch (jeder andere Wert scheitert schon am literal-Check selbst,
-// mit Zods generischer "Invalid literal value"-Meldung), das nachgestellte
-// `.refine()` sieht also immer nur noch `v === true` und die deutsche
-// Meldung erschien nie. Die Meldung gehört als `message`-Parameter direkt
-// an `z.literal()`.
+// Die Meldung steht direkt an z.literal(): ein nachgestelltes .refine()
+// käme nie zum Zug, weil z.literal(true) jeden anderen Wert schon vorher
+// (mit Zods generischer Meldung) ablehnt.
 const consentField = z.literal(true, { message: 'Die Einwilligung zur Datenverarbeitung ist erforderlich.' });
 
-// Review 30.08.2026, Befund S1: `consent: true` allein sagt nur "irgendeine
-// Einwilligung wurde bestätigt" — WELCHER Fassung, geht daraus nicht
-// hervor. auth.service.ts: login() stempelte bislang bedingungslos die
-// server-eigene CURRENT_CONSENT_VERSION auf jeden Login, unabhängig davon,
-// ob die angemeldete Person diese Fassung je gesehen hat — bei einer
-// angehobenen Datenschutzerklärung schrieb der nächste Routine-Login die
-// neue Version, ohne dass irgendjemand ihr zugestimmt hätte. Der Client
-// muss die Version jetzt explizit benennen; z.literal() (wie bei
-// consentField oben) lässt ausschließlich die tagesaktuelle Fassung durch
-// — driftet CURRENT_CONSENT_VERSION zwischen Backend und Frontend
-// auseinander (siehe die bislang doppelt gepflegte Konstante in
-// apps/web/js/state.js), scheitert der Login jetzt sichtbar an dieser
-// Stelle, statt eine falsche Fassung stillschweigend zu protokollieren.
+// `consent: true` allein sagt nicht, WELCHER Fassung zugestimmt wurde. Der
+// Client benennt die Fassung deshalb ausdrücklich, und nur die aktuelle wird
+// angenommen: sonst würde der nächste Routine-Login nach einer geänderten
+// Datenschutzerklärung deren neue Version protokollieren, ohne dass die
+// Person sie je gesehen hat. Laufen Frontend und Backend bei der Version
+// auseinander, scheitert der Login hier sichtbar, statt eine falsche Fassung
+// zu speichern.
 const consentVersionField = z.literal(CURRENT_CONSENT_VERSION, {
   message: 'Die Einwilligung bezieht sich nicht auf die aktuelle Fassung der Datenschutzerklärung.',
 });
 
-// `.max(200)` (Sicherheitsreview 2026-08, Befund N7): argon2id verarbeitet
-// beliebig lange Eingaben — verifyPassword() hasht das übermittelte
-// Passwort bei JEDEM Login-Versuch gegen den gespeicherten Hash, ein
-// unbegrenzt langes Feld wäre bei 64 MiB Speicherkosten pro Versuch ein
-// unnötiger DoS-Verstärker. 200 Zeichen liegt weit über jeder realistischen
-// Passphrase (siehe auth.passwordHint im Frontend).
+// `.max(200)` für Passwörter: verifyPassword() hasht die Eingabe bei jedem
+// Login-Versuch mit argon2id (64 MiB pro Versuch), ein unbegrenztes Feld
+// wäre ein unnötiger DoS-Verstärker. 200 Zeichen liegen weit über jeder
+// realistischen Passphrase (siehe auth.passwordHint im Frontend).
 export const LoginRequestSchema = z.object({
-  // Sicherheitsreview 2026-08-29, Befund M2 — siehe NormalizedEmailSchema
-  // (packages/shared-types/src/user.ts) für die vollständige Begründung.
+  // Normalisiert, siehe NormalizedEmailSchema in user.ts.
   email: NormalizedEmailSchema,
   password: z.string().min(1).max(200),
   consent: consentField,
@@ -106,38 +93,30 @@ export const MeResponseSchema = PublicUserSchema.extend({
 });
 export type MeResponse = z.infer<typeof MeResponseSchema>;
 
-// Sicherheitsreview 2026-08-27, Befund H2: `email` stand hier bislang mit
-// drin — ein Wechsel der hinterlegten E-Mail-Adresse verlangte dadurch
-// KEIN aktuelles Passwort, obwohl er dieselbe Kontoübernahme-Fläche
-// eröffnet wie ein Passwortwechsel: mit einem kurzzeitig entwendeten,
-// noch gültigen Access Token (z. B. Refresh Token im localStorage, siehe
-// Sicherheitsreview 2026-08, Befund N3) hätte ein Angreifer die Adresse
-// auf eine eigene umbiegen und danach über POST /auth/forgot-password
-// einen Reset-Link an sich selbst zustellen können — die rechtmäßige
-// Person wäre dabei sowohl aus- als auch fortan ausgesperrt gewesen.
-// `email` ist deshalb kein Teil dieses Schemas mehr, sondern ein eigener,
-// per aktuellem Passwort abgesicherter Endpunkt — siehe
-// ChangeEmailRequestSchema unten (analog zu ChangePasswordRequestSchema).
+// Bewusst ohne `email`: ein Adresswechsel öffnet dieselbe Übernahmefläche
+// wie ein Passwortwechsel (mit einem entwendeten Access Token die Adresse
+// umbiegen, dann per "Passwort vergessen" einen Reset-Link an sich selbst
+// schicken). Er läuft deshalb über einen eigenen, per aktuellem Passwort
+// abgesicherten Endpunkt, siehe ChangeEmailRequestSchema unten.
 export const UpdateMeRequestSchema = z
   .object({
-    // `.max(200)` (Sicherheitsreview 2026-08, Befund N2) — siehe Begründung
-    // bei CreateClubRequestSchema (invitation.ts).
+    // `.max(200)`: siehe Begründung bei CreateClubRequestSchema (invitation.ts).
     name: z.string().min(1).max(200).optional(),
     locale: LocaleSchema.optional(),
   })
   .refine((v) => Object.keys(v).length > 0, { message: 'Mindestens ein Feld muss angegeben werden.' });
 export type UpdateMeRequest = z.infer<typeof UpdateMeRequestSchema>;
 
-// ---- "Passwort vergessen" / Passwortwechsel (Sicherheitsreview 2026-08,
-// Befund M5) ----------------------------------------------------------
+// ---- "Passwort vergessen" / Passwortwechsel -------------------------------
 //
 // Dieselbe Mindest-/Höchstlänge wie AcceptInvitationRequestSchema.password
 // (packages/shared-types/src/invitation.ts) — bewusst hier erneut
 // definiert statt importiert: unterschiedliche Datei/Domäne (Einladung
 // vs. Auth), die Konstante ist eine einzige Zeile, ein Import würde hier
-// mehr Kopplung stiften als die Duplikation vermeidet. `.max(200)`
-// (Sicherheitsreview 2026-08, Befund N7) — siehe Begründung bei
-// LoginRequestSchema.password oben.
+// mehr Kopplung stiften als die Duplikation vermeidet. `.max(200)`: siehe
+// LoginRequestSchema oben. Die strengeren Regeln für Admin-Konten und die
+// Prüfung gegen geleakte Passwörter prüft der Server (auth/passwordPolicy.ts),
+// weil nur er die Rolle kennt.
 const newPasswordField = z.string().min(8, 'Passwort muss mindestens 8 Zeichen lang sein').max(200);
 
 // POST /auth/forgot-password — öffentlich (kein Login nötig). Liefert
@@ -145,10 +124,9 @@ const newPasswordField = z.string().min(8, 'Passwort muss mindestens 8 Zeichen l
 // dieser E-Mail-Adresse existiert (verhindert User-Enumeration, siehe
 // auth.service.ts: requestPasswordReset()).
 export const ForgotPasswordRequestSchema = z.object({
-  // Sicherheitsreview 2026-08-29, Befund M2 — hier besonders wichtig: die
-  // generische Antwort dieses Endpunkts macht eine bloße Schreibweisen-
-  // Abweichung von „Konto existiert nicht" ununterscheidbar (siehe
-  // NormalizedEmailSchema in user.ts, Punkt 2).
+  // Normalisiert, hier besonders wichtig: wegen der generischen Antwort
+  // wäre eine bloß anders geschriebene Adresse nicht von „Konto existiert
+  // nicht" zu unterscheiden (siehe NormalizedEmailSchema in user.ts, Punkt 2).
   email: NormalizedEmailSchema,
 });
 export type ForgotPasswordRequest = z.infer<typeof ForgotPasswordRequestSchema>;
@@ -166,27 +144,21 @@ export type ResetPasswordRequest = z.infer<typeof ResetPasswordRequestSchema>;
 // aktuelle Passwort (verhindert, dass ein kurzzeitig entwendeter Access
 // Token allein zur dauerhaften Kontoübernahme per Passwortwechsel reicht).
 export const ChangePasswordRequestSchema = z.object({
-  // `.max(200)` (Sicherheitsreview 2026-08, Befund N7) — siehe Begründung
-  // bei LoginRequestSchema.password oben; gilt hier ebenso, da
-  // changePassword() das aktuelle Passwort ebenfalls per verifyPassword()
-  // gegen den gespeicherten Hash prüft.
+  // `.max(200)` wie bei LoginRequestSchema oben: changePassword() prüft das
+  // aktuelle Passwort ebenfalls per verifyPassword().
   currentPassword: z.string().min(1).max(200),
   newPassword: newPasswordField,
 });
 export type ChangePasswordRequest = z.infer<typeof ChangePasswordRequestSchema>;
 
-// POST /api/me/email (Sicherheitsreview 2026-08-27, Befund H2) —
-// authentifiziert, verlangt wie ChangePasswordRequestSchema oben
-// zusätzlich das aktuelle Passwort (siehe dortiger Kommentar bzw.
-// UpdateMeRequestSchema oben für die vollständige Begründung: verhindert,
-// dass ein kurzzeitig entwendeter Access Token allein — kombiniert mit
-// "Passwort vergessen" — zur dauerhaften Kontoübernahme reicht).
+// POST /api/me/email — authentifiziert, verlangt wie
+// ChangePasswordRequestSchema zusätzlich das aktuelle Passwort (Begründung
+// bei UpdateMeRequestSchema oben).
 export const ChangeEmailRequestSchema = z.object({
   currentPassword: z.string().min(1).max(200),
-  // Sicherheitsreview 2026-08-29, Befund M2 — ohne Normalisierung ließ
-  // sich hier die Duplikat-Prüfung in changeEmail() über eine abweichende
-  // Groß-/Kleinschreibung umgehen (siehe NormalizedEmailSchema in
-  // user.ts, Punkt 3).
+  // Normalisiert, damit die Duplikat-Prüfung in changeEmail() nicht per
+  // abweichender Groß-/Kleinschreibung umgangen werden kann (siehe
+  // NormalizedEmailSchema in user.ts, Punkt 3).
   newEmail: NormalizedEmailSchema,
 });
 export type ChangeEmailRequest = z.infer<typeof ChangeEmailRequestSchema>;
@@ -230,9 +202,9 @@ export const MyDataExportSchema = z.object({
 });
 export type MyDataExport = z.infer<typeof MyDataExportSchema>;
 
-// Code-Review, Befund R8: `purgedAt`/`status` gestrichen — der Zustand
-// "purged" war strukturell unerreichbar (siehe schema.prisma:
-// DataDeletionRequest für die Begründung).
+// Ohne `status`/`purgedAt`: nach dem Purge existiert der Antrag nicht mehr,
+// ein Zustand "purged" wäre unerreichbar (siehe schema.prisma:
+// DataDeletionRequest).
 export const DataDeletionRequestSchema = z.object({
   id: z.string().uuid(),
   userId: z.string().uuid(),

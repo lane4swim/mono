@@ -33,8 +33,7 @@ export async function restoreSession() {
   if (!api.getStoredRefreshToken()) return null;
   try {
     const result = await api.refreshTokens();
-    // Sicherheitsreview 2026-08-29, Befund H1 — auch hier, nicht nur bei
-    // login(): dasselbe Gerät kann ein Refresh Token einer ANDEREN Person
+    // Auch hier, nicht nur bei login(): dasselbe Gerät kann ein Refresh Token einer ANDEREN Person
     // tragen als die zuletzt lokal gespeicherten Daten (z. B. wenn zwei
     // Personen sich abwechselnd anmelden und eine davon den Tab nur
     // geschlossen, nicht abgemeldet hat).
@@ -44,9 +43,8 @@ export async function restoreSession() {
     setLocale(current?.locale || detectInitialLocale());
     return current;
   } catch (err) {
-    // Review 30.08.2026, Befund U4: ein Ratenlimit-Treffer (429) auf
-    // /auth/refresh (siehe Befund S2) bedeutet nicht, dass die Sitzung
-    // ungültig ist — nur, dass DIESER Wiederherstellungsversuch gerade
+    // Ein Ratenlimit-Treffer (429) auf /auth/refresh bedeutet nicht, dass
+    // die Sitzung ungültig ist — nur, dass DIESER Wiederherstellungsversuch gerade
     // nicht möglich war (z. B. beim gleichzeitigen Neustart mehrerer
     // Geräte hinter derselben NAT nach einem Netzwerkausfall). Die
     // gespeicherten Tokens bleiben in diesem Fall erhalten, damit ein
@@ -70,17 +68,13 @@ export function getCurrentUser() { return current; }
 // von state.js abhängen muss.
 setClubIdProvider(() => getCurrentUser()?.clubId);
 // Fällt bei fehlender Sitzung auf ein leeres Array zurück, NICHT auf eine
-// konkrete Rolle (vormals 'trainer') — ein Default-Wert sollte im Zweifel
-// zusperren, nicht öffnen. 'trainer' hätte defensiv aufgerufenen
-// Rollenprüfungen (isTrainerOrAdmin(), visibleModules(roles) in router.js)
-// stillschweigend Zugriff auf trainer-restringierte Module gewährt, statt
-// ihn korrekt zu verweigern. `visibleModules([])` zeigt weiterhin alle
-// Kern-Module OHNE Rollenbeschränkung (siehe router.js) — nur die
-// rollenbeschränkten werden nun korrekt ausgeblendet statt fälschlich
-// gezeigt.
+// konkrete Rolle: ein Default-Wert soll im Zweifel zusperren, nicht öffnen.
+// `visibleModules([])` zeigt weiterhin alle Kern-Module OHNE
+// Rollenbeschränkung (siehe router.js), nur die rollenbeschränkten bleiben
+// ausgeblendet.
 //
-// docs/Plans/kampfrichter-modul-plan.md, Abschnitt 1: ein Konto kann mehrere
-// Rollen gleichzeitig haben — getRoles() ersetzt das frühere getRole().
+// Ein Konto kann mehrere Rollen gleichzeitig haben
+// (docs/Plans/kampfrichter-modul-plan.md, Abschnitt 1).
 export function getRoles() { return current?.roles ?? []; }
 export function hasRole(role) { return getRoles().includes(role); }
 export function isLoggedIn() { return !!current; }
@@ -90,8 +84,7 @@ export function isLoggedIn() { return !!current; }
 // geladen ist.
 export function getEnabledModules() { return current?.enabledModules ?? []; }
 
-// Sicherheitsreview 2026-08-27, Befund N5: Paket-Key -> IndexedDB-Store-
-// Namen, deren lokal bereits synchronisierte Daten beim Abbestellen des
+// Paket-Key -> IndexedDB-Store-Namen, deren lokal bereits synchronisierte Daten beim Abbestellen des
 // Pakets entfernt werden müssen (siehe applyEnabledModules() unten). MUSS
 // inhaltlich mit packages/shared-types/src/modules.ts:
 // MODULE_PACKAGES[*].stores übereinstimmen — wie ROUTE_TO_PACKAGE in
@@ -239,8 +232,7 @@ export async function acceptInvitation(token, name, password, consent) {
   return user;
 }
 
-// "Passwort vergessen" (Sicherheitsreview 2026-08, Befund M5) — meldet die
-// Person bei Erfolg direkt an, analog zu login()/acceptInvitation() oben
+// "Passwort vergessen" — meldet die Person bei Erfolg direkt an, analog zu login()/acceptInvitation() oben
 // (der Server liefert bereits ein volles Token-Paar, siehe
 // apiClient.js: resetPassword()).
 export async function resetPassword(token, newPassword) {
@@ -303,8 +295,8 @@ export async function setUserLocale(locale) {
 
 // Aktualisiert die eigenen persönlichen Daten der/des AKTUELL eingeloggten
 // Person (z. B. Name) — genutzt vom "Mein Profil"-Modul. `email` ist
-// bewusst NICHT Teil dieses Patches (siehe changeEmail() unten,
-// Sicherheitsreview 2026-08-27, Befund H2). Im Demo-Modus gibt es kein
+// bewusst NICHT Teil dieses Patches, sondern verlangt das aktuelle Passwort
+// (siehe changeEmail() unten). Im Demo-Modus gibt es kein
 // Backend, gegen das gespeichert werden könnte — die Änderung wird daher
 // nur auf die Im-Speicher-Demo-Person angewendet (siehe loginDemo() oben
 // zur Begründung, warum das eine Kopie ist).
@@ -332,8 +324,7 @@ export function setClubIdentity(nationalID, nationalIDType) {
   return current;
 }
 
-// Passwortwechsel für die AKTUELL eingeloggte Person (Sicherheitsreview
-// 2026-08, Befund M5) — genutzt vom "Mein Profil"-Modul. Anders als
+// Passwortwechsel für die AKTUELL eingeloggte Person — genutzt vom "Mein Profil"-Modul. Anders als
 // updateProfile() oben KEIN emit(): kein angezeigtes Feld ändert sich
 // (Name/E-Mail/Rolle bleiben gleich, nur der Passwort-Hash), ein erneutes
 // Rendern der abhängigen UI wäre unnötig — analog zur Begründung bei
@@ -346,8 +337,7 @@ export async function changePassword(currentPassword, newPassword) {
   return current;
 }
 
-// E-Mail-Wechsel für die AKTUELL eingeloggte Person (Sicherheitsreview
-// 2026-08-27, Befund H2) — genutzt vom "Mein Profil"-Modul. Anders als
+// E-Mail-Wechsel für die AKTUELL eingeloggte Person — genutzt vom "Mein Profil"-Modul. Anders als
 // changePassword() MIT emit(): die E-Mail-Adresse ist (anders als der
 // Passwort-Hash) ein tatsächlich angezeigtes Feld (Kontodaten-Karte in
 // profile.js) — emit() löst über onUserChange() (siehe app.js) das

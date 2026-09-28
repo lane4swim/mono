@@ -98,23 +98,16 @@ export function apiErrorMessage(err) {
   return translated === key ? t('common.errorUnknown') : translated;
 }
 
-// Übersetzt einen ApiError/NetworkError in eine anzeigbare Meldung — vormals
-// dreimal wortgleich (bis auf drei parallele Schlüsselpaare in beiden
-// Sprachdateien) in profile.js, userManagement.js und admin/admin.js
-// dupliziert. `on401Message`, wenn gesetzt, überschreibt `err.message` für
-// einen 401 (admin.js: zeigt dort bewusst
-// t('auth.errorInvalidCredentials') statt der rohen Serverantwort — die
-// einzige tatsächliche Abweichung zwischen den drei ursprünglichen
-// Kopien, alles andere war bereits identisch).
+// Übersetzt einen ApiError/NetworkError in eine anzeigbare Meldung, gemeinsam
+// für profile.js, userManagement.js und admin/admin.js. `on401Message`, wenn
+// gesetzt, überschreibt `err.message` für einen 401 (admin.js zeigt dort
+// bewusst t('auth.errorInvalidCredentials') statt der rohen Serverantwort).
 export function describeError(err, { on401Message } = {}) {
   if (err instanceof NetworkError) return t('common.errorNetwork');
   if (err instanceof ApiError) {
     if (err.status === 401 && on401Message) return on401Message;
-    // Review 30.08.2026, Befund U4: ohne diesen Zweig zeigte ein 429
-    // (Ratenlimit-Treffer, siehe Befund S2) dieselbe generische
-    // Server-Fehlermeldung wie jeder andere Fehler — nicht unterscheidbar
-    // von einem echten Problem, obwohl ein erneuter Versuch nach kurzer
-    // Zeit genügt.
+    // Ein Ratenlimit-Treffer bekommt eine eigene Meldung: anders als bei
+    // einem echten Fehler genügt ein erneuter Versuch nach kurzer Zeit.
     if (err.status === 429) return t('common.errorRateLimited');
     return apiErrorMessage(err);
   }
@@ -199,9 +192,8 @@ export async function acceptInvitation({ token, name, password, consent }) {
   return { ...result.user, enabledModules: result.enabledModules, clubName: result.clubName, clubNationalID: result.clubNationalID, clubNationalIDType: result.clubNationalIDType };
 }
 
-// "Passwort vergessen" (Sicherheitsreview 2026-08, Befund M5). Liefert
-// serverseitig IMMER dieselbe generische Antwort (siehe
-// auth.service.ts: requestPasswordReset()) — verrät nicht, ob die
+// "Passwort vergessen". Liefert serverseitig IMMER dieselbe generische
+// Antwort (siehe auth.service.ts: requestPasswordReset()) — verrät nicht, ob die
 // E-Mail-Adresse zu einem Konto gehört. allowRefreshRetry: false wie bei
 // login()/acceptInvitation() — vor einer Sitzung gibt es kein Access
 // Token, das per 401-Retry erneuert werden könnte.
@@ -252,8 +244,7 @@ export async function logoutRemote() {
   catch { /* best effort — lokales Aufräumen erfolgt in jedem Fall */ }
 }
 
-// POST statt GET mit Token als URL-Pfadparameter (Sicherheitsreview
-// 2026-08, Befund M3) — verhindert, dass das Token über Server-seitiges
+// POST statt GET mit Token als URL-Pfadparameter — verhindert, dass das Token über Server-seitiges
 // Zugriffs-/Anwendungslogging (req.url) im Klartext landet. Der geteilte
 // Einladungslink selbst (#/accept-invite/<token>, per "Link kopieren" in
 // modules/userManagement.js z. B. für den Versand per WhatsApp) bleibt
@@ -271,8 +262,7 @@ export function getMe() {
 export function updateMe(patch) {
   return request('/api/me', { method: 'PATCH', body: JSON.stringify(patch) });
 }
-// Passwortwechsel für die eigene, eingeloggte Person (Sicherheitsreview
-// 2026-08, Befund M5). Liefert wie login() ein frisches Token-Paar —
+// Passwortwechsel für die eigene, eingeloggte Person. Liefert wie login() ein frisches Token-Paar —
 // die aktuelle Sitzung bleibt dadurch nahtlos angemeldet, während der
 // Server alle ANDEREN Sitzungen widerruft (siehe auth.service.ts:
 // changePassword()).
@@ -281,10 +271,9 @@ export async function changePassword({ currentPassword, newPassword }) {
   setTokens(result);
   return { ...result.user, enabledModules: result.enabledModules, clubName: result.clubName, clubNationalID: result.clubNationalID, clubNationalIDType: result.clubNationalIDType };
 }
-// E-Mail-Wechsel für die eigene, eingeloggte Person (Sicherheitsreview
-// 2026-08-27, Befund H2) — verlangt wie changePassword() das aktuelle
-// Passwort. `email` ist deshalb bewusst NICHT mehr Teil von updateMe()/
-// PATCH /api/me (siehe dortiger Kommentar). Liefert wie changePassword()
+// E-Mail-Wechsel für die eigene, eingeloggte Person — verlangt wie
+// changePassword() das aktuelle Passwort und ist deshalb nicht Teil von
+// updateMe()/PATCH /api/me. Liefert wie changePassword()
 // ein frisches Token-Paar — die aktuelle Sitzung bleibt dadurch nahtlos
 // angemeldet, während der Server alle ANDEREN Sitzungen widerruft (siehe
 // auth.service.ts: changeEmail()).

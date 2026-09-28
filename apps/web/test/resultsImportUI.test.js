@@ -65,6 +65,9 @@ function setupDom() {
   modalRoot.id = 'modal-root';
   modalRoot.hidden = true;
   document.body.appendChild(modalRoot);
+  const toastRegion = document.createElement('div');
+  toastRegion.id = 'toast-region';
+  document.body.appendChild(toastRegion);
 }
 
 function makeDsv7File(text) {
@@ -73,14 +76,13 @@ function makeDsv7File(text) {
   return file;
 }
 
-async function selectFile(fileInput, file) {
+// Der change-Handler ist async (FileReader, IndexedDB, Modal-Aufbau). Die
+// Tests warten deshalb per vi.waitFor() auf das sichtbare Ergebnis statt
+// auf eine feste Zahl von Event-Loop-Runden, die auf einem langsamen
+// CI-Runner nicht reicht.
+function selectFile(fileInput, file) {
   Object.defineProperty(fileInput, 'files', { value: [file], configurable: true });
   fileInput.dispatchEvent(new Event('change'));
-  // Der change-Handler ist async (file.text() + Modal-Aufbau) — auf den
-  // Mikrotask-Umlauf warten, damit das Modal im DOM steht, bevor der Test
-  // weitermacht.
-  await new Promise((r) => setTimeout(r, 0));
-  await new Promise((r) => setTimeout(r, 0));
 }
 
 beforeEach(async () => {
@@ -99,10 +101,11 @@ describe('resultsImportButton() — voller Ablauf', () => {
     document.body.appendChild(wrapper);
     const fileInput = wrapper.querySelector('input[type="file"]');
 
-    await selectFile(fileInput, makeDsv7File(OFFICIAL_EXAMPLE));
+    selectFile(fileInput, makeDsv7File(OFFICIAL_EXAMPLE));
 
     // Schritt 1: Vereinsauswahl (kein nationalID-Treffer hinterlegt).
     const modalRoot = document.getElementById('modal-root');
+    await vi.waitFor(() => expect(modalRoot.querySelector('select')).toBeTruthy());
     expect(modalRoot.hidden).toBe(false);
     const clubOptions = [...modalRoot.querySelectorAll('option')].map((o) => o.value);
     expect(clubOptions).toEqual(['SV Hansa Adorf', 'SC Duisburg']);
@@ -110,19 +113,15 @@ describe('resultsImportButton() — voller Ablauf', () => {
     const clubSelect = modalRoot.querySelector('select');
     clubSelect.value = 'SV Hansa Adorf';
     modalRoot.querySelector('form').dispatchEvent(new Event('submit', { cancelable: true }));
-    await new Promise((r) => setTimeout(r, 0));
-    await new Promise((r) => setTimeout(r, 0));
 
     // Schritt 2: keine unmappten Events für "100 Freistil" -> direkt Vorschau.
+    const findConfirmBtn = () => [...modalRoot.querySelectorAll('button')].find((b) => b.textContent.includes('importieren'));
+    await vi.waitFor(() => expect(findConfirmBtn()).toBeTruthy());
     expect(syncClientMock.pull).toHaveBeenCalledTimes(1);
-    const bodyText = modalRoot.textContent;
-    expect(bodyText).toContain('Keller');
+    expect(modalRoot.textContent).toContain('Keller');
 
-    const confirmBtn = [...modalRoot.querySelectorAll('button')].find((b) => b.textContent.includes('importieren'));
-    expect(confirmBtn).toBeTruthy();
-    confirmBtn.click();
-    await new Promise((r) => setTimeout(r, 0));
-    await new Promise((r) => setTimeout(r, 0));
+    findConfirmBtn().click();
+    await vi.waitFor(() => expect(onImported).toHaveBeenCalledTimes(1));
 
     const saved = await db.getAll('results');
     expect(saved).toHaveLength(1);
@@ -137,8 +136,9 @@ describe('resultsImportButton() — voller Ablauf', () => {
     document.body.appendChild(wrapper);
     const fileInput = wrapper.querySelector('input[type="file"]');
 
-    await selectFile(fileInput, makeDsv7File('nicht eine dsv7 datei'));
+    selectFile(fileInput, makeDsv7File('nicht eine dsv7 datei'));
 
+    await vi.waitFor(() => expect(document.querySelector('#toast-region .toast.err')).toBeTruthy());
     const modalRoot = document.getElementById('modal-root');
     expect(modalRoot.hidden).toBe(true);
   });
