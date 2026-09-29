@@ -232,7 +232,7 @@ describe('Vereinspflicht für Admins und Pflicht-Status', () => {
   });
 });
 
-// Sicherheitsreview der Zwei-Faktor-Anmeldung: die Grenze von 5 Versuchen je
+// Die Grenze von 5 Versuchen je
 // mfaToken muss auch bei parallelen Anfragen halten — sonst prüfen beliebig
 // viele gleichzeitige Anfragen Codes, bevor der erste Fehlversuch zählt.
 describe('Fehlversuchs-Grenze bei parallelen Anfragen', () => {
