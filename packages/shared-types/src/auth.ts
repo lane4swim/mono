@@ -238,6 +238,12 @@ export type LoginMfaRequest = z.infer<typeof LoginMfaRequestSchema>;
 // alle anderen Sitzungen beenden und die rechtmäßige Person aussperren.
 export const MfaConfirmRequestSchema = z.object({ code: totpCodeField, currentPassword: currentPasswordField });
 
+// POST /auth/mfa-setup und /auth/mfa-setup/confirm — erzwungene Einrichtung
+// mit dem setupToken aus der Anmeldung.
+const setupTokenField = z.string().min(1).max(4000);
+export const MfaForcedSetupRequestSchema = z.object({ setupToken: setupTokenField });
+export const MfaForcedConfirmRequestSchema = z.object({ setupToken: setupTokenField, code: totpCodeField });
+
 // DELETE /api/me/mfa/totp
 export const MfaDisableRequestSchema = z
   .object({ currentPassword: currentPasswordField, code: totpCodeField.optional(), recoveryCode: recoveryCodeField.optional() })

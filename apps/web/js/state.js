@@ -20,6 +20,9 @@ import { resetCursor } from './syncClient.js';
 export const CURRENT_CONSENT_VERSION = '2026-07-15';
 
 let current = null;
+// Grund, aus dem restoreSession() keine Sitzung wiederherstellen konnte
+// (siehe takeSessionEndReason()).
+let sessionEndReason = null;
 const listeners = [];
 
 export function onUserChange(fn) { listeners.push(fn); }
@@ -54,12 +57,22 @@ export async function restoreSession() {
     if (!(err instanceof api.ApiError && err.status === 429)) {
       api.clearTokens();
     }
+    // Die Sitzung endete, weil TOTP inzwischen Pflicht ist (Issue #97) —
+    // der Anmeldebildschirm sagt das dazu.
+    sessionEndReason = err?.body?.error === 'mfa_setup_required' ? 'mfaSetupRequired' : null;
     current = null;
     return null;
   }
 }
 
 export function getCurrentUser() { return current; }
+
+// Einmal abrufbar, für einen Hinweis auf dem Anmeldebildschirm.
+export function takeSessionEndReason() {
+  const reason = sessionEndReason;
+  sessionEndReason = null;
+  return reason;
+}
 
 // db.js kennt state.js bewusst nicht (siehe dortiger Kommentar zum
 // Import-Zyklus) — put() dort braucht für neu angelegte, vereins-
@@ -226,13 +239,22 @@ export async function login(email, password, consent) {
   // durch: driften beide auseinander, scheitert der Login sichtbar, statt
   // den Nachweis still falsch zu protokollieren.
   const result = await api.login({ email, password, consent, consentVersion: CURRENT_CONSENT_VERSION });
-  if (result.mfaRequired) return result;
+  if (result.mfaRequired || result.mfaSetupRequired) return result;
   return startSession(result);
 }
 
 // Zweiter Anmeldeschritt: `secondFactor` ist { code } oder { recoveryCode }.
 export async function completeMfaLogin(mfaToken, secondFactor) {
   return startSession(await api.loginMfa({ mfaToken, ...secondFactor }));
+}
+
+// Erzwungene Einrichtung (TOTP Pflicht, aber nicht eingerichtet): nach dem
+// ersten gültigen Code liefert der Server Sitzung und
+// Wiederherstellungscodes. Die Sitzung beginnt erst mit finish() — so bleibt
+// der Bildschirm mit den Codes stehen, bis die Person sie gesichert hat.
+export async function confirmForcedMfaSetup(setupToken, code) {
+  const { recoveryCodes, user } = await api.confirmForcedMfaSetup(setupToken, code);
+  return { recoveryCodes, finish: () => startSession(user) };
 }
 
 export async function acceptInvitation(token, name, password, consent) {
@@ -253,7 +275,7 @@ export async function acceptInvitation(token, name, password, consent) {
 // liefert wie login() { mfaRequired, mfaToken }.
 export async function resetPassword(token, newPassword) {
   const result = await api.resetPassword({ token, newPassword });
-  if (result.mfaRequired) return result;
+  if (result.mfaRequired || result.mfaSetupRequired) return result;
   return startSession(result);
 }
 

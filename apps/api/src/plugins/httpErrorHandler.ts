@@ -56,7 +56,7 @@ import {
 import { PasswordHasherBusyError } from '../auth/passwordHasherPool.js';
 import { PasswordTooShortForRoleError, CommonPasswordError } from '../auth/passwordPolicy.js';
 import { MfaNotConfiguredError, MfaSecretUnreadableError } from '../modules/mfa/mfa.core.js';
-import { InvalidMfaTokenError } from '../auth/tokens.js';
+import { InvalidMfaTokenError, InvalidMfaSetupTokenError } from '../auth/tokens.js';
 import {
   InvalidMfaCodeError,
   MfaCodeRequiredError,
@@ -64,6 +64,8 @@ import {
   MfaSetupNotStartedError,
   MfaNotEnabledError,
   MfaRequiredForActionError,
+  MfaSetupRequiredError,
+  MfaRequiredCannotDisableError,
 } from '../modules/mfa/mfaErrors.js';
 
 interface HttpErrorMapping {
@@ -147,6 +149,9 @@ const HTTP_ERROR_REGISTRY = new Map<abstract new (...args: never[]) => Error, Ht
   [MfaSetupNotStartedError, { status: 409, code: 'mfa_setup_not_started' }],
   [MfaNotEnabledError, { status: 409, code: 'mfa_not_enabled' }],
   [MfaRequiredForActionError, { status: 403, code: 'mfa_required_for_action' }],
+  [InvalidMfaSetupTokenError, { status: 401, code: 'invalid_mfa_setup_token' }],
+  [MfaSetupRequiredError, { status: 401, code: 'mfa_setup_required' }],
+  [MfaRequiredCannotDisableError, { status: 409, code: 'mfa_required' }],
 ]);
 
 function sendMappedError(err: Error, mapping: HttpErrorMapping, reply: FastifyReply) {

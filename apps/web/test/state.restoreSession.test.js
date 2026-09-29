@@ -46,7 +46,7 @@ vi.mock('../js/apiClient.js', () => ({
 }));
 
 import * as api from '../js/apiClient.js';
-import { restoreSession, getCurrentUser } from '../js/state.js';
+import { restoreSession, getCurrentUser, takeSessionEndReason } from '../js/state.js';
 
 beforeEach(() => {
   api.clearTokens.mockClear();
@@ -80,5 +80,23 @@ describe('restoreSession() — ein 429 beendet die Sitzung nicht (Befund U4)', (
 
     expect(result).toBeNull();
     expect(api.clearTokens).toHaveBeenCalledTimes(1);
+  });
+});
+
+// Issue #97, Plan PR 3: endet die Sitzung, weil TOTP inzwischen Pflicht ist,
+// soll der Anmeldebildschirm das sagen können.
+describe('restoreSession() — Sitzungsende wegen Zwei-Faktor-Pflicht', () => {
+  it('merkt sich den Grund genau einmal', async () => {
+    api.refreshTokens.mockRejectedValue(new api.ApiError(401, { error: 'mfa_setup_required' }));
+    expect(await restoreSession()).toBeNull();
+    expect(api.clearTokens).toHaveBeenCalled();
+    expect(takeSessionEndReason()).toBe('mfaSetupRequired');
+    expect(takeSessionEndReason()).toBeNull();
+  });
+
+  it('kennt keinen Grund bei einem gewöhnlich abgelaufenen Refresh Token', async () => {
+    api.refreshTokens.mockRejectedValue(new api.ApiError(401, { error: 'invalid_refresh_token' }));
+    await restoreSession();
+    expect(takeSessionEndReason()).toBeNull();
   });
 });

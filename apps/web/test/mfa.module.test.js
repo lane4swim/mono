@@ -105,6 +105,14 @@ describe('Profilbereich', () => {
     expect([...card.querySelectorAll('button')].map((b) => b.textContent)).toEqual([t('mfa.regenerateButton'), t('mfa.disableButton')]);
   });
 
+  it('bietet bei Pflicht kein Abschalten an', async () => {
+    apiMocks.getMfaStatus.mockResolvedValue({ available: true, enabled: true, required: true, enforced: true, recoveryCodesRemaining: 10 });
+    const card = mfa.buildMfaCard();
+    await flush();
+    expect(card.textContent).toContain(t('mfa.requiredInfo'));
+    expect([...card.querySelectorAll('button')].map((b) => b.textContent)).toEqual([t('mfa.regenerateButton')]);
+  });
+
   it('meldet, wenn TOTP auf dem Server nicht verfügbar ist', async () => {
     apiMocks.getMfaStatus.mockResolvedValue({ available: false, enabled: false, required: false, enforced: true, recoveryCodesRemaining: 0 });
     const card = mfa.buildMfaCard();
@@ -182,6 +190,17 @@ describe('canResetMemberMfa()', () => {
 });
 
 describe('Vereinseinstellung', () => {
+  it('nennt ausstehende Admins nur bei aktiver Pflicht und weist auf einen abgeschalteten Server-Schalter hin', () => {
+    const club = { id: 'club-a', name: 'SV A', mfaRequiredForAdmins: true };
+    expect(mfa.buildClubMfaPolicyCard(club, null, { enforced: true, adminsWithoutMfa: 2 }).textContent)
+      .toContain(t('mfa.clubPolicyPendingAdmins', { count: 2 }));
+    expect(mfa.buildClubMfaPolicyCard(club, null, { enforced: true, adminsWithoutMfa: 0 }).textContent)
+      .not.toContain(t('mfa.clubPolicyPendingAdmins', { count: 0 }));
+    const notEnforced = mfa.buildClubMfaPolicyCard(club, null, { enforced: false, adminsWithoutMfa: 2 }).textContent;
+    expect(notEnforced).toContain(t('mfa.clubPolicyNotEnforced'));
+    expect(notEnforced).not.toContain(t('mfa.clubPolicyPendingAdmins', { count: 2 }));
+  });
+
   it('lässt sich ohne eigenes TOTP nicht einschalten', () => {
     const control = mfa.clubMfaPolicyControl({ id: 'club-a', name: 'SV A', mfaRequiredForAdmins: false });
     const button = control.querySelector('button');

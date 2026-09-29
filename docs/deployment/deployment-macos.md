@@ -209,6 +209,22 @@ Schlüssel darf **nur eine** der beiden Formen gesetzt sein
 (`JWT_PRIVATE_KEY` **oder** `JWT_PRIVATE_KEY_FILE`, nie beide — `env.ts`
 lehnt eine gleichzeitige Angabe sonst mit einer klaren Fehlermeldung ab).
 
+**Zwei-Faktor-Anmeldung (TOTP).** `TOTP_ENCRYPTION_KEY` verschlüsselt die
+TOTP-Secrets in der Datenbank, `MFA_ENFORCE` legt fest, ob die
+Zwei-Faktor-Anmeldung für Superadmins Pflicht ist:
+```bash
+echo "TOTP_ENCRYPTION_KEY=\"$(openssl rand -base64 32)\"" >> apps/api/.env
+echo 'MFA_ENFORCE=true' >> apps/api/.env
+```
+Für diese Anleitung ist `MFA_ENFORCE=true` der empfohlene Wert (auch der
+Standard, wenn die Zeile fehlt): jedes Superadmin-Konto muss dann eine
+Authenticator-App einrichten, Vereine können dasselbe für ihre Admins
+verlangen.
+Mit `NODE_ENV=production` und aktiver Pflicht startet der Server ohne
+`TOTP_ENCRYPTION_KEY` nicht. Den Schlüssel **nie ändern oder löschen**,
+solange Konten TOTP nutzen — ihre Codes und Wiederherstellungscodes wären
+sonst ungültig.
+
 ---
 
 ## 6. Datenbank-Schema anlegen
@@ -309,6 +325,18 @@ SUPERADMIN_PASSWORD='EIN-TESTPASSWORT' npm run create-superadmin -- --email=admi
 cd ../..
 ```
 Mit diesem Konto danach unter `https://lane1.test/admin` anmelden und dort den ersten (Test-)Verein anlegen.
+
+**Erste Anmeldung mit Zwei-Faktor-Pflicht** (`MFA_ENFORCE=true`): nach dem
+Passwort zeigt Lane 1 einen QR-Code — eine Authenticator-App (z. B. Aegis, Google
+Authenticator, Microsoft Authenticator oder einen Passwortmanager mit TOTP)
+bereithalten, den Code scannen und die 10 Wiederherstellungscodes sicher
+aufbewahren. Gehen App und Wiederherstellungscodes verloren, setzt der
+Serverbetrieb TOTP zurück:
+```bash
+cd apps/api
+npm run reset-mfa -- --email=admin@mein-verein.de
+cd ../..
+```
 
 ---
 
@@ -499,6 +527,18 @@ sudo nginx -s reload
 > Update einmalig `TRUSTED_PROXY_IPS="127.0.0.1"` an `apps/api/.env`
 > anhängen, sonst bricht der Neustart mit einer klaren Fehlermeldung ab.
 
+> **Update auf die Version mit Zwei-Faktor-Pflicht (Issue #97):** fehlt
+> `TOTP_ENCRYPTION_KEY` in einer bestehenden `apps/api/.env`, bricht der
+> Start ab, solange `MFA_ENFORCE` nicht `false` ist. Vor dem ersten `pm2
+> restart` nach diesem Update einmalig ergänzen:
+> ```bash
+> echo "TOTP_ENCRYPTION_KEY=\"$(openssl rand -base64 32)\"" >> apps/api/.env
+> echo 'MFA_ENFORCE=true' >> apps/api/.env
+> ```
+> Danach werden Superadmins bei ihrer nächsten Anmeldung durch die
+> Einrichtung geführt; laufende Sitzungen ohne TOTP enden spätestens nach
+> 15 Minuten.
+
 ---
 
 ## 14. Laufende Wartung
@@ -532,6 +572,8 @@ Soll die Testumgebung nicht nur zurückgesetzt, sondern komplett entfernt werden
 
 | Symptom | Wahrscheinliche Ursache | Prüfen |
 |---|---|---|
+| Backend startet nicht, Log: „TOTP_ENCRYPTION_KEY fehlt, MFA_ENFORCE ist aber aktiv“ | Pflicht zur Zwei-Faktor-Anmeldung ohne Schlüssel | Schlüssel ergänzen (siehe Abschnitt Umgebungsvariablen) oder `MFA_ENFORCE=false` setzen |
+| Superadmin hat Authenticator-App und Wiederherstellungscodes verloren | — | `cd apps/api && npm run reset-mfa -- --email=...`, danach bei der Anmeldung neu einrichten |
 | `lane1.test` löst nicht auf | `/etc/hosts`-Eintrag fehlt/falsch (Abschnitt 2) | `cat /etc/hosts \| grep lane1.test`, `ping -c 1 lane1.test` |
 | Browser zeigt Zertifikatswarnung | `mkcert -install` nicht ausgeführt, oder Zertifikat für falschen Namen erzeugt | `mkcert -install` erneut ausführen, `mkcert lane1.test` erneut ausführen, Browser neu starten |
 | `nginx: [emerg] bind() to 0.0.0.0:80 failed (13: Permission denied)` | Nginx wurde ohne `sudo` gestartet (Port < 1024 braucht root) | `sudo brew services start nginx` statt `brew services start nginx` |

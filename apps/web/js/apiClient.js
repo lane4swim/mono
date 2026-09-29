@@ -189,9 +189,12 @@ function acceptSession(result) {
 
 // Mit aktiver Zwei-Faktor-Anmeldung (Issue #97) antwortet der Server statt
 // mit einer Sitzung mit { mfaRequired, mfaToken }; der Aufrufer schließt die
-// Anmeldung dann über loginMfa() ab. Kein setTokens() in diesem Fall.
+// Anmeldung dann über loginMfa() ab. Ist TOTP Pflicht, aber noch nicht
+// eingerichtet, kommt { mfaSetupRequired, setupToken } — weiter mit
+// beginForcedMfaSetup(). Kein setTokens() in beiden Fällen.
 function sessionOrMfaChallenge(result) {
   if (result.mfaRequired) return { mfaRequired: true, mfaToken: result.mfaToken };
+  if (result.mfaSetupRequired) return { mfaSetupRequired: true, setupToken: result.setupToken };
   return acceptSession(result);
 }
 
@@ -205,6 +208,17 @@ export async function login({ email, password, consent, consentVersion }) {
 export async function loginMfa({ mfaToken, code, recoveryCode }) {
   const body = recoveryCode ? { mfaToken, recoveryCode } : { mfaToken, code };
   return acceptSession(await postJson('/auth/login/mfa', body, { allowRefreshRetry: false }));
+}
+
+// Erzwungene Einrichtung: vor einer Sitzung, nur mit dem setupToken aus
+// login()/resetPassword(). Die Bestätigung liefert die Sitzung samt
+// Wiederherstellungscodes.
+export function beginForcedMfaSetup(setupToken) {
+  return postJson('/auth/mfa-setup', { setupToken }, { allowRefreshRetry: false });
+}
+export async function confirmForcedMfaSetup(setupToken, code) {
+  const result = await postJson('/auth/mfa-setup/confirm', { setupToken, code }, { allowRefreshRetry: false });
+  return { recoveryCodes: result.recoveryCodes, user: acceptSession(result) };
 }
 
 export async function acceptInvitation({ token, name, password, consent }) {

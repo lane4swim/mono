@@ -443,6 +443,22 @@ lehnt eine gleichzeitige Angabe sonst mit einer klaren Fehlermeldung ab).
 > (wie oben, mit STARTTLS) verwenden, das funktioniert mit jedem gängigen
 > Anbieter und ist der heute übliche Standard.
 
+**Zwei-Faktor-Anmeldung (TOTP).** `TOTP_ENCRYPTION_KEY` verschlüsselt die
+TOTP-Secrets in der Datenbank, `MFA_ENFORCE` legt fest, ob die
+Zwei-Faktor-Anmeldung für Superadmins Pflicht ist:
+```bash
+echo "TOTP_ENCRYPTION_KEY=\"$(openssl rand -base64 32)\"" >> apps/api/.env
+echo 'MFA_ENFORCE=true' >> apps/api/.env
+```
+Für diese Anleitung ist `MFA_ENFORCE=true` der empfohlene Wert (auch der
+Standard, wenn die Zeile fehlt): jedes Superadmin-Konto muss dann eine
+Authenticator-App einrichten, Vereine können dasselbe für ihre Admins
+verlangen.
+Mit `NODE_ENV=production` und aktiver Pflicht startet der Server ohne
+`TOTP_ENCRYPTION_KEY` nicht. Den Schlüssel **nie ändern oder löschen**,
+solange Konten TOTP nutzen — ihre Codes und Wiederherstellungscodes wären
+sonst ungültig.
+
 ### 7.3 Datenbank-Schema anlegen
 `DATABASE_URL` wird hier bewusst **überschrieben** (Sicherheitsreview
 2026-08-28, Befund N1): `apps/api/.env` enthält die DML-only-Rolle
@@ -513,6 +529,18 @@ cd ../..
 Mit diesem Konto danach unter `https://training.mein-verein.de/admin`
 anmelden (siehe `apps/web/help/admin.html`) und dort den ersten Verein
 anlegen — das erzeugt automatisch die erste Admin-Einladung.
+
+**Erste Anmeldung mit Zwei-Faktor-Pflicht** (`MFA_ENFORCE=true`): nach dem
+Passwort zeigt Lane 1 einen QR-Code — eine Authenticator-App (z. B. Aegis, Google
+Authenticator, Microsoft Authenticator oder einen Passwortmanager mit TOTP)
+bereithalten, den Code scannen und die 10 Wiederherstellungscodes sicher
+aufbewahren. Gehen App und Wiederherstellungscodes verloren, setzt der
+Serverbetrieb TOTP zurück:
+```bash
+cd apps/api
+npm run reset-mfa -- --email=admin@mein-verein.de
+cd ../..
+```
 
 ---
 
@@ -798,6 +826,18 @@ sudo systemctl reload nginx
 > Update einmalig `TRUSTED_PROXY_IPS="127.0.0.1"` an `apps/api/.env`
 > anhängen, sonst bricht der Neustart mit einer klaren Fehlermeldung ab.
 
+> **Update auf die Version mit Zwei-Faktor-Pflicht (Issue #97):** fehlt
+> `TOTP_ENCRYPTION_KEY` in einer bestehenden `apps/api/.env`, bricht der
+> Start ab, solange `MFA_ENFORCE` nicht `false` ist. Vor dem ersten `pm2
+> restart` nach diesem Update einmalig ergänzen:
+> ```bash
+> echo "TOTP_ENCRYPTION_KEY=\"$(openssl rand -base64 32)\"" >> apps/api/.env
+> echo 'MFA_ENFORCE=true' >> apps/api/.env
+> ```
+> Danach werden Superadmins bei ihrer nächsten Anmeldung durch die
+> Einrichtung geführt; laufende Sitzungen ohne TOTP enden spätestens nach
+> 15 Minuten.
+
 ---
 
 ## 14. Laufende Wartung
@@ -831,6 +871,8 @@ Anders als bei Hetzner gibt es keine monatliche Servermiete — dafür Anschaffu
 
 | Symptom | Wahrscheinliche Ursache | Prüfen |
 |---|---|---|
+| Backend startet nicht, Log: „TOTP_ENCRYPTION_KEY fehlt, MFA_ENFORCE ist aber aktiv“ | Pflicht zur Zwei-Faktor-Anmeldung ohne Schlüssel | Schlüssel ergänzen (siehe Abschnitt Umgebungsvariablen) oder `MFA_ENFORCE=false` setzen |
+| Superadmin hat Authenticator-App und Wiederherstellungscodes verloren | — | `cd apps/api && npm run reset-mfa -- --email=...`, danach bei der Anmeldung neu einrichten |
 | Seite von außerhalb des Heimnetzes gar nicht erreichbar, im WLAN aber schon | Portweiterleitung fehlt/falsch, CGNAT, oder Dynamic DNS zeigt auf veraltete IP | Abschnitte 5.1/5.3/5.4 erneut durchgehen, Online-„Port Checker" für 80/443, `ping domain` mit dem in 5.1 notierten öffentlichen IP vergleichen |
 | Seite lädt auch im Heimnetz gar nicht | DNS zeigt noch nicht auf die aktuelle IP / `ufw` blockiert | `ping domain`, `sudo ufw status` |
 | „502 Bad Gateway" | Backend läuft nicht | `pm2 status`, `pm2 logs lane1-api` |

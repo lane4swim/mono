@@ -212,6 +212,11 @@ export async function buildApp(env: Env, overrides: BuildAppOverrides = {}): Pro
   // zweiten Anmeldeschritt (authService) und die Verwaltung (mfaService).
   const mfaUsers = new PrismaUserRepository(getPrisma());
   const mfaRecoveryCodes = new PrismaMfaRecoveryCodeRepository(getPrisma());
+  // Abgeschaltete Pflicht in Produktion ist erlaubt (z. B. eine
+  // Testinstanz), soll aber im Log auffallen.
+  if (env.NODE_ENV === 'production' && !env.MFA_ENFORCE) {
+    console.warn('[mfa] MFA_ENFORCE=false: die Zwei-Faktor-Anmeldung ist für niemanden Pflicht, auch nicht für Superadmins.');
+  }
   const mfaVerifier = createMfaVerifier({
     users: mfaUsers,
     recoveryCodes: mfaRecoveryCodes,
@@ -221,7 +226,7 @@ export async function buildApp(env: Env, overrides: BuildAppOverrides = {}): Pro
   const authService =
     overrides.authService ??
     createAuthService({
-      mfa: { verifier: mfaVerifier, challenges: new MfaChallengeStore() },
+      mfa: { verifier: mfaVerifier, challenges: new MfaChallengeStore(), enforce: env.MFA_ENFORCE },
       users: new PrismaUserRepository(getPrisma()),
       refreshTokens: new PrismaRefreshTokenRepository(getPrisma()),
       // Dieselbe invitationsService-Instanz wie oben (nicht ein zweites,
@@ -263,6 +268,7 @@ export async function buildApp(env: Env, overrides: BuildAppOverrides = {}): Pro
       issueSession: (userId) => authService.issueSessionFor(userId),
       enforce: env.MFA_ENFORCE,
       issuer: env.SMTP_FROM_NAME,
+      keyPair,
     });
 
   const syncService =

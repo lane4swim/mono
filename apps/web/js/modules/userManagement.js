@@ -94,7 +94,7 @@ function renderView(container, clubs, invitations, members, legalInfo) {
   wrap.appendChild(tabbedView('usermgmt', [
     isSuperAdmin() && { id: 'clubs', label: t('usermgmt.tabClubs'), render: () => renderClubsSection(clubs, refresh) },
     !isSuperAdmin() && { id: 'members', label: t('usermgmt.tabMembers'), render: () => renderMembersSection(members, refresh) },
-    !isSuperAdmin() && { id: 'club', label: t('usermgmt.tabClub'), render: () => el('div', {}, [renderClubMfaSection(refresh), renderClubIdentitySection(), renderClubLegalInfoSection(legalInfo)]) },
+    !isSuperAdmin() && { id: 'club', label: t('usermgmt.tabClub'), render: () => el('div', {}, [renderClubMfaSection(members, refresh), renderClubIdentitySection(), renderClubLegalInfoSection(legalInfo)]) },
     {
       id: 'invitations',
       label: pendingCount ? `${t('usermgmt.tabInvitations')} (${pendingCount})` : t('usermgmt.tabInvitations'),
@@ -128,13 +128,18 @@ function renderView(container, clubs, invitations, members, legalInfo) {
 // Vereinseinstellung "Zwei-Faktor-Anmeldung für Admins verlangen" (Issue
 // #97) im Verein-Reiter des Admins. Der aktuelle Wert kommt aus
 // GET /api/me/mfa (clubRequiresAdminMfa), da die Sitzung ihn nicht trägt.
-function renderClubMfaSection(onChanged) {
+function renderClubMfaSection(members, onChanged) {
   const user = getCurrentUser();
   const holder = el('div');
+  const adminsWithoutMfa = members.filter((m) => m.roles?.includes('admin') && !m.mfaEnabled).length;
   api.getMfaStatus()
     .then((status) => {
       clear(holder);
-      holder.appendChild(buildClubMfaPolicyCard({ id: user.clubId, name: user.clubName || '', mfaRequiredForAdmins: status.clubRequiresAdminMfa }, onChanged));
+      holder.appendChild(buildClubMfaPolicyCard(
+        { id: user.clubId, name: user.clubName || '', mfaRequiredForAdmins: status.clubRequiresAdminMfa },
+        onChanged,
+        { enforced: status.enforced, adminsWithoutMfa },
+      ));
     })
     .catch((err) => {
       clear(holder);

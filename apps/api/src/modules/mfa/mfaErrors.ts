@@ -33,3 +33,16 @@ export class MfaRequiredForActionError extends Error {
     super('Für diese Aktion muss die Zwei-Faktor-Anmeldung für das eigene Konto eingerichtet sein.');
   }
 }
+// Pflicht nach Rolle/Verein, aber kein TOTP eingerichtet: die bestehende
+// Sitzung wird nicht verlängert (auth.service.ts: refresh()).
+export class MfaSetupRequiredError extends Error {
+  constructor() {
+    super('Für dieses Konto ist die Zwei-Faktor-Anmeldung jetzt Pflicht. Bitte erneut anmelden, um sie einzurichten.');
+  }
+}
+// Abschalten ist nicht möglich, solange TOTP für die Person Pflicht ist.
+export class MfaRequiredCannotDisableError extends Error {
+  constructor() {
+    super('Die Zwei-Faktor-Anmeldung ist für dieses Konto Pflicht und lässt sich nicht abschalten.');
+  }
+}

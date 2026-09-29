@@ -22,10 +22,10 @@ import {
 import type { ProfileDataGateway } from '../profile/profile.repository.js';
 import { hashPassword, verifyPassword } from '../../auth/password.js';
 import { assertPasswordPolicy } from '../../auth/passwordPolicy.js';
-import { signMfaToken, verifyMfaToken, InvalidMfaTokenError } from '../../auth/tokens.js';
-import { MfaNotConfiguredError, type MfaVerifier } from '../mfa/mfa.core.js';
+import { signMfaToken, verifyMfaToken, InvalidMfaTokenError, signMfaSetupToken } from '../../auth/tokens.js';
+import { isMfaRequired, MfaNotConfiguredError, type MfaVerifier } from '../mfa/mfa.core.js';
 import type { MfaChallengeStore } from '../mfa/mfaChallenges.js';
-import { InvalidMfaCodeError } from '../mfa/mfaErrors.js';
+import { InvalidMfaCodeError, MfaSetupRequiredError } from '../mfa/mfaErrors.js';
 import { signAccessToken, generateRefreshToken, hashRefreshToken, generatePasswordResetToken, hashPasswordResetToken } from '../../auth/tokens.js';
 import type { KeyPair } from '../../auth/keys.js';
 import type { MailSender } from '../../mail/mailer.js';
@@ -153,7 +153,13 @@ export interface InvitationValidator {
 // (login/refresh/acceptInvitation/getMe) einzubetten (siehe
 // resolveClubContext() unten).
 export interface ClubModulesLookup {
-  findById(clubId: string): Promise<{ name: string; enabledModules: string[]; nationalID: string | null; nationalIDType: string | null } | null>;
+  findById(clubId: string): Promise<{
+    name: string;
+    enabledModules: string[];
+    nationalID: string | null;
+    nationalIDType: string | null;
+    mfaRequiredForAdmins?: boolean;
+  } | null>;
 }
 
 export interface AuthServiceDeps {
@@ -180,7 +186,9 @@ export interface AuthServiceDeps {
   // Zwei-Faktor-Anmeldung (Issue #97): zweiter Anmeldeschritt. Optional nur,
   // damit Tests ohne TOTP-Bezug nichts verdrahten müssen; fehlt sie, kann
   // sich ein Konto mit aktivem TOTP nicht anmelden (MfaNotConfiguredError).
-  mfa?: { verifier: MfaVerifier; challenges: MfaChallengeStore };
+  // `enforce` ist MFA_ENFORCE: Personen, für die TOTP Pflicht ist, erhalten
+  // ohne eingerichtetes TOTP keine Sitzung, sondern ein setupToken.
+  mfa?: { verifier: MfaVerifier; challenges: MfaChallengeStore; enforce?: boolean };
 }
 
 // Antwort von Schritt 1, wenn für das Konto TOTP aktiv ist: statt Tokens ein
@@ -188,6 +196,13 @@ export interface AuthServiceDeps {
 export interface MfaChallengeResponse {
   mfaRequired: true;
   mfaToken: string;
+}
+
+// Antwort von Schritt 1, wenn TOTP für das Konto Pflicht, aber noch nicht
+// eingerichtet ist: ein setupToken nur für POST /auth/mfa-setup(/confirm).
+export interface MfaSetupRequiredResponse {
+  mfaSetupRequired: true;
+  setupToken: string;
 }
 
 // Analog zu buildInviteUrl() in invitations.service.ts: die Annahme-/
@@ -262,6 +277,28 @@ export function createAuthService(deps: AuthServiceDeps) {
     if (!deps.mfa?.verifier.isAvailable()) throw new MfaNotConfiguredError();
     const { token } = await signMfaToken(user.id, deps.keyPair);
     return { mfaRequired: true, mfaToken: token };
+  }
+
+  // Pflicht, aber noch nicht eingerichtet? Den Verein lädt nur, wer als Admin
+  // überhaupt betroffen sein kann — für alle anderen bleibt es bei keiner
+  // zusätzlichen Abfrage.
+  async function mfaSetupPending(user: UserRecord): Promise<boolean> {
+    if (!deps.mfa?.enforce || user.totpEnabledAt) return false;
+    if (!user.roles.includes('superadmin') && !user.roles.includes('admin')) return false;
+    const club = user.clubId && !user.roles.includes('superadmin') ? await deps.clubs.findById(user.clubId) : null;
+    return isMfaRequired(user, club, true);
+  }
+
+  // Nach korrektem Passwort (oder Reset-Link): zweiter Schritt, erzwungene
+  // Einrichtung oder direkt die Sitzung.
+  async function completeFirstFactor(user: UserRecord) {
+    if (user.totpEnabledAt) return startMfaChallenge(user);
+    if (await mfaSetupPending(user)) {
+      if (!deps.mfa?.verifier.isAvailable()) throw new MfaNotConfiguredError();
+      const response: MfaSetupRequiredResponse = { mfaSetupRequired: true, setupToken: await signMfaSetupToken(user.id, deps.keyPair) };
+      return response;
+    }
+    return issueSession(user);
   }
 
   // Wiederverwendung eines bereits rotierten Refresh Tokens = möglicher
@@ -449,8 +486,7 @@ export function createAuthService(deps: AuthServiceDeps) {
               consentVersion: CURRENT_CONSENT_VERSION,
             });
 
-      if (updated.totpEnabledAt) return startMfaChallenge(updated);
-      return issueSession(updated);
+      return completeFirstFactor(updated);
     },
 
     // Schritt 2 der Zwei-Faktor-Anmeldung (Issue #97): mfaToken aus Schritt 1
@@ -539,6 +575,17 @@ export function createAuthService(deps: AuthServiceDeps) {
 
       const user = await deps.users.findById(existing.userId);
       if (!user) throw new InvalidRefreshTokenError();
+
+      // Pflicht zur Zwei-Faktor-Anmeldung (Issue #97): eine Sitzung aus der
+      // Zeit vor der Pflicht (Deployment mit MFA_ENFORCE, Vereinspflicht neu
+      // eingeschaltet, Zurücksetzen, neue Admin-Rolle) wird nicht verlängert.
+      // Die Person meldet sich neu an und landet in der erzwungenen
+      // Einrichtung. Das Token wird dabei eingelöst, damit es nicht als
+      // "wiederverwendet" die Diebstahl-Erkennung auslöst.
+      if (await mfaSetupPending(user)) {
+        await deps.refreshTokens.consume(existing.id);
+        throw new MfaSetupRequiredError();
+      }
 
       // Rotation: das alte Token wird ungültig, sobald ein neues ausgestellt
       // wurde — ein wiederverwendetes (z. B. gestohlenes) altes Token
@@ -695,8 +742,9 @@ export function createAuthService(deps: AuthServiceDeps) {
 
       // Mit aktivem TOTP keine direkte Anmeldung: der Reset-Link belegt nur
       // den Zugriff auf das Postfach, nicht den zweiten Faktor.
-      if (updated.totpEnabledAt) return startMfaChallenge(updated);
-      return issueSession(updated);
+      // Ist TOTP Pflicht, aber nicht eingerichtet, folgt die erzwungene
+      // Einrichtung.
+      return completeFirstFactor(updated);
     },
 
     // Passwortwechsel für die aktuell eingeloggte Person. Verlangt zusätzlich

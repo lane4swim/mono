@@ -42,13 +42,14 @@ export async function makeFixture(options: { enforce?: boolean; encryptionKey?: 
     parentLinks: new InMemoryParentLinkRepository(),
     dataErasureRetentionDays: 30, frontendBaseUrl: 'https://app.example.org', passwordResetTtlMinutes: 60,
     accessTtlSeconds: 900, refreshTtlDays: 30,
-    mfa: { verifier, challenges: new MfaChallengeStore() },
+    mfa: { verifier, challenges: new MfaChallengeStore(), enforce: options.enforce ?? true },
   });
   const mfaService = createMfaService({
     users, recoveryCodes, refreshTokens, clubs, verifier, auditLog, mailer,
     issueSession: (userId) => authService.issueSessionFor(userId),
     enforce: options.enforce ?? true,
     issuer: 'Lane 1',
+    keyPair,
   });
 
   const clubA = await clubs.create({ name: 'SV A' });

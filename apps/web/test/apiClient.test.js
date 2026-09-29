@@ -320,6 +320,27 @@ describe('login()/loginMfa() — Zwei-Faktor-Anmeldung', () => {
     expect(api.getStoredRefreshToken()).toBe('r1');
   });
 
+  it('gibt bei Pflicht ohne eingerichtetes TOTP das setupToken weiter, ohne Tokens zu speichern', async () => {
+    globalThis.fetch = vi.fn(async () => ({ status: 200, ok: true, json: async () => ({ mfaSetupRequired: true, setupToken: 'setup-1' }) }));
+    const result = await api.login({ email: 'a@b.de', password: 'x', consent: true, consentVersion: 'v1' });
+    expect(result).toEqual({ mfaSetupRequired: true, setupToken: 'setup-1' });
+    expect(api.getStoredRefreshToken()).toBeNull();
+  });
+
+  it('confirmForcedMfaSetup() übernimmt die Sitzung und liefert die Wiederherstellungscodes', async () => {
+    const bodies = [];
+    globalThis.fetch = vi.fn(async (url, options) => {
+      bodies.push({ url, body: JSON.parse(options.body) });
+      return { status: 200, ok: true, json: async () => ({ recoveryCodes: ['aaaaa-bbbbb'], accessToken: 'a1', refreshToken: 'r1', expiresIn: 900, user: { id: 'u1', name: 'Chef' }, enabledModules: [] }) };
+    });
+    const { recoveryCodes, user } = await api.confirmForcedMfaSetup('setup-1', '123456');
+    expect(bodies[0].url).toMatch(/\/auth\/mfa-setup\/confirm$/);
+    expect(bodies[0].body).toEqual({ setupToken: 'setup-1', code: '123456' });
+    expect(recoveryCodes).toEqual(['aaaaa-bbbbb']);
+    expect(user).toMatchObject({ id: 'u1' });
+    expect(api.getStoredRefreshToken()).toBe('r1');
+  });
+
   it('resetPassword() gibt bei aktivem TOTP ebenfalls nur die Aufforderung zurück', async () => {
     globalThis.fetch = vi.fn(async () => ({ status: 200, ok: true, json: async () => ({ mfaRequired: true, mfaToken: 'mfa-2' }) }));
     await expect(api.resetPassword({ token: 't', newPassword: 'neu-neu-neu' })).resolves.toEqual({ mfaRequired: true, mfaToken: 'mfa-2' });

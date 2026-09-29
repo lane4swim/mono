@@ -1,17 +1,19 @@
 // Endpunkte der Zwei-Faktor-Anmeldung (Issue #97). Der zweite
 // Anmeldeschritt (POST /auth/login/mfa) liegt in auth.route.ts.
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import {
   MfaConfirmRequestSchema,
   MfaDisableRequestSchema,
   MfaRecoveryCodesRequestSchema,
   MfaResetRequestSchema,
   ClubMfaPolicyRequestSchema,
+  MfaForcedSetupRequestSchema,
+  MfaForcedConfirmRequestSchema,
 } from '@lane1/shared-types';
 import type { MfaService, MfaRequester } from './mfa.service.js';
 import { parseInput } from '../../plugins/parseInput.js';
 import { requireAnyRole } from '../../plugins/authorize.js';
-import { accessTokenRateLimitKey } from '../auth/auth.route.js';
+import { accessTokenRateLimitKey, perIpAuthCeiling } from '../auth/auth.route.js';
 
 export interface MfaRoutesOptions {
   mfaService: MfaService;
@@ -28,6 +30,25 @@ const WRITE_LIMIT = { rateLimit: { max: 10, timeWindow: '1 minute', keyGenerator
 
 export async function mfaRoutes(app: FastifyInstance, opts: MfaRoutesOptions) {
   const { mfaService } = opts;
+
+  // Erzwungene Einrichtung (Plan PR 3): ohne Sitzung, nur mit dem
+  // setupToken aus der Anmeldung. Begrenzt je IP wie /auth/login/mfa.
+  const forcedSetupConfig = {
+    rateLimit: { max: 10, timeWindow: '1 minute', keyGenerator: (request: FastifyRequest) => request.ip },
+  };
+
+  app.post('/auth/mfa-setup', { onRequest: perIpAuthCeiling(app), config: forcedSetupConfig }, async (request, reply) => {
+    const body = parseInput(MfaForcedSetupRequestSchema, request.body, reply);
+    if (!body) return;
+    return reply.code(200).send(await mfaService.beginForcedSetup(body.setupToken));
+  });
+
+  app.post('/auth/mfa-setup/confirm', { onRequest: perIpAuthCeiling(app), config: forcedSetupConfig }, async (request, reply) => {
+    const body = parseInput(MfaForcedConfirmRequestSchema, request.body, reply);
+    if (!body) return;
+    const { recoveryCodes, session } = await mfaService.confirmForcedSetup(body.setupToken, body.code);
+    return reply.code(200).send({ recoveryCodes, ...(session as object) });
+  });
 
   app.get('/api/me/mfa', { preHandler: app.authenticate }, async (request, reply) => {
     return reply.code(200).send(await mfaService.status(requesterFrom(request).id));
