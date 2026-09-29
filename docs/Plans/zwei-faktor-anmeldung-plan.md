@@ -9,8 +9,8 @@ Einmalcodes aus einer Authenticator-App (TOTP nach RFC 6238).
 | Ausbaustufe | Inhalt | Stand |
 |---|---|---|
 | PR 1 — Backend | Datenmodell, TOTP und Verschlüsselung, Einrichtung, zweiter Anmeldeschritt, Wiederherstellungscodes, Zurücksetzen, Vereinseinstellung, Audit-Log, Konfiguration | **umgesetzt** |
-| PR 2 — Oberfläche | Anmeldeschritt, Profilbereich, erzwungene Einrichtung, Vereinseinstellung, Status und Zurücksetzen in der Mitgliederliste, i18n, Hilfe | offen |
-| PR 3 — Pflicht | erzwungene Einrichtung für Pflicht-Rollen, Abschalten bei Pflicht verweigern, Abfrage in den Setup-Skripten, `reset-mfa`-Skript, Deployment-Doku | offen |
+| PR 2 — Oberfläche | Anmeldeschritt (auch nach Passwort-Reset), Profilbereich, Vereinseinstellung, Status und Zurücksetzen in der Mitgliederliste, Audit-Log-Texte, i18n, Hilfe | **umgesetzt** |
+| PR 3 — Pflicht | erzwungene Einrichtung für Pflicht-Rollen (Backend `setupToken` **und** Einrichtungsbildschirm), Abschalten bei Pflicht verweigern, Abfrage in den Setup-Skripten, `reset-mfa`-Skript, Deployment-Doku | offen |
 
 Die Pflicht wird bewusst erst mit PR 3 erzwungen: ohne Oberfläche würden
 Superadmins sonst ausgesperrt.
@@ -88,9 +88,24 @@ Codespaces). Fehlt der Wert, gilt `true`.
 `auth.loginFailed`), `auth.recoveryCodeUsed`. Anzeigetexte im Frontend
 folgen mit PR 2.
 
+## Oberfläche (PR 2)
+
+- `js/modules/mfa.js` bündelt alle Bausteine; eingebunden von
+  `authScreens.js` (Codeschritt nach Anmeldung und Passwort-Reset),
+  `profile.js` (Reiter „Sicherheit“) und `userManagement.js`
+  (2FA-Badge, „2FA zurücksetzen“, Vereinseinstellung im Reiter „Verein“,
+  Spalte in der Superadmin-Vereinsliste).
+- **QR-Code:** die CSP erlaubt nur Bilder vom eigenen Origin, und
+  Servertext wird nie als Markup eingefügt (siehe `dom.js: icon()`). Das SVG
+  wird deshalb geparst und nur aus erlaubten Elementen (`svg`, `path`,
+  `rect`) und Attributen nachgebaut (`buildQrSvg()`).
+- Der Verein-Reiter liest die Vereinseinstellung aus `GET /api/me/mfa`
+  (`clubRequiresAdminMfa`), weil die Sitzung sie nicht trägt.
+- Die erzwungene Einrichtung ist nach PR 3 gewandert: sie braucht die
+  Backend-Antwort `mfaSetupRequired`, die erst mit der Pflicht entsteht.
+
 ## Bekannte Grenzen von PR 1
 
-- Die Weboberfläche kennt die MFA-Antwort von `POST /auth/login` noch nicht:
-  wer TOTP per API einrichtet, kann sich erst mit PR 2 wieder über die
-  Oberfläche anmelden.
+- ~~Die Weboberfläche kennt die MFA-Antwort von `POST /auth/login` noch
+  nicht~~ — mit PR 2 behoben.
 - Die Pflicht wird nur angezeigt (`required` im Status), nicht erzwungen.

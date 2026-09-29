@@ -87,4 +87,18 @@ describe('Zwei-Faktor-Anmeldung über HTTP', () => {
     expect(noTotp.statusCode).toBe(403);
     expect(noTotp.json().error).toBe('mfa_required_for_action');
   });
+
+  it('DELETE /api/me/mfa/totp nimmt Passwort und Code im JSON-Body an', async () => {
+    const { f, app } = await setup();
+    const { secret } = await f.enableTotp(f.trainer.id);
+    const session = await f.authService.issueSessionFor(f.trainer.id);
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/api/me/mfa/totp',
+      headers: { authorization: `Bearer ${session.accessToken}` },
+      payload: { currentPassword: PASSWORD, code: f.nextCode(secret) },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().user.mfaEnabled).toBe(false);
+  });
 });

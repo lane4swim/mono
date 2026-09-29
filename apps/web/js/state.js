@@ -206,12 +206,8 @@ async function applyEnabledModules(nextModules) {
   await resetCursor();
 }
 
-export async function login(email, password, consent) {
-  // Zugestimmt wird derselben Konstante, die authScreens.js im
-  // Einwilligungstext anzeigt. Der Server lässt nur seine eigene Fassung
-  // durch: driften beide auseinander, scheitert der Login sichtbar, statt
-  // den Nachweis still falsch zu protokollieren.
-  const user = await api.login({ email, password, consent, consentVersion: CURRENT_CONSENT_VERSION });
+// Macht eine frisch angemeldete Person zur aktuellen Sitzung.
+async function startSession(user) {
   // Räumt die lokale Ablage auf, falls sie noch einer anderen Person gehört.
   await ensureLocalStoreBelongsTo(user.id);
   await applyEnabledModules(user.enabledModules);
@@ -219,6 +215,24 @@ export async function login(email, password, consent) {
   setLocale(user.locale || detectInitialLocale());
   emit();
   return user;
+}
+
+// Liefert die angemeldete Person — oder, bei aktiver Zwei-Faktor-Anmeldung
+// (Issue #97), { mfaRequired, mfaToken }; dann schließt completeMfaLogin()
+// die Anmeldung ab.
+export async function login(email, password, consent) {
+  // Zugestimmt wird derselben Konstante, die authScreens.js im
+  // Einwilligungstext anzeigt. Der Server lässt nur seine eigene Fassung
+  // durch: driften beide auseinander, scheitert der Login sichtbar, statt
+  // den Nachweis still falsch zu protokollieren.
+  const result = await api.login({ email, password, consent, consentVersion: CURRENT_CONSENT_VERSION });
+  if (result.mfaRequired) return result;
+  return startSession(result);
+}
+
+// Zweiter Anmeldeschritt: `secondFactor` ist { code } oder { recoveryCode }.
+export async function completeMfaLogin(mfaToken, secondFactor) {
+  return startSession(await api.loginMfa({ mfaToken, ...secondFactor }));
 }
 
 export async function acceptInvitation(token, name, password, consent) {
@@ -235,15 +249,23 @@ export async function acceptInvitation(token, name, password, consent) {
 // "Passwort vergessen" — meldet die Person bei Erfolg direkt an, analog zu login()/acceptInvitation() oben
 // (der Server liefert bereits ein volles Token-Paar, siehe
 // apiClient.js: resetPassword()).
+// Mit aktiver Zwei-Faktor-Anmeldung meldet der Reset nicht direkt an, sondern
+// liefert wie login() { mfaRequired, mfaToken }.
 export async function resetPassword(token, newPassword) {
-  const user = await api.resetPassword({ token, newPassword });
-  // Räumt die lokale Ablage auf, falls sie noch einer anderen Person gehört.
-  await ensureLocalStoreBelongsTo(user.id);
-  await applyEnabledModules(user.enabledModules);
+  const result = await api.resetPassword({ token, newPassword });
+  if (result.mfaRequired) return result;
+  return startSession(result);
+}
+
+// Nach Einrichten oder Abschalten der Zwei-Faktor-Anmeldung: der Server hat
+// alle anderen Sitzungen beendet und für diese ein frisches Token-Paar
+// geliefert (apiClient.js hat es bereits übernommen); hier nur die Person
+// aktualisieren (mfaEnabled), mit emit() für die abhängige Anzeige.
+export function applySessionUser(user) {
+  if (!current) return null;
   current = user;
-  setLocale(user.locale || detectInitialLocale());
   emit();
-  return user;
+  return current;
 }
 
 // demo.html: übernimmt eines der beiden festen Konten aus demoMode.js als

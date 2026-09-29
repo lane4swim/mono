@@ -74,6 +74,16 @@
     <h2>Zugänge verwalten</h2>
     <p>Bestehende Mitglieder des Vereins werden in der Nutzerverwaltung nach Rolle gruppiert aufgelistet (Name, E-Mail-Adresse). Für den Entzug eines Zugangs oder eine Rollenänderung wenden sich Vereinsadministrationen an die Superadmin-Betreuung.</p>
 
+    <h2>Zwei-Faktor-Anmeldung</h2>
+    <p>Zusätzlich zum Passwort kann die Anmeldung einen 6-stelligen Code aus einer Authenticator-App verlangen (z.&nbsp;B. Google Authenticator, Microsoft Authenticator, Aegis, 2FAS oder Apple Passwörter). Jede Person richtet sie selbst unter <em>Mein Profil → Sicherheit</em> ein: QR-Code scannen, einen Code eingeben, die angezeigten Wiederherstellungscodes sicher aufbewahren.</p>
+    <ul>
+      <li><strong>Für Superadmins</strong> ist die Zwei-Faktor-Anmeldung vorgesehen und wird auf den meisten Servern vorgeschrieben.</li>
+      <li><strong>Für Admins</strong> kann die Vereinsadministration sie im Reiter <em>Verein</em> der Nutzerverwaltung vorschreiben. Dafür muss die einschaltende Person sie zuerst für ihr eigenes Konto eingerichtet haben.</li>
+      <li><strong>Alle anderen</strong> können sie freiwillig nutzen.</li>
+    </ul>
+    <h3>Smartphone verloren?</h3>
+    <p>Mit einem der Wiederherstellungscodes gelingt die Anmeldung einmalig auch ohne App; danach die Zwei-Faktor-Anmeldung im Profil neu einrichten. Ohne Wiederherstellungscodes kann eine Vereinsadministration die Zwei-Faktor-Anmeldung eines Mitglieds in der Nutzerverwaltung zurücksetzen (<em>2FA zurücksetzen</em>, mit eigenem Passwort bestätigt) — das gilt auch für andere Admins desselben Vereins. Die betroffene Person wird auf allen Geräten abgemeldet und per E-Mail informiert. Superadmins setzen Konten aller Vereine zurück.</p>
+
     <h2>Verwandte Themen</h2>
     <ul>
       <li>Server-Betrieb, HTTPS, Backups: siehe <code>docs/deployment/deployment.md</code> im Projekt-Repository.</li>

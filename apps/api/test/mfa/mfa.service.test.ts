@@ -205,6 +205,8 @@ describe('Vereinspflicht für Admins und Pflicht-Status', () => {
     const { secret } = await f.enableTotp(f.admin.id);
     await expect(f.mfaService.setClubAdminRequirement(f.clubA.id, true, asRequester(f.admin), PASSWORD, { code: f.nextCode(secret) })).resolves.toEqual({ mfaRequiredForAdmins: true });
     expect((await f.mfaService.status(f.otherAdmin.id)).required).toBe(true);
+    expect((await f.mfaService.status(f.trainer.id)).clubRequiresAdminMfa).toBe(true);
+    expect((await f.mfaService.status(f.superadmin.id)).clubRequiresAdminMfa).toBeNull();
     expect((await f.mfaService.status(f.trainer.id)).required).toBe(false);
     expect(await actions(f.auditLogEntries)).toContain('club.mfaPolicyChanged');
   });

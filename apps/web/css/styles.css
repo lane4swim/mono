@@ -570,3 +570,11 @@ tr.live-row-done .live-set-desc{ text-decoration: line-through; color: var(--c-s
   .plan-print-sheet{ width: auto; }
   @page{ size: A4; margin: 12mm; }
 }
+
+/* Zwei-Faktor-Anmeldung (js/modules/mfa.js) */
+.mfa-qr-wrap{ display: flex; justify-content: center; margin: 12px 0 16px; }
+.mfa-qr{ width: 200px; height: 200px; background: #fff; padding: 8px; border-radius: 8px; }
+.mfa-secret{ display: inline-block; font-size: var(--fs-sm, 0.95rem); letter-spacing: 0.08em; word-break: break-all; }
+.mfa-code-input{ font-size: 1.4rem; letter-spacing: 0.3em; text-align: center; max-width: 12ch; }
+.mfa-recovery-codes{ columns: 2; list-style: none; padding: 0; margin: 12px 0 16px; }
+.mfa-recovery-codes li{ margin-bottom: 6px; font-family: monospace; }

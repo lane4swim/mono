@@ -84,6 +84,9 @@ export function createMfaService(deps: MfaServiceDeps) {
         required: isMfaRequired(user, club, deps.enforce),
         enforced: deps.enforce,
         recoveryCodesRemaining: user.totpEnabledAt ? await deps.recoveryCodes.countUnused(user.id) : 0,
+        // Vereinseinstellung "TOTP für Admins verlangen" (null ohne Verein) —
+        // für die Anzeige im Verein-Reiter; unabhängig von MFA_ENFORCE.
+        clubRequiresAdminMfa: club ? Boolean(club.mfaRequiredForAdmins) : null,
       };
     },
 

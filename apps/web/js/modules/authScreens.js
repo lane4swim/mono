@@ -10,10 +10,12 @@ import { openModal } from '../modal.js';
 import { field, textInput } from '../forms.js';
 import {
   login as loginRequest,
+  completeMfaLogin,
   acceptInvitation as acceptInvitationRequest,
   resetPassword as resetPasswordRequest,
   CURRENT_CONSENT_VERSION,
 } from '../state.js';
+import { renderMfaStep } from './mfa.js';
 import * as api from '../apiClient.js';
 import { t } from '../i18n.js';
 import { buildLegalContent } from './info.js';
@@ -31,12 +33,27 @@ function appendLegalFooterLink(container) {
 }
 
 // ---- Login ----------------------------------------------------------
-export function renderLoginScreen(container, onSuccess) {
+// Zweiter Anmeldeschritt bei aktiver Zwei-Faktor-Anmeldung (Issue #97):
+// ersetzt den Bildschirm durch das Code-Formular; ein abgelaufenes oder
+// gesperrtes mfaToken führt mit Hinweis zurück zur Anmeldung.
+function continueWithSecondFactor(container, mfaToken, onSuccess) {
+  renderMfaStep(container, {
+    onSubmit: (secondFactor) => completeMfaLogin(mfaToken, secondFactor),
+    onSuccess: (user) => {
+      toast(t('auth.loginSuccess', { name: user.name }));
+      onSuccess();
+    },
+    onExpired: (message) => renderLoginScreen(container, onSuccess, { notice: message }),
+  });
+}
+
+export function renderLoginScreen(container, onSuccess, { notice } = {}) {
   container.innerHTML = '';
   const box = el('div', { class: 'auth-box' });
 
   box.appendChild(el('h1', { class: 'mt-0' }, t('auth.loginTitle')));
   box.appendChild(el('p', { class: 'hint' }, t('auth.loginIntro')));
+  if (notice) box.appendChild(el('p', { class: 'form-error' }, notice));
 
   const form = el('form', { class: 'form-grid' });
   const fEmail = textInput('', { type: 'email', required: true, autocomplete: 'username' });
@@ -67,8 +84,12 @@ export function renderLoginScreen(container, onSuccess) {
     }
     submitBtn.disabled = true;
     try {
-      const user = await loginRequest(fEmail.value.trim(), fPassword.value, true);
-      toast(t('auth.loginSuccess', { name: user.name }));
+      const result = await loginRequest(fEmail.value.trim(), fPassword.value, true);
+      if (result.mfaRequired) {
+        continueWithSecondFactor(container, result.mfaToken, onSuccess);
+        return;
+      }
+      toast(t('auth.loginSuccess', { name: result.name }));
       onSuccess();
     } catch (err) {
       errorBox.textContent = describeAuthError(err);
@@ -182,8 +203,14 @@ export function renderResetPasswordScreen(container, token, onSuccess) {
     }
     submitBtn.disabled = true;
     try {
-      await resetPasswordRequest(token, fPassword.value);
+      const result = await resetPasswordRequest(token, fPassword.value);
       toast(t('auth.resetPasswordSuccess'));
+      // Mit aktiver Zwei-Faktor-Anmeldung meldet der Reset nicht direkt an:
+      // das Passwort ist geändert, der Code folgt.
+      if (result.mfaRequired) {
+        continueWithSecondFactor(container, result.mfaToken, onSuccess);
+        return;
+      }
       onSuccess();
     } catch (err) {
       errorBox.textContent = describeAuthError(err, { on410Message: t('auth.errorResetTokenExpired') });
