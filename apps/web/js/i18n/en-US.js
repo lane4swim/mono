@@ -39,6 +39,7 @@ export default {
       password_too_short_for_role: 'Accounts with administration rights need a password of at least 12 characters.',
       password_common: 'This password appears in known data breaches and is too easy to guess. Please choose a different one.',
       mfa_not_configured: 'Two-factor sign-in is not set up on this server.',
+      mfa_secret_unreadable: "Two-factor sign-in for this account can't be checked right now. Please ask your club's administration to reset it.",
       invalid_mfa_token: 'The sign-in expired. Please sign in again.',
       invalid_mfa_code: 'The code is invalid or was already used.',
       mfa_code_required: 'Please also enter a code from your authenticator app.',

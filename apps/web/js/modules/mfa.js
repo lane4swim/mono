@@ -190,6 +190,10 @@ function openSetupModal(onDone) {
     const form = el('form', { class: 'form-grid' });
     const fCode = codeInput();
     form.appendChild(field(t('mfa.setupStep2'), fCode, { span2: true }));
+    // Der Server verlangt das Passwort zum Einschalten (siehe
+    // mfa.service.ts: confirmSetup()).
+    const fPassword = textInput('', { type: 'password', required: true, autocomplete: 'current-password' });
+    form.appendChild(field(t('profile.currentPasswordLabel'), fPassword, { span2: true }));
     const errorBox = el('p', { class: 'form-error', style: 'grid-column:1/-1;display:none' });
     form.appendChild(errorBox);
     const submitBtn = el('button', { type: 'submit', class: 'btn btn-primary' }, t('mfa.setupConfirm'));
@@ -199,13 +203,13 @@ function openSetupModal(onDone) {
       errorBox.style.display = 'none';
       submitBtn.disabled = true;
       try {
-        const { recoveryCodes, user } = await api.confirmMfaSetup(fCode.value.replace(/\s/g, ''));
+        const { recoveryCodes, user } = await api.confirmMfaSetup(fCode.value.replace(/\s/g, ''), fPassword.value);
         applySessionUser(user);
         modal.close();
         toast(t('mfa.enabledToast'));
         showRecoveryCodesModal(recoveryCodes, onDone);
       } catch (err) {
-        errorBox.textContent = describeMfaError(err);
+        errorBox.textContent = describeMfaError(err, { on401Message: t('profile.errorInvalidCurrentPassword') });
         errorBox.style.display = 'block';
       } finally {
         submitBtn.disabled = false;

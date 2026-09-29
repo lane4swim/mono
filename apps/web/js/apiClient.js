@@ -318,8 +318,8 @@ export function beginMfaSetup() {
 }
 // Aktivieren beendet alle anderen Sitzungen; der Server liefert für die
 // aktuelle ein frisches Token-Paar mit (wie changePassword()).
-export async function confirmMfaSetup(code) {
-  const result = await postJson('/api/me/mfa/totp/confirm', { code });
+export async function confirmMfaSetup(code, currentPassword) {
+  const result = await postJson('/api/me/mfa/totp/confirm', { code, currentPassword });
   return { recoveryCodes: result.recoveryCodes, user: acceptSession(result) };
 }
 export async function disableMfa({ currentPassword, code, recoveryCode }) {

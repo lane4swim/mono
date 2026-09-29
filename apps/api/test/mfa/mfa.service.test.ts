@@ -1,6 +1,6 @@
 // Issue #97: Zwei-Faktor-Anmeldung per TOTP — Einrichtung, zweiter
 // Anmeldeschritt, Wiederherstellungscodes, Zurücksetzen und Vereinspflicht.
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { InvalidCurrentPasswordError, InvalidRefreshTokenError } from '../../src/modules/auth/auth.service.js';
 import { InMemoryAuditLogRepository } from '../../src/modules/auditLog/auditLog.repository.memory.js';
 import { ForbiddenError } from '../../src/modules/invitations/invitations.service.js';
@@ -35,9 +35,12 @@ describe('Einrichtung', () => {
   it('bestätigt mit einem gültigen Code: 10 Wiederherstellungscodes, andere Sitzungen beendet, Audit und E-Mail', async () => {
     const before = await f.authService.issueSessionFor(f.trainer.id);
     const { secret } = await f.mfaService.beginSetup(f.trainer.id);
-    await expect(f.mfaService.confirmSetup(f.trainer.id, '000000' === totpAt(secret, totpStep()) ? '111111' : '000000')).rejects.toThrow(InvalidMfaCodeError);
+    await expect(f.mfaService.confirmSetup(f.trainer.id, '000000' === totpAt(secret, totpStep()) ? '111111' : '000000', PASSWORD)).rejects.toThrow(InvalidMfaCodeError);
+    // Ohne richtiges Passwort keine Aktivierung, auch mit gültigem Code.
+    await expect(f.mfaService.confirmSetup(f.trainer.id, totpAt(secret, totpStep()), 'falsch')).rejects.toThrow(InvalidCurrentPasswordError);
+    expect((await f.mfaService.status(f.trainer.id)).enabled).toBe(false);
 
-    const result = await f.mfaService.confirmSetup(f.trainer.id, totpAt(secret, totpStep()));
+    const result = await f.mfaService.confirmSetup(f.trainer.id, totpAt(secret, totpStep()), PASSWORD);
     expect(result.recoveryCodes).toHaveLength(10);
     expect(new Set(result.recoveryCodes).size).toBe(10);
     expect(result.recoveryCodes[0]).toMatch(/^[a-z2-9]{5}-[a-z2-9]{5}$/);
@@ -48,7 +51,7 @@ describe('Einrichtung', () => {
   });
 
   it('lehnt eine zweite Einrichtung und eine Bestätigung ohne Start ab', async () => {
-    await expect(f.mfaService.confirmSetup(f.trainer.id, '123456')).rejects.toThrow(MfaSetupNotStartedError);
+    await expect(f.mfaService.confirmSetup(f.trainer.id, '123456', PASSWORD)).rejects.toThrow(MfaSetupNotStartedError);
     await f.enableTotp(f.trainer.id);
     await expect(f.mfaService.beginSetup(f.trainer.id)).rejects.toThrow(MfaAlreadyEnabledError);
   });
@@ -112,6 +115,8 @@ describe('Zweiter Anmeldeschritt', () => {
     const second = (await f.login('trainer@a.de')) as { mfaToken: string };
     await expect(f.authService.loginWithSecondFactor({ mfaToken: second.mfaToken, recoveryCode: recoveryCodes[0]! })).rejects.toThrow(InvalidMfaCodeError);
     expect(await actions(f.auditLogEntries)).toContain('auth.recoveryCodeUsed');
+    await new Promise((r) => setTimeout(r, 0));
+    expect(f.mailer.sentAccountSecurityChangeEmails.at(-1)).toMatchObject({ to: 'trainer@a.de', changeType: 'recoveryCodeUsed' });
     expect((await f.mfaService.status(f.trainer.id)).recoveryCodesRemaining).toBe(9);
   });
 
@@ -142,6 +147,7 @@ describe('Abschalten und neue Wiederherstellungscodes', () => {
   it('neue Wiederherstellungscodes entwerten die alten', async () => {
     const { secret, recoveryCodes } = await f.enableTotp(f.trainer.id);
     const { recoveryCodes: fresh } = await f.mfaService.regenerateRecoveryCodes(f.trainer.id, { code: f.nextCode(secret) });
+    expect(f.mailer.sentAccountSecurityChangeEmails.at(-1)).toMatchObject({ changeType: 'recoveryCodesRegenerated' });
     const { mfaToken } = (await f.login('trainer@a.de')) as { mfaToken: string };
     await expect(f.authService.loginWithSecondFactor({ mfaToken, recoveryCode: recoveryCodes[0]! })).rejects.toThrow(InvalidMfaCodeError);
     await expect(f.authService.loginWithSecondFactor({ mfaToken, recoveryCode: fresh[0]! })).resolves.toHaveProperty('accessToken');
@@ -223,5 +229,43 @@ describe('Vereinspflicht für Admins und Pflicht-Status', () => {
     expect(await off.mfaService.status(off.superadmin.id)).toMatchObject({ required: false, enforced: false, available: true });
     await off.enableTotp(off.superadmin.id);
     expect(await off.login('super@lane1.de')).toHaveProperty('mfaRequired', true);
+  });
+});
+
+// Sicherheitsreview der Zwei-Faktor-Anmeldung: die Grenze von 5 Versuchen je
+// mfaToken muss auch bei parallelen Anfragen halten — sonst prüfen beliebig
+// viele gleichzeitige Anfragen Codes, bevor der erste Fehlversuch zählt.
+describe('Fehlversuchs-Grenze bei parallelen Anfragen', () => {
+  it('lässt keinen richtigen Code mehr durch, wenn er als 20. von 20 gleichzeitigen Anfragen kommt', async () => {
+    const f = await makeFixture();
+    const { secret } = await f.enableTotp(f.trainer.id);
+    const { mfaToken } = (await f.login('trainer@a.de')) as { mfaToken: string };
+    const wrong = totpAt(secret, totpStep() + 5);
+    // Wie ein echter Datenbank-Roundtrip: die Anfragen überlappen sich.
+    const findById = f.users.findById.bind(f.users);
+    vi.spyOn(f.users, 'findById').mockImplementation(async (id) => {
+      await new Promise((r) => setTimeout(r, 50));
+      return findById(id);
+    });
+    const codes = [...Array.from({ length: 19 }, () => wrong), f.nextCode(secret)];
+    const results = await Promise.allSettled(codes.map((code) => f.authService.loginWithSecondFactor({ mfaToken, code })));
+    expect(results.every((r) => r.status === 'rejected')).toBe(true);
+  });
+});
+
+describe('Wiederherstellungscodes — Speicherung', () => {
+  it('speichert nur einen mit dem Server-Schlüssel und der Konto-ID verknüpften HMAC, keinen reinen Hash', async () => {
+    const { createHash } = await import('node:crypto');
+    const f = await makeFixture();
+    const { recoveryCodes } = await f.enableTotp(f.trainer.id);
+    const consume = vi.spyOn(f.recoveryCodes, 'consume');
+    const plainHash = createHash('sha256').update(recoveryCodes[0]!.replace('-', '')).digest('hex');
+    // Ein Angreifer mit Datenbank-Abzug, der den ungesalzenen Hash kennt,
+    // kommt damit nicht weiter: consume() bekommt einen anderen Wert.
+    const { mfaToken } = (await f.login('trainer@a.de')) as { mfaToken: string };
+    await f.authService.loginWithSecondFactor({ mfaToken, recoveryCode: recoveryCodes[0]! });
+    expect(consume).toHaveBeenCalledTimes(1);
+    expect(consume.mock.calls[0]![1]).not.toBe(plainHash);
+    expect(consume.mock.calls[0]![1]).toMatch(/^[0-9a-f]{64}$/);
   });
 });

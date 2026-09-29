@@ -40,7 +40,7 @@ export async function mfaRoutes(app: FastifyInstance, opts: MfaRoutesOptions) {
   app.post('/api/me/mfa/totp/confirm', { preHandler: app.authenticate, config: WRITE_LIMIT }, async (request, reply) => {
     const body = parseInput(MfaConfirmRequestSchema, request.body, reply);
     if (!body) return;
-    const { recoveryCodes, session } = await mfaService.confirmSetup(requesterFrom(request).id, body.code);
+    const { recoveryCodes, session } = await mfaService.confirmSetup(requesterFrom(request).id, body.code, body.currentPassword);
     return reply.code(200).send({ recoveryCodes, ...(session as object) });
   });
 

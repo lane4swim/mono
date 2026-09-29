@@ -55,7 +55,7 @@ import {
 } from '../modules/parents/parents.service.js';
 import { PasswordHasherBusyError } from '../auth/passwordHasherPool.js';
 import { PasswordTooShortForRoleError, CommonPasswordError } from '../auth/passwordPolicy.js';
-import { MfaNotConfiguredError } from '../modules/mfa/mfa.core.js';
+import { MfaNotConfiguredError, MfaSecretUnreadableError } from '../modules/mfa/mfa.core.js';
 import { InvalidMfaTokenError } from '../auth/tokens.js';
 import {
   InvalidMfaCodeError,
@@ -139,6 +139,7 @@ const HTTP_ERROR_REGISTRY = new Map<abstract new (...args: never[]) => Error, Ht
   [CommonPasswordError, { status: 400, code: 'password_common' }],
   // Zwei-Faktor-Anmeldung (Issue #97).
   [MfaNotConfiguredError, { status: 503, code: 'mfa_not_configured' }],
+  [MfaSecretUnreadableError, { status: 503, code: 'mfa_secret_unreadable' }],
   [InvalidMfaTokenError, { status: 401, code: 'invalid_mfa_token' }],
   [InvalidMfaCodeError, { status: 400, code: 'invalid_mfa_code' }],
   [MfaCodeRequiredError, { status: 400, code: 'mfa_code_required' }],

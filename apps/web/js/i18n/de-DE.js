@@ -52,6 +52,7 @@ export default {
       password_too_short_for_role: 'Für Konten mit Administrationsrechten muss das Passwort mindestens 12 Zeichen lang sein.',
       password_common: 'Dieses Passwort ist aus bekannten Datenlecks bekannt und zu leicht zu erraten. Bitte ein anderes wählen.',
       mfa_not_configured: 'Die Zwei-Faktor-Anmeldung ist auf diesem Server nicht eingerichtet.',
+      mfa_secret_unreadable: 'Die Zwei-Faktor-Anmeldung dieses Kontos kann gerade nicht geprüft werden. Bitte die Vereinsverwaltung bitten, sie zurückzusetzen.',
       invalid_mfa_token: 'Die Anmeldung ist abgelaufen. Bitte erneut anmelden.',
       invalid_mfa_code: 'Der Code ist ungültig oder wurde bereits verwendet.',
       mfa_code_required: 'Bitte zusätzlich einen Code aus der Authenticator-App angeben.',

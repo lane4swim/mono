@@ -233,8 +233,10 @@ export const LoginMfaRequestSchema = z
   .refine(exactlyOneSecondFactor, SECOND_FACTOR_MESSAGE);
 export type LoginMfaRequest = z.infer<typeof LoginMfaRequestSchema>;
 
-// POST /api/me/mfa/totp/confirm
-export const MfaConfirmRequestSchema = z.object({ code: totpCodeField });
+// POST /api/me/mfa/totp/confirm — mit aktuellem Passwort: sonst könnte, wer
+// nur ein entwendetes Access Token hat, TOTP für das Konto einrichten, damit
+// alle anderen Sitzungen beenden und die rechtmäßige Person aussperren.
+export const MfaConfirmRequestSchema = z.object({ code: totpCodeField, currentPassword: currentPasswordField });
 
 // DELETE /api/me/mfa/totp
 export const MfaDisableRequestSchema = z

@@ -87,10 +87,11 @@ describe('Profilbereich', () => {
     expect(modal.textContent).toContain('JBSW Y3DP');
     const input = modal.querySelector('input.mfa-code-input');
     input.value = '123 456';
+    modal.querySelector('input[type="password"]').value = 'geheim';
     modal.querySelector('form').dispatchEvent(new Event('submit', { cancelable: true }));
     await flush();
 
-    expect(apiMocks.confirmMfaSetup).toHaveBeenCalledWith('123456');
+    expect(apiMocks.confirmMfaSetup).toHaveBeenCalledWith('123456', 'geheim');
     expect(applySessionUser).toHaveBeenCalledWith(expect.objectContaining({ mfaEnabled: true }));
     expect([...modal.querySelectorAll('.mfa-recovery-codes li')].map((li) => li.textContent)).toEqual(codes);
   });

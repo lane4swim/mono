@@ -49,7 +49,10 @@ export interface AccountSecurityChangeMailPayload {
   to: string;
   recipientName?: string | null;
   // 'mfa': Zwei-Faktor-Anmeldung eingerichtet, abgeschaltet oder zurückgesetzt (Issue #97).
-  changeType: 'email' | 'password' | 'mfa';
+  // 'recoveryCodeUsed' / 'recoveryCodesRegenerated': Wiederherstellungscodes
+  // benutzt bzw. neu erzeugt — ein typisches Zeichen, falls jemand anderes
+  // an die Codes gekommen ist.
+  changeType: 'email' | 'password' | 'mfa' | 'recoveryCodeUsed' | 'recoveryCodesRegenerated';
   locale?: string;
 }
 
@@ -256,11 +259,15 @@ const CHANGE_SENTENCE: Record<SupportedLocale, Record<AccountSecurityChangeMailP
     email: 'Die E-Mail-Adresse Ihres Lane-1-Kontos wurde soeben geändert. Diese Nachricht ging an Ihre BISHERIGE hinterlegte Adresse, unabhängig von der Änderung selbst.',
     password: 'Das Passwort Ihres Lane-1-Kontos wurde soeben geändert.',
     mfa: 'Die Zwei-Faktor-Anmeldung Ihres Lane-1-Kontos wurde soeben geändert (eingerichtet, abgeschaltet oder zurückgesetzt).',
+    recoveryCodeUsed: 'Soeben hat sich jemand mit einem Wiederherstellungscode der Zwei-Faktor-Anmeldung bei Ihrem Lane-1-Konto angemeldet.',
+    recoveryCodesRegenerated: 'Für Ihr Lane-1-Konto wurden soeben neue Wiederherstellungscodes der Zwei-Faktor-Anmeldung erzeugt; die bisherigen gelten nicht mehr.',
   },
   'en-US': {
     email: 'The email address for your Lane 1 account was just changed. This message went to your PREVIOUS address on file, independent of the change itself.',
     password: 'The password for your Lane 1 account was just changed.',
     mfa: 'Two-factor sign-in for your Lane 1 account was just changed (set up, turned off or reset).',
+    recoveryCodeUsed: 'Someone just signed in to your Lane 1 account using a two-factor recovery code.',
+    recoveryCodesRegenerated: 'New two-factor recovery codes were just generated for your Lane 1 account; the previous ones no longer work.',
   },
 };
 

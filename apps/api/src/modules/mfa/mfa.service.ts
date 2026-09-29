@@ -11,7 +11,7 @@ import { InvalidCurrentPasswordError, UserNotFoundError } from '../auth/auth.ser
 import { ForbiddenError, ClubNotFoundError } from '../invitations/invitations.service.js';
 import { verifyPassword } from '../../auth/password.js';
 import { buildOtpauthUri, generateTotpSecret, verifyTotp } from '../../auth/totp.js';
-import { generateRecoveryCodes, isMfaRequired, MfaNotConfiguredError, type MfaVerifier, type SecondFactorInput } from './mfa.core.js';
+import { isMfaRequired, MfaNotConfiguredError, type MfaVerifier, type SecondFactorInput } from './mfa.core.js';
 import {
   MfaAlreadyEnabledError,
   MfaSetupNotStartedError,
@@ -60,16 +60,16 @@ export function createMfaService(deps: MfaServiceDeps) {
     if (!(await deps.verifier.verifySecondFactor(user, input))) throw new InvalidMfaCodeError();
   }
 
-  function notify(user: UserRecord): void {
+  function notify(user: UserRecord, changeType: 'mfa' | 'recoveryCodesRegenerated' = 'mfa'): void {
     deps.mailer
-      .sendAccountSecurityChangeNotice({ to: user.email, recipientName: user.name, changeType: 'mfa', locale: user.locale })
+      .sendAccountSecurityChangeNotice({ to: user.email, recipientName: user.name, changeType, locale: user.locale })
       .catch((err) => {
         console.error('[mfa] Fehler beim Versand des Sicherheitshinweises:', err);
       });
   }
 
   async function newRecoveryCodes(userId: string): Promise<string[]> {
-    const { codes, hashes } = generateRecoveryCodes();
+    const { codes, hashes } = deps.verifier.generateRecoveryCodes(userId);
     await deps.recoveryCodes.replaceAll(userId, hashes);
     return codes;
   }
@@ -105,9 +105,13 @@ export function createMfaService(deps: MfaServiceDeps) {
 
     // Aktiviert TOTP mit einem ersten gültigen Code. Beendet alle anderen
     // Sitzungen und stellt für die aktuelle ein frisches Token-Paar aus.
-    async confirmSetup(userId: string, code: string) {
+    // Verlangt das aktuelle Passwort (wie Passwort- und E-Mail-Wechsel): mit
+    // nur einem entwendeten Access Token ließe sich sonst TOTP einrichten und
+    // die rechtmäßige Person dauerhaft aussperren.
+    async confirmSetup(userId: string, code: string, currentPassword: string) {
       const user = await requireUser(userId);
       if (user.totpEnabledAt) throw new MfaAlreadyEnabledError();
+      await requirePassword(user, currentPassword);
       if (!user.totpSecretEnc) throw new MfaSetupNotStartedError();
       const step = verifyTotp(deps.verifier.openSecret(user.totpSecretEnc), code);
       if (step === null) throw new InvalidMfaCodeError();
@@ -140,6 +144,7 @@ export function createMfaService(deps: MfaServiceDeps) {
       await requireOwnSecondFactor(user, secondFactor);
       const recoveryCodes = await newRecoveryCodes(user.id);
       await deps.auditLog.record({ clubId: user.clubId, actorId: user.id, action: 'mfa.recoveryCodesRegenerated', targetId: user.id });
+      notify(user, 'recoveryCodesRegenerated');
       return { recoveryCodes };
     },
 

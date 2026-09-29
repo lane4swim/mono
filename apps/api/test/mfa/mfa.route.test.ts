@@ -1,5 +1,5 @@
 // Issue #97: HTTP-Ebene der Zwei-Faktor-Anmeldung.
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../../src/app.js';
 import { loadEnv } from '../../src/config/env.js';
@@ -35,7 +35,7 @@ describe('Zwei-Faktor-Anmeldung über HTTP', () => {
     const { secret, qrSvg } = setupRes.json();
     expect(qrSvg).toMatch(/^<svg/);
 
-    const confirmRes = await app.inject({ method: 'POST', url: '/api/me/mfa/totp/confirm', headers: auth, payload: { code: totpAt(secret, totpStep()) } });
+    const confirmRes = await app.inject({ method: 'POST', url: '/api/me/mfa/totp/confirm', headers: auth, payload: { code: totpAt(secret, totpStep()), currentPassword: PASSWORD } });
     expect(confirmRes.statusCode).toBe(200);
     expect(confirmRes.json().recoveryCodes).toHaveLength(10);
     expect(confirmRes.json().accessToken).toBeTruthy();
@@ -100,5 +100,26 @@ describe('Zwei-Faktor-Anmeldung über HTTP', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().user.mfaEnabled).toBe(false);
+  });
+});
+
+describe('Geänderter TOTP_ENCRYPTION_KEY', () => {
+  it('meldet ein nicht entschlüsselbares Secret als 503 mfa_secret_unreadable statt als 500', async () => {
+    const { f, app } = await setup();
+    const { secret } = await f.enableTotp(f.trainer.id);
+    const user = await f.users.findById(f.trainer.id);
+    // Secret mit einem anderen Schlüssel, wie nach einem Schlüsselwechsel.
+    const { seal } = await import('../../src/auth/secretBox.js');
+    const { randomBytes } = await import('node:crypto');
+    await f.users.clearTotp(user!.id);
+    await f.users.setPendingTotpSecret(user!.id, seal(secret, randomBytes(32)));
+    await f.users.enableTotp(user!.id, 1);
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const step1 = await f.login('trainer@a.de');
+    const res = await app.inject({ method: 'POST', url: '/auth/login/mfa', payload: { mfaToken: (step1 as { mfaToken: string }).mfaToken, code: f.nextCode(secret) } });
+    expect(res.statusCode).toBe(503);
+    expect(res.json().error).toBe('mfa_secret_unreadable');
+    consoleError.mockRestore();
   });
 });
