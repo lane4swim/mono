@@ -177,13 +177,34 @@ function postJson(path, body, opts) {
 }
 
 // ---- Auth ------------------------------------------------------------
-// Gibt user + enabledModules zusammen zurück (nicht nur result.user) —
-// state.js legt daraus die vollständige `current`-Sitzung an, inklusive
-// der gebuchten Module des Vereins (siehe router.js: visibleModules()).
-export async function login({ email, password, consent, consentVersion }) {
-  const result = await postJson('/auth/login', { email, password, consent, consentVersion }, { allowRefreshRetry: false });
+// Übernimmt eine Sitzungsantwort (Tokens + user + Vereinskontext): speichert
+// die Tokens und gibt user + enabledModules zusammen zurück (nicht nur
+// result.user) — state.js legt daraus die vollständige `current`-Sitzung an,
+// inklusive der gebuchten Module des Vereins (siehe router.js:
+// visibleModules()).
+function acceptSession(result) {
   setTokens(result);
   return { ...result.user, enabledModules: result.enabledModules, clubName: result.clubName, clubNationalID: result.clubNationalID, clubNationalIDType: result.clubNationalIDType };
+}
+
+// Mit aktiver Zwei-Faktor-Anmeldung (Issue #97) antwortet der Server statt
+// mit einer Sitzung mit { mfaRequired, mfaToken }; der Aufrufer schließt die
+// Anmeldung dann über loginMfa() ab. Kein setTokens() in diesem Fall.
+function sessionOrMfaChallenge(result) {
+  if (result.mfaRequired) return { mfaRequired: true, mfaToken: result.mfaToken };
+  return acceptSession(result);
+}
+
+export async function login({ email, password, consent, consentVersion }) {
+  const result = await postJson('/auth/login', { email, password, consent, consentVersion }, { allowRefreshRetry: false });
+  return sessionOrMfaChallenge(result);
+}
+
+// Zweiter Anmeldeschritt: mfaToken aus login()/resetPassword() plus Code aus
+// der Authenticator-App ODER ein Wiederherstellungscode.
+export async function loginMfa({ mfaToken, code, recoveryCode }) {
+  const body = recoveryCode ? { mfaToken, recoveryCode } : { mfaToken, code };
+  return acceptSession(await postJson('/auth/login/mfa', body, { allowRefreshRetry: false }));
 }
 
 export async function acceptInvitation({ token, name, password, consent }) {
@@ -207,8 +228,7 @@ export function forgotPassword(email) {
 // auth.service.ts: resetPassword()).
 export async function resetPassword({ token, newPassword }) {
   const result = await postJson('/auth/reset-password', { token, newPassword }, { allowRefreshRetry: false });
-  setTokens(result);
-  return { ...result.user, enabledModules: result.enabledModules, clubName: result.clubName, clubNationalID: result.clubNationalID, clubNationalIDType: result.clubNationalIDType };
+  return sessionOrMfaChallenge(result);
 }
 
 // Bündelt gleichzeitige Aufrufer auf GENAU einen In-Flight-Versuch. Ohne das
@@ -282,6 +302,43 @@ export async function changeEmail({ currentPassword, newEmail }) {
   setTokens(result);
   return { ...result.user, enabledModules: result.enabledModules, clubName: result.clubName, clubNationalID: result.clubNationalID, clubNationalIDType: result.clubNationalIDType };
 }
+// ---- Zwei-Faktor-Anmeldung (Issue #97) ----------------------------------
+// Nur den gewählten zweiten Faktor mitschicken (der Server verlangt genau
+// einen bzw. höchstens einen).
+function secondFactorBody({ code, recoveryCode } = {}) {
+  if (recoveryCode) return { recoveryCode };
+  if (code) return { code };
+  return {};
+}
+export function getMfaStatus() {
+  return request('/api/me/mfa');
+}
+export function beginMfaSetup() {
+  return postJson('/api/me/mfa/totp/setup', {});
+}
+// Aktivieren beendet alle anderen Sitzungen; der Server liefert für die
+// aktuelle ein frisches Token-Paar mit (wie changePassword()).
+export async function confirmMfaSetup(code, currentPassword) {
+  const result = await postJson('/api/me/mfa/totp/confirm', { code, currentPassword });
+  return { recoveryCodes: result.recoveryCodes, user: acceptSession(result) };
+}
+export async function disableMfa({ currentPassword, code, recoveryCode }) {
+  const result = await request('/api/me/mfa/totp', { method: 'DELETE', body: JSON.stringify({ currentPassword, ...secondFactorBody({ code, recoveryCode }) }) });
+  return acceptSession(result);
+}
+export function regenerateRecoveryCodes({ code, recoveryCode }) {
+  return postJson('/api/me/mfa/recovery-codes', secondFactorBody({ code, recoveryCode }));
+}
+export function resetUserMfa(userId, { currentPassword, code, recoveryCode }) {
+  return postJson(`/api/users/${encodeURIComponent(userId)}/mfa/reset`, { currentPassword, ...secondFactorBody({ code, recoveryCode }) });
+}
+export function setClubMfaPolicy(clubId, { requiredForAdmins, currentPassword, code, recoveryCode }) {
+  return request(`/api/clubs/${encodeURIComponent(clubId)}/mfa`, {
+    method: 'PATCH',
+    body: JSON.stringify({ requiredForAdmins, currentPassword, ...secondFactorBody({ code, recoveryCode }) }),
+  });
+}
+
 // Art. 15 DSGVO — Recht auf Auskunft: bündelt alle zum eigenen Konto
 // gespeicherten Daten.
 export function exportMyData() {

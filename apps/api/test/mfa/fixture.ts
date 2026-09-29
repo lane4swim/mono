@@ -66,7 +66,7 @@ export async function makeFixture(options: { enforce?: boolean; encryptionKey?: 
   // Richtet TOTP für eine Person ein und liefert Secret und Wiederherstellungscodes.
   async function enableTotp(userId: string) {
     const { secret } = await mfaService.beginSetup(userId);
-    const { recoveryCodes: codes } = await mfaService.confirmSetup(userId, totpAt(secret, totpStep()));
+    const { recoveryCodes: codes } = await mfaService.confirmSetup(userId, totpAt(secret, totpStep()), PASSWORD);
     return { secret, recoveryCodes: codes };
   }
   // Ein Code für einen späteren Zeitschritt als der zuletzt angenommene

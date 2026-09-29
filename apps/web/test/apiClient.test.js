@@ -295,3 +295,34 @@ describe('describeError() — eigene Meldung für 429 (Befund U4)', () => {
     expect(message).not.toBe('Rate limit exceeded');
   });
 });
+
+// Issue #97: Zwei-Faktor-Anmeldung. Mit aktivem TOTP liefert POST
+// /auth/login statt einer Sitzung { mfaRequired, mfaToken } — dann dürfen
+// keine Tokens gespeichert werden; erst loginMfa() schließt die Anmeldung ab.
+describe('login()/loginMfa() — Zwei-Faktor-Anmeldung', () => {
+  it('speichert bei mfaRequired keine Tokens und gibt die Aufforderung weiter', async () => {
+    globalThis.fetch = vi.fn(async () => ({ status: 200, ok: true, json: async () => ({ mfaRequired: true, mfaToken: 'mfa-1' }) }));
+    const result = await api.login({ email: 'a@b.de', password: 'x', consent: true, consentVersion: 'v1' });
+    expect(result).toEqual({ mfaRequired: true, mfaToken: 'mfa-1' });
+    expect(api.getStoredRefreshToken()).toBeNull();
+  });
+
+  it('loginMfa() schickt genau einen zweiten Faktor und übernimmt die Sitzung', async () => {
+    const bodies = [];
+    globalThis.fetch = vi.fn(async (url, options) => {
+      bodies.push({ url, body: JSON.parse(options.body) });
+      return { status: 200, ok: true, json: async () => ({ accessToken: 'a1', refreshToken: 'r1', expiresIn: 900, user: { id: 'u1', name: 'Mara' }, enabledModules: [] }) };
+    });
+    const user = await api.loginMfa({ mfaToken: 'mfa-1', recoveryCode: 'abcde-fghjk' });
+    expect(bodies[0].url).toMatch(/\/auth\/login\/mfa$/);
+    expect(bodies[0].body).toEqual({ mfaToken: 'mfa-1', recoveryCode: 'abcde-fghjk' });
+    expect(user).toMatchObject({ id: 'u1', name: 'Mara' });
+    expect(api.getStoredRefreshToken()).toBe('r1');
+  });
+
+  it('resetPassword() gibt bei aktivem TOTP ebenfalls nur die Aufforderung zurück', async () => {
+    globalThis.fetch = vi.fn(async () => ({ status: 200, ok: true, json: async () => ({ mfaRequired: true, mfaToken: 'mfa-2' }) }));
+    await expect(api.resetPassword({ token: 't', newPassword: 'neu-neu-neu' })).resolves.toEqual({ mfaRequired: true, mfaToken: 'mfa-2' });
+    expect(api.getStoredRefreshToken()).toBeNull();
+  });
+});

@@ -113,6 +113,20 @@ function describeEntry(entry) {
       return t('auditLog.action.refereeAssignmentUpdated', { competition: meta.competitionName || '—' });
     case 'refereeAssignment.deleted':
       return t('auditLog.action.refereeAssignmentDeleted', { competition: meta.competitionName || '—' });
+    case 'mfa.enabled':
+      return t('auditLog.action.mfaEnabled');
+    case 'mfa.disabled':
+      return t('auditLog.action.mfaDisabled');
+    case 'mfa.reset':
+      return t('auditLog.action.mfaReset');
+    case 'mfa.recoveryCodesRegenerated':
+      return t('auditLog.action.mfaRecoveryCodesRegenerated');
+    case 'club.mfaPolicyChanged':
+      return meta.requiredForAdmins ? t('auditLog.action.clubMfaPolicyOn') : t('auditLog.action.clubMfaPolicyOff');
+    case 'auth.mfaFailed':
+      return meta.exhausted ? t('auditLog.action.mfaFailedLocked') : t('auditLog.action.mfaFailed');
+    case 'auth.recoveryCodeUsed':
+      return t('auditLog.action.recoveryCodeUsed');
     default:
       return entry.action;
   }

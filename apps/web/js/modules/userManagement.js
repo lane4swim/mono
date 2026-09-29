@@ -15,6 +15,7 @@ import { describeError } from '../apiClient.js';
 import { t } from '../i18n.js';
 import { openCreateClubModal, openEditClubModulesModal } from './clubForm.js';
 import { IS_DEMO } from '../demoMode.js';
+import { mfaBadge, canResetMemberMfa, openResetMemberMfaModal, buildClubMfaPolicyCard, clubMfaPolicyControl } from './mfa.js';
 
 export const userManagementModule = {
   id: 'usermgmt',
@@ -93,7 +94,7 @@ function renderView(container, clubs, invitations, members, legalInfo) {
   wrap.appendChild(tabbedView('usermgmt', [
     isSuperAdmin() && { id: 'clubs', label: t('usermgmt.tabClubs'), render: () => renderClubsSection(clubs, refresh) },
     !isSuperAdmin() && { id: 'members', label: t('usermgmt.tabMembers'), render: () => renderMembersSection(members, refresh) },
-    !isSuperAdmin() && { id: 'club', label: t('usermgmt.tabClub'), render: () => el('div', {}, [renderClubIdentitySection(), renderClubLegalInfoSection(legalInfo)]) },
+    !isSuperAdmin() && { id: 'club', label: t('usermgmt.tabClub'), render: () => el('div', {}, [renderClubMfaSection(refresh), renderClubIdentitySection(), renderClubLegalInfoSection(legalInfo)]) },
     {
       id: 'invitations',
       label: pendingCount ? `${t('usermgmt.tabInvitations')} (${pendingCount})` : t('usermgmt.tabInvitations'),
@@ -124,6 +125,24 @@ function renderView(container, clubs, invitations, members, legalInfo) {
   }
 }
 
+// Vereinseinstellung "Zwei-Faktor-Anmeldung für Admins verlangen" (Issue
+// #97) im Verein-Reiter des Admins. Der aktuelle Wert kommt aus
+// GET /api/me/mfa (clubRequiresAdminMfa), da die Sitzung ihn nicht trägt.
+function renderClubMfaSection(onChanged) {
+  const user = getCurrentUser();
+  const holder = el('div');
+  api.getMfaStatus()
+    .then((status) => {
+      clear(holder);
+      holder.appendChild(buildClubMfaPolicyCard({ id: user.clubId, name: user.clubName || '', mfaRequiredForAdmins: status.clubRequiresAdminMfa }, onChanged));
+    })
+    .catch((err) => {
+      clear(holder);
+      holder.appendChild(el('p', { class: 'form-error' }, describeError(err)));
+    });
+  return holder;
+}
+
 // ---------------- Bestehende Vereinsmitglieder ----------------
 // Für admin: immer der eigene Verein, direkt auf der Seite. Für
 // superadmin: je Verein über einen Button in der Vereinsliste (siehe
@@ -142,7 +161,10 @@ function renderMembersSection(members, onRolesChanged) {
 // Ansicht für superadmin (openClubMembersModal() unten) übergibt keinen
 // Callback, `isAdmin()` ist dort ohnehin immer false (siehe Button-Guard
 // unten), der Parameter würde also nie aufgerufen.
-function renderMembersGroupedByRole(members, onRolesChanged) {
+// `onMfaReset` wird nach dem Zurücksetzen der Zwei-Faktor-Anmeldung eines
+// Mitglieds aufgerufen (Issue #97) — admin: Liste neu laden; superadmin:
+// Mitglieder-Dialog neu öffnen (der Bestätigungsdialog hat ihn ersetzt).
+function renderMembersGroupedByRole(members, onRolesChanged, onMfaReset = onRolesChanged) {
   const wrap = el('div');
   if (!members || members.length === 0) {
     wrap.appendChild(el('p', {}, t('usermgmt.noMembersYet')));
@@ -170,8 +192,13 @@ function renderMembersGroupedByRole(members, onRolesChanged) {
     inRole.forEach((member) => tbody.appendChild(el('tr', {}, [
       el('td', {}, member.name),
       el('td', {}, member.email),
-      el('td', {}, el('div', { class: 'flex gap-8' }, member.roles.map((r) => badge(t(`settings.role_${r}`), 'neutral')))),
-      el('td', {}, isAdmin() ? el('div', { class: 'flex gap-8' }, [
+      el('td', {}, el('div', { class: 'flex gap-8' }, [...member.roles.map((r) => badge(t(`settings.role_${r}`), 'neutral')), mfaBadge(member)].filter(Boolean))),
+      el('td', {}, isAdmin() || canResetMemberMfa(member) ? el('div', { class: 'flex gap-8' }, [
+        canResetMemberMfa(member) ? el('button', {
+          class: 'btn btn-ghost btn-sm',
+          onclick: () => openResetMemberMfaModal(member, onMfaReset),
+        }, t('mfa.resetButton')) : null,
+      ].concat(isAdmin() ? [
         el('button', {
           class: 'btn btn-ghost btn-sm',
           onclick: () => openManageRolesModal(member, onRolesChanged),
@@ -182,7 +209,7 @@ function renderMembersGroupedByRole(members, onRolesChanged) {
           class: 'btn btn-ghost btn-sm',
           onclick: () => openManageParentLinksModal(member),
         }, t('usermgmt.manageChildren')) : null,
-      ].filter(Boolean)) : null),
+      ] : []).filter(Boolean)) : null),
     ])));
     table.appendChild(tbody);
     wrap.appendChild(el('div', { class: 'table-wrap mb-16' }, table));
@@ -415,7 +442,7 @@ function openClubMembersModal(club) {
   api.listClubMembers(club.id)
     .then((resp) => {
       clear(body);
-      body.appendChild(renderMembersGroupedByRole(resp.users));
+      body.appendChild(renderMembersGroupedByRole(resp.users, undefined, () => openClubMembersModal(club)));
     })
     .catch((err) => {
       clear(body);
@@ -442,12 +469,13 @@ function renderClubsSection(clubs, onChanged) {
     card.appendChild(emptyState(t('usermgmt.clubsSection'), t('usermgmt.noClubsYet'), null));
   } else {
     const table = el('table');
-    table.appendChild(el('thead', {}, el('tr', {}, [el('th', {}, t('usermgmt.formClubName')), el('th', {}, ''), el('th', {}, ''), el('th', {}, '')])));
+    table.appendChild(el('thead', {}, el('tr', {}, [el('th', {}, t('usermgmt.formClubName')), el('th', {}, ''), el('th', {}, ''), el('th', {}, t('mfa.clubPolicyColumn')), el('th', {}, '')])));
     const tbody = el('tbody');
     clubs.forEach(club => tbody.appendChild(el('tr', {}, [
       el('td', {}, club.name),
       el('td', {}, fmtDateShort((club.createdAt || '').slice(0, 10))),
       el('td', {}, el('button', { class: 'btn btn-ghost btn-sm', onclick: () => openClubMembersModal(club) }, t('usermgmt.showMembers'))),
+      el('td', {}, clubMfaPolicyControl(club, () => onChanged?.())),
       el('td', {}, el('button', { class: 'btn btn-ghost btn-sm', onclick: () => openEditClubModulesModal({
         club,
         onSuccess: () => { toast(t('usermgmt.clubModulesUpdated')); onChanged?.(); },

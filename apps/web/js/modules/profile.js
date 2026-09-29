@@ -25,6 +25,7 @@ import * as api from '../apiClient.js';
 import { NetworkError, describeError } from '../apiClient.js';
 import { t, getLocale, getAvailableLocales } from '../i18n.js';
 import { isPushSupported, getExistingPushSubscription, subscribeToPush, unsubscribeFromPush } from '../push.js';
+import { buildMfaCard } from './mfa.js';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -345,7 +346,7 @@ function renderView(container, athletes, results, entries, actionItems, sessions
   // DSGVO-Aktionen zu den eigenen Daten.
   wrap.appendChild(tabbedView('profile', [
     { id: 'account', label: t('profile.tabAccount'), render: () => el('div', {}, [card, langCard]) },
-    { id: 'security', label: t('profile.tabSecurity'), render: () => el('div', {}, [buildChangeEmailCard(), buildChangePasswordCard()]) },
+    { id: 'security', label: t('profile.tabSecurity'), render: () => el('div', {}, [buildMfaCard(), buildChangeEmailCard(), buildChangePasswordCard()]) },
     notificationsCard && { id: 'notifications', label: t('profile.tabNotifications'), render: () => notificationsCard },
     { id: 'data', label: t('profile.tabData'), render: () => dataCard },
   ]));

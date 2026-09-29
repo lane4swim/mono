@@ -44,6 +44,9 @@ describe('auditLog — Beschriftungen (Issue #96)', () => {
       'user.passwordChanged', 'user.emailChanged', 'club.created', 'club.modulesChanged', 'club.identityChanged',
       'club.legalInfoChanged', 'parentLink.added', 'parentLink.removed', 'qualification.created', 'qualification.updated',
       'qualification.deleted', 'refereeAssignment.created', 'refereeAssignment.updated', 'refereeAssignment.deleted',
+      // Issue #97: Zwei-Faktor-Anmeldung.
+      'mfa.enabled', 'mfa.disabled', 'mfa.reset', 'mfa.recoveryCodesRegenerated', 'club.mfaPolicyChanged',
+      'auth.mfaFailed', 'auth.recoveryCodeUsed',
     ];
     const rows = await renderRows(actions.map((action) => entry({ action })));
     rows.forEach((row, i) => {

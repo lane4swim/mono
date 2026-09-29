@@ -11,7 +11,7 @@
 export const MAX_FAILED_ATTEMPTS = 5;
 
 interface ChallengeState {
-  failures: number;
+  attempts: number;
   consumed: boolean;
   expiresAt: number;
 }
@@ -26,23 +26,27 @@ export class MfaChallengeStore {
     }
     let state = this.states.get(jti);
     if (!state) {
-      state = { failures: 0, consumed: false, expiresAt: expiresAt.getTime() };
+      state = { attempts: 0, consumed: false, expiresAt: expiresAt.getTime() };
       this.states.set(jti, state);
     }
     return state;
   }
 
-  // Darf mit diesem mfaToken noch ein Code versucht werden?
-  isUsable(jti: string, expiresAt: Date): boolean {
+  // Reserviert einen Versuch, BEVOR der Code geprüft wird — synchron, ohne
+  // await dazwischen. Würde erst nach der (asynchronen) Prüfung gezählt,
+  // kämen beliebig viele gleichzeitige Anfragen an der Grenze vorbei, und ein
+  // richtiger Code unter ihnen würde angenommen. false: mfaToken verbraucht
+  // oder alle Versuche aufgebraucht.
+  beginAttempt(jti: string, expiresAt: Date): boolean {
     const state = this.stateFor(jti, expiresAt);
-    return !state.consumed && state.failures < MAX_FAILED_ATTEMPTS;
+    if (state.consumed || state.attempts >= MAX_FAILED_ATTEMPTS) return false;
+    state.attempts += 1;
+    return true;
   }
 
-  // Zählt einen Fehlversuch; true, wenn das mfaToken damit erschöpft ist.
-  recordFailure(jti: string, expiresAt: Date): boolean {
-    const state = this.stateFor(jti, expiresAt);
-    state.failures += 1;
-    return state.failures >= MAX_FAILED_ATTEMPTS;
+  // Nach einem Fehlversuch: sind damit alle Versuche aufgebraucht?
+  isExhausted(jti: string, expiresAt: Date): boolean {
+    return this.stateFor(jti, expiresAt).attempts >= MAX_FAILED_ATTEMPTS;
   }
 
   // Markiert das mfaToken als eingelöst; false, wenn es das schon war.

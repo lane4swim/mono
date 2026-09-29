@@ -459,14 +459,14 @@ export function createAuthService(deps: AuthServiceDeps) {
       const challenge = await verifyMfaToken(input.mfaToken, deps.keyPair);
       if (!deps.mfa) throw new MfaNotConfiguredError();
       const { verifier, challenges } = deps.mfa;
-      if (!challenges.isUsable(challenge.jti, challenge.expiresAt)) throw new InvalidMfaTokenError();
+      if (!challenges.beginAttempt(challenge.jti, challenge.expiresAt)) throw new InvalidMfaTokenError();
 
       const user = await deps.users.findById(challenge.userId);
       if (!user || !user.totpEnabledAt) throw new InvalidMfaTokenError();
 
       const method = await verifier.verifySecondFactor(user, { code: input.code, recoveryCode: input.recoveryCode });
       if (!method) {
-        const exhausted = challenges.recordFailure(challenge.jti, challenge.expiresAt);
+        const exhausted = challenges.isExhausted(challenge.jti, challenge.expiresAt);
         // Ohne await, wie auth.loginFailed.
         void deps.auditLog.record({
           clubId: user.clubId,
@@ -482,6 +482,13 @@ export function createAuthService(deps: AuthServiceDeps) {
       if (!challenges.consume(challenge.jti, challenge.expiresAt)) throw new InvalidMfaTokenError();
       if (method === 'recovery') {
         await deps.auditLog.record({ clubId: user.clubId, actorId: user.id, actorLabel: userLabel(user), action: 'auth.recoveryCodeUsed', targetId: user.id, targetLabel: userLabel(user) });
+        // Ohne await, wie die übrigen Sicherheitshinweise: ein Mailfehler darf
+        // die Anmeldung nicht scheitern lassen.
+        deps.mailer
+          .sendAccountSecurityChangeNotice({ to: user.email, recipientName: user.name, changeType: 'recoveryCodeUsed', locale: user.locale })
+          .catch((err) => {
+            console.error('[auth] Fehler beim Versand des Hinweises zur Anmeldung mit Wiederherstellungscode:', err);
+          });
       }
       return issueSession(user);
     },
