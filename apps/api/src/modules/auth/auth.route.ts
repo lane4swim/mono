@@ -78,7 +78,7 @@ export function ipAndEmailRateLimitKey(request: FastifyRequest): string {
 // der Grenze wird abgewiesen, bevor Arbeit anfällt.
 const AUTH_PER_IP_MAX_PER_MINUTE = 30;
 
-function perIpAuthCeiling(app: FastifyInstance): onRequestAsyncHookHandler {
+export function perIpAuthCeiling(app: FastifyInstance): onRequestAsyncHookHandler {
   const limiter = app.createRateLimit({
     max: AUTH_PER_IP_MAX_PER_MINUTE,
     timeWindow: '1 minute',

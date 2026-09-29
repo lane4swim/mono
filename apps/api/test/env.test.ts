@@ -70,6 +70,8 @@ describe('loadEnv', () => {
       JWT_PRIVATE_KEY: 'dummy-private-key',
       JWT_PUBLIC_KEY: 'dummy-public-key',
       TRUSTED_PROXY_IPS: '127.0.0.1',
+      // Pflicht in Produktion, solange MFA_ENFORCE aktiv ist.
+      TOTP_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
     });
     expect(env.CORS_ORIGIN).toBe('https://app.lane1.example.org');
   });
@@ -84,6 +86,8 @@ describe('loadEnv', () => {
           ...validEnv,
           NODE_ENV: 'production',
           TRUSTED_PROXY_IPS: '127.0.0.1',
+          // Pflicht in Produktion, solange MFA_ENFORCE aktiv ist.
+          TOTP_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
         }),
       ).toThrow(/JWT_PRIVATE_KEY/);
     });
@@ -93,6 +97,8 @@ describe('loadEnv', () => {
         ...validEnv,
         NODE_ENV: 'production',
         TRUSTED_PROXY_IPS: '127.0.0.1',
+        // Pflicht in Produktion, solange MFA_ENFORCE aktiv ist.
+        TOTP_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
         JWT_PRIVATE_KEY_FILE: '/etc/lane1/jwt_private.pem',
         JWT_PUBLIC_KEY_FILE: '/etc/lane1/jwt_public.pem',
       });
@@ -105,6 +111,8 @@ describe('loadEnv', () => {
         ...validEnv,
         NODE_ENV: 'production',
         TRUSTED_PROXY_IPS: '127.0.0.1',
+        // Pflicht in Produktion, solange MFA_ENFORCE aktiv ist.
+        TOTP_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
         JWT_PRIVATE_KEY_FILE: '/etc/lane1/jwt_private.pem',
         JWT_PUBLIC_KEY: 'dummy-public-key',
       });
@@ -118,6 +126,8 @@ describe('loadEnv', () => {
           ...validEnv,
           NODE_ENV: 'production',
           TRUSTED_PROXY_IPS: '127.0.0.1',
+          // Pflicht in Produktion, solange MFA_ENFORCE aktiv ist.
+          TOTP_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
           JWT_PRIVATE_KEY: 'dummy-private-key',
           JWT_PRIVATE_KEY_FILE: '/etc/lane1/jwt_private.pem',
           JWT_PUBLIC_KEY: 'dummy-public-key',
@@ -166,6 +176,8 @@ describe('loadEnv', () => {
         JWT_PRIVATE_KEY: 'dummy-private-key',
         JWT_PUBLIC_KEY: 'dummy-public-key',
         TRUSTED_PROXY_IPS: '127.0.0.1',
+        // Pflicht in Produktion, solange MFA_ENFORCE aktiv ist.
+        TOTP_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
       });
       expect(env.TRUSTED_PROXY_IPS).toBe('127.0.0.1');
     });
@@ -234,5 +246,29 @@ describe('resolveTotpEncryptionKey()', () => {
     expect(resolveTotpEncryptionKey({ NODE_ENV: 'test', TOTP_ENCRYPTION_KEY: undefined })).toHaveLength(32);
     const key = Buffer.alloc(32, 7);
     expect(resolveTotpEncryptionKey({ NODE_ENV: 'production', TOTP_ENCRYPTION_KEY: key.toString('base64') })).toEqual(key);
+  });
+});
+
+// Plan PR 3: mit Pflicht, aber ohne Schlüssel wären alle Superadmins
+// ausgesperrt — der Start scheitert stattdessen.
+describe('loadEnv — MFA_ENFORCE ohne TOTP_ENCRYPTION_KEY in Produktion', () => {
+  const prodEnv = {
+    ...validEnv,
+    NODE_ENV: 'production',
+    JWT_PRIVATE_KEY: 'dummy-private-key',
+    JWT_PUBLIC_KEY: 'dummy-public-key',
+    TRUSTED_PROXY_IPS: '127.0.0.1',
+  };
+
+  it('bricht ab, solange die Pflicht aktiv ist', () => {
+    expect(() => loadEnv(prodEnv)).toThrow(/TOTP_ENCRYPTION_KEY fehlt/);
+  });
+
+  it('startet mit MFA_ENFORCE=false auch ohne Schlüssel', () => {
+    expect(loadEnv({ ...prodEnv, MFA_ENFORCE: 'false' }).MFA_ENFORCE).toBe(false);
+  });
+
+  it('verlangt den Schlüssel außerhalb von Produktion nicht', () => {
+    expect(loadEnv({ ...validEnv, NODE_ENV: 'development' }).MFA_ENFORCE).toBe(true);
   });
 });

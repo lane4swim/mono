@@ -11,6 +11,8 @@ import { InvalidCurrentPasswordError, UserNotFoundError } from '../auth/auth.ser
 import { ForbiddenError, ClubNotFoundError } from '../invitations/invitations.service.js';
 import { verifyPassword } from '../../auth/password.js';
 import { buildOtpauthUri, generateTotpSecret, verifyTotp } from '../../auth/totp.js';
+import { verifyMfaSetupToken } from '../../auth/tokens.js';
+import type { KeyPair } from '../../auth/keys.js';
 import { isMfaRequired, MfaNotConfiguredError, type MfaVerifier, type SecondFactorInput } from './mfa.core.js';
 import {
   MfaAlreadyEnabledError,
@@ -19,6 +21,7 @@ import {
   InvalidMfaCodeError,
   MfaCodeRequiredError,
   MfaRequiredForActionError,
+  MfaRequiredCannotDisableError,
 } from './mfaErrors.js';
 
 export interface MfaRequester {
@@ -40,6 +43,8 @@ export interface MfaServiceDeps {
   issueSession: (userId: string) => Promise<unknown>;
   enforce: boolean;
   issuer: string;
+  // Prüft das setupToken der erzwungenen Einrichtung (auth/tokens.ts).
+  keyPair: KeyPair;
 }
 
 export function createMfaService(deps: MfaServiceDeps) {
@@ -74,6 +79,38 @@ export function createMfaService(deps: MfaServiceDeps) {
     return codes;
   }
 
+  async function isRequiredFor(user: UserRecord): Promise<boolean> {
+    const club = user.clubId ? await deps.clubs.findById(user.clubId) : null;
+    return isMfaRequired(user, club, deps.enforce);
+  }
+
+  async function beginSetupFor(userId: string) {
+    if (!deps.verifier.isAvailable()) throw new MfaNotConfiguredError();
+    const user = await requireUser(userId);
+    if (user.totpEnabledAt) throw new MfaAlreadyEnabledError();
+    const secret = generateTotpSecret();
+    if (!(await deps.users.setPendingTotpSecret(user.id, deps.verifier.sealSecret(secret)))) throw new MfaAlreadyEnabledError();
+    const otpauthUri = buildOtpauthUri(secret, user.email, deps.issuer);
+    const qrSvg = await QRCode.toString(otpauthUri, { type: 'svg', errorCorrectionLevel: 'M', margin: 1 });
+    return { secret, otpauthUri, qrSvg };
+  }
+
+  // Aktiviert TOTP mit einem ersten gültigen Code, beendet alle Sitzungen
+  // und stellt ein frisches Token-Paar aus. Wer aufruft, hat das Passwort
+  // bereits geprüft (confirmSetup: currentPassword; erzwungene Einrichtung:
+  // setupToken aus der Anmeldung).
+  async function activate(user: UserRecord, code: string) {
+    if (!user.totpSecretEnc) throw new MfaSetupNotStartedError();
+    const step = verifyTotp(deps.verifier.openSecret(user.totpSecretEnc), code);
+    if (step === null) throw new InvalidMfaCodeError();
+    if (!(await deps.users.enableTotp(user.id, step))) throw new MfaAlreadyEnabledError();
+    const recoveryCodes = await newRecoveryCodes(user.id);
+    await deps.refreshTokens.revokeAllForUser(user.id);
+    await deps.auditLog.record({ clubId: user.clubId, actorId: user.id, action: 'mfa.enabled', targetId: user.id });
+    notify(user);
+    return { recoveryCodes, session: await deps.issueSession(user.id) };
+  }
+
   return {
     async status(userId: string) {
       const user = await requireUser(userId);
@@ -93,14 +130,7 @@ export function createMfaService(deps: MfaServiceDeps) {
     // Neues, noch unbestätigtes Secret. Ein erneuter Aufruf ersetzt ein
     // unbestätigtes Secret (z. B. QR-Code nicht gescannt).
     async beginSetup(userId: string) {
-      if (!deps.verifier.isAvailable()) throw new MfaNotConfiguredError();
-      const user = await requireUser(userId);
-      if (user.totpEnabledAt) throw new MfaAlreadyEnabledError();
-      const secret = generateTotpSecret();
-      if (!(await deps.users.setPendingTotpSecret(user.id, deps.verifier.sealSecret(secret)))) throw new MfaAlreadyEnabledError();
-      const otpauthUri = buildOtpauthUri(secret, user.email, deps.issuer);
-      const qrSvg = await QRCode.toString(otpauthUri, { type: 'svg', errorCorrectionLevel: 'M', margin: 1 });
-      return { secret, otpauthUri, qrSvg };
+      return beginSetupFor(userId);
     },
 
     // Aktiviert TOTP mit einem ersten gültigen Code. Beendet alle anderen
@@ -112,22 +142,31 @@ export function createMfaService(deps: MfaServiceDeps) {
       const user = await requireUser(userId);
       if (user.totpEnabledAt) throw new MfaAlreadyEnabledError();
       await requirePassword(user, currentPassword);
-      if (!user.totpSecretEnc) throw new MfaSetupNotStartedError();
-      const step = verifyTotp(deps.verifier.openSecret(user.totpSecretEnc), code);
-      if (step === null) throw new InvalidMfaCodeError();
-      if (!(await deps.users.enableTotp(user.id, step))) throw new MfaAlreadyEnabledError();
-      const recoveryCodes = await newRecoveryCodes(user.id);
-      await deps.refreshTokens.revokeAllForUser(user.id);
-      await deps.auditLog.record({ clubId: user.clubId, actorId: user.id, action: 'mfa.enabled', targetId: user.id });
-      notify(user);
-      return { recoveryCodes, session: await deps.issueSession(user.id) };
+      return activate(user, code);
+    },
+
+    // Erzwungene Einrichtung (Plan PR 3): die Anmeldung lieferte statt einer
+    // Sitzung ein setupToken, weil TOTP Pflicht, aber nicht eingerichtet ist.
+    // Das Token belegt das korrekte Passwort; ein zweites Mal wird es nicht
+    // verlangt.
+    async beginForcedSetup(setupToken: string) {
+      const { userId } = await verifyMfaSetupToken(setupToken, deps.keyPair);
+      return beginSetupFor(userId);
+    },
+
+    async confirmForcedSetup(setupToken: string, code: string) {
+      const { userId } = await verifyMfaSetupToken(setupToken, deps.keyPair);
+      const user = await requireUser(userId);
+      if (user.totpEnabledAt) throw new MfaAlreadyEnabledError();
+      return activate(user, code);
     },
 
     // Abschalten durch die Person selbst: Passwort UND ein zweiter Faktor.
-    // (Die Pflicht nach Rolle/Verein verhindert das erst ab PR 3 des Plans.)
+    // Nicht, solange TOTP für sie Pflicht ist.
     async disable(userId: string, currentPassword: string, secondFactor: SecondFactorInput) {
       const user = await requireUser(userId);
       if (!user.totpEnabledAt) throw new MfaNotEnabledError();
+      if (await isRequiredFor(user)) throw new MfaRequiredCannotDisableError();
       await requirePassword(user, currentPassword);
       await requireOwnSecondFactor(user, secondFactor);
       await deps.users.clearTotp(user.id);

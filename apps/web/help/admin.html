@@ -81,8 +81,9 @@
       <li><strong>Für Admins</strong> kann die Vereinsadministration sie im Reiter <em>Verein</em> der Nutzerverwaltung vorschreiben. Dafür muss die einschaltende Person sie zuerst für ihr eigenes Konto eingerichtet haben.</li>
       <li><strong>Alle anderen</strong> können sie freiwillig nutzen.</li>
     </ul>
+    <p>Ist die Zwei-Faktor-Anmeldung für ein Konto Pflicht, aber noch nicht eingerichtet, führt die nächste Anmeldung nach dem Passwort direkt zur Einrichtung — ohne sie geht es nicht weiter. Wer beim Einschalten der Vereinspflicht gerade angemeldet ist, wird spätestens nach 15 Minuten abgemeldet und richtet sie bei der nächsten Anmeldung ein. Solange sie Pflicht ist, lässt sie sich im Profil nicht abschalten. Im Reiter <em>Verein</em> steht, wie viele Admins sie noch einrichten müssen.</p>
     <h3>Smartphone verloren?</h3>
-    <p>Mit einem der Wiederherstellungscodes gelingt die Anmeldung einmalig auch ohne App; danach die Zwei-Faktor-Anmeldung im Profil neu einrichten. Ohne Wiederherstellungscodes kann eine Vereinsadministration die Zwei-Faktor-Anmeldung eines Mitglieds in der Nutzerverwaltung zurücksetzen (<em>2FA zurücksetzen</em>, mit eigenem Passwort bestätigt) — das gilt auch für andere Admins desselben Vereins. Die betroffene Person wird auf allen Geräten abgemeldet und per E-Mail informiert. Superadmins setzen Konten aller Vereine zurück.</p>
+    <p>Mit einem der Wiederherstellungscodes gelingt die Anmeldung einmalig auch ohne App; danach die Zwei-Faktor-Anmeldung im Profil neu einrichten. Ohne Wiederherstellungscodes kann eine Vereinsadministration die Zwei-Faktor-Anmeldung eines Mitglieds in der Nutzerverwaltung zurücksetzen (<em>2FA zurücksetzen</em>, mit eigenem Passwort bestätigt) — das gilt auch für andere Admins desselben Vereins. Die betroffene Person wird auf allen Geräten abgemeldet und per E-Mail informiert. Superadmins setzen Konten aller Vereine zurück. Das Konto eines Superadmins setzt nur der Serverbetrieb zurück (<code>npm run reset-mfa</code>, siehe Deployment-Anleitung).</p>
 
     <h2>Verwandte Themen</h2>
     <ul>

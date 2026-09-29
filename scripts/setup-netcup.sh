@@ -368,6 +368,15 @@ fi
 # die Rechte einer bereits vorhandenen, älteren Datei.
 chmod 600 "$ENV_FILE"
 
+# Zwei-Faktor-Anmeldung (Issue #97): TOTP_ENCRYPTION_KEY erzeugen und
+# MFA_ENFORCE festlegen — auch für eine bereits vorhandene $ENV_FILE, der
+# beides noch fehlt (siehe scripts/lib/mfa-env.sh). Vorhandene Werte bleiben.
+# Standard hier: Pflicht für Superadmins — ein öffentlich erreichbarer
+# Server. MFA_ENFORCE=false nur für eine Testinstanz.
+# shellcheck source=lib/mfa-env.sh
+source "${REPO_ROOT}/scripts/lib/mfa-env.sh"
+mfa_ensure_env "$ENV_FILE" true
+
 # --- Schritt 7.3: Datenbank-Schema anlegen -----------------------------------
 # `migrate deploy` statt `db push`: wendet die
 # committete Migrationshistorie unter apps/api/prisma/migrations/ an.
@@ -563,6 +572,11 @@ log "Fertig bis einschließlich Schritt 9."
 # hier im Terminal-Scrollback und in jedem Log, das die Skriptausgabe
 # mitschneidet.
 echo "Superadmin-Login: ${SUPERADMIN_EMAIL} (Passwort wie eingegeben/vorgegeben — wird hier nicht wiederholt)"
+if grep -Eq '^MFA_ENFORCE="?true' "$ENV_FILE"; then
+  echo "Zwei-Faktor-Anmeldung ist für Superadmins Pflicht (MFA_ENFORCE=true): bei der ersten Anmeldung eine Authenticator-App bereithalten."
+else
+  echo "Zwei-Faktor-Anmeldung ist für niemanden Pflicht (MFA_ENFORCE=false) — sie lässt sich trotzdem im Profil einrichten."
+fi
 if [[ "$ENV_WAS_CREATED" == "1" ]]; then
   echo "Das erzeugte DB-Passwort (Laufzeitrolle lane1_app) steht in apps/api/.env unter DATABASE_URL."
   echo "Das erzeugte DB-Migrationspasswort (lane1_migrator, nur für künftige 'prisma migrate deploy'-Läufe, siehe Abschnitt 13) steht in apps/api/.env.migrate."

@@ -31,7 +31,7 @@
 import { pendingSyncCount } from './db.js';
 import { wipeDemoDataIfPresent } from './seed.js';
 import { registerServiceWorker } from './swUpdate.js';
-import { restoreSession, getCurrentUser, setUserLocale, logout, onUserChange, isLoggedIn, isParentOnly } from './state.js';
+import { restoreSession, takeSessionEndReason, getCurrentUser, setUserLocale, logout, onUserChange, isLoggedIn, isParentOnly } from './state.js';
 import { currentRoute, onRouteChange } from './router.js';
 import { toast } from './ui.js';
 import { confirmAction } from './modal.js';
@@ -86,7 +86,10 @@ async function boot() {
   const user = await restoreSession();
   if (!user) {
     showAuthScreen();
-    renderLoginScreen(authScreenEl, startAuthenticatedApp);
+    // Endete die Sitzung, weil die Zwei-Faktor-Anmeldung inzwischen Pflicht
+    // ist (Issue #97), sagt der Anmeldebildschirm warum.
+    const notice = takeSessionEndReason() === 'mfaSetupRequired' ? t('mfa.sessionEndedSetupRequired') : undefined;
+    renderLoginScreen(authScreenEl, startAuthenticatedApp, { notice });
     return;
   }
   await startAuthenticatedApp();

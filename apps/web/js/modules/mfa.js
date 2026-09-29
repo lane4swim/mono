@@ -174,19 +174,25 @@ export function openConfirmDialog({ title, intro, needsPassword, needsSecondFact
 }
 
 // ---- Einrichten -----------------------------------------------------------
+// QR-Code und manuell eingebbarer Schlüssel — im Profil und bei der
+// erzwungenen Einrichtung gleich.
+function appendSetupInstructions(body, setup) {
+  body.appendChild(el('p', {}, t('mfa.setupStep1')));
+  const qr = buildQrSvg(setup.qrSvg);
+  if (qr) body.appendChild(el('div', { class: 'mfa-qr-wrap' }, qr));
+  body.appendChild(el('details', { class: 'mb-16' }, [
+    el('summary', {}, t('mfa.setupManualSummary')),
+    el('p', { class: 'hint' }, t('mfa.setupManualHint')),
+    el('code', { class: 'mfa-secret' }, formatSecret(setup.secret)),
+  ]));
+}
+
 function openSetupModal(onDone) {
   const body = el('div', {}, el('p', {}, t('common.loading')));
   const modal = openModal({ title: t('mfa.setupTitle'), bodyNode: body });
   api.beginMfaSetup().then((setup) => {
     clear(body);
-    body.appendChild(el('p', {}, t('mfa.setupStep1')));
-    const qr = buildQrSvg(setup.qrSvg);
-    if (qr) body.appendChild(el('div', { class: 'mfa-qr-wrap' }, qr));
-    body.appendChild(el('details', { class: 'mb-16' }, [
-      el('summary', {}, t('mfa.setupManualSummary')),
-      el('p', { class: 'hint' }, t('mfa.setupManualHint')),
-      el('code', { class: 'mfa-secret' }, formatSecret(setup.secret)),
-    ]));
+    appendSetupInstructions(body, setup);
     const form = el('form', { class: 'form-grid' });
     const fCode = codeInput();
     form.appendChild(field(t('mfa.setupStep2'), fCode, { span2: true }));
@@ -269,6 +275,8 @@ export function buildMfaCard() {
       el('span', { class: 'hint' }, t('mfa.recoveryRemaining', { count: status.recoveryCodesRemaining })),
     ]));
     if (status.recoveryCodesRemaining <= 2) content.appendChild(el('p', { class: 'form-error' }, t('mfa.recoveryLow')));
+    // Bei Pflicht lehnt der Server das Abschalten ab (mfa_required) — der
+    // Knopf entfällt dann.
     content.appendChild(el('div', { class: 'flex gap-8' }, [
       el('button', {
         type: 'button',
@@ -284,7 +292,7 @@ export function buildMfaCard() {
           },
         }),
       }, t('mfa.regenerateButton')),
-      el('button', {
+      !status.required && el('button', {
         type: 'button',
         class: 'btn btn-ghost',
         onclick: () => openConfirmDialog({
@@ -351,6 +359,87 @@ export function renderMfaStep(container, { onSubmit, onSuccess, onExpired }) {
   secondFactor.focus();
 }
 
+// ---- Erzwungene Einrichtung -------------------------------------------------
+// TOTP ist für die Person Pflicht, aber noch nicht eingerichtet: die Anmeldung
+// lieferte statt einer Sitzung ein setupToken. Ersetzt den Inhalt von
+// `container` durch QR-Code und Codefeld, danach durch die
+// Wiederherstellungscodes. `onConfirm(code)` liefert { recoveryCodes, finish };
+// finish() beginnt die Sitzung. `onExpired` führt zurück zur Anmeldung
+// (setupToken abgelaufen, 15 Minuten).
+export function renderForcedMfaSetup(container, { setupToken, onConfirm, onSuccess, onExpired }) {
+  clear(container);
+  const box = el('div', { class: 'auth-box' });
+  box.appendChild(el('h1', { class: 'mt-0' }, t('mfa.forcedTitle')));
+  box.appendChild(el('p', { class: 'hint' }, t('mfa.forcedIntro')));
+  const body = el('div', {}, el('p', {}, t('common.loading')));
+  box.appendChild(body);
+  const footer = el('div', { class: 'auth-footer' }, [
+    el('button', { type: 'button', onclick: () => onExpired(null) }, t('auth.backToLogin')),
+  ]);
+  box.appendChild(footer);
+  container.appendChild(box);
+
+  const expired = (err) => err instanceof api.ApiError && err.status === 401;
+
+  function showRecoveryCodes(recoveryCodes, finish) {
+    // TOTP ist jetzt eingerichtet — zurück zur Anmeldung ergäbe keinen Sinn.
+    footer.remove();
+    clear(body);
+    body.appendChild(renderRecoveryCodes(recoveryCodes));
+    const done = el('button', { type: 'button', class: 'btn btn-primary', style: 'margin-top:16px;width:100%' }, t('mfa.forcedContinue'));
+    done.addEventListener('click', async () => {
+      done.disabled = true;
+      try {
+        onSuccess(await finish());
+      } catch (err) {
+        done.disabled = false;
+        toast(describeError(err), 'error');
+      }
+    });
+    body.appendChild(done);
+  }
+
+  api.beginForcedMfaSetup(setupToken).then((setup) => {
+    clear(body);
+    appendSetupInstructions(body, setup);
+    const form = el('form', { class: 'form-grid' });
+    const fCode = codeInput();
+    form.appendChild(field(t('mfa.setupStep2'), fCode, { span2: true }));
+    const errorBox = el('p', { class: 'form-error', style: 'grid-column:1/-1;display:none' });
+    form.appendChild(errorBox);
+    const submitBtn = el('button', { type: 'submit', class: 'btn btn-primary', style: 'grid-column:1/-1' }, t('mfa.setupConfirm'));
+    form.appendChild(submitBtn);
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorBox.style.display = 'none';
+      submitBtn.disabled = true;
+      try {
+        const { recoveryCodes, finish } = await onConfirm(fCode.value.replace(/\s/g, ''));
+        toast(t('mfa.enabledToast'));
+        showRecoveryCodes(recoveryCodes, finish);
+      } catch (err) {
+        if (expired(err)) {
+          onExpired(t('mfa.forcedExpired'));
+          return;
+        }
+        errorBox.textContent = describeMfaError(err);
+        errorBox.style.display = 'block';
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
+    body.appendChild(form);
+    fCode.focus();
+  }).catch((err) => {
+    if (expired(err)) {
+      onExpired(t('mfa.forcedExpired'));
+      return;
+    }
+    clear(body);
+    body.appendChild(el('p', { class: 'form-error' }, describeMfaError(err)));
+  });
+}
+
 // ---- Verwaltung durch Admins/Superadmins ---------------------------------------
 // Zurücksetzen für ein Mitglied (verlorenes Gerät). Bestätigung mit eigenem
 // Passwort und — falls die handelnde Person selbst TOTP nutzt — einem Code.
@@ -386,9 +475,16 @@ export function mfaBadge(member) {
 
 // Vereinseinstellung "TOTP für alle Admins verlangen" (admin: eigener Verein;
 // superadmin: jeder). Einschalten setzt eigenes, aktives TOTP voraus.
-export function buildClubMfaPolicyCard(club, onChanged) {
+// `enforced`: MFA_ENFORCE des Servers — ohne ihn bleibt die Einstellung
+// gespeichert, wirkt aber nicht. `adminsWithoutMfa`: Admins des Vereins, die
+// bei ihrer nächsten Anmeldung zur Einrichtung aufgefordert werden.
+export function buildClubMfaPolicyCard(club, onChanged, { enforced = true, adminsWithoutMfa = 0 } = {}) {
   const card = el('div', { class: 'card mb-16' }, [el('h3', { class: 'mt-0' }, t('mfa.clubPolicyTitle'))]);
   card.appendChild(el('p', { class: 'hint' }, t('mfa.clubPolicyHint')));
+  if (!enforced) card.appendChild(el('p', { class: 'hint' }, t('mfa.clubPolicyNotEnforced')));
+  else if (club.mfaRequiredForAdmins && adminsWithoutMfa > 0) {
+    card.appendChild(el('p', { class: 'hint' }, t('mfa.clubPolicyPendingAdmins', { count: adminsWithoutMfa })));
+  }
   card.appendChild(clubMfaPolicyControl(club, onChanged));
   return card;
 }

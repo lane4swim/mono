@@ -103,6 +103,44 @@ describe('Zwei-Faktor-Anmeldung über HTTP', () => {
   });
 });
 
+describe('Erzwungene Einrichtung über HTTP', () => {
+  it('Anmeldung → setupToken → Einrichtung → Sitzung; ungültige Tokens mit stabilem Fehlercode', async () => {
+    const { f, app } = await setup();
+    const login = await app.inject({ method: 'POST', url: '/auth/login', payload: { email: 'super@lane1.de', password: PASSWORD, consent: true, consentVersion: f.superadmin.consentVersion } });
+    expect(login.statusCode).toBe(200);
+    const { setupToken } = login.json();
+    expect(login.json()).toEqual({ mfaSetupRequired: true, setupToken: expect.any(String) });
+
+    const bad = await app.inject({ method: 'POST', url: '/auth/mfa-setup', payload: { setupToken: 'kein-token' } });
+    expect(bad.statusCode).toBe(401);
+    expect(bad.json().error).toBe('invalid_mfa_setup_token');
+
+    const begin = await app.inject({ method: 'POST', url: '/auth/mfa-setup', payload: { setupToken } });
+    expect(begin.statusCode).toBe(200);
+    const confirm = await app.inject({ method: 'POST', url: '/auth/mfa-setup/confirm', payload: { setupToken, code: totpAt(begin.json().secret, totpStep()) } });
+    expect(confirm.statusCode).toBe(200);
+    expect(confirm.json().recoveryCodes).toHaveLength(10);
+    expect(confirm.json().user).toMatchObject({ email: 'super@lane1.de', mfaEnabled: true });
+
+    const disable = await app.inject({
+      method: 'DELETE',
+      url: '/api/me/mfa/totp',
+      headers: { authorization: `Bearer ${confirm.json().accessToken}` },
+      payload: { currentPassword: PASSWORD, code: totpAt(begin.json().secret, totpStep() + 1) },
+    });
+    expect(disable.statusCode).toBe(409);
+    expect(disable.json().error).toBe('mfa_required');
+  });
+
+  it('eine Sitzung ohne das nun verlangte TOTP endet mit 401 mfa_setup_required', async () => {
+    const { f, app } = await setup();
+    const session = await f.authService.issueSessionFor(f.superadmin.id);
+    const res = await app.inject({ method: 'POST', url: '/auth/refresh', payload: { refreshToken: session.refreshToken } });
+    expect(res.statusCode).toBe(401);
+    expect(res.json().error).toBe('mfa_setup_required');
+  });
+});
+
 describe('Geänderter TOTP_ENCRYPTION_KEY', () => {
   it('meldet ein nicht entschlüsselbares Secret als 503 mfa_secret_unreadable statt als 500', async () => {
     const { f, app } = await setup();

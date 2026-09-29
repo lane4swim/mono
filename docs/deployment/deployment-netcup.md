@@ -451,6 +451,26 @@ sichtbar, der Server protokolliert Versandversuche dann aber nur, statt
 sie tatsächlich zuzustellen (`ConsolePushSender`, siehe
 `apps/api/src/push/pusher.console.ts`).
 
+**Zwei-Faktor-Anmeldung (TOTP).** `TOTP_ENCRYPTION_KEY` verschlüsselt die
+TOTP-Secrets in der Datenbank, `MFA_ENFORCE` legt fest, ob die
+Zwei-Faktor-Anmeldung für Superadmins Pflicht ist:
+```bash
+echo "TOTP_ENCRYPTION_KEY=\"$(openssl rand -base64 32)\"" >> apps/api/.env
+echo 'MFA_ENFORCE=true' >> apps/api/.env
+```
+Für diese Anleitung ist `MFA_ENFORCE=true` der empfohlene Wert (auch der
+Standard, wenn die Zeile fehlt): jedes Superadmin-Konto muss dann eine
+Authenticator-App einrichten, Vereine können dasselbe für ihre Admins
+verlangen.
+Mit `NODE_ENV=production` und aktiver Pflicht startet der Server ohne
+`TOTP_ENCRYPTION_KEY` nicht. Den Schlüssel **nie ändern oder löschen**,
+solange Konten TOTP nutzen — ihre Codes und Wiederherstellungscodes wären
+sonst ungültig.
+
+`scripts/setup-netcup.sh` erledigt beides: es erzeugt den Schlüssel und
+fragt nach der Pflicht (Standard: ja; vorgeben mit `MFA_ENFORCE=true` bzw.
+`false`). Vorhandene Werte bleiben bei einem erneuten Lauf unverändert.
+
 ### 7.3 Datenbank-Schema anlegen
 `DATABASE_URL` wird hier bewusst **überschrieben** (Sicherheitsreview
 2026-08-28, Befund N1): `apps/api/.env` enthält die DML-only-Rolle
@@ -535,6 +555,18 @@ cd ../..
 Mit diesem Konto danach unter `https://training.mein-verein.de/admin`
 anmelden (siehe `apps/web/help/admin.html`) und dort den ersten Verein
 anlegen — das erzeugt automatisch die erste Admin-Einladung.
+
+**Erste Anmeldung mit Zwei-Faktor-Pflicht** (`MFA_ENFORCE=true`): nach dem
+Passwort zeigt Lane 1 einen QR-Code — eine Authenticator-App (z. B. Aegis, Google
+Authenticator, Microsoft Authenticator oder einen Passwortmanager mit TOTP)
+bereithalten, den Code scannen und die 10 Wiederherstellungscodes sicher
+aufbewahren. Gehen App und Wiederherstellungscodes verloren, setzt der
+Serverbetrieb TOTP zurück:
+```bash
+cd apps/api
+npm run reset-mfa -- --email=admin@mein-verein.de
+cd ../..
+```
 
 ---
 
@@ -900,6 +932,19 @@ sudo systemctl reload nginx
 > (Der Wert ist bei diesem Aufbau immer `127.0.0.1` — Nginx läuft auf
 > demselben Host, siehe Abschnitt 9.)
 
+> **Update auf die Version mit Zwei-Faktor-Pflicht (Issue #97):** fehlt
+> `TOTP_ENCRYPTION_KEY` in einer bestehenden `apps/api/.env`, bricht der
+> Start ab, solange `MFA_ENFORCE` nicht `false` ist. Vor dem ersten `pm2
+> restart` nach diesem Update einmalig ergänzen:
+> ```bash
+> echo "TOTP_ENCRYPTION_KEY=\"$(openssl rand -base64 32)\"" >> apps/api/.env
+> echo 'MFA_ENFORCE=true' >> apps/api/.env
+> ```
+> (`bash scripts/setup-netcup.sh` ergänzt beides ebenfalls, ohne andere Werte anzufassen.)
+> Danach werden Superadmins bei ihrer nächsten Anmeldung durch die
+> Einrichtung geführt; laufende Sitzungen ohne TOTP enden spätestens nach
+> 15 Minuten.
+
 ---
 
 ## 14. Laufende Wartung
@@ -929,6 +974,8 @@ sudo systemctl reload nginx
 
 | Symptom | Wahrscheinliche Ursache | Prüfen |
 |---|---|---|
+| Backend startet nicht, Log: „TOTP_ENCRYPTION_KEY fehlt, MFA_ENFORCE ist aber aktiv“ | Pflicht zur Zwei-Faktor-Anmeldung ohne Schlüssel | Schlüssel ergänzen (siehe Abschnitt Umgebungsvariablen) oder `MFA_ENFORCE=false` setzen |
+| Superadmin hat Authenticator-App und Wiederherstellungscodes verloren | — | `cd apps/api && npm run reset-mfa -- --email=...`, danach bei der Anmeldung neu einrichten |
 | Seite lädt gar nicht | DNS zeigt noch nicht auf den Server / Firewall blockiert | `ping domain`, SCP-Firewall-Regeln (Schritt 2.2), `sudo ufw status` |
 | „502 Bad Gateway" | Backend läuft nicht | `pm2 status`, `pm2 logs lane1-api` |
 | Backend startet gar nicht (`pm2 status` zeigt „errored") | Pflicht-Umgebungsvariable fehlt/ungültig, z. B. `JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY` in Produktion nicht gesetzt | `pm2 logs lane1-api` — `env.ts` gibt die genaue fehlende/ungültige Variable aus |

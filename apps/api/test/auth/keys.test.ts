@@ -18,6 +18,8 @@ const baseEnv = {
   DATABASE_URL: 'postgresql://user:pass@localhost:5432/lane1',
   CORS_ORIGIN: 'https://training.example.org',
   TRUSTED_PROXY_IPS: '127.0.0.1',
+  // Pflicht in Produktion, solange MFA_ENFORCE aktiv ist.
+  TOTP_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
 };
 
 // Eigenes Verzeichnis je Testlauf statt eines gemeinsamen — verhindert,

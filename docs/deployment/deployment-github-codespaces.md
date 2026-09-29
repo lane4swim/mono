@@ -271,6 +271,27 @@ Schlüssel darf **nur eine** der beiden Formen gesetzt sein
 (`JWT_PRIVATE_KEY` **oder** `JWT_PRIVATE_KEY_FILE`, nie beide — `env.ts`
 lehnt eine gleichzeitige Angabe sonst mit einer klaren Fehlermeldung ab).
 
+**Zwei-Faktor-Anmeldung (TOTP).** `TOTP_ENCRYPTION_KEY` verschlüsselt die
+TOTP-Secrets in der Datenbank, `MFA_ENFORCE` legt fest, ob die
+Zwei-Faktor-Anmeldung für Superadmins Pflicht ist:
+```bash
+echo "TOTP_ENCRYPTION_KEY=\"$(openssl rand -base64 32)\"" >> apps/api/.env
+echo 'MFA_ENFORCE=false' >> apps/api/.env
+```
+Ein Codespace ist eine Test- und Entwicklungsumgebung — hier ist
+`MFA_ENFORCE=false` der Standard: niemand muss TOTP einrichten, freiwillig
+geht es trotzdem (Profil → Sicherheit). Wer die Pflicht mit testen will,
+setzt `MFA_ENFORCE=true`.
+Mit `NODE_ENV=production` und aktiver Pflicht startet der Server ohne
+`TOTP_ENCRYPTION_KEY` nicht. Den Schlüssel **nie ändern oder löschen**,
+solange Konten TOTP nutzen — ihre Codes und Wiederherstellungscodes wären
+sonst ungültig.
+
+`scripts/setup-codespace.sh` erledigt beides: es erzeugt den Schlüssel und
+fragt nach der Pflicht (Standard: nein; vorgeben mit `MFA_ENFORCE=true`
+bzw. `false`). Vorhandene Werte bleiben bei einem erneuten Lauf
+unverändert.
+
 ---
 
 ## 7. Datenbank-Schema anlegen
@@ -331,6 +352,18 @@ SUPERADMIN_PASSWORD='EIN-TESTPASSWORT' npm run create-superadmin -- --email=admi
 cd ../..
 ```
 Mit diesem Konto danach unter `<deine-codespace-adresse>/admin` anmelden (siehe `apps/web/help/admin.html`) und dort den ersten (Test-)Verein anlegen.
+
+**Erste Anmeldung mit Zwei-Faktor-Pflicht** (`MFA_ENFORCE=true`): nach dem
+Passwort zeigt Lane 1 einen QR-Code — eine Authenticator-App (z. B. Aegis, Google
+Authenticator, Microsoft Authenticator oder einen Passwortmanager mit TOTP)
+bereithalten, den Code scannen und die 10 Wiederherstellungscodes sicher
+aufbewahren. Gehen App und Wiederherstellungscodes verloren, setzt der
+Serverbetrieb TOTP zurück:
+```bash
+cd apps/api
+npm run reset-mfa -- --email=admin@mein-verein.de
+cd ../..
+```
 
 ---
 
@@ -500,6 +533,8 @@ Ein angehaltener (nicht gelöschter) Codespace verbraucht weiterhin Speicherkont
 
 | Symptom | Wahrscheinliche Ursache | Prüfen |
 |---|---|---|
+| Backend startet nicht, Log: „TOTP_ENCRYPTION_KEY fehlt, MFA_ENFORCE ist aber aktiv“ | Pflicht zur Zwei-Faktor-Anmeldung ohne Schlüssel | Schlüssel ergänzen (siehe Abschnitt Umgebungsvariablen) oder `MFA_ENFORCE=false` setzen |
+| Superadmin hat Authenticator-App und Wiederherstellungscodes verloren | — | `cd apps/api && npm run reset-mfa -- --email=...`, danach bei der Anmeldung neu einrichten |
 | `sudo apt install -y postgresql` (oder `nginx`) meldet „Unable to locate package …" | Lokaler `apt`-Paketindex im frischen Container noch nicht aktualisiert | `sudo apt-get update` einmalig ausführen (siehe Hinweis Anfang Abschnitt 4), danach `apt install` erneut versuchen |
 | Geöffnete Adresse zeigt eine GitHub-Anmeldeseite statt der App | Port-Sichtbarkeit steht auf „Private" | Ports-Tab → Port 8080 → „Port Visibility" → „Public" (siehe Schritt 11) |
 | „502 Bad Gateway" | Backend läuft nicht (z. B. nach Fortsetzen des Codespace vergessen neu zu starten) | `pm2 status`, `pm2 logs lane1-api --nostream`, siehe Abschnitt 13 |

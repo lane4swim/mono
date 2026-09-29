@@ -303,6 +303,16 @@ fi
 # Rechte einer bereits vorhandenen, älteren Datei.
 chmod 600 "$ENV_FILE"
 
+# Zwei-Faktor-Anmeldung (Issue #97): TOTP_ENCRYPTION_KEY erzeugen und
+# MFA_ENFORCE festlegen — auch für eine bereits vorhandene $ENV_FILE, der
+# beides noch fehlt (siehe scripts/lib/mfa-env.sh). Vorhandene Werte bleiben.
+# Standard hier: KEINE Pflicht — ein Codespace ist eine Test- und
+# Entwicklungsumgebung. Mit MFA_ENFORCE=true vorgeben oder mit j beantworten,
+# um sie trotzdem zu verlangen.
+# shellcheck source=lib/mfa-env.sh
+source "${REPO_ROOT}/scripts/lib/mfa-env.sh"
+mfa_ensure_env "$ENV_FILE" false
+
 # --- Schritt 7: Datenbank-Schema anlegen -------------------------------------
 # `migrate deploy` statt `db push`: wendet die
 # committete Migrationshistorie unter apps/api/prisma/migrations/ an.
@@ -480,6 +490,11 @@ log "Fertig bis einschließlich Schritt 10."
 # Klartext-Passwort im Terminal-Scrollback und in jedem Log, das die Skriptausgabe
 # mitschneidet (z. B. CI-Logs bei einem automatisierten Lauf).
 echo "Superadmin-Login: ${SUPERADMIN_EMAIL} (Passwort wie eingegeben/vorgegeben — wird hier nicht wiederholt)"
+if grep -Eq '^MFA_ENFORCE="?true' "$ENV_FILE"; then
+  echo "Zwei-Faktor-Anmeldung ist für Superadmins Pflicht (MFA_ENFORCE=true): bei der ersten Anmeldung eine Authenticator-App bereithalten."
+else
+  echo "Zwei-Faktor-Anmeldung ist für niemanden Pflicht (MFA_ENFORCE=false) — sie lässt sich trotzdem im Profil einrichten."
+fi
 if [[ "$ENV_WAS_CREATED" == "1" ]]; then
   # Dieselbe Begründung wie beim Superadmin-Passwort oben: das
   # Klartext-Passwort gehört nicht in Terminal-Scrollback/CI-Log. Der Wert steht

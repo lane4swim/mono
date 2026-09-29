@@ -11,11 +11,12 @@ import { field, textInput } from '../forms.js';
 import {
   login as loginRequest,
   completeMfaLogin,
+  confirmForcedMfaSetup,
   acceptInvitation as acceptInvitationRequest,
   resetPassword as resetPasswordRequest,
   CURRENT_CONSENT_VERSION,
 } from '../state.js';
-import { renderMfaStep } from './mfa.js';
+import { renderMfaStep, renderForcedMfaSetup } from './mfa.js';
 import * as api from '../apiClient.js';
 import { t } from '../i18n.js';
 import { buildLegalContent } from './info.js';
@@ -39,6 +40,21 @@ function appendLegalFooterLink(container) {
 function continueWithSecondFactor(container, mfaToken, onSuccess) {
   renderMfaStep(container, {
     onSubmit: (secondFactor) => completeMfaLogin(mfaToken, secondFactor),
+    onSuccess: (user) => {
+      toast(t('auth.loginSuccess', { name: user.name }));
+      onSuccess();
+    },
+    onExpired: (message) => renderLoginScreen(container, onSuccess, { notice: message }),
+  });
+}
+
+// Erzwungene Einrichtung (Issue #97): TOTP ist Pflicht, aber noch nicht
+// eingerichtet. Nach QR-Code, erstem Code und den Wiederherstellungscodes
+// beginnt die Sitzung.
+function continueWithForcedSetup(container, setupToken, onSuccess) {
+  renderForcedMfaSetup(container, {
+    setupToken,
+    onConfirm: (code) => confirmForcedMfaSetup(setupToken, code),
     onSuccess: (user) => {
       toast(t('auth.loginSuccess', { name: user.name }));
       onSuccess();
@@ -87,6 +103,10 @@ export function renderLoginScreen(container, onSuccess, { notice } = {}) {
       const result = await loginRequest(fEmail.value.trim(), fPassword.value, true);
       if (result.mfaRequired) {
         continueWithSecondFactor(container, result.mfaToken, onSuccess);
+        return;
+      }
+      if (result.mfaSetupRequired) {
+        continueWithForcedSetup(container, result.setupToken, onSuccess);
         return;
       }
       toast(t('auth.loginSuccess', { name: result.name }));
@@ -209,6 +229,10 @@ export function renderResetPasswordScreen(container, token, onSuccess) {
       // das Passwort ist geändert, der Code folgt.
       if (result.mfaRequired) {
         continueWithSecondFactor(container, result.mfaToken, onSuccess);
+        return;
+      }
+      if (result.mfaSetupRequired) {
+        continueWithForcedSetup(container, result.setupToken, onSuccess);
         return;
       }
       onSuccess();

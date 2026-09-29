@@ -12,6 +12,7 @@ import {
   CannotAssignSuperadminError,
   LastAdminError,
   type MfaChallengeResponse,
+  type MfaSetupRequiredResponse,
 } from '../../src/modules/auth/auth.service.js';
 import { InMemoryUserRepository, InMemoryRefreshTokenRepository, InMemoryPasswordResetTokenRepository } from '../../src/modules/auth/auth.repository.memory.js';
 import type { PasswordResetTokenRecord } from '../../src/modules/auth/auth.repository.js';
@@ -33,9 +34,11 @@ const CLUB_ID = '11111111-1111-1111-1111-111111111111';
 // login()/resetPassword() liefern bei aktivem TOTP statt einer Sitzung eine
 // MFA-Aufforderung (Issue #97). Für Tests ohne TOTP: Sitzung erwarten und
 // den Typ entsprechend einengen.
-function asSession<T>(result: T): Exclude<T, MfaChallengeResponse> {
-  if ((result as { mfaRequired?: boolean }).mfaRequired) throw new Error('Unerwartete MFA-Aufforderung');
-  return result as Exclude<T, MfaChallengeResponse>;
+// Ebenso die erzwungene Einrichtung (MfaSetupRequiredResponse).
+function asSession<T>(result: T): Exclude<T, MfaChallengeResponse | MfaSetupRequiredResponse> {
+  const r = result as { mfaRequired?: boolean; mfaSetupRequired?: boolean };
+  if (r.mfaRequired || r.mfaSetupRequired) throw new Error('Unerwartete MFA-Aufforderung');
+  return result as Exclude<T, MfaChallengeResponse | MfaSetupRequiredResponse>;
 }
 const INVITER_ID = '99999999-9999-9999-9999-999999999999';
 

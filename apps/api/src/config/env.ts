@@ -166,6 +166,15 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
         'kollabieren auf einen einzigen, von Nginx geteilten Zähler (Sicherheitsreview 2026-08-27, Befund H1).',
     );
   }
+  // Mit Pflicht, aber ohne Schlüssel ließe sich TOTP nicht einrichten — jeder
+  // Superadmin wäre ausgesperrt. Lieber beim Start scheitern.
+  if (env.NODE_ENV === 'production' && env.MFA_ENFORCE && !env.TOTP_ENCRYPTION_KEY) {
+    throw new Error(
+      'TOTP_ENCRYPTION_KEY fehlt, MFA_ENFORCE ist aber aktiv (Standard): ohne Schlüssel kann niemand die ' +
+        'Pflicht zur Zwei-Faktor-Anmeldung erfüllen. Schlüssel erzeugen mit `openssl rand -base64 32` ' +
+        'oder MFA_ENFORCE=false setzen (siehe .env.example).',
+    );
+  }
   if (env.TOTP_ENCRYPTION_KEY) {
     try {
       parseSecretBoxKey(env.TOTP_ENCRYPTION_KEY);

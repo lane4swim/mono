@@ -10,10 +10,10 @@ Einmalcodes aus einer Authenticator-App (TOTP nach RFC 6238).
 |---|---|---|
 | PR 1 — Backend | Datenmodell, TOTP und Verschlüsselung, Einrichtung, zweiter Anmeldeschritt, Wiederherstellungscodes, Zurücksetzen, Vereinseinstellung, Audit-Log, Konfiguration | **umgesetzt** |
 | PR 2 — Oberfläche | Anmeldeschritt (auch nach Passwort-Reset), Profilbereich, Vereinseinstellung, Status und Zurücksetzen in der Mitgliederliste, Audit-Log-Texte, i18n, Hilfe | **umgesetzt** |
-| PR 3 — Pflicht | erzwungene Einrichtung für Pflicht-Rollen (Backend `setupToken` **und** Einrichtungsbildschirm), Abschalten bei Pflicht verweigern, Abfrage in den Setup-Skripten, `reset-mfa`-Skript, Deployment-Doku | offen |
+| PR 3 — Pflicht | erzwungene Einrichtung für Pflicht-Rollen (Backend `setupToken` **und** Einrichtungsbildschirm), keine verlängerte Sitzung ohne Pflicht-TOTP, Abschalten bei Pflicht verweigern, Startprüfung, Abfrage in den Setup-Skripten, `reset-mfa`-Skript, Deployment-Doku | **umgesetzt** |
 
-Die Pflicht wird bewusst erst mit PR 3 erzwungen: ohne Oberfläche würden
-Superadmins sonst ausgesperrt.
+Die Pflicht wird seit PR 3 erzwungen (vorher hätte die Oberfläche gefehlt,
+Superadmins wären ausgesperrt gewesen).
 
 ## Wer TOTP nutzen muss
 
@@ -69,6 +69,45 @@ Codespaces). Fehlt der Wert, gilt `true`.
    antwortet ebenfalls mit `mfaRequired` — der Reset-Link belegt nur den
    Zugriff auf das Postfach.
 
+## Pflicht (PR 3)
+
+- **Erzwungene Einrichtung:** Ist TOTP Pflicht, aber nicht eingerichtet,
+  antworten `POST /auth/login` und `POST /auth/reset-password` mit
+  `{ mfaSetupRequired: true, setupToken }`. Das `setupToken` ist ein
+  RS256-JWT mit `purpose: 'mfa-setup'`, 15 Minuten gültig und taugt weder
+  als Access Token noch als `mfaToken`. Damit:
+  `POST /auth/mfa-setup { setupToken }` (QR-Code, Schlüssel) und
+  `POST /auth/mfa-setup/confirm { setupToken, code }`
+  (Wiederherstellungscodes und Sitzung). Das Passwort wird dabei nicht
+  erneut verlangt — das Token belegt es. Begrenzt je IP wie
+  `/auth/login/mfa`.
+- **Bestehende Sitzungen:** `POST /auth/refresh` verlängert keine Sitzung
+  einer Person, für die TOTP Pflicht, aber nicht eingerichtet ist
+  (401 `mfa_setup_required`; das Refresh Token wird dabei eingelöst). Nach
+  einem Deployment, dem Einschalten der Vereinspflicht, einem Zurücksetzen
+  oder einer neuen Admin-Rolle endet die Sitzung also spätestens mit dem
+  Access Token (15 Minuten); die Weboberfläche nennt den Grund auf dem
+  Anmeldebildschirm.
+- **Abschalten** bei Pflicht: 409 `mfa_required`; das Profil zeigt den
+  Knopf dann nicht.
+- **Startprüfung:** mit `NODE_ENV=production`, `MFA_ENFORCE` aktiv und ohne
+  `TOTP_ENCRYPTION_KEY` bricht der Start ab (sonst wäre jeder Superadmin
+  ausgesperrt). `MFA_ENFORCE=false` in Produktion erzeugt eine Warnung im
+  Log.
+- **Setup-Skripte** (`scripts/lib/mfa-env.sh`): erzeugen
+  `TOTP_ENCRYPTION_KEY`, wenn er fehlt, und fragen nach `MFA_ENFORCE` —
+  Codespace mit Standard „nein“, netcup mit „ja“. Eine vorgegebene
+  Umgebungsvariable ersetzt die Frage, ohne Terminal gilt der Standard,
+  vorhandene Werte bleiben. Auch eine bestehende `.env` bekommt so beim
+  erneuten Lauf die fehlenden Werte.
+- **Notweg:** `npm run reset-mfa -- --email=…` (apps/api) setzt TOTP eines
+  Kontos zurück, beendet dessen Sitzungen, schreibt `mfa.reset` mit
+  Akteur „System“ ins Audit-Log und schickt den Sicherheitshinweis — für
+  Superadmins, die sonst niemand zurücksetzen kann.
+- **Vereinseinstellung:** der Verein-Reiter zeigt, wie viele Admins TOTP
+  noch einrichten müssen, und weist darauf hin, wenn der Server
+  (`MFA_ENFORCE=false`) die Pflicht gerade nicht durchsetzt.
+
 ## Endpunkte
 
 | Endpunkt | Wer | Zweck |
@@ -112,11 +151,13 @@ folgen mit PR 2.
   `rect`) und Attributen nachgebaut (`buildQrSvg()`).
 - Der Verein-Reiter liest die Vereinseinstellung aus `GET /api/me/mfa`
   (`clubRequiresAdminMfa`), weil die Sitzung sie nicht trägt.
-- Die erzwungene Einrichtung ist nach PR 3 gewandert: sie braucht die
-  Backend-Antwort `mfaSetupRequired`, die erst mit der Pflicht entsteht.
+- Die erzwungene Einrichtung kam mit PR 3 (`renderForcedMfaSetup()`):
+  QR-Code, erster Code, dann die Wiederherstellungscodes — die Sitzung
+  beginnt erst, wenn die Person bestätigt, sie gesichert zu haben.
 
 ## Bekannte Grenzen von PR 1
 
 - ~~Die Weboberfläche kennt die MFA-Antwort von `POST /auth/login` noch
   nicht~~ — mit PR 2 behoben.
-- Die Pflicht wird nur angezeigt (`required` im Status), nicht erzwungen.
+- ~~Die Pflicht wird nur angezeigt (`required` im Status), nicht
+  erzwungen~~ — mit PR 3 behoben.

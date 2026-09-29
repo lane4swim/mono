@@ -110,6 +110,42 @@ export async function verifyMfaToken(token: string, keyPair: KeyPair): Promise<{
   }
 }
 
+// Token für die erzwungene Einrichtung (Issue #97, Plan PR 3): ist TOTP für
+// eine Person Pflicht, aber noch nicht eingerichtet, liefert die Anmeldung
+// nach korrektem Passwort statt einer Sitzung dieses Token. Es taugt nur für
+// POST /auth/mfa-setup und /auth/mfa-setup/confirm (`purpose: 'mfa-setup'`),
+// nicht als Access Token und nicht als mfaToken. 15 Minuten: Zeit genug, um
+// eine Authenticator-App zu installieren.
+export const MFA_SETUP_TOKEN_TTL_SECONDS = 15 * 60;
+
+export class InvalidMfaSetupTokenError extends Error {
+  constructor() {
+    super('Die Einrichtung ist abgelaufen oder ungültig. Bitte erneut mit E-Mail-Adresse und Passwort anmelden.');
+  }
+}
+
+export async function signMfaSetupToken(userId: string, keyPair: KeyPair): Promise<string> {
+  const privateKey = await getPrivateKey(keyPair.privateKey);
+  return new SignJWT({ purpose: 'mfa-setup' })
+    .setProtectedHeader({ alg: ALG })
+    .setSubject(userId)
+    .setJti(randomBytes(16).toString('base64url'))
+    .setIssuedAt()
+    .setExpirationTime(`${MFA_SETUP_TOKEN_TTL_SECONDS}s`)
+    .sign(privateKey);
+}
+
+export async function verifyMfaSetupToken(token: string, keyPair: KeyPair): Promise<{ userId: string }> {
+  const publicKey = await getPublicKey(keyPair.publicKey);
+  try {
+    const { payload } = await jwtVerify(token, publicKey, { algorithms: [ALG] });
+    if (payload.purpose !== 'mfa-setup' || !payload.sub) throw new InvalidMfaSetupTokenError();
+    return { userId: payload.sub };
+  } catch {
+    throw new InvalidMfaSetupTokenError();
+  }
+}
+
 // Code-Review, Befund R7: generateRefreshToken()/generateInvitationToken()
 // sowie hashRefreshToken()/hashInvitationToken() unterschieden sich zuvor
 // ausschließlich in der Byte-Länge (48 vs. 32) — beide folgen demselben

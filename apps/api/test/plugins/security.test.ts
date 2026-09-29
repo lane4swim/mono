@@ -110,6 +110,8 @@ describe('Security-Header (Helmet) — Produktionsmodus', () => {
       // dieser Prüfung) — ohne diesen Wert würde bereits loadEnv() hier
       // abbrechen.
       TRUSTED_PROXY_IPS: '127.0.0.1',
+      // Pflicht in Produktion, solange MFA_ENFORCE aktiv ist.
+      TOTP_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
     });
     const keyPair = generateFreshKeyPair();
     const invitations = new InMemoryInvitationRepository();
@@ -192,6 +194,8 @@ describe('trustProxy — nur die konfigurierte Proxy-Adresse wird vertraut (Sich
       DATABASE_URL: 'postgresql://test:test@localhost:5432/test',
       CORS_ORIGIN: 'http://localhost:5173',
       TRUSTED_PROXY_IPS: '127.0.0.1',
+      // Pflicht in Produktion, solange MFA_ENFORCE aktiv ist.
+      TOTP_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
     });
     app = await buildTestApp(env);
   });
