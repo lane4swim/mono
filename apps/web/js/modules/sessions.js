@@ -11,7 +11,9 @@ import { t } from '../i18n.js';
 
 export const sessionsModule = {
   id: 'sessions',
-  roles: ['trainer', 'admin', 'athlete'],
+  // Ohne 'admin': die Vereinsverwaltung sieht Anwesenheiten nur als
+  // Zusammenfassung ohne RPE/Notizen (attendanceOverview.js).
+  roles: ['trainer', 'athlete'],
   icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 4v16l4-2 4 2 4-2 4 2V4l-4 2-4-2-4 2-4-2z"/><path d="M9 9h6M9 13h4"/></svg>`,
   async render(container, params) {
     const isCurrent = beginRender(container);

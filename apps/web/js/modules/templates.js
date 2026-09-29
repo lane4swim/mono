@@ -17,7 +17,10 @@ function poolLengthOptions() {
 
 export const templatesModule = {
   id: 'templates',
-  roles: ['trainer', 'admin'],
+  // Ohne 'admin': Trainingsplanung ist Sache der Trainer:innen, die
+  // Vereinsverwaltung sieht dieses Modul nicht (Admin mit zusätzlicher
+  // Rolle 'trainer' weiterhin schon).
+  roles: ['trainer'],
   icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="4" rx="1"/><rect x="3" y="11" width="8" height="9" rx="1"/><rect x="13" y="11" width="8" height="9" rx="1"/></svg>`,
   async render(container) {
     const isCurrent = beginRender(container);

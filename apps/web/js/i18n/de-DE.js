@@ -135,7 +135,7 @@ export default {
   nav: {
     dashboard: 'Dashboard', athletes: 'Athleten & Team', competitions: 'Wettkämpfe',
     times: 'Zeiten & Leistung', plans: 'Trainingspläne', templates: 'Trainingsplan-Vorlagen',
-    catalog: 'Übungskatalog', sectionTemplates: 'Abschnitts-Vorlagen', sessions: 'Einheiten & Feedback', actionitems: 'Handlungsfelder',
+    catalog: 'Übungskatalog', sectionTemplates: 'Abschnitts-Vorlagen', sessions: 'Einheiten & Feedback', attendance: 'Anwesenheitsstatistik', actionitems: 'Handlungsfelder',
     announcements: 'Ankündigungen',
     stats: 'Statistiken', syncqueue: 'Sync-Warteschlange', profile: 'Mein Profil', usermgmt: 'Nutzerverwaltung',
     info: 'Rechtliches & Datenschutz', qualifications: 'Qualifikationen', kampfrichter: 'Kampfrichter', auditlog: 'Audit-Log',
@@ -494,6 +494,23 @@ export default {
     onlyOneTime: 'Einzige erfasste Zeit: {time} am {date}.',
     progressLine: 'Entwicklung über {count} Zeiten: ',
     faster: '−{delta}s schneller', slower: '+{delta}s langsamer', unchanged: 'unverändert',
+  },
+  // Anwesenheitsstatistik der Vereinsverwaltung (js/modules/attendanceOverview.js).
+  attendance: {
+    eyebrow: 'Auswertung', title: 'Anwesenheitsstatistik',
+    noSessionsTitle: 'Noch keine Einheiten', noSessionsMsg: 'Sobald Trainer:innen Trainingseinheiten erfassen, erscheint hier die Anwesenheit.',
+    filterGroup: 'Gruppe', allGroups: 'Alle Gruppen', filterPeriod: 'Zeitraum',
+    period4w: 'Letzte 4 Wochen', period12w: 'Letzte 12 Wochen', period12m: 'Letzte 12 Monate', periodAll: 'Gesamter Zeitraum',
+    statSessions: 'Einheiten', statAvgPresent: 'Ø Athlet:innen anwesend', statAvgPresentSub: 'pro Einheit',
+    statRate: 'Anwesenheitsquote', statRateSub: '{present} von {total} Teilnahmen',
+    statCoaches: 'Trainer:innen im Einsatz', statCoachesSub: 'laut Gruppenzuordnung',
+    noSessionsInPeriod: 'Im gewählten Zeitraum wurden keine Einheiten erfasst.',
+    tabAthletes: 'Athlet:innen', tabCoaches: 'Trainer:innen', tabSessions: 'Einheiten',
+    colAthlete: 'Athlet:in', colCoach: 'Trainer:in', colGroup: 'Gruppe', colPresent: 'Anwesend', colRate: 'Quote',
+    colSessions: 'Einheiten', colDate: 'Datum', colCoaches: 'Trainer:innen',
+    noCoaches: 'Den Gruppen dieser Einheiten sind keine Trainer:innen zugeordnet.',
+    coachesHint: 'Trainer:innen werden pro Einheit nicht einzeln erfasst — gezählt werden die Einheiten der Gruppen, denen sie zugeordnet sind.',
+    unknownTrainer: 'Unbekannt',
   },
   // Zwei-Faktor-Anmeldung (Issue #97, js/modules/mfa.js).
   mfa: {

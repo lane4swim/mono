@@ -112,7 +112,7 @@ export default {
   nav: {
     dashboard: 'Dashboard', athletes: 'Athletes & Team', competitions: 'Competitions',
     times: 'Times & Performance', plans: 'Training Plans', templates: 'Training Plan Templates',
-    catalog: 'Exercise Catalog', sectionTemplates: 'Section Templates', sessions: 'Sessions & Feedback', actionitems: 'Focus Areas',
+    catalog: 'Exercise Catalog', sectionTemplates: 'Section Templates', sessions: 'Sessions & Feedback', attendance: 'Attendance Statistics', actionitems: 'Focus Areas',
     announcements: 'Announcements',
     stats: 'Statistics', syncqueue: 'Sync Queue', profile: 'My Profile', usermgmt: 'User Management',
     info: 'Legal & Privacy', qualifications: 'Qualifications', kampfrichter: 'Officiating', auditlog: 'Audit Log',
@@ -473,6 +473,22 @@ export default {
     faster: '−{delta}s faster', slower: '+{delta}s slower', unchanged: 'unchanged',
   },
   // Two-factor sign-in (issue #97, js/modules/mfa.js).
+  attendance: {
+    eyebrow: 'Analysis', title: 'Attendance Statistics',
+    noSessionsTitle: 'No sessions yet', noSessionsMsg: 'Once coaches record training sessions, attendance shows up here.',
+    filterGroup: 'Group', allGroups: 'All groups', filterPeriod: 'Period',
+    period4w: 'Last 4 weeks', period12w: 'Last 12 weeks', period12m: 'Last 12 months', periodAll: 'All time',
+    statSessions: 'Sessions', statAvgPresent: 'Avg. athletes present', statAvgPresentSub: 'per session',
+    statRate: 'Attendance rate', statRateSub: '{present} of {total} participations',
+    statCoaches: 'Coaches on duty', statCoachesSub: 'based on group assignment',
+    noSessionsInPeriod: 'No sessions were recorded in the selected period.',
+    tabAthletes: 'Athletes', tabCoaches: 'Coaches', tabSessions: 'Sessions',
+    colAthlete: 'Athlete', colCoach: 'Coach', colGroup: 'Group', colPresent: 'Present', colRate: 'Rate',
+    colSessions: 'Sessions', colDate: 'Date', colCoaches: 'Coaches',
+    noCoaches: 'No coaches are assigned to the groups of these sessions.',
+    coachesHint: 'Coaches are not recorded per session — the count covers sessions of the groups they are assigned to.',
+    unknownTrainer: 'Unknown',
+  },
   mfa: {
     sectionTitle: 'Two-factor sign-in',
     sectionIntro: 'In addition to your password, signing in asks for a code from an authenticator app on your phone (e.g. Google Authenticator, Microsoft Authenticator, Aegis, 2FAS or Apple Passwords).',

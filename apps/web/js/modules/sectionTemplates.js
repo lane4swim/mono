@@ -25,7 +25,10 @@ const ICON_VIEW_LIST = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColo
 
 export const sectionTemplatesModule = {
   id: 'sectionTemplates',
-  roles: ['trainer', 'admin'],
+  // Ohne 'admin': Trainingsplanung ist Sache der Trainer:innen, die
+  // Vereinsverwaltung sieht dieses Modul nicht (Admin mit zusätzlicher
+  // Rolle 'trainer' weiterhin schon).
+  roles: ['trainer'],
   icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h12v18l-6-4-6 4V3z"/></svg>`,
   async render(container) {
     const isCurrent = beginRender(container);
