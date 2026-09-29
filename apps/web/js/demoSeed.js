@@ -125,11 +125,11 @@ async function seedDemoClubData() {
   await bulkPut('plans', [plan1]);
 
   const session1 = {
-    id: id(), clubId: DEMO_CLUB_ID, date: toIsoDateTime(wkStart), groupId: groupA.id, planId: plan1.id, trainerNote: 'Gute Energie, Fokus auf Wenden verbessert.',
+    id: id(), clubId: DEMO_CLUB_ID, date: toIsoDateTime(wkStart), groupId: groupA.id, planId: plan1.id, trainerNote: 'Gute Energie, Fokus auf Wenden verbessert.', coachIds: ['demo-user-sabine', 'demo-user-katrin'],
     attendance: athletes.filter(a => a.groupId === groupA.id).map(a => ({ athleteId: a.id, present: true, rpe: 6 + Math.round(Math.random() * 3), note: '' })),
   };
   const session2 = {
-    id: id(), clubId: DEMO_CLUB_ID, date: toIsoDateTime(isoAddDays(wkStart, -7)), groupId: groupA.id, planId: null, trainerNote: 'Eine Athletin krank gemeldet.',
+    id: id(), clubId: DEMO_CLUB_ID, date: toIsoDateTime(isoAddDays(wkStart, -7)), groupId: groupA.id, planId: null, trainerNote: 'Eine Athletin krank gemeldet.', coachIds: ['demo-user-sabine'],
     attendance: athletes.filter(a => a.groupId === groupA.id).map((a, i) => ({ athleteId: a.id, present: i !== 1, rpe: i !== 1 ? 7 : null, note: i === 1 ? 'Krankheit' : '' })),
   };
   await bulkPut('sessions', [session1, session2]);

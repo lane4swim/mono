@@ -96,15 +96,14 @@ describe('flagLowAttendance()', () => {
 
 describe('summarizeAttendance()', () => {
   const athletes = [{ id: 'a', firstName: 'Ana' }, { id: 'b', firstName: 'Ben' }];
-  const groups = [{ id: 'g1', trainerIds: ['t1', 't2'] }, { id: 'g2', trainerIds: ['t2'] }];
   const sessions = [
-    { id: 's1', date: '2026-01-05T00:00:00.000Z', groupId: 'g1', trainerNote: 'geheim', attendance: [{ athleteId: 'a', present: true, rpe: 7, note: 'x' }, { athleteId: 'b', present: false, rpe: null, note: 'krank' }] },
-    { id: 's2', date: '2026-01-12', groupId: 'g1', attendance: [{ athleteId: 'a', present: true, rpe: 5, note: '' }, { athleteId: 'b', present: true, rpe: 6, note: '' }] },
-    { id: 's3', date: '2026-01-14', groupId: 'g2', attendance: [{ athleteId: 'b', present: true, rpe: 8, note: '' }] },
+    { id: 's1', date: '2026-01-05T00:00:00.000Z', groupId: 'g1', trainerNote: 'geheim', coachIds: ['t1', 't2'], attendance: [{ athleteId: 'a', present: true, rpe: 7, note: 'x' }, { athleteId: 'b', present: false, rpe: null, note: 'krank' }] },
+    { id: 's2', date: '2026-01-12', groupId: 'g1', coachIds: ['t2'], attendance: [{ athleteId: 'a', present: true, rpe: 5, note: '' }, { athleteId: 'b', present: true, rpe: 6, note: '' }] },
+    { id: 's3', date: '2026-01-14', groupId: 'g2', coachIds: ['t2'], attendance: [{ athleteId: 'b', present: true, rpe: 8, note: '' }] },
   ];
 
   it('zählt Einheiten, Teilnahmen und Quote über alle Gruppen', () => {
-    const r = summarizeAttendance(sessions, athletes, groups);
+    const r = summarizeAttendance(sessions, athletes);
     expect(r.sessionCount).toBe(3);
     expect(r.present).toBe(4);
     expect(r.total).toBe(5);
@@ -114,30 +113,36 @@ describe('summarizeAttendance()', () => {
   });
 
   it('fasst je Athlet:in zusammen, sortiert nach Quote', () => {
-    const r = summarizeAttendance(sessions, athletes, groups);
+    const r = summarizeAttendance(sessions, athletes);
     expect(r.athletes.map(a => [a.athleteId, a.present, a.total])).toEqual([['a', 2, 2], ['b', 2, 3]]);
     expect(r.athletes[0].athlete.firstName).toBe('Ana');
   });
 
-  it('zählt Trainer:innen über die Gruppenzuordnung der Einheiten', () => {
-    const r = summarizeAttendance(sessions, athletes, groups);
-    expect(r.coaches).toEqual([{ trainerId: 't2', sessions: 3 }, { trainerId: 't1', sessions: 2 }]);
-    expect(r.sessions.find(s => s.id === 's3').coachIds).toEqual(['t2']);
+  it('zählt die pro Einheit abgehakten Trainer:innen', () => {
+    const r = summarizeAttendance(sessions, athletes);
+    expect(r.coaches).toEqual([{ trainerId: 't2', sessions: 3 }, { trainerId: 't1', sessions: 1 }]);
+    expect(r.sessions.find(s => s.id === 's1').coachIds).toEqual(['t1', 't2']);
+  });
+
+  it('Einheiten ohne coachIds (Altbestand) zählen ohne Trainer:innen', () => {
+    const r = summarizeAttendance([{ id: 'old', date: '2026-01-01', groupId: 'g1', attendance: [] }], athletes);
+    expect(r.coaches).toEqual([]);
+    expect(r.sessions[0].coachIds).toEqual([]);
   });
 
   it('filtert nach Gruppe und Startdatum', () => {
-    expect(summarizeAttendance(sessions, athletes, groups, { groupId: 'g1' }).sessionCount).toBe(2);
-    const r = summarizeAttendance(sessions, athletes, groups, { from: '2026-01-12' });
+    expect(summarizeAttendance(sessions, athletes, { groupId: 'g1' }).sessionCount).toBe(2);
+    const r = summarizeAttendance(sessions, athletes, { from: '2026-01-12' });
     expect(r.sessions.map(s => s.id)).toEqual(['s3', 's2']);
   });
 
   it('enthält weder RPE noch Notizen', () => {
-    const json = JSON.stringify(summarizeAttendance(sessions, athletes, groups));
+    const json = JSON.stringify(summarizeAttendance(sessions, athletes));
     expect(json).not.toMatch(/rpe|note|geheim|krank/i);
   });
 
   it('liefert null-Quoten ohne Einheiten', () => {
-    const r = summarizeAttendance([], athletes, groups);
+    const r = summarizeAttendance([], athletes);
     expect(r).toMatchObject({ sessionCount: 0, rate: null, avgPresent: null, athletes: [], coaches: [], sessions: [] });
   });
 });

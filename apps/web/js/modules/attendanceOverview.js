@@ -65,13 +65,13 @@ function renderView(container, sessions, athletes, groups, trainers) {
   function draw() {
     clear(host);
     const from = period ? isoAddDays(todayISO(), -Number(period)) : '';
-    const summary = summarizeAttendance(sessions, athletes, groups, { groupId, from });
+    const summary = summarizeAttendance(sessions, athletes, { groupId, from });
 
     host.appendChild(el('div', { class: 'grid grid-4 mb-16' }, [
       statCard({ label: t('attendance.statSessions'), value: summary.sessionCount }),
       statCard({ label: t('attendance.statAvgPresent'), value: summary.avgPresent == null ? '—' : summary.avgPresent.toFixed(1), sub: t('attendance.statAvgPresentSub'), alt: true }),
       statCard({ label: t('attendance.statRate'), value: pct(summary.rate), sub: t('attendance.statRateSub', { present: summary.present, total: summary.total }) }),
-      statCard({ label: t('attendance.statCoaches'), value: summary.coaches.length, sub: t('attendance.statCoachesSub'), alt: true }),
+      statCard({ label: t('attendance.statCoaches'), value: summary.coaches.length, alt: true }),
     ]));
 
     if (summary.sessionCount === 0) {
@@ -105,10 +105,7 @@ function renderView(container, sessions, athletes, groups, trainers) {
     const tbody = el('tbody');
     summary.coaches.forEach(row => tbody.appendChild(el('tr', {}, [el('td', {}, trainerName(row.trainerId)), el('td', {}, String(row.sessions))])));
     table.appendChild(tbody);
-    return el('div', {}, [
-      el('div', { class: 'table-wrap card' }, table),
-      el('p', { class: 'text-slate text-sm' }, t('attendance.coachesHint')),
-    ]);
+    return el('div', { class: 'table-wrap card' }, table);
   }
 
   function sessionTable(summary) {

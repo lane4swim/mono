@@ -509,6 +509,17 @@ describe('TrainingSessionSchema', () => {
     expect(TrainingSessionSchema.safeParse({ ...base, attendance: Array(500).fill(entry) }).success).toBe(true);
   });
 
+  it('coachIds ist optional und defaultet auf [] (Altbestand ohne dieses Feld)', () => {
+    const session = { id: ATHLETE_ID, clubId: CLUB_ID, date: now, groupId: null, planId: null, trainerNote: '', attendance: [], createdAt: now, updatedAt: now };
+    const parsed = TrainingSessionSchema.safeParse(session);
+    expect(parsed.success && parsed.data.coachIds).toEqual([]);
+  });
+  it('coachIds akzeptiert nur UUIDs', () => {
+    const base = { id: ATHLETE_ID, clubId: CLUB_ID, date: now, groupId: null, planId: null, trainerNote: '', attendance: [], createdAt: now, updatedAt: now };
+    expect(TrainingSessionSchema.safeParse({ ...base, coachIds: [CLUB_ID] }).success).toBe(true);
+    expect(TrainingSessionSchema.safeParse({ ...base, coachIds: ['kein-uuid'] }).success).toBe(false);
+  });
+
   // Phase 1, Abschnitt 3.2 (docs/Plans/trainingsplanung-phase1-plan.md).
   it('actualDistance ist optional und defaultet auf null (Altbestand ohne dieses Feld)', () => {
     const session = { id: ATHLETE_ID, clubId: CLUB_ID, date: now, groupId: null, planId: null, trainerNote: '', attendance: [], createdAt: now, updatedAt: now };

@@ -67,12 +67,11 @@ export function flagLowAttendance(sessions, athletes) {
 
 // Zusammenfassung für die Anwesenheitsstatistik der Vereinsverwaltung
 // (attendanceOverview.js): nur, WER da war — RPE und Notizen (je
-// Athlet:in und trainerNote) fließen bewusst nicht ein. Trainer:innen
-// werden pro Einheit nicht erfasst; als anwesend gelten die der Gruppe
-// zugeordneten (Group.trainerIds). `from` (YYYY-MM-DD, optional) und
+// Athlet:in und trainerNote) fließen bewusst nicht ein. Anwesende
+// Trainer:innen stammen aus TrainingSession.coachIds. `from` (YYYY-MM-DD,
+// optional) und
 // `groupId` (optional) schränken die berücksichtigten Einheiten ein.
-export function summarizeAttendance(sessions, athletes, groups, { groupId = '', from = '' } = {}) {
-  const groupById = new Map(groups.map(g => [g.id, g]));
+export function summarizeAttendance(sessions, athletes, { groupId = '', from = '' } = {}) {
   const athleteById = new Map(athletes.map(a => [a.id, a]));
   const perAthlete = new Map();
   const perCoach = new Map();
@@ -88,7 +87,7 @@ export function summarizeAttendance(sessions, athletes, groups, { groupId = '', 
   for (const s of selected) {
     const records = s.attendance || [];
     const presentCount = records.filter(r => r.present).length;
-    const coachIds = groupById.get(s.groupId)?.trainerIds || [];
+    const coachIds = s.coachIds || [];
     present += presentCount;
     total += records.length;
     for (const r of records) {

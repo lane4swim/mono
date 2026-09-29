@@ -107,6 +107,7 @@ const FOREIGN_KEY_REFS: Partial<Record<EntityStoreName, ForeignKeyRef[]>> = {
   sessions: [
     { kind: 'entity', field: 'groupId', store: 'groups' },
     { kind: 'entity', field: 'planId', store: 'plans' },
+    { kind: 'userList', field: 'coachIds' },
   ],
   announcements: [
     { kind: 'entity', field: 'groupId', store: 'groups' },
