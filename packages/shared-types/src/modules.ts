@@ -47,7 +47,10 @@ export const MODULE_PACKAGES = {
   templates: { routeIds: ['templates'], stores: ['templates'] },
   catalog: { routeIds: ['catalog'], stores: ['exercises'] },
   sectionTemplates: { routeIds: ['sectionTemplates'], stores: ['sectionTemplates'] },
-  sessions: { routeIds: ['sessions'], stores: ['sessions'] },
+  // 'attendance' (Anwesenheitsstatistik der Vereinsverwaltung, apps/web/js/
+  // modules/attendanceOverview.js) wertet denselben Store aus — kein
+  // eigenes Paket, sonst wäre die Route ohne Sync-Zugriff auf "sessions".
+  sessions: { routeIds: ['sessions', 'attendance'], stores: ['sessions'] },
   actionitems: { routeIds: ['actionitems'], stores: ['actionItems'] },
   // Vereinsinterne Nachrichten/Ankündigungen (Phase 2, Abschnitt 4.1 —
   // docs/Plans/phase2-plan.md). Eigenes, zubuchbares Paket (nicht in

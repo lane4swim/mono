@@ -1,7 +1,7 @@
 // Testet die reinen Auswertungsfunktionen aus js/modules/attendanceStats.js
 // (Phase 1, Abschnitt 3.3 — docs/Plans/trainingsplanung-phase1-plan.md).
 import { describe, it, expect } from 'vitest';
-import { attendanceTrend, flagLowAttendance } from '../js/modules/attendanceStats.js';
+import { attendanceTrend, flagLowAttendance, summarizeAttendance } from '../js/modules/attendanceStats.js';
 
 function session(date, groupId, records) {
   return { date, groupId, attendance: records.map(([athleteId, present]) => ({ athleteId, present })) };
@@ -91,5 +91,58 @@ describe('flagLowAttendance()', () => {
     ]));
     const flags = flagLowAttendance(sessions, athletes);
     expect(flags.map(f => f.athlete.id)).toEqual(['a']);
+  });
+});
+
+describe('summarizeAttendance()', () => {
+  const athletes = [{ id: 'a', firstName: 'Ana' }, { id: 'b', firstName: 'Ben' }];
+  const sessions = [
+    { id: 's1', date: '2026-01-05T00:00:00.000Z', groupId: 'g1', trainerNote: 'geheim', coachIds: ['t1', 't2'], attendance: [{ athleteId: 'a', present: true, rpe: 7, note: 'x' }, { athleteId: 'b', present: false, rpe: null, note: 'krank' }] },
+    { id: 's2', date: '2026-01-12', groupId: 'g1', coachIds: ['t2'], attendance: [{ athleteId: 'a', present: true, rpe: 5, note: '' }, { athleteId: 'b', present: true, rpe: 6, note: '' }] },
+    { id: 's3', date: '2026-01-14', groupId: 'g2', coachIds: ['t2'], attendance: [{ athleteId: 'b', present: true, rpe: 8, note: '' }] },
+  ];
+
+  it('zählt Einheiten, Teilnahmen und Quote über alle Gruppen', () => {
+    const r = summarizeAttendance(sessions, athletes);
+    expect(r.sessionCount).toBe(3);
+    expect(r.present).toBe(4);
+    expect(r.total).toBe(5);
+    expect(r.rate).toBe(80);
+    expect(r.avgPresent).toBeCloseTo(4 / 3);
+    expect(r.sessions.map(s => s.id)).toEqual(['s3', 's2', 's1']); // neueste zuerst
+  });
+
+  it('fasst je Athlet:in zusammen, sortiert nach Quote', () => {
+    const r = summarizeAttendance(sessions, athletes);
+    expect(r.athletes.map(a => [a.athleteId, a.present, a.total])).toEqual([['a', 2, 2], ['b', 2, 3]]);
+    expect(r.athletes[0].athlete.firstName).toBe('Ana');
+  });
+
+  it('zählt die pro Einheit abgehakten Trainer:innen', () => {
+    const r = summarizeAttendance(sessions, athletes);
+    expect(r.coaches).toEqual([{ trainerId: 't2', sessions: 3 }, { trainerId: 't1', sessions: 1 }]);
+    expect(r.sessions.find(s => s.id === 's1').coachIds).toEqual(['t1', 't2']);
+  });
+
+  it('Einheiten ohne coachIds (Altbestand) zählen ohne Trainer:innen', () => {
+    const r = summarizeAttendance([{ id: 'old', date: '2026-01-01', groupId: 'g1', attendance: [] }], athletes);
+    expect(r.coaches).toEqual([]);
+    expect(r.sessions[0].coachIds).toEqual([]);
+  });
+
+  it('filtert nach Gruppe und Startdatum', () => {
+    expect(summarizeAttendance(sessions, athletes, { groupId: 'g1' }).sessionCount).toBe(2);
+    const r = summarizeAttendance(sessions, athletes, { from: '2026-01-12' });
+    expect(r.sessions.map(s => s.id)).toEqual(['s3', 's2']);
+  });
+
+  it('enthält weder RPE noch Notizen', () => {
+    const json = JSON.stringify(summarizeAttendance(sessions, athletes));
+    expect(json).not.toMatch(/rpe|note|geheim|krank/i);
+  });
+
+  it('liefert null-Quoten ohne Einheiten', () => {
+    const r = summarizeAttendance([], athletes);
+    expect(r).toMatchObject({ sessionCount: 0, rate: null, avgPresent: null, athletes: [], coaches: [], sessions: [] });
   });
 });

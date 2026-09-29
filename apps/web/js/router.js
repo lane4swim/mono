@@ -28,8 +28,9 @@ export const CORE_MODULE_IDS = ['dashboard', 'parent', 'profile', 'usermgmt', 'a
 // packages/shared-types/src/modules.ts: MODULE_PACKAGES übereinstimmen —
 // apps/web lädt ohne Build-Schritt direkt als Browser-ES-Module (siehe
 // package.json) und kann dieses Backend-Paket daher nicht importieren.
-// Ein Paket kann mehrere Route-IDs bündeln (aktuell 1:1, siehe MODULE_
-// PACKAGES-Kommentar zu competitionLive.js/stopwatch.js) — deshalb dieser
+// Ein Paket kann mehrere Route-IDs bündeln (z. B. "sessions" mit
+// "attendance", siehe auch MODULE_PACKAGES-Kommentar zu competitionLive.js/
+// stopwatch.js) — deshalb dieser
 // Umweg statt enabledModules direkt gegen die Route-ID zu prüfen.
 const ROUTE_TO_PACKAGE = {
   athletes: 'athletes',
@@ -40,6 +41,9 @@ const ROUTE_TO_PACKAGE = {
   catalog: 'catalog',
   sectionTemplates: 'sectionTemplates',
   sessions: 'sessions',
+  // Anwesenheitsstatistik der Vereinsverwaltung liest denselben Store wie
+  // "Einheiten & Feedback" und gehört daher zum Paket "sessions".
+  attendance: 'sessions',
   actionitems: 'actionitems',
   // Vereinsinterne Nachrichten/Ankündigungen (Phase 2, Abschnitt 4.1) —
   // MUSS mit packages/shared-types/src/modules.ts: MODULE_PACKAGES.
@@ -60,7 +64,7 @@ const ROUTE_TO_PACKAGE = {
 // Aufrufer (noch) keins übergibt (z. B. Demo-Modus/Tests vor deren
 // Anbindung), damit visibleModules() ohne zweiten Parameter weiterhin
 // alles zeigt statt fälschlich alles zu sperren.
-export const MODULE_KEYS = Object.keys(ROUTE_TO_PACKAGE);
+export const MODULE_KEYS = [...new Set(Object.values(ROUTE_TO_PACKAGE))];
 
 // Einzelmodul-Prüfung — von visibleModules() UND von shell.js (renderRoute()'s
 // Fallback bei direktem Hash-Aufruf einer gesperrten Route, defaultModuleFor())

@@ -4,8 +4,8 @@ import { el, clear, beginRender } from '../dom.js';
 import { fmtDateLong, todayISO } from '../dates.js';
 import { secToTime } from '../swimTime.js';
 import { fullName, statCard, badge, laneWave, groupBy, average } from '../ui.js';
-import { isAthleteScoped, getCurrentUser } from '../state.js';
-import { navigate } from '../router.js';
+import { isAthleteScoped, getCurrentUser, getRoles, getEnabledModules } from '../state.js';
+import { navigate, getModule, isModuleVisible } from '../router.js';
 import { totalDistance } from './setEditor.js';
 import { flagLowAttendance } from './attendanceStats.js';
 import { t, trCode } from '../i18n.js';
@@ -26,12 +26,23 @@ export const dashboardModule = {
   }
 };
 
+// Die Vereinsverwaltung (Rolle 'admin' ohne 'trainer') sieht weder
+// Trainingspläne noch "Einheiten & Feedback" — Links dorthin entfallen
+// bzw. führen zur Anwesenheitsstatistik, RPE-Werte werden nicht gezeigt.
+function canOpen(routeId) {
+  const mod = getModule(routeId);
+  return !!mod && isModuleVisible(mod, getRoles(), getEnabledModules());
+}
+
 async function renderTrainerDashboard(container, isCurrent) {
   const [athletes, groups, plans, sessions, actionItems, competitions, announcements] = await Promise.all(
     ['athletes', 'groups', 'plans', 'sessions', 'actionItems', 'competitions', 'announcements'].map(getAll)
   );
   if (!isCurrent()) return;
 
+  const canOpenPlans = canOpen('plans');
+  const canOpenSessions = canOpen('sessions');
+  const sessionRoute = canOpenSessions ? 'sessions' : (canOpen('attendance') ? 'attendance' : null);
   const today = todayISO();
   const upcomingComps = competitions.filter(c => c.date >= today).sort((a, b) => a.date.localeCompare(b.date));
   const openActions = actionItems.filter(a => a.status !== 'done');
@@ -59,11 +70,11 @@ async function renderTrainerDashboard(container, isCurrent) {
   const planCard = el('div', { class: 'card' }, [el('h3', {}, t('dashboard.nextSessionsTitle'))]);
   if (upcomingPlanDays.length === 0) {
     planCard.appendChild(el('p', {}, t('dashboard.noUpcomingSessions')));
-    planCard.appendChild(el('button', { class: 'btn btn-primary btn-sm', onclick: () => navigate('plans') }, t('dashboard.createPlan')));
+    if (canOpenPlans) planCard.appendChild(el('button', { class: 'btn btn-primary btn-sm', onclick: () => navigate('plans') }, t('dashboard.createPlan')));
   } else {
     upcomingPlanDays.slice(0, 5).forEach(({ plan, day }) => {
       const group = groups.find(g => g.id === plan.groupId);
-      planCard.appendChild(el('div', { class: 'list-row row-click', onclick: () => navigate('plans', plan.id) }, [
+      planCard.appendChild(el('div', canOpenPlans ? { class: 'list-row row-click', onclick: () => navigate('plans', plan.id) } : { class: 'list-row' }, [
         el('div', { class: 'avatar' }, (group?.name || '?').slice(0, 2).toUpperCase()),
         el('div', { style: 'flex:1' }, [
           el('div', {}, `${fmtDateLong(day.date)}`),
@@ -117,8 +128,9 @@ async function renderTrainerDashboard(container, isCurrent) {
     recentSessions.forEach(s => {
       const present = s.attendance?.filter(a => a.present).length || 0;
       const total = s.attendance?.length || 0;
-      const rpeAvg = average(s.attendance?.filter(a => a.present && a.rpe).map(a => a.rpe) || []);
-      sessionCard.appendChild(el('div', { class: 'list-row row-click', onclick: () => navigate('sessions', s.id) }, [
+      const rpeAvg = canOpenSessions ? average(s.attendance?.filter(a => a.present && a.rpe).map(a => a.rpe) || []) : null;
+      const rowAttrs = canOpenSessions ? { class: 'list-row row-click', onclick: () => navigate('sessions', s.id) } : { class: 'list-row' };
+      sessionCard.appendChild(el('div', rowAttrs, [
         el('div', { style: 'flex:1' }, [
           el('div', {}, fmtDateLong(s.date)),
           el('div', { class: 'text-slate text-sm' }, `${t('dashboard.attendanceLine', { present, total })}${rpeAvg ? t('dashboard.avgRpe', { rpe: rpeAvg.toFixed(1) }) : ''}`),
@@ -126,7 +138,7 @@ async function renderTrainerDashboard(container, isCurrent) {
       ]));
     });
   }
-  sessionCard.appendChild(el('button', { class: 'btn btn-ghost btn-sm', style: 'margin-top:8px', onclick: () => navigate('sessions') }, t('dashboard.allSessions')));
+  if (sessionRoute) sessionCard.appendChild(el('button', { class: 'btn btn-ghost btn-sm', style: 'margin-top:8px', onclick: () => navigate(sessionRoute) }, t('dashboard.allSessions')));
   grid.appendChild(sessionCard);
 
   // Anwesenheits-Frühindikator (Phase 1, Abschnitt 3.3) — nur als Hinweis,

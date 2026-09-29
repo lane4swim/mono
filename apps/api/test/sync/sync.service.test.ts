@@ -2439,6 +2439,38 @@ describe('syncService.push — Group.trainerIds nur aus dem eigenen Verein (Issu
   });
 });
 
+describe('syncService.push — TrainingSession.coachIds nur aus dem eigenen Verein', () => {
+  const OWN_TRAINER = '99999999-0000-0000-0000-00000000000c';
+  const FOREIGN_TRAINER = '99999999-0000-0000-0000-00000000000d';
+
+  it('akzeptiert coachIds des eigenen Vereins und speichert sie', async () => {
+    const { service, gateway } = makeService();
+    gateway.seedUser(OWN_TRAINER, CLUB_A);
+    const payload = makeSessionPayload({ coachIds: [OWN_TRAINER] });
+
+    const results = await service.push(
+      [{ id: 'evt-coaches-own', store: 'sessions', entityId: payload.id, action: 'create', payload, clientUpdatedAt: payload.updatedAt }],
+      asTrainer(CLUB_A),
+    );
+    expect(results[0]!.status).toBe('applied');
+    expect(((await gateway.findById('sessions', payload.id)) as { coachIds?: unknown } | null)?.coachIds).toEqual([OWN_TRAINER]);
+  });
+
+  it('lehnt eine Einheit ab, deren coachIds einen User eines FREMDEN Vereins enthalten', async () => {
+    const { service, gateway } = makeService();
+    gateway.seedUser(OWN_TRAINER, CLUB_A);
+    gateway.seedUser(FOREIGN_TRAINER, CLUB_B);
+    const payload = makeSessionPayload({ coachIds: [OWN_TRAINER, FOREIGN_TRAINER] });
+
+    const results = await service.push(
+      [{ id: 'evt-coaches-foreign', store: 'sessions', entityId: payload.id, action: 'create', payload, clientUpdatedAt: payload.updatedAt }],
+      asTrainer(CLUB_A),
+    );
+    expect(results[0]).toMatchObject({ status: 'error', code: 'foreign_entity_missing' });
+    expect(await gateway.findById('sessions', payload.id)).toBeNull();
+  });
+});
+
 // Issue #94: ein per Sync gelöschtes Athletenprofil bleibt als Soft-Delete
 // dauerhaft bestehen — die internen Trainer:innen-Notizen nicht.
 describe('syncService.push — Löschen eines Athletenprofils leert notes (Issue #94)', () => {

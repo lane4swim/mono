@@ -44,7 +44,10 @@ export function duplicatePlan(plan) {
 
 export const plansModule = {
   id: 'plans',
-  roles: ['trainer', 'admin', 'athlete'],
+  // Ohne 'admin': Trainingsplanung ist Sache der Trainer:innen, die
+  // Vereinsverwaltung sieht dieses Modul nicht (Admin mit zusätzlicher
+  // Rolle 'trainer' weiterhin schon).
+  roles: ['trainer', 'athlete'],
   icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4.5" width="18" height="16" rx="2"/><path d="M3 9.5h18"/><path d="M8 2.5v4M16 2.5v4"/></svg>`,
   async render(container, params) {
     const isCurrent = beginRender(container);

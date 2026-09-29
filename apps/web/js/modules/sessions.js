@@ -6,12 +6,15 @@ import { badge, emptyState, laneWave, average, fullName, toast } from '../ui.js'
 import { openModal, confirmAction } from '../modal.js';
 import { field, selectInput, dateInput, formActions } from '../forms.js';
 import { isAthleteScoped, getCurrentUser } from '../state.js';
+import { fetchAssignableTrainers } from './actionItems.js';
 import { navigate } from '../router.js';
 import { t } from '../i18n.js';
 
 export const sessionsModule = {
   id: 'sessions',
-  roles: ['trainer', 'admin', 'athlete'],
+  // Ohne 'admin': die Vereinsverwaltung sieht Anwesenheiten nur als
+  // Zusammenfassung ohne RPE/Notizen (attendanceOverview.js).
+  roles: ['trainer', 'athlete'],
   icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 4v16l4-2 4 2 4-2 4 2V4l-4 2-4-2-4 2-4-2z"/><path d="M9 9h6M9 13h4"/></svg>`,
   async render(container, params) {
     const isCurrent = beginRender(container);
@@ -30,7 +33,7 @@ function renderList(container, sessions, groups, athletes) {
   const wrap = el('div');
   wrap.appendChild(el('div', { class: 'page-head' }, [
     el('div', {}, [el('div', { class: 'page-eyebrow' }, t('sessions.eyebrow', { count: sessions.length })), el('h1', { class: 'mt-0' }, t('sessions.title'))]),
-    el('div', { class: 'page-actions' }, [el('button', { class: 'btn btn-primary', onclick: () => openSessionModal(null, groups, athletes, refresh) }, t('sessions.addSession'))]),
+    el('div', { class: 'page-actions' }, [el('button', { class: 'btn btn-primary', onclick: () => openSessionModal(null, groups, athletes, fetchAssignableTrainers(), refresh) }, t('sessions.addSession'))]),
   ]));
   wrap.appendChild(laneWave());
 
@@ -63,7 +66,7 @@ function renderList(container, sessions, groups, athletes) {
 
 async function renderDetail(container, sessionId) {
   const isCurrent = beginRender(container);
-  const [sessions, groups, athletes, plans] = await Promise.all(['sessions', 'groups', 'athletes', 'plans'].map(getAll));
+  const [sessions, groups, athletes, plans, trainers] = await Promise.all([...['sessions', 'groups', 'athletes', 'plans'].map(getAll), fetchAssignableTrainers()]);
   if (!isCurrent()) return;
   clear(container);
   const session = sessions.find(s => s.id === sessionId);
@@ -76,7 +79,7 @@ async function renderDetail(container, sessionId) {
   wrap.appendChild(el('div', { class: 'page-head' }, [
     el('div', {}, [el('div', { class: 'page-eyebrow' }, group?.name || t('plans.noGroup')), el('h1', { class: 'mt-0' }, fmtDateLong(session.date))]),
     el('div', { class: 'page-actions' }, [
-      el('button', { class: 'btn btn-ghost', onclick: () => openSessionModal(session, groups, athletes, () => renderDetail(container, sessionId)) }, t('common.edit')),
+      el('button', { class: 'btn btn-ghost', onclick: () => openSessionModal(session, groups, athletes, trainers, () => renderDetail(container, sessionId)) }, t('common.edit')),
       el('button', { class: 'btn btn-danger', onclick: () => confirmAction(t('sessions.deleteConfirm'), async () => { await remove('sessions', sessionId); toast(t('sessions.deleted')); navigate('sessions'); }) }, t('common.delete')),
     ]),
   ]));
@@ -84,6 +87,12 @@ async function renderDetail(container, sessionId) {
   if (plan) wrap.appendChild(el('p', {}, t('sessions.basedOnPlan', { name: plan.name })));
   else if (session.actualDistance != null) wrap.appendChild(el('p', {}, t('sessions.actualDistanceLine', { m: session.actualDistance })));
   if (session.trainerNote) wrap.appendChild(el('div', { class: 'card' }, [el('h3', { class: 'mt-0' }, t('sessions.trainerNoteTitle')), el('p', {}, session.trainerNote)]));
+
+  const coachIds = session.coachIds || [];
+  wrap.appendChild(el('div', { class: 'card' }, [
+    el('h3', { class: 'mt-0' }, t('sessions.coachesTitle')),
+    el('p', { class: 'mb-0' }, coachIds.length ? coachIds.map(id => trainers.find(tr => tr.id === id)?.name || t('sessions.unknownCoach')).join(', ') : t('sessions.noCoachesRecorded')),
+  ]));
 
   const attCard = el('div', { class: 'card' }, [el('h3', { class: 'mt-0' }, t('sessions.attendanceTitle'))]);
   (session.attendance || []).forEach(rec => {
@@ -124,9 +133,21 @@ async function renderAthleteView(container, isCurrent) {
   container.appendChild(wrap);
 }
 
-function openSessionModal(session, groups, athletes, onSaved) {
+// Vorauswahl der anwesenden Trainer:innen einer NEUEN Einheit: die der
+// Gruppe zugeordneten, ohne Zuordnung die erfassende Person selbst.
+function defaultCoachIds(groups, groupId) {
+  const assigned = groups.find(g => g.id === groupId)?.trainerIds || [];
+  const me = getCurrentUser();
+  return assigned.length ? [...assigned] : (me ? [me.id] : []);
+}
+
+// `trainers` darf ein Promise sein (Liste lädt über das Netz, siehe
+// fetchAssignableTrainers()) — die Checkboxen erscheinen, sobald sie da ist.
+function openSessionModal(session, groups, athletes, trainers, onSaved) {
   const isEdit = !!session;
-  const data = session ? { ...session, attendance: session.attendance.map(a => ({ ...a })) } : { date: todayISO(), groupId: groups[0]?.id || '', planId: null, trainerNote: '', attendance: [] };
+  const data = session
+    ? { ...session, attendance: session.attendance.map(a => ({ ...a })), coachIds: [...(session.coachIds || [])] }
+    : { date: todayISO(), groupId: groups[0]?.id || '', planId: null, trainerNote: '', attendance: [], coachIds: defaultCoachIds(groups, groups[0]?.id) };
   function attendanceFor(groupId) {
     return athletes.filter(a => a.groupId === groupId).map(a => {
       const existing = data.attendance.find(x => x.athleteId === a.id);
@@ -150,6 +171,32 @@ function openSessionModal(session, groups, athletes, onSaved) {
     form.appendChild(field(t('sessions.formActualDistance'), fActualDistance, { hint: t('sessions.formActualDistanceHint') }));
   }
 
+  const coachWrap = el('div', { class: 'field' });
+  coachWrap.appendChild(el('label', {}, t('sessions.coachesLabel')));
+  const coachHost = el('div', { style: 'display:flex;flex-wrap:wrap;gap:4px 20px' }, el('span', { class: 'text-slate text-sm' }, t('common.loading')));
+  // Checkboxen außerhalb von .field — dessen Label-Stil (Versalien) gilt
+  // nur für die Überschrift, nicht für die Namen.
+  form.appendChild(coachWrap);
+  form.appendChild(coachHost);
+  let trainerList = null;
+  Promise.resolve(trainers).then(list => { trainerList = list; drawCoaches(); });
+
+  // IDs, die nicht (mehr) in der Trainer:innen-Liste stehen (z. B. Konto
+  // entfernt), bleiben beim Speichern erhalten — nur Sichtbares ist abwählbar.
+  function drawCoaches() {
+    if (!trainerList) return;
+    clear(coachHost);
+    if (trainerList.length === 0) { coachHost.appendChild(el('span', { class: 'text-slate text-sm' }, t('sessions.noCoachesAvailable'))); return; }
+    trainerList.forEach(tr => {
+      const cb = el('input', { type: 'checkbox' });
+      cb.checked = data.coachIds.includes(tr.id);
+      cb.addEventListener('change', () => {
+        data.coachIds = cb.checked ? [...data.coachIds, tr.id] : data.coachIds.filter(id => id !== tr.id);
+      });
+      coachHost.appendChild(el('label', { class: 'consent-checkbox' }, [cb, el('span', {}, tr.name)]));
+    });
+  }
+
   const attWrap = el('div', { class: 'field' });
   attWrap.appendChild(el('label', {}, t('sessions.attendanceRpeLabel')));
   const attHost = el('div');
@@ -171,13 +218,16 @@ function openSessionModal(session, groups, athletes, onSaved) {
     });
   }
   drawAttendance();
-  fGroup.addEventListener('change', () => { data.groupId = fGroup.value; data.attendance = attendanceFor(fGroup.value); drawAttendance(); });
+  fGroup.addEventListener('change', () => {
+    data.groupId = fGroup.value; data.attendance = attendanceFor(fGroup.value); drawAttendance();
+    if (!isEdit) { data.coachIds = defaultCoachIds(groups, fGroup.value); drawCoaches(); }
+  });
 
   form.appendChild(formActions({ onCancel: () => close(), submitLabel: isEdit ? t('common.save') : t('sessions.addSession').replace('+ ', ''), spanFull: false }).row);
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const actualDistance = fActualDistance ? (fActualDistance.value ? parseInt(fActualDistance.value, 10) : null) : (data.actualDistance ?? null);
-    await put('sessions', { ...data, date: toIsoDateTime(fDate.value), groupId: fGroup.value, trainerNote: fNote.value.trim(), attendance: data.attendance, actualDistance });
+    await put('sessions', { ...data, date: toIsoDateTime(fDate.value), groupId: fGroup.value, trainerNote: fNote.value.trim(), attendance: data.attendance, coachIds: data.coachIds, actualDistance });
     toast(isEdit ? t('sessions.savedEdit') : t('sessions.savedCreate'));
     close(); onSaved?.();
   });

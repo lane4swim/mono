@@ -64,3 +64,54 @@ export function flagLowAttendance(sessions, athletes) {
   }
   return flags.sort((a, b) => a.recentRate - b.recentRate);
 }
+
+// Zusammenfassung für die Anwesenheitsstatistik der Vereinsverwaltung
+// (attendanceOverview.js): nur, WER da war — RPE und Notizen (je
+// Athlet:in und trainerNote) fließen bewusst nicht ein. Anwesende
+// Trainer:innen stammen aus TrainingSession.coachIds. `from` (YYYY-MM-DD,
+// optional) und
+// `groupId` (optional) schränken die berücksichtigten Einheiten ein.
+export function summarizeAttendance(sessions, athletes, { groupId = '', from = '' } = {}) {
+  const athleteById = new Map(athletes.map(a => [a.id, a]));
+  const perAthlete = new Map();
+  const perCoach = new Map();
+  const rows = [];
+  let present = 0;
+  let total = 0;
+
+  const selected = sessions
+    .filter(s => !groupId || s.groupId === groupId)
+    .filter(s => !from || dateOnly(s.date) >= from)
+    .sort((a, b) => b.date.localeCompare(a.date));
+
+  for (const s of selected) {
+    const records = s.attendance || [];
+    const presentCount = records.filter(r => r.present).length;
+    const coachIds = s.coachIds || [];
+    present += presentCount;
+    total += records.length;
+    for (const r of records) {
+      const tally = perAthlete.get(r.athleteId) || { present: 0, total: 0 };
+      tally.total++;
+      if (r.present) tally.present++;
+      perAthlete.set(r.athleteId, tally);
+    }
+    for (const id of coachIds) perCoach.set(id, (perCoach.get(id) || 0) + 1);
+    rows.push({ id: s.id, date: s.date, groupId: s.groupId, present: presentCount, total: records.length, coachIds });
+  }
+
+  return {
+    sessionCount: selected.length,
+    present,
+    total,
+    rate: total ? (present / total) * 100 : null,
+    avgPresent: selected.length ? present / selected.length : null,
+    athletes: [...perAthlete.entries()]
+      .map(([athleteId, t]) => ({ athleteId, athlete: athleteById.get(athleteId) || null, present: t.present, total: t.total, rate: (t.present / t.total) * 100 }))
+      .sort((a, b) => b.rate - a.rate || b.present - a.present),
+    coaches: [...perCoach.entries()]
+      .map(([trainerId, sessionCount]) => ({ trainerId, sessions: sessionCount }))
+      .sort((a, b) => b.sessions - a.sessions),
+    sessions: rows,
+  };
+}

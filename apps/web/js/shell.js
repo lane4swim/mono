@@ -31,10 +31,10 @@ const GROUP_ICON_ADMIN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentCo
 // (dashboard, profile) render as plain top-level items with no header.
 export const NAV_GROUPS = [
   { id: 'dashboard', moduleIds: ['dashboard', 'parent'] },
-  { id: 'training', labelKey: 'nav.groups.training', icon: GROUP_ICON_TRAINING, moduleIds: ['plans', 'sessions'] },
+  { id: 'training', labelKey: 'nav.groups.training', icon: GROUP_ICON_TRAINING, moduleIds: ['plans', 'sessions', 'attendance', 'actionitems'] },
   { id: 'vorlagen', labelKey: 'nav.groups.vorlagen', icon: GROUP_ICON_VORLAGEN, moduleIds: ['templates', 'catalog', 'sectionTemplates'] },
   { id: 'performance', labelKey: 'nav.groups.performance', icon: GROUP_ICON_PERFORMANCE, moduleIds: ['times', 'competitions', 'stats'] },
-  { id: 'team', labelKey: 'nav.groups.team', icon: GROUP_ICON_TEAM, moduleIds: ['athletes', 'announcements', 'actionitems', 'qualifications', 'kampfrichter'] },
+  { id: 'team', labelKey: 'nav.groups.team', icon: GROUP_ICON_TEAM, moduleIds: ['athletes', 'announcements', 'qualifications', 'kampfrichter'] },
   { id: 'admin', labelKey: 'nav.groups.admin', icon: GROUP_ICON_ADMIN, moduleIds: ['usermgmt', 'auditlog', 'syncqueue', 'info'] },
   { id: 'profile', moduleIds: ['profile'] },
 ];

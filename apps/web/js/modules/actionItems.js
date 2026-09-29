@@ -11,6 +11,7 @@ import { isAthleteScoped, getCurrentUser } from '../state.js';
 import { navigate } from '../router.js';
 import { t, trLabel, trOptions } from '../i18n.js';
 import * as api from '../apiClient.js';
+import { IS_DEMO, DEMO_USERS } from '../demoMode.js';
 
 export const actionItemsModule = {
   id: 'actionitems',
@@ -41,6 +42,8 @@ export const actionItemsModule = {
 // Bearbeiten bleibt so auch offline möglich, nur die Umzuweisung an eine
 // andere Person erfordert Netzwerkzugriff.
 export async function fetchAssignableTrainers() {
+  // Demo-Modus ohne Server: die Demo-Konten mit Rolle trainer/admin.
+  if (IS_DEMO) return DEMO_USERS.filter(u => u.roles.some(r => r === 'trainer' || r === 'admin')).map(u => ({ id: u.id, name: u.name }));
   const user = getCurrentUser();
   const fallback = user ? [{ id: user.id, name: user.name }] : [];
   try {
