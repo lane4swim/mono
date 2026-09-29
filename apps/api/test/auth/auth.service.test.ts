@@ -11,6 +11,7 @@ import {
   ForeignClubUserError,
   CannotAssignSuperadminError,
   LastAdminError,
+  type MfaChallengeResponse,
 } from '../../src/modules/auth/auth.service.js';
 import { InMemoryUserRepository, InMemoryRefreshTokenRepository, InMemoryPasswordResetTokenRepository } from '../../src/modules/auth/auth.repository.memory.js';
 import type { PasswordResetTokenRecord } from '../../src/modules/auth/auth.repository.js';
@@ -28,6 +29,14 @@ import { CURRENT_CONSENT_VERSION, LoginRequestSchema } from '@lane1/shared-types
 import { PasswordTooShortForRoleError, CommonPasswordError } from '../../src/auth/passwordPolicy.js';
 
 const CLUB_ID = '11111111-1111-1111-1111-111111111111';
+
+// login()/resetPassword() liefern bei aktivem TOTP statt einer Sitzung eine
+// MFA-Aufforderung (Issue #97). Für Tests ohne TOTP: Sitzung erwarten und
+// den Typ entsprechend einengen.
+function asSession<T>(result: T): Exclude<T, MfaChallengeResponse> {
+  if ((result as { mfaRequired?: boolean }).mfaRequired) throw new Error('Unerwartete MFA-Aufforderung');
+  return result as Exclude<T, MfaChallengeResponse>;
+}
 const INVITER_ID = '99999999-9999-9999-9999-999999999999';
 
 function makeService() {
@@ -236,7 +245,7 @@ describe('authService.login', () => {
   it('meldet mit korrekten Zugangsdaten erfolgreich an', async () => {
     const { service, invitations } = makeService();
     await registerViaInvitation(service, invitations, { email: 'sabine.reuter@example.org' });
-    const result = await service.login({ email: 'sabine.reuter@example.org', password: 'ein-sicheres-passwort', consent: true, consentVersion: CURRENT_CONSENT_VERSION });
+    const result = asSession(await service.login({ email: 'sabine.reuter@example.org', password: 'ein-sicheres-passwort', consent: true, consentVersion: CURRENT_CONSENT_VERSION }));
     expect(result.user.email).toBe('sabine.reuter@example.org');
   });
 
@@ -318,12 +327,12 @@ describe('authService.login', () => {
       // CURRENT_CONSENT_VERSION registriert).
       await users.update(registeredUser.id, { consentVersion: '2020-01-01' });
 
-      const result = await service.login({
+      const result = asSession(await service.login({
         email: 'alte-fassung@example.org',
         password: 'ein-sicheres-passwort',
         consent: true,
         consentVersion: CURRENT_CONSENT_VERSION,
-      });
+      }));
 
       expect(result.user.consentVersion).toBe(CURRENT_CONSENT_VERSION);
     });
@@ -333,12 +342,12 @@ describe('authService.login', () => {
       const { user: registeredUser } = await registerViaInvitation(service, invitations, { email: 'aktuell@example.org' });
 
       const updateSpy = vi.spyOn(users, 'update');
-      const result = await service.login({
+      const result = asSession(await service.login({
         email: 'aktuell@example.org',
         password: 'ein-sicheres-passwort',
         consent: true,
         consentVersion: CURRENT_CONSENT_VERSION,
-      });
+      }));
 
       expect(updateSpy).not.toHaveBeenCalled();
       expect(result.user.consentGivenAt).toEqual(registeredUser.consentGivenAt);
@@ -480,7 +489,7 @@ describe('authService.getMe / updateMe', () => {
 
     // Auch über login()/acceptInvitation() (dieselbe resolveClubContext()-
     // Stelle) — nicht nur getMe().
-    const loginResult = await service.login({ email: 'sabine.reuter@example.org', password: 'ein-sicheres-passwort', consent: true, consentVersion: CURRENT_CONSENT_VERSION });
+    const loginResult = asSession(await service.login({ email: 'sabine.reuter@example.org', password: 'ein-sicheres-passwort', consent: true, consentVersion: CURRENT_CONSENT_VERSION }));
     expect(loginResult.clubNationalID).toBe('1234');
     expect(loginResult.clubNationalIDType).toBe('DSV');
   });
@@ -510,7 +519,7 @@ describe('authService.getMe / updateMe', () => {
     expect(findByIdSpy).toHaveBeenCalledTimes(1);
 
     findByIdSpy.mockClear();
-    const loginResult = await service.login({ email: 'sabine.reuter@example.org', password: 'ein-sicheres-passwort', consent: true, consentVersion: CURRENT_CONSENT_VERSION });
+    const loginResult = asSession(await service.login({ email: 'sabine.reuter@example.org', password: 'ein-sicheres-passwort', consent: true, consentVersion: CURRENT_CONSENT_VERSION }));
     expect(loginResult.enabledModules).toEqual(['athletes']);
     expect(loginResult.clubNationalID).toBe('1234');
     expect(findByIdSpy).toHaveBeenCalledTimes(1);
@@ -716,7 +725,7 @@ describe('authService.resetPassword', () => {
     await registerViaInvitation(service, invitations, { email: 'reset@example.org' });
     const token = await requestAndExtractToken(service, mailer, 'reset@example.org');
 
-    const result = await service.resetPassword(token, 'ein-neues-passwort');
+    const result = asSession(await service.resetPassword(token, 'ein-neues-passwort'));
     expect(result.user.email).toBe('reset@example.org');
     expect(result.accessToken).toBeTruthy();
     expect(result.refreshToken).toBeTruthy();

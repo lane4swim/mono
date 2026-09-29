@@ -55,6 +55,16 @@ import {
 } from '../modules/parents/parents.service.js';
 import { PasswordHasherBusyError } from '../auth/passwordHasherPool.js';
 import { PasswordTooShortForRoleError, CommonPasswordError } from '../auth/passwordPolicy.js';
+import { MfaNotConfiguredError } from '../modules/mfa/mfa.core.js';
+import { InvalidMfaTokenError } from '../auth/tokens.js';
+import {
+  InvalidMfaCodeError,
+  MfaCodeRequiredError,
+  MfaAlreadyEnabledError,
+  MfaSetupNotStartedError,
+  MfaNotEnabledError,
+  MfaRequiredForActionError,
+} from '../modules/mfa/mfaErrors.js';
 
 interface HttpErrorMapping {
   status: number;
@@ -127,6 +137,15 @@ const HTTP_ERROR_REGISTRY = new Map<abstract new (...args: never[]) => Error, Ht
   // Anforderungen an neue Passwörter (auth/passwordPolicy.ts, Issue #97).
   [PasswordTooShortForRoleError, { status: 400, code: 'password_too_short_for_role' }],
   [CommonPasswordError, { status: 400, code: 'password_common' }],
+  // Zwei-Faktor-Anmeldung (Issue #97).
+  [MfaNotConfiguredError, { status: 503, code: 'mfa_not_configured' }],
+  [InvalidMfaTokenError, { status: 401, code: 'invalid_mfa_token' }],
+  [InvalidMfaCodeError, { status: 400, code: 'invalid_mfa_code' }],
+  [MfaCodeRequiredError, { status: 400, code: 'mfa_code_required' }],
+  [MfaAlreadyEnabledError, { status: 409, code: 'mfa_already_enabled' }],
+  [MfaSetupNotStartedError, { status: 409, code: 'mfa_setup_not_started' }],
+  [MfaNotEnabledError, { status: 409, code: 'mfa_not_enabled' }],
+  [MfaRequiredForActionError, { status: 403, code: 'mfa_required_for_action' }],
 ]);
 
 function sendMappedError(err: Error, mapping: HttpErrorMapping, reply: FastifyReply) {

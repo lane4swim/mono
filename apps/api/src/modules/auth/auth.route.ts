@@ -5,6 +5,7 @@ import type { FastifyInstance, FastifyRequest, onRequestAsyncHookHandler } from 
 import {
   AcceptInvitationRequestSchema,
   LoginRequestSchema,
+  LoginMfaRequestSchema,
   RefreshRequestSchema,
   LogoutRequestSchema,
   UpdateMeRequestSchema,
@@ -41,7 +42,7 @@ import { parseInput } from '../../plugins/parseInput.js';
 // Zeitpunkt höchstens die Token, die er tatsächlich erbeutet hat, und
 // kann sie nicht beliebig neu erzeugen — der Schlüssel bleibt für seine
 // Versuche stabil.
-function accessTokenRateLimitKey(request: FastifyRequest): string {
+export function accessTokenRateLimitKey(request: FastifyRequest): string {
   const header = request.headers.authorization;
   if (!header?.startsWith('Bearer ')) return `${request.ip}:no-token`;
   return createHash('sha256').update(header).digest('hex');
@@ -143,6 +144,24 @@ export async function authRoutes(app: FastifyInstance, opts: { authService: Auth
       if (!body) return;
 
       const result = await authService.login(body);
+      return reply.code(200).send(result);
+    },
+  );
+
+  // Zweiter Anmeldeschritt der Zwei-Faktor-Anmeldung (Issue #97). Zusätzlich
+  // zur Grenze von 5 Fehlversuchen je mfaToken (modules/mfa/mfaChallenges.ts)
+  // ein IP-Limit, damit sich nicht beliebig viele mfaTokens parallel
+  // durchprobieren lassen.
+  app.post(
+    '/auth/login/mfa',
+    {
+      onRequest: perIpAuthCeiling(app),
+      config: { rateLimit: { max: 10, timeWindow: '1 minute', keyGenerator: (request: FastifyRequest) => request.ip } },
+    },
+    async (request, reply) => {
+      const body = parseInput(LoginMfaRequestSchema, request.body, reply);
+      if (!body) return;
+      const result = await authService.loginWithSecondFactor(body);
       return reply.code(200).send(result);
     },
   );

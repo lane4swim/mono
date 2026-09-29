@@ -26,6 +26,12 @@ export interface UserRecord {
   deletedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
+  // Zwei-Faktor-Anmeldung (Issue #97), siehe schema.prisma. Optional, weil
+  // Test-Fixtures ohne diese Felder auskommen; fehlend heißt "kein TOTP".
+  // NIE nach außen geben: toPublicUser() entfernt sie.
+  totpSecretEnc?: string | null;
+  totpEnabledAt?: Date | null;
+  totpLastUsedStep?: number | null;
 }
 
 export interface CreateUserInput {
@@ -69,6 +75,31 @@ export interface UserRepository {
   // Für die Nutzerverwaltung ("GET /api/users"): alle aktiven (nicht
   // gelöschten) Mitglieder eines Vereins.
   listByClub(clubId: string): Promise<UserRecord[]>;
+
+  // Zwei-Faktor-Anmeldung (Issue #97). Alle vier schreiben atomar über ein
+  // bedingtes UPDATE und melden, ob die Bedingung zutraf — so können zwei
+  // gleichzeitige Anfragen nicht beide "gewinnen".
+  //
+  // Neues, noch unbestätigtes Secret — nur, solange TOTP nicht aktiv ist.
+  setPendingTotpSecret(id: string, secretEnc: string): Promise<boolean>;
+  // Aktiviert TOTP mit dem Zeitschritt des Bestätigungscodes — nur, wenn
+  // ein unbestätigtes Secret vorliegt.
+  enableTotp(id: string, step: number): Promise<boolean>;
+  // Nimmt einen Code an: nur, wenn sein Zeitschritt NACH dem zuletzt
+  // angenommenen liegt (keine Wiederverwendung desselben Codes).
+  recordTotpStep(id: string, step: number): Promise<boolean>;
+  // Entfernt Secret und Status (Abschalten, Zurücksetzen).
+  clearTotp(id: string): Promise<void>;
+}
+
+export interface MfaRecoveryCodeRepository {
+  // Ersetzt alle Codes der Person durch die neuen (Hashes).
+  replaceAll(userId: string, codeHashes: string[]): Promise<void>;
+  // Verbraucht einen unbenutzten Code atomar; true nur für den einen Aufruf,
+  // der ihn tatsächlich verbraucht hat.
+  consume(userId: string, codeHash: string): Promise<boolean>;
+  countUnused(userId: string): Promise<number>;
+  deleteAll(userId: string): Promise<void>;
 }
 
 export interface RefreshTokenRecord {
@@ -198,6 +229,30 @@ export class PrismaUserRepository implements UserRepository {
     }
     return (await this.findById(id))!;
   }
+  async setPendingTotpSecret(id: string, secretEnc: string): Promise<boolean> {
+    const { count } = await this.prisma.user.updateMany({
+      where: { id, deletedAt: null, totpEnabledAt: null },
+      data: { totpSecretEnc: secretEnc, totpLastUsedStep: null },
+    });
+    return count === 1;
+  }
+  async enableTotp(id: string, step: number): Promise<boolean> {
+    const { count } = await this.prisma.user.updateMany({
+      where: { id, deletedAt: null, totpEnabledAt: null, totpSecretEnc: { not: null } },
+      data: { totpEnabledAt: new Date(), totpLastUsedStep: step },
+    });
+    return count === 1;
+  }
+  async recordTotpStep(id: string, step: number): Promise<boolean> {
+    const { count } = await this.prisma.user.updateMany({
+      where: { id, totpEnabledAt: { not: null }, OR: [{ totpLastUsedStep: null }, { totpLastUsedStep: { lt: step } }] },
+      data: { totpLastUsedStep: step },
+    });
+    return count === 1;
+  }
+  async clearTotp(id: string): Promise<void> {
+    await this.prisma.user.update({ where: { id }, data: { totpSecretEnc: null, totpEnabledAt: null, totpLastUsedStep: null } });
+  }
   async listByClub(clubId: string): Promise<UserRecord[]> {
     return this.prisma.user.findMany({ where: { clubId, deletedAt: null } });
   }
@@ -246,5 +301,29 @@ export class PrismaPasswordResetTokenRepository implements PasswordResetTokenRep
 
   async markAllUsedForUser(userId: string): Promise<void> {
     await this.prisma.passwordResetToken.updateMany({ where: { userId, usedAt: null }, data: { usedAt: new Date() } });
+  }
+}
+
+export class PrismaMfaRecoveryCodeRepository implements MfaRecoveryCodeRepository {
+  constructor(private readonly prisma: PrismaClient) {}
+
+  async replaceAll(userId: string, codeHashes: string[]): Promise<void> {
+    await this.prisma.$transaction([
+      this.prisma.mfaRecoveryCode.deleteMany({ where: { userId } }),
+      this.prisma.mfaRecoveryCode.createMany({ data: codeHashes.map((codeHash) => ({ userId, codeHash })) }),
+    ]);
+  }
+  async consume(userId: string, codeHash: string): Promise<boolean> {
+    const { count } = await this.prisma.mfaRecoveryCode.updateMany({
+      where: { userId, codeHash, usedAt: null },
+      data: { usedAt: new Date() },
+    });
+    return count === 1;
+  }
+  async countUnused(userId: string): Promise<number> {
+    return this.prisma.mfaRecoveryCode.count({ where: { userId, usedAt: null } });
+  }
+  async deleteAll(userId: string): Promise<void> {
+    await this.prisma.mfaRecoveryCode.deleteMany({ where: { userId } });
   }
 }

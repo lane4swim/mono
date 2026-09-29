@@ -22,6 +22,10 @@ import {
 import type { ProfileDataGateway } from '../profile/profile.repository.js';
 import { hashPassword, verifyPassword } from '../../auth/password.js';
 import { assertPasswordPolicy } from '../../auth/passwordPolicy.js';
+import { signMfaToken, verifyMfaToken, InvalidMfaTokenError } from '../../auth/tokens.js';
+import { MfaNotConfiguredError, type MfaVerifier } from '../mfa/mfa.core.js';
+import type { MfaChallengeStore } from '../mfa/mfaChallenges.js';
+import { InvalidMfaCodeError } from '../mfa/mfaErrors.js';
 import { signAccessToken, generateRefreshToken, hashRefreshToken, generatePasswordResetToken, hashPasswordResetToken } from '../../auth/tokens.js';
 import type { KeyPair } from '../../auth/keys.js';
 import type { MailSender } from '../../mail/mailer.js';
@@ -173,6 +177,17 @@ export interface AuthServiceDeps {
   // Phase 2, Abschnitt 4.2 (docs/Plans/phase2-plan.md) — Eltern-Kind-
   // Erstverknüpfung bei Einladungsannahme, siehe acceptInvitation() unten.
   parentLinks: ParentLinkRepository;
+  // Zwei-Faktor-Anmeldung (Issue #97): zweiter Anmeldeschritt. Optional nur,
+  // damit Tests ohne TOTP-Bezug nichts verdrahten müssen; fehlt sie, kann
+  // sich ein Konto mit aktivem TOTP nicht anmelden (MfaNotConfiguredError).
+  mfa?: { verifier: MfaVerifier; challenges: MfaChallengeStore };
+}
+
+// Antwort von Schritt 1, wenn für das Konto TOTP aktiv ist: statt Tokens ein
+// kurzlebiges mfaToken für POST /auth/login/mfa.
+export interface MfaChallengeResponse {
+  mfaRequired: true;
+  mfaToken: string;
 }
 
 // Analog zu buildInviteUrl() in invitations.service.ts: die Annahme-/
@@ -181,9 +196,17 @@ function buildPasswordResetUrl(frontendBaseUrl: string, token: string): string {
   return `${frontendBaseUrl.replace(/\/+$/, '')}/#/reset-password/${token}`;
 }
 
+// Nur `mfaEnabled` verlässt den Server — Secret (auch verschlüsselt) und
+// letzter Zeitschritt nie (Issue #97).
 export function toPublicUser(user: UserRecord) {
-  const { passwordHash: _passwordHash, ...publicUser } = user;
-  return publicUser;
+  const {
+    passwordHash: _passwordHash,
+    totpSecretEnc: _totpSecretEnc,
+    totpLastUsedStep: _totpLastUsedStep,
+    totpEnabledAt,
+    ...publicUser
+  } = user;
+  return { ...publicUser, mfaEnabled: Boolean(totpEnabledAt) };
 }
 
 // Lädt den Vereinskontext, den alle acht Aufrufstellen unten in ihre
@@ -227,6 +250,18 @@ export function createAuthService(deps: AuthServiceDeps) {
     const refresh = generateRefreshToken(deps.refreshTtlDays);
     await deps.refreshTokens.create(user.id, refresh.tokenHash, refresh.expiresAt);
     return { accessToken, refreshToken: refresh.plainToken, expiresIn: deps.accessTtlSeconds };
+  }
+
+  async function issueSession(user: UserRecord) {
+    const tokens = await issueTokens(user);
+    const clubContext = await resolveClubContext(deps.clubs, user.clubId);
+    return { ...tokens, user: toPublicUser(user), ...clubContext };
+  }
+
+  async function startMfaChallenge(user: UserRecord): Promise<MfaChallengeResponse> {
+    if (!deps.mfa?.verifier.isAvailable()) throw new MfaNotConfiguredError();
+    const { token } = await signMfaToken(user.id, deps.keyPair);
+    return { mfaRequired: true, mfaToken: token };
   }
 
   // Wiederverwendung eines bereits rotierten Refresh Tokens = möglicher
@@ -414,9 +449,49 @@ export function createAuthService(deps: AuthServiceDeps) {
               consentVersion: CURRENT_CONSENT_VERSION,
             });
 
-      const tokens = await issueTokens(updated);
-      const clubContext = await resolveClubContext(deps.clubs, updated.clubId);
-      return { ...tokens, user: toPublicUser(updated), ...clubContext };
+      if (updated.totpEnabledAt) return startMfaChallenge(updated);
+      return issueSession(updated);
+    },
+
+    // Schritt 2 der Zwei-Faktor-Anmeldung (Issue #97): mfaToken aus Schritt 1
+    // plus TOTP-Code oder Wiederherstellungscode.
+    async loginWithSecondFactor(input: { mfaToken: string; code?: string; recoveryCode?: string }) {
+      const challenge = await verifyMfaToken(input.mfaToken, deps.keyPair);
+      if (!deps.mfa) throw new MfaNotConfiguredError();
+      const { verifier, challenges } = deps.mfa;
+      if (!challenges.isUsable(challenge.jti, challenge.expiresAt)) throw new InvalidMfaTokenError();
+
+      const user = await deps.users.findById(challenge.userId);
+      if (!user || !user.totpEnabledAt) throw new InvalidMfaTokenError();
+
+      const method = await verifier.verifySecondFactor(user, { code: input.code, recoveryCode: input.recoveryCode });
+      if (!method) {
+        const exhausted = challenges.recordFailure(challenge.jti, challenge.expiresAt);
+        // Ohne await, wie auth.loginFailed.
+        void deps.auditLog.record({
+          clubId: user.clubId,
+          actorId: null,
+          actorLabel: UNKNOWN_ACTOR_LABEL,
+          action: 'auth.mfaFailed',
+          targetId: user.id,
+          targetLabel: userLabel(user),
+          metadata: { exhausted },
+        });
+        throw exhausted ? new InvalidMfaTokenError() : new InvalidMfaCodeError();
+      }
+      if (!challenges.consume(challenge.jti, challenge.expiresAt)) throw new InvalidMfaTokenError();
+      if (method === 'recovery') {
+        await deps.auditLog.record({ clubId: user.clubId, actorId: user.id, actorLabel: userLabel(user), action: 'auth.recoveryCodeUsed', targetId: user.id, targetLabel: userLabel(user) });
+      }
+      return issueSession(user);
+    },
+
+    // Frisches Token-Paar samt Vereinskontext für eine bereits bestätigte
+    // Person — für mfa.service.ts nach Änderungen, die alle Sitzungen beenden.
+    async issueSessionFor(userId: string) {
+      const user = await deps.users.findById(userId);
+      if (!user) throw new UserNotFoundError();
+      return issueSession(user);
     },
 
     async refresh(plainRefreshToken: string) {
@@ -611,9 +686,10 @@ export function createAuthService(deps: AuthServiceDeps) {
         targetLabel: userLabel(updated),
       });
 
-      const tokens = await issueTokens(updated);
-      const clubContext = await resolveClubContext(deps.clubs, updated.clubId);
-      return { ...tokens, user: toPublicUser(updated), ...clubContext };
+      // Mit aktivem TOTP keine direkte Anmeldung: der Reset-Link belegt nur
+      // den Zugriff auf das Postfach, nicht den zweiten Faktor.
+      if (updated.totpEnabledAt) return startMfaChallenge(updated);
+      return issueSession(updated);
     },
 
     // Passwortwechsel für die aktuell eingeloggte Person. Verlangt zusätzlich

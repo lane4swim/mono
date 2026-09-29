@@ -14,6 +14,9 @@ export interface ClubRecord {
   // invitations.service.ts: updateClubIdentity().
   nationalID: string | null;
   nationalIDType: string | null;
+  // Zwei-Faktor-Pflicht für die Admins dieses Vereins (Issue #97). Optional,
+  // weil Test-Fixtures ohne dieses Feld auskommen; fehlend heißt "aus".
+  mfaRequiredForAdmins?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -63,6 +66,7 @@ export interface ClubRepository {
   // Ändert NUR die externe Vereinskennung (siehe invitations.service.ts:
   // updateClubIdentity()). Wirft, wenn clubId nicht existiert.
   updateIdentity(clubId: string, identity: { nationalID: string | null; nationalIDType: string | null }): Promise<ClubRecord>;
+  setMfaRequiredForAdmins(clubId: string, required: boolean): Promise<ClubRecord>;
 }
 
 export interface InvitationRecord {
@@ -151,6 +155,10 @@ export class PrismaClubRepository implements ClubRepository {
 
   async updateIdentity(clubId: string, identity: { nationalID: string | null; nationalIDType: string | null }): Promise<ClubRecord> {
     return this.prisma.club.update({ where: { id: clubId }, data: identity });
+  }
+
+  async setMfaRequiredForAdmins(clubId: string, required: boolean): Promise<ClubRecord> {
+    return this.prisma.club.update({ where: { id: clubId }, data: { mfaRequiredForAdmins: required } });
   }
 
   // docs/Plans/kampfrichter-modul-plan.md, Abschnitt 2: `roles` ist eine

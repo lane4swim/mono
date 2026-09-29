@@ -91,7 +91,9 @@ export class InMemoryProfileDataGateway implements ProfileDataGateway {
     const qualifications = (this.db.qualifications ?? []).filter((q) => q.userId === userId);
     const refereeAssignments = (this.db.refereeAssignments ?? []).filter((r) => r.userId === userId);
 
-    const { passwordHash: _passwordHash, ...publicUser } = user;
+    // Kein Passwort-Hash und kein (verschlüsseltes) TOTP-Secret im Export;
+    // ob TOTP eingerichtet ist (totpEnabledAt), gehört dagegen dazu.
+    const { passwordHash: _passwordHash, totpSecretEnc: _totpSecretEnc, totpLastUsedStep: _totpLastUsedStep, ...publicUser } = user as typeof user & { totpSecretEnc?: unknown; totpLastUsedStep?: unknown };
     return {
       exportedAt: new Date().toISOString(),
       format: 'lane1-user-data-export-v1',

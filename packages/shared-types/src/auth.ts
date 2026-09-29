@@ -212,3 +212,51 @@ export const DataDeletionRequestSchema = z.object({
   purgeAfter: z.string().datetime(),
 });
 export type DataDeletionRequest = z.infer<typeof DataDeletionRequestSchema>;
+
+// ---- Zwei-Faktor-Anmeldung per TOTP (Issue #97) ---------------------------
+
+// 6 Ziffern, ein Leerzeichen in der Mitte (wie viele Apps sie anzeigen) ist
+// erlaubt.
+const totpCodeField = z.string().regex(/^\s*\d{3}\s?\d{3}\s*$/, 'Der Code besteht aus 6 Ziffern.');
+// Wiederherstellungscode "xxxxx-xxxxx"; Groß-/Kleinschreibung und
+// Trennzeichen sind egal (siehe normalizeRecoveryCode() im Backend).
+const recoveryCodeField = z.string().min(10).max(20);
+const currentPasswordField = z.string().min(1).max(200);
+
+const exactlyOneSecondFactor = (v: { code?: string; recoveryCode?: string }) => Boolean(v.code) !== Boolean(v.recoveryCode);
+const atMostOneSecondFactor = (v: { code?: string; recoveryCode?: string }) => !(v.code && v.recoveryCode);
+const SECOND_FACTOR_MESSAGE = 'Bitte genau einen Code angeben: aus der Authenticator-App oder einen Wiederherstellungscode.';
+
+// POST /auth/login/mfa — zweiter Anmeldeschritt.
+export const LoginMfaRequestSchema = z
+  .object({ mfaToken: z.string().min(1).max(4000), code: totpCodeField.optional(), recoveryCode: recoveryCodeField.optional() })
+  .refine(exactlyOneSecondFactor, SECOND_FACTOR_MESSAGE);
+export type LoginMfaRequest = z.infer<typeof LoginMfaRequestSchema>;
+
+// POST /api/me/mfa/totp/confirm
+export const MfaConfirmRequestSchema = z.object({ code: totpCodeField });
+
+// DELETE /api/me/mfa/totp
+export const MfaDisableRequestSchema = z
+  .object({ currentPassword: currentPasswordField, code: totpCodeField.optional(), recoveryCode: recoveryCodeField.optional() })
+  .refine(exactlyOneSecondFactor, SECOND_FACTOR_MESSAGE);
+
+// POST /api/me/mfa/recovery-codes
+export const MfaRecoveryCodesRequestSchema = z
+  .object({ code: totpCodeField.optional(), recoveryCode: recoveryCodeField.optional() })
+  .refine(exactlyOneSecondFactor, SECOND_FACTOR_MESSAGE);
+
+// POST /api/users/:userId/mfa/reset und PATCH /api/clubs/:id/mfa: der Code
+// der handelnden Person ist nur nötig, wenn sie selbst TOTP nutzt.
+export const MfaResetRequestSchema = z
+  .object({ currentPassword: currentPasswordField, code: totpCodeField.optional(), recoveryCode: recoveryCodeField.optional() })
+  .refine(atMostOneSecondFactor, SECOND_FACTOR_MESSAGE);
+
+export const ClubMfaPolicyRequestSchema = z
+  .object({
+    requiredForAdmins: z.boolean(),
+    currentPassword: currentPasswordField,
+    code: totpCodeField.optional(),
+    recoveryCode: recoveryCodeField.optional(),
+  })
+  .refine(atMostOneSecondFactor, SECOND_FACTOR_MESSAGE);
