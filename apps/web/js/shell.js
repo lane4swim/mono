@@ -18,6 +18,11 @@ import { toast } from './ui.js';
 import { openModal } from './modal.js';
 import { t, getLocale, getAvailableLocales } from './i18n.js';
 import { releaseWakeLock } from './wakeLock.js';
+import {
+  availableViews, getCurrentView, setCurrentView, isRouteInView, viewForRoute, defaultRouteOf,
+  setViewStorageScope, getStoredViewId, getSkipViewPicker, setSkipViewPicker, resolveStartupView, COMMON_MODULE_IDS,
+} from './views.js';
+import { showViewPicker, viewCardGrid, alwaysStartCheckbox } from './viewPicker.js';
 
 const GROUP_ICON_TRAINING = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 7c1.4 1.3 2.8 1.3 4.2 0s2.8-1.3 4.2 0 2.8 1.3 4.2 0 2.8-1.3 4.2 0"/><path d="M2 12.5c1.4 1.3 2.8 1.3 4.2 0s2.8-1.3 4.2 0 2.8 1.3 4.2 0 2.8-1.3 4.2 0"/><path d="M2 18c1.4 1.3 2.8 1.3 4.2 0s2.8-1.3 4.2 0 2.8 1.3 4.2 0 2.8-1.3 4.2 0"/></svg>';
 const GROUP_ICON_VORLAGEN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h12v18l-6-4-6 4V3z"/></svg>';
@@ -46,11 +51,36 @@ export const NAV_GROUPS = [
 export const MOBILE_DIRECT_GROUPS = ['dashboard', 'training', 'vorlagen', 'performance', 'team', 'profile'];
 export const MORE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>';
 
+// Innerhalb einer Ansicht (views.js) passen meist alle Fachmodule direkt
+// in die mobile Bottom-Nav; nur was darüber hinausgeht, landet in "Mehr".
+const MAX_DIRECT_VIEW_ITEMS = 4;
+const SWITCH_VIEW_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 8h13l-3-3"/><path d="M20 16H7l3 3"/></svg>';
+const CARET_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>';
+
+function currentAvailableViews() {
+  return availableViews(getRoles(), getEnabledModules());
+}
+
+// Hält die aktuelle Ansicht konsistent mit dem, was die Person (noch)
+// sehen darf — z. B. nachdem der Verein ein Modul-Paket abbestellt hat
+// oder sich die Rollen geändert haben: eine nicht mehr verfügbare Ansicht
+// fällt auf die erste verfügbare zurück (bzw. auf "keine", dann ohne Filter).
+function ensureValidView(available) {
+  const view = getCurrentView();
+  if (view && !available.some((v) => v.id === view.id)) setCurrentView(available[0]?.id ?? null);
+  return getCurrentView();
+}
+
 export function buildNav() {
   const navList = document.getElementById('nav-list');
   const bottomNav = document.getElementById('bottomnav');
+  if (!navList || !bottomNav) return;
   const roles = getRoles();
-  const byId = new Map(visibleModules(roles, getEnabledModules()).map(m => [m.id, m]));
+  const available = currentAvailableViews();
+  const view = ensureValidView(available);
+  const byId = new Map(visibleModules(roles, getEnabledModules())
+    .filter(m => isRouteInView(m.id, view))
+    .map(m => [m.id, m]));
   clear(navList);
   clear(bottomNav);
 
@@ -64,8 +94,24 @@ export function buildNav() {
     g.mods.forEach(m => navList.appendChild(sideNavItem(m)));
   });
 
-  // Mobile bottom bar: one direct entry per primary group, everything else
-  // (remaining group members + the whole admin group) behind "Mehr".
+  const canSwitch = available.length > 1;
+  const overflow = view ? buildViewBottomNav(bottomNav, view, byId) : buildGroupedBottomNav(bottomNav, groups);
+  const overflowRouteIds = overflow.flatMap(g => g.mods.map(m => m.id));
+  if (overflowRouteIds.length > 0 || canSwitch) {
+    bottomNav.appendChild(el('button', { 'data-route-group': overflowRouteIds.join(' '), style: 'position:relative', onclick: () => openMoreNav(overflow, canSwitch) }, [
+      icon(MORE_ICON, { class: 'ic' }), el('span', {}, t('common.more')),
+    ]));
+  }
+
+  updateViewSwitchButton(view, canSwitch);
+  markActive(currentRoute().routeId);
+  updateSyncBadge();
+}
+
+// Ohne Ansicht (z. B. Eltern-Konto): one direct entry per primary group,
+// everything else (remaining group members + the whole admin group) behind
+// "Mehr". Liefert die Überlauf-Gruppen zurück.
+function buildGroupedBottomNav(bottomNav, groups) {
   const overflow = [];
   groups.forEach(g => {
     if (MOBILE_DIRECT_GROUPS.includes(g.id)) {
@@ -75,15 +121,99 @@ export function buildNav() {
       overflow.push(g);
     }
   });
-  const overflowRouteIds = overflow.flatMap(g => g.mods.map(m => m.id));
-  if (overflowRouteIds.length > 0) {
-    bottomNav.appendChild(el('button', { 'data-route-group': overflowRouteIds.join(' '), style: 'position:relative', onclick: () => openMoreNav(overflow) }, [
-      icon(MORE_ICON, { class: 'ic' }), el('span', {}, t('common.more')),
-    ]));
-  }
+  return overflow;
+}
 
-  markActive(currentRoute().routeId);
-  updateSyncBadge();
+// Mit Ansicht: Einstieg (Dashboard/Eltern-Übersicht), dann die
+// Fachmodule der Ansicht in deren Reihenfolge direkt (bis zu
+// MAX_DIRECT_VIEW_ITEMS), dann "Mein Profil". Übrige Fachmodule und die
+// übrigen gemeinsamen Module (Ankündigungen, Sync, Info) kommen — nach
+// den gewohnten Gruppen sortiert — in "Mehr".
+function buildViewBottomNav(bottomNav, view, byId) {
+  const entry = ['dashboard', 'parent'].map(id => byId.get(id)).filter(Boolean);
+  const viewMods = view.moduleIds.map(id => byId.get(id)).filter(Boolean);
+  const direct = viewMods.slice(0, MAX_DIRECT_VIEW_ITEMS);
+  const profile = byId.get('profile');
+  [...entry, ...direct, profile].filter(Boolean).forEach(m => bottomNav.appendChild(bottomNavItem(m)));
+
+  const directIds = new Set([...entry, ...direct, profile].filter(Boolean).map(m => m.id));
+  return NAV_GROUPS
+    .map(g => ({ ...g, mods: g.moduleIds.filter(id => !directIds.has(id)).map(id => byId.get(id)).filter(Boolean) }))
+    .filter(g => g.mods.length > 0);
+}
+
+function updateViewSwitchButton(view, canSwitch) {
+  const btn = document.getElementById('btn-view-switch');
+  if (!btn) return;
+  btn.hidden = !canSwitch || !view;
+  clear(btn);
+  if (btn.hidden) return;
+  const name = t(`views.${view.id}.name`);
+  btn.title = t('views.switchTitle');
+  btn.setAttribute('aria-label', `${t('views.switchTitle')}: ${name}`);
+  btn.appendChild(icon(view.icon, { class: 'ic' }));
+  btn.appendChild(el('span', { class: 'view-switch-label' }, name));
+  btn.appendChild(icon(CARET_ICON, { class: 'ic view-switch-caret' }));
+  btn.onclick = openViewSwitcher;
+}
+
+// Explizites Umschalten (Topbar-Knopf, "Mehr"-Sheet): neue Ansicht setzen,
+// Navigation neu aufbauen und auf deren Startseite springen.
+export function switchView(viewId) {
+  setCurrentView(viewId);
+  buildNav();
+  const view = getCurrentView();
+  const target = view && defaultRouteOf(view, getRoles(), getEnabledModules());
+  if (target) navigate(target);
+}
+
+// Modal "Ansicht wechseln": dasselbe Kartenraster wie beim Start, plus das
+// Häkchen "Immer in dieser Ansicht starten" — wirkt sofort (kein
+// Speichern-Knopf), damit sich die beim Start abbestellte Auswahl auch
+// wieder einschalten lässt.
+export function openViewSwitcher() {
+  const current = getCurrentView();
+  const checkbox = alwaysStartCheckbox(getSkipViewPicker(), (checked) => setSkipViewPicker(checked));
+  const body = el('div', {}, [
+    viewCardGrid(currentAvailableViews(), {
+      selectedId: current?.id,
+      onSelect: (id) => { close(); if (id !== current?.id) switchView(id); },
+    }),
+    checkbox.node,
+  ]);
+  const { close } = openModal({ title: t('views.switchTitle'), bodyNode: body, wide: true });
+}
+
+// Ansicht beim Start festlegen (app.js nach dem Login, app-demo.js bei
+// jedem Kontowechsel) — zeigt bei Bedarf die bildschirmfüllende Auswahl
+// und wartet auf sie. `scope` trennt die gespeicherten Gerätevorlieben je
+// Konto (siehe views.js: setViewStorageScope()). Liefert die Route, auf
+// die danach gesprungen werden soll — oder null, wenn die aktuelle Route
+// stehen bleiben soll (Deep Link, nur eine/keine Ansicht).
+//   - ignoreRoute: die aktuelle Route NICHT als Deep Link werten (Demo-
+//     Kontowechsel: die Route gehört dann noch zum vorherigen Konto).
+export async function initViews(scope, { ignoreRoute = false } = {}) {
+  setViewStorageScope(scope);
+  const roles = getRoles();
+  const enabledModules = getEnabledModules();
+  const available = availableViews(roles, enabledModules);
+  const mod = ignoreRoute ? null : getModule(currentRoute().routeId);
+  const linkedRouteId = mod && !COMMON_MODULE_IDS.includes(mod.id) && isModuleVisible(mod, roles, enabledModules) ? mod.id : null;
+  const decision = resolveStartupView({
+    available, storedViewId: getStoredViewId(), skipPicker: getSkipViewPicker(), routeId: linkedRouteId,
+  });
+  let viewId = decision.viewId;
+  if (decision.showPicker) {
+    const result = await showViewPicker({ views: available, selectedId: viewId, skip: getSkipViewPicker() });
+    viewId = result.viewId;
+    setSkipViewPicker(result.skip);
+  }
+  setCurrentView(viewId);
+  // "In einer Ansicht starten" heißt: auf deren Startseite — außer bei
+  // einem Deep Link oder wenn es ohnehin nur eine Ansicht gibt (dann
+  // bleibt das bisherige Startverhalten unverändert).
+  if (linkedRouteId || available.length <= 1 || !viewId) return null;
+  return defaultRouteOf(getCurrentView(), roles, enabledModules);
 }
 
 function sideNavItem(m) {
@@ -111,8 +241,16 @@ function bottomNavItem(m, groupLabel, groupRouteIds, groupIcon) {
 // "Mehr"-Sheet für die mobile Bottom-Nav: alle Module, die dort nicht als
 // eigenes Icon Platz finden (siehe MOBILE_DIRECT_GROUPS oben), bleiben so
 // über die gleiche gruppierte Ansicht wie im Desktop-Sidenav erreichbar.
-function openMoreNav(groups) {
+function openMoreNav(groups, canSwitchView) {
   const body = el('div', { class: 'more-nav-list' });
+  if (canSwitchView) {
+    const view = getCurrentView();
+    body.appendChild(el('button', { class: 'nav-link more-nav-view-switch', onclick: () => { close(); openViewSwitcher(); } }, [
+      icon(SWITCH_VIEW_ICON, { class: 'ic' }),
+      el('span', { style: 'flex:1' }, t('views.switchTitle')),
+      view ? el('span', { class: 'text-sm text-slate' }, t(`views.${view.id}.name`)) : null,
+    ].filter(Boolean)));
+  }
   groups.forEach(g => {
     if (g.labelKey) {
       body.appendChild(el('div', { class: 'nav-group-label' }, [
@@ -184,6 +322,11 @@ export function defaultModuleFor(roles) {
       : (roles.length === 1 && roles[0] === 'parent' ? 'parent' : ''));
   const preferred = getModule(DEFAULT_ROUTE_BY_ROLE[preferredRole] || '');
   if (preferred && isModuleVisible(preferred, roles, enabledModules)) return preferred;
+  // Mit gewählter Ansicht (views.js) deren Startseite statt des ersten
+  // überhaupt sichtbaren Moduls.
+  const view = getCurrentView();
+  const viewDefault = view && getModule(defaultRouteOf(view, roles, enabledModules) || '');
+  if (viewDefault) return viewDefault;
   return visibleModules(roles, enabledModules)[0];
 }
 
@@ -215,6 +358,19 @@ export async function renderRoute(viewEl, route) {
   // das zugehörige Modul-Paket nicht gebucht hat (direkter Hash-Aufruf
   // einer gesperrten Route, z. B. "#/competitions" ohne Wettkampfmodul).
   if (!mod || !isModuleVisible(mod, roles, getEnabledModules())) mod = defaultModuleFor(roles);
+  // Ansichten sind keine Berechtigungsgrenze: eine sichtbare Route
+  // außerhalb der aktuellen Ansicht (Querverweis, Benachrichtigung,
+  // Lesezeichen) wird gerendert — die Navigation wechselt dafür in eine
+  // Ansicht, die sie enthält, und sagt das kurz an.
+  const view = getCurrentView();
+  if (view && !isRouteInView(mod.id, view)) {
+    const target = viewForRoute(mod.id, currentAvailableViews());
+    if (target) {
+      setCurrentView(target.id);
+      buildNav();
+      toast(t('views.switchedTo', { name: t(`views.${target.id}.name`) }));
+    }
+  }
   markActive(mod.id);
   // Über el()/clear() statt eines Template-Literals auf viewEl.innerHTML
   // — konsistent mit dem sonst in dieser Datei konsequent verwendeten
@@ -296,6 +452,16 @@ export function setupSettingsModal({ storageNoteKey, exportPrefix, getExportData
     body.appendChild(el('h3', { class: 'mt-0' }, t('settings.accounts')));
     if (user) body.appendChild(el('p', { class: 'text-sm' }, `${user.name} — ${t('settings.roleLabel')}: ${user.roles.map((r) => t(`settings.role_${r}`)).join(', ')}`));
     body.appendChild(el('p', { class: 'hint' }, t(storageNoteKey)));
+    // Gegenstück zum Häkchen in der Ansichtsauswahl — hier positiv
+    // formuliert ("beim Start fragen"), damit die einmal abbestellte
+    // Auswahl auch ohne Umweg über den Ansichtswechsel wieder auffindbar ist.
+    if (currentAvailableViews().length > 1) {
+      const askInput = el('input', { type: 'checkbox', onchange: () => setSkipViewPicker(!askInput.checked) });
+      askInput.checked = !getSkipViewPicker();
+      body.appendChild(el('h3', {}, t('views.settingsTitle')));
+      body.appendChild(el('label', { class: 'consent-checkbox' }, [askInput, el('span', {}, t('views.askAtStartup'))]));
+      body.appendChild(el('p', { class: 'hint' }, t('views.deviceNote')));
+    }
     body.appendChild(el('div', { class: 'form-actions', style: 'justify-content:flex-start;margin-top:20px' }, [
       el('button', { class: 'btn btn-ghost', onclick: exportData }, t('settings.exportButton')),
       ...extraActions(),

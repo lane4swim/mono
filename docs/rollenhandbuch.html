@@ -441,6 +441,7 @@
       <h2>Sichtbare Module je Rolle</h2>
     </div>
     <p>Die Hauptanwendung blendet Navigationspunkte aus, für die die eigene Rolle nicht freigeschaltet ist — der Router prüft dieselbe Rollenliste, bevor ein Modul überhaupt gerendert wird.</p>
+    <p>Zusätzlich filtern <em>Ansichten</em> (Verwaltung, Trainingsplanung, Wettkampfteilnahme, Wettkampforganisation — <code>apps/web/js/views.js</code>) die Navigation nach Aufgabe. Sie bauen auf dieser Tabelle auf, erweitern sie aber nie: angeboten wird nur eine Ansicht mit mindestens einem für die Rolle sichtbaren Modul (ein reines Kampfrichter-Konto erhält nur „Wettkampforganisation“, ein Eltern-Konto gar keine), und eine Route außerhalb der gewählten Ansicht wird nicht gesperrt, sondern wechselt die Ansicht.</p>
 
     <div class="table-wrap">
       <table>

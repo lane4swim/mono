@@ -22,7 +22,7 @@ import { el, clear } from './dom.js';
 import { toast } from './ui.js';
 import { confirmAction } from './modal.js';
 import { t, onLocaleChange } from './i18n.js';
-import { buildNav, renderRoute, populateLanguageSelect, setupSettingsModal } from './shell.js';
+import { buildNav, renderRoute, populateLanguageSelect, setupSettingsModal, initViews } from './shell.js';
 import { registerAllModules } from './moduleRegistry.js';
 
 registerAllModules();
@@ -41,11 +41,32 @@ async function boot() {
 
   populateLanguageSelect(setUserLocale);
   populateDemoIndicator();
+  const startRoute = await initViews(viewScope());
+  if (startRoute) history.replaceState(null, '', `#/${startRoute}`);
   buildNav();
   onRouteChange(render);
-  onUserChange(() => { populateDemoAccountSelect(); populateLanguageSelect(setUserLocale); populateDemoIndicator(); buildNav(); render(currentRoute()); });
+  // Kontowechsel: Ansicht für das neue Konto neu festlegen (ggf. mit
+  // Auswahl) — die aktuelle Route gehört noch zum vorherigen Konto und
+  // zählt daher nicht als Deep Link.
+  onUserChange(async () => {
+    populateDemoAccountSelect(); populateLanguageSelect(setUserLocale); populateDemoIndicator();
+    const route = await initViews(viewScope(), { ignoreRoute: true });
+    buildNav();
+    goTo(route || 'dashboard');
+  });
   onLocaleChange(() => { populateDemoAccountSelect(); populateLanguageSelect(setUserLocale); populateDemoIndicator(); buildNav(); render(currentRoute()); });
   render(currentRoute());
+}
+
+// Eigener Präfix, damit gespeicherte Ansichts-Vorlieben der Demo-Konten
+// nie mit denen echter Konten (Nutzer-ID) kollidieren.
+function viewScope() {
+  return `demo.${getCurrentUser()?.id}`;
+}
+
+function goTo(routeId) {
+  if (currentRoute().routeId === routeId) render(currentRoute());
+  else navigate(routeId);
 }
 
 function populateDemoIndicator() {
@@ -67,7 +88,6 @@ function populateDemoAccountSelect() {
     const next = DEMO_USERS.find(u => u.id === demoAccountSelect.value);
     if (!next) return;
     loginDemo(next);
-    navigate('dashboard');
   };
 }
 

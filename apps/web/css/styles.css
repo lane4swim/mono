@@ -118,6 +118,47 @@ button{ font-family: inherit; }
 
 .app-body{ flex:1; display:flex; min-height: 0; }
 
+/* Ansichten (js/views.js, js/viewPicker.js) */
+.view-switch-btn{
+  display:inline-flex; align-items:center; gap:7px; cursor:pointer;
+  background: rgba(255,255,255,0.08); color: var(--c-white); border: 1px solid var(--c-line-dark);
+  padding: 6px 10px; border-radius: var(--radius-sm); font-size: var(--fs-sm); font-family: inherit;
+}
+.view-switch-btn[hidden]{ display:none; }
+.view-switch-btn:hover{ background: rgba(255,255,255,0.14); }
+.view-switch-btn .ic{ width:16px; height:16px; display:inline-flex; color: var(--c-chlorine); }
+.view-switch-btn .view-switch-caret{ width:12px; height:12px; color: var(--c-slate-2); }
+.view-switch-btn svg{ width:100%; height:100%; }
+@media (max-width: 600px){
+  .brand-name{ white-space:nowrap; }
+  .view-switch-btn{ padding: 6px 8px; flex-shrink:0; }
+  .view-switch-label, .view-switch-btn .view-switch-caret{ display:none; }
+}
+
+.view-picker-screen{
+  position: fixed; inset: 0; z-index: 200; overflow-y: auto;
+  display:flex; align-items:center; justify-content:center;
+  padding: 24px 16px; background: var(--c-foam);
+}
+.view-picker-box{ width:100%; max-width: 720px; }
+.view-picker-title{ font-family: var(--f-display); font-size: var(--fs-xl); color: var(--c-deep); margin: 0 0 6px; }
+.view-card-grid{
+  display:grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin: 18px 0;
+}
+.view-card{
+  display:flex; flex-direction:column; align-items:flex-start; gap:6px; text-align:left; cursor:pointer;
+  background: var(--c-white); color: var(--c-ink); font-family: inherit;
+  border: 1px solid var(--c-line); border-radius: var(--radius-md); padding: 16px;
+  box-shadow: var(--shadow-sm); transition: border-color .15s var(--ease), box-shadow .15s var(--ease);
+}
+.view-card:hover, .view-card:focus-visible{ border-color: var(--c-chlorine); box-shadow: var(--shadow-md); }
+.view-card.selected{ border: 2px solid var(--c-chlorine); padding: 15px; }
+.view-card-icon{ width:28px; height:28px; color: var(--c-petrol); display:inline-flex; }
+.view-card-icon svg{ width:100%; height:100%; }
+.view-card-name{ font-weight:700; font-size: var(--fs-md); }
+.view-card-desc{ font-size: var(--fs-sm); color: var(--c-slate); }
+.view-always-start{ margin: 4px 0 8px; }
+
 .sidenav{
   width: var(--sidenav-w); flex-shrink:0;
   background: var(--c-deep-2); color: var(--c-white);

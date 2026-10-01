@@ -15,7 +15,7 @@
 // bliebe beliebig lange auf dem alten Stand, ohne jeden Hinweis. app.js
 // meldet stattdessen, dass eine neue Fassung bereitsteht, und lässt die
 // Person entscheiden, wann neu geladen wird.
-const CACHE_VERSION = 'lane1-v75';
+const CACHE_VERSION = 'lane1-v76';
 const PRECACHE_URLS = [
   './',
   './index.html',
@@ -31,6 +31,8 @@ const PRECACHE_URLS = [
   './js/swUpdate.js',
   './js/shell.js',
   './js/moduleRegistry.js',
+  './js/views.js',
+  './js/viewPicker.js',
   './js/apiClient.js',
   './js/push.js',
   './js/syncClient.js',

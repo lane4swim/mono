@@ -21,6 +21,8 @@ Laden keine Internetverbindung mehr.
 - **Mein Profil** — jede:r Nutzer:in kann eigene Kontodaten (Name, E-Mail) sowie die bevorzugte Sprache selbst verwalten; zusätzlich Auskunft (JSON-Export) und Löschung des eigenen Kontos gemäß DSGVO (Art. 15 + 17) — ruft die echten Backend-Endpunkte auf, mit lokalem Export als Ausweichlösung bei fehlender Internetverbindung
 - **Nutzerverwaltung** — Superadministrator:innen legen Vereine an und laden deren ersten Admin per zeitlich befristetem Einladungslink ein (per echter E-Mail versendet); Admins laden Trainer:innen/Athlet:innen ihres Vereins ebenso ein. Zusätzlich: Anzeige bestehender Vereinsmitglieder, gruppiert nach Rolle (Admins/Trainer:innen/Athlet:innen) — für Admins automatisch der eigene Verein, für Superadministrator:innen je Verein über einen Button in der Vereinsliste.
 
+- **Ansichten** — die Navigation lässt sich nach Aufgabe bündeln: Verwaltung, Trainingsplanung, Wettkampfteilnahme und Wettkampforganisation (`js/views.js`). Angeboten werden nur Ansichten mit mindestens einem für die eigene Rolle sichtbaren Modul; bei mehreren fragt die App beim Start (abschaltbar per Häkchen „Immer in dieser Ansicht starten“), gewechselt wird jederzeit über die Schaltfläche neben dem Logo bzw. „Mehr“. Die Wahl gilt pro Gerät (localStorage) und ist reiner Navigationsfilter, keine Berechtigungsgrenze
+
 Drei Rollen: **Trainer**, **Athlet** und **Administrator** (siehe unten).
 
 ## Lokal ausführen

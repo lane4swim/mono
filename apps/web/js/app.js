@@ -38,7 +38,7 @@ import { confirmAction } from './modal.js';
 import { t, onLocaleChange } from './i18n.js';
 import { renderLoginScreen, renderAcceptInvitationScreen, renderResetPasswordScreen } from './modules/authScreens.js';
 import { runSync } from './syncClient.js';
-import { buildNav, renderRoute, populateLanguageSelect, updateSyncBadge, setupSettingsModal } from './shell.js';
+import { buildNav, renderRoute, populateLanguageSelect, updateSyncBadge, setupSettingsModal, initViews } from './shell.js';
 import { registerAllModules } from './moduleRegistry.js';
 
 registerAllModules();
@@ -102,7 +102,6 @@ function showAuthScreen() {
 
 async function startAuthenticatedApp() {
   authScreenEl.hidden = true;
-  appShellEl.hidden = false;
   if (location.hash.startsWith('#/accept-invite') || location.hash.startsWith('#/reset-password')) location.hash = '#/dashboard';
 
   // Läuft VOR dem ersten Sync-Zyklus unten (startBackgroundSync()): räumt
@@ -116,6 +115,15 @@ async function startAuthenticatedApp() {
   // findet den Marker bereits konsumiert vor und rührt die inzwischen
   // echten, synchronisierten Daten nicht an.
   if (await wipeDemoDataIfPresent()) toast(t('auth.demoDataReplaced'));
+
+  // Ansicht festlegen (views.js) — zeigt ggf. die bildschirmfüllende
+  // Auswahl und wartet darauf, BEVOR die Shell sichtbar wird. Der Sprung
+  // auf die Startseite der Ansicht per replaceState statt location.hash:
+  // löst kein hashchange aus (das render() unten zeichnet ohnehin) und
+  // hinterlässt keinen zusätzlichen Verlaufseintrag.
+  const startRoute = await initViews(getCurrentUser().id);
+  if (startRoute) history.replaceState(null, '', `#/${startRoute}`);
+  appShellEl.hidden = false;
 
   populateCurrentUserLabel();
   populateLanguageSelect(setUserLocale);
