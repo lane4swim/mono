@@ -97,9 +97,11 @@ describe('AthleteSchema', () => {
     expect(AthleteSchema.safeParse({ ...valid, notes: 'x'.repeat(10000) }).success).toBe(true);
   });
 
-  it('setzt "accountMode" ohne Angabe auf "managed" (Altdatensätze)', () => {
+  // Kein Default: sonst setzte ein Sync-Update eines feldlosen
+  // Altdatensatzes ein gespeichertes "invitable" auf "managed" zurück.
+  it('lässt "accountMode" ohne Angabe weg (kein Default)', () => {
     const parsed = AthleteSchema.parse(valid);
-    expect(parsed.accountMode).toBe('managed');
+    expect('accountMode' in parsed).toBe(false);
   });
   it('akzeptiert accountMode "invitable"', () => {
     expect(AthleteSchema.parse({ ...valid, accountMode: 'invitable' }).accountMode).toBe('invitable');

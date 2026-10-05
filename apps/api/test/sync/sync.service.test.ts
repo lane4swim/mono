@@ -2490,3 +2490,37 @@ describe('syncService.push — Löschen eines Athletenprofils leert notes (Issue
     expect((stored as { notes?: unknown } | null)?.notes).toBe('');
   });
 });
+
+// Athletenprofile ohne/mit eigenem Konto (accountMode): ein Update eines
+// älteren Clients ohne dieses Feld darf ein gespeichertes "invitable"
+// nicht auf "managed" zurücksetzen — AthleteSchema hat deshalb bewusst
+// keinen Default für accountMode.
+describe('syncService.push — Athlete.accountMode', () => {
+  it('übernimmt accountMode "invitable" aus dem Payload', async () => {
+    const { service, gateway } = makeService();
+    const athlete = makeAthletePayload({ accountMode: 'invitable' });
+
+    const results = await service.push(
+      [{ id: 'evt-mode-create', store: 'athletes', entityId: athlete.id, action: 'create', payload: athlete, clientUpdatedAt: athlete.updatedAt }],
+      asAdmin(CLUB_A),
+    );
+    expect(results[0]!.status).toBe('applied');
+    expect(((await gateway.findById('athletes', athlete.id)) as { accountMode?: unknown } | null)?.accountMode).toBe('invitable');
+  });
+
+  it('behält ein gespeichertes "invitable" bei einem Update ohne accountMode', async () => {
+    const { service, gateway } = makeService();
+    const athlete = makeAthletePayload();
+    gateway.seed('athletes', { ...athlete, accountMode: 'invitable', updatedAt: new Date(athlete.updatedAt), deletedAt: null });
+
+    const update = { ...athlete, firstName: 'Umbenannt', updatedAt: new Date(Date.now() + 1000).toISOString() };
+    const results = await service.push(
+      [{ id: 'evt-mode-update', store: 'athletes', entityId: athlete.id, action: 'update', payload: update, clientUpdatedAt: update.updatedAt }],
+      asAdmin(CLUB_A),
+    );
+    expect(results[0]!.status).toBe('applied');
+    const stored = (await gateway.findById('athletes', athlete.id)) as { firstName?: unknown; accountMode?: unknown } | null;
+    expect(stored?.firstName).toBe('Umbenannt');
+    expect(stored?.accountMode).toBe('invitable');
+  });
+});

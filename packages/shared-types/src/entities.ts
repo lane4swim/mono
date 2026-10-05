@@ -119,9 +119,13 @@ export const AthleteSchema = z.object({
   // statt DSV-spezifisch, siehe docs/Plans/dsv7-lenex-import-plan.md Abschnitt 3.1.
   nationalID: z.string().max(50).nullable().optional(),
   nationalIDType: z.string().max(50).nullable().optional(),
-  // Default "managed", damit bestehende Datensätze in IndexedDB/Sync-Queue
-  // (ohne dieses Feld) gültig bleiben.
-  accountMode: AthleteAccountModeSchema.default('managed'),
+  // Bewusst optional OHNE .default(): der Sync-Push schreibt den GEPARSTEN
+  // Payload (sync.service.ts) — ein Default würde beim Update eines alten,
+  // feldlosen Client-Datensatzes ein "invitable" still auf "managed"
+  // zurücksetzen. Fehlt das Feld, bleibt der gespeicherte Wert unverändert;
+  // neue Zeilen erhalten "managed" über den Spalten-Default (schema.prisma).
+  // Lesende Stellen behandeln undefined wie "managed".
+  accountMode: AthleteAccountModeSchema.optional(),
   createdAt: isoDate,
   updatedAt: isoDate,
 }).strict();
