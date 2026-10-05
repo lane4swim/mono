@@ -373,6 +373,13 @@ model Athlete {
   // Importzeilen als reiner Namensabgleich (z. B. bei Namensgleichheit).
   nationalID     String?
   nationalIDType String?
+  // "managed" | "invitable" — ob für dieses Profil ein eigenes Nutzerkonto
+  // vorgesehen ist. "managed": nur von Admin/Trainer:innen gepflegt, es
+  // wird keine Athlet:innen-Einladung dafür ausgestellt (Standard, z. B.
+  // für Kinder ohne eigenen Login). "invitable": darf per Einladung mit
+  // einem Konto verknüpft werden (Invitation.athleteId -> User.athleteId).
+  // Eltern-Einladungen sind davon unabhängig.
+  accountMode    String    @default("managed")
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
   deletedAt      DateTime?

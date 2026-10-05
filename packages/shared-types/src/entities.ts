@@ -97,6 +97,13 @@ export type Group = z.infer<typeof GroupSchema>;
 
 export const AthleteGenderSchema = z.enum(['w', 'm', 'd']);
 
+// Ob für ein Athletenprofil ein eigenes Nutzerkonto vorgesehen ist:
+// "managed" = nur von Admin/Trainer:innen gepflegt, keine Athlet:innen-
+// Einladung; "invitable" = darf per Einladung mit einem Konto verknüpft
+// werden. Eltern-Einladungen sind davon unabhängig.
+export const AthleteAccountModeSchema = z.enum(['managed', 'invitable']);
+export type AthleteAccountMode = z.infer<typeof AthleteAccountModeSchema>;
+
 export const AthleteSchema = z.object({
   id: z.string().uuid(),
   clubId: z.string().uuid(),
@@ -112,6 +119,9 @@ export const AthleteSchema = z.object({
   // statt DSV-spezifisch, siehe docs/Plans/dsv7-lenex-import-plan.md Abschnitt 3.1.
   nationalID: z.string().max(50).nullable().optional(),
   nationalIDType: z.string().max(50).nullable().optional(),
+  // Default "managed", damit bestehende Datensätze in IndexedDB/Sync-Queue
+  // (ohne dieses Feld) gültig bleiben.
+  accountMode: AthleteAccountModeSchema.default('managed'),
   createdAt: isoDate,
   updatedAt: isoDate,
 }).strict();
