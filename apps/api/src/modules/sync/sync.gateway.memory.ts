@@ -39,6 +39,18 @@ export class InMemorySyncGateway implements SyncGateway {
     this.users.set(userId, clubId);
   }
 
+  // athleteId -> Kontozustand, für findAthleteAccountState(). Ohne Eintrag:
+  // weder Konto noch offene Einladung.
+  private athleteAccountStates = new Map<string, { hasLinkedUser: boolean; hasOpenInvitation: boolean }>();
+
+  seedAthleteAccountState(athleteId: string, state: { hasLinkedUser?: boolean; hasOpenInvitation?: boolean }): void {
+    this.athleteAccountStates.set(athleteId, { hasLinkedUser: false, hasOpenInvitation: false, ...state });
+  }
+
+  async findAthleteAccountState(athleteId: string, _clubId: string): Promise<{ hasLinkedUser: boolean; hasOpenInvitation: boolean }> {
+    return this.athleteAccountStates.get(athleteId) ?? { hasLinkedUser: false, hasOpenInvitation: false };
+  }
+
   async findClubIdForUser(userId: string): Promise<string | null> {
     return this.users.get(userId) ?? null;
   }

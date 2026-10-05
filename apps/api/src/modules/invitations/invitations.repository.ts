@@ -111,10 +111,15 @@ export interface InvitationRepository {
 // Punkt 3: ohne diese Prüfung könnte ein Admin ein neues Konto an das
 // Athletenprofil eines FREMDEN Vereins koppeln). Bewusst kein volles
 // AthleteRepository (mit allen CRUD-Operationen) — die Einladungslogik
-// braucht nur `clubId` des referenzierten Athletenprofils.
+// braucht nur `clubId` des referenzierten Athletenprofils, dazu für
+// Konto-Einladungen accountMode und ob bereits ein Konto verknüpft ist.
 export interface AthleteLookup {
   id: string;
   clubId: string;
+  // "managed" | "invitable" — siehe schema.prisma: Athlete.accountMode.
+  accountMode: string;
+  // true, sobald ein User über User.athleteId auf dieses Profil zeigt.
+  hasLinkedUser: boolean;
 }
 
 export interface AthleteRepository {
@@ -228,7 +233,11 @@ export class PrismaAthleteRepository implements AthleteRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
   async findById(id: string): Promise<AthleteLookup | null> {
-    const athlete = await this.prisma.athlete.findUnique({ where: { id }, select: { id: true, clubId: true } });
-    return athlete;
+    const athlete = await this.prisma.athlete.findUnique({
+      where: { id },
+      select: { id: true, clubId: true, accountMode: true, user: { select: { id: true } } },
+    });
+    if (!athlete) return null;
+    return { id: athlete.id, clubId: athlete.clubId, accountMode: athlete.accountMode, hasLinkedUser: athlete.user !== null };
   }
 }

@@ -425,6 +425,24 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
           }
         }
 
+        // Nicht jede:r Athlet:in hat ein eigenes Konto (Athlete.accountMode).
+        // Zurück auf "managed" darf ein Profil nur, solange weder ein Konto
+        // verknüpft ist noch eine offene Konto-Einladung darauf zeigt —
+        // sonst widerspräche das Flag dem tatsächlichen Zustand. Nur beim
+        // tatsächlichen Wechsel geprüft (gespeichert != "managed"), damit
+        // gewöhnliche Updates keine zusätzliche Abfrage kosten.
+        if (store === 'athletes' && event.action !== 'delete' && existing) {
+          const payloadMode = (validatedPayload as { accountMode?: unknown } | null)?.accountMode;
+          const existingMode = (existing as { accountMode?: unknown }).accountMode;
+          if (payloadMode === 'managed' && existingMode !== 'managed') {
+            const state = await deps.gateway.findAthleteAccountState(event.entityId, requester.clubId);
+            if (state.hasLinkedUser || state.hasOpenInvitation) {
+              results.push({ eventId: event.id, status: 'error', message: 'Ein Athletenprofil mit Konto oder offener Einladung kann nicht auf "nur vom Verein verwaltet" umgestellt werden.', code: 'athlete_has_account' });
+              continue;
+            }
+          }
+        }
+
         const decision = resolveConflict(
           store,
           { clientUpdatedAt: event.clientUpdatedAt },

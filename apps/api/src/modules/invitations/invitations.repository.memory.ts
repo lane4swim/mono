@@ -177,8 +177,10 @@ export class InMemoryInvitationRepository implements InvitationRepository {
 export class InMemoryAthleteRepository implements AthleteRepository {
   private athletesById = new Map<string, AthleteLookup>();
 
-  seed(athlete: AthleteLookup): void {
-    this.athletesById.set(athlete.id, athlete);
+  // accountMode/hasLinkedUser optional mit denselben Standardwerten wie
+  // ein frisch angelegtes Profil in der Datenbank ("managed", kein Konto).
+  seed(athlete: Pick<AthleteLookup, 'id' | 'clubId'> & Partial<AthleteLookup>): void {
+    this.athletesById.set(athlete.id, { accountMode: 'managed', hasLinkedUser: false, ...athlete });
   }
 
   async findById(id: string): Promise<AthleteLookup | null> {

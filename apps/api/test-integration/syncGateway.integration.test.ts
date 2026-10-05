@@ -455,3 +455,39 @@ describe('syncService.push() mit PrismaSyncGateway (Issue #93)', () => {
     expect(await gateway.findById('groups', otherId, club.id)).toBeNull();
   });
 });
+
+describe('PrismaSyncGateway.findAthleteAccountState()', () => {
+  async function seedAthlete() {
+    const club = await createTestClub(prisma);
+    const athlete = await prisma.athlete.create({ data: { clubId: club.id, firstName: 'Mara', lastName: 'Vogel', accountMode: 'invitable' } });
+    return { club, athlete };
+  }
+  function invitation(clubId: string, athleteId: string, overrides: Record<string, unknown> = {}) {
+    return { tokenHash: randomUUID(), email: 'x@y.de', role: 'athlete', clubId, athleteId, expiresAt: new Date(Date.now() + 86_400_000), ...overrides };
+  }
+
+  it('weder Konto noch Einladung', async () => {
+    const { club, athlete } = await seedAthlete();
+    expect(await gateway.findAthleteAccountState(athlete.id, club.id)).toEqual({ hasLinkedUser: false, hasOpenInvitation: false });
+  });
+
+  it('erkennt ein verknüpftes Konto', async () => {
+    const { club, athlete } = await seedAthlete();
+    await prisma.user.create({ data: { clubId: club.id, name: 'Mara', email: `${randomUUID()}@x.de`, passwordHash: 'h', role: 'athlete', roles: ['athlete'], athleteId: athlete.id } });
+    expect(await gateway.findAthleteAccountState(athlete.id, club.id)).toMatchObject({ hasLinkedUser: true });
+  });
+
+  it('zählt nur offene Konto-Einladungen (nicht widerrufen/verwendet/abgelaufen, nicht "parent")', async () => {
+    const { club, athlete } = await seedAthlete();
+    await prisma.invitation.createMany({ data: [
+      invitation(club.id, athlete.id, { revokedAt: new Date() }),
+      invitation(club.id, athlete.id, { usedAt: new Date() }),
+      invitation(club.id, athlete.id, { expiresAt: new Date(Date.now() - 1000) }),
+      invitation(club.id, athlete.id, { role: 'parent' }),
+    ] });
+    expect(await gateway.findAthleteAccountState(athlete.id, club.id)).toEqual({ hasLinkedUser: false, hasOpenInvitation: false });
+
+    await prisma.invitation.create({ data: invitation(club.id, athlete.id) });
+    expect(await gateway.findAthleteAccountState(athlete.id, club.id)).toEqual({ hasLinkedUser: false, hasOpenInvitation: true });
+  });
+});

@@ -136,6 +136,11 @@ export interface SyncGateway {
   // Verein gehört (z. B. superadmin) — ausreichend, da der Aufrufer die ID
   // ohnehin nur gegen eine konkrete erwartete clubId vergleicht.
   findClubIdForUser(userId: string): Promise<string | null>;
+  // Für den Wechsel eines Athletenprofils auf accountMode "managed" (siehe
+  // sync.service.ts): ob bereits ein Konto über User.athleteId verknüpft
+  // ist oder eine offene Konto-Einladung (Rolle != "parent") darauf zeigt.
+  // Beides würde dem "nur vom Verein verwaltet" widersprechen.
+  findAthleteAccountState(athleteId: string, clubId: string): Promise<{ hasLinkedUser: boolean; hasOpenInvitation: boolean }>;
 }
 
 // create()/update()/softDelete()/markEventProcessed() gehören nicht in
@@ -410,5 +415,16 @@ export class PrismaSyncGateway implements SyncGateway, SyncGatewayTestSurface {
   async findClubIdForUser(userId: string): Promise<string | null> {
     const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { clubId: true } });
     return user?.clubId ?? null;
+  }
+
+  async findAthleteAccountState(athleteId: string, clubId: string): Promise<{ hasLinkedUser: boolean; hasOpenInvitation: boolean }> {
+    const [linkedUser, openInvitation] = await Promise.all([
+      this.prisma.user.findFirst({ where: { athleteId, clubId }, select: { id: true } }),
+      this.prisma.invitation.findFirst({
+        where: { athleteId, clubId, role: { not: 'parent' }, usedAt: null, revokedAt: null, expiresAt: { gte: new Date() } },
+        select: { id: true },
+      }),
+    ]);
+    return { hasLinkedUser: linkedUser !== null, hasOpenInvitation: openInvitation !== null };
   }
 }
