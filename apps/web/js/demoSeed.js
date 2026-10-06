@@ -25,8 +25,8 @@ async function seedDemoClubData() {
   await bulkPut('groups', [groupA, groupB]);
 
   const athleteDefs = [
-    { id: DEMO_ATHLETE_ID_MAYA, firstName: 'Maya', lastName: 'Vogel', birthdate: '2009-03-14', gender: 'w', groupId: groupA.id, joinDate: '2019-08-01', active: true, notes: '' },
-    { firstName: 'Jonas', lastName: 'Brandt', birthdate: '2008-11-02', gender: 'm', groupId: groupA.id, joinDate: '2018-02-15', active: true, notes: 'Schwerpunkt Sprint' },
+    { id: DEMO_ATHLETE_ID_MAYA, firstName: 'Maya', lastName: 'Vogel', birthdate: '2009-03-14', gender: 'w', groupId: groupA.id, joinDate: '2019-08-01', active: true, notes: '', accountMode: 'invitable' },
+    { firstName: 'Jonas', lastName: 'Brandt', birthdate: '2008-11-02', gender: 'm', groupId: groupA.id, joinDate: '2018-02-15', active: true, notes: 'Schwerpunkt Sprint', accountMode: 'invitable' },
     { firstName: 'Elif', lastName: 'Kaya', birthdate: '2010-06-22', gender: 'w', groupId: groupA.id, joinDate: '2020-01-10', active: true, notes: '' },
     { firstName: 'Lukas', lastName: 'Weber', birthdate: '2011-09-05', gender: 'm', groupId: groupB.id, joinDate: '2021-09-01', active: true, notes: '' },
     { firstName: 'Nele', lastName: 'Schuster', birthdate: '2012-01-30', gender: 'w', groupId: groupB.id, joinDate: '2022-03-01', active: true, notes: '' },

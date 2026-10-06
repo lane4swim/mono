@@ -8,7 +8,7 @@ import { describe, it, expect, vi } from 'vitest';
 // db.js/state.js importieren transitiv demoMode.js, das auf Modulebene
 // `location.pathname` liest (siehe kampfrichter.module.test.js-Kommentar).
 vi.mock('../js/demoMode.js', () => ({ IS_DEMO: false }));
-vi.mock('../js/state.js', () => ({ isAdminOrSuperAdmin: () => false, isAthleteScoped: () => false, getCurrentUser: () => null }));
+vi.mock('../js/state.js', () => ({ isAdminOrSuperAdmin: () => false, isAdmin: () => false, isAthleteScoped: () => false, getCurrentUser: () => null }));
 
 import { athletesModule } from '../js/modules/athletes.js';
 import { isModuleVisible } from '../js/router.js';

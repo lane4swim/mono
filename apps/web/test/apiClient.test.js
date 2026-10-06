@@ -347,3 +347,23 @@ describe('login()/loginMfa() — Zwei-Faktor-Anmeldung', () => {
     expect(api.getStoredRefreshToken()).toBeNull();
   });
 });
+
+// Fastify lehnt "Content-Type: application/json" mit leerem Body ab
+// (FST_ERR_CTP_EMPTY_JSON_BODY) — ein DELETE ohne Body darf den Header
+// daher nicht tragen, sonst scheitert z. B. das Widerrufen einer Einladung.
+describe('request() — Content-Type nur mit Body', () => {
+  it('schickt bei einem DELETE ohne Body keinen Content-Type', async () => {
+    globalThis.fetch = vi.fn(async () => ({ status: 204, ok: true, json: async () => null }));
+    await api.revokeInvitation('inv-1');
+    const [, options] = globalThis.fetch.mock.calls[0];
+    expect(options.method).toBe('DELETE');
+    expect(options.headers['Content-Type']).toBeUndefined();
+  });
+
+  it('schickt bei einem Request mit Body weiterhin application/json', async () => {
+    globalThis.fetch = vi.fn(async () => ({ status: 200, ok: true, json: async () => ({ id: 'inv-1', token: 't' }) }));
+    await api.createInvitation({ email: 'a@b.de', role: 'athlete', athleteId: 'a1' });
+    const [, options] = globalThis.fetch.mock.calls[0];
+    expect(options.headers['Content-Type']).toBe('application/json');
+  });
+});
