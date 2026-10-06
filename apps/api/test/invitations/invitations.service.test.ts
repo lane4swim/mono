@@ -6,6 +6,9 @@ import {
   ClubNotFoundError,
   AthleteNotFoundError,
   AthleteClubMismatchError,
+  AthleteManagedOnlyError,
+  AthleteAccountExistsError,
+  AthleteInvitationPendingError,
   InvitationNotFoundError,
   InvitationExpiredError,
   InvitationAlreadyUsedError,
@@ -161,7 +164,7 @@ describe('invitationsService.createInvitation — athleteId muss zum Zielverein 
   it('akzeptiert eine athlete-Einladung, deren athleteId zum EIGENEN Verein gehört', async () => {
     const { service, clubs, athletes } = makeService();
     const club = await clubs.create({ name: 'Club A' });
-    athletes.seed({ id: 'athlete-in-club-a', clubId: club.id });
+    athletes.seed({ id: 'athlete-in-club-a', clubId: club.id, accountMode: 'invitable' });
     const requester = { ...ADMIN_OF_CLUB_A, clubId: club.id };
 
     const invitation = await service.createInvitation(
@@ -188,6 +191,69 @@ describe('invitationsService.createInvitation — athleteId muss zum Zielverein 
     const requester = { ...ADMIN_OF_CLUB_A, clubId: club.id };
     const invitation = await service.createInvitation({ email: 'trainer@a.de', role: 'trainer' }, requester);
     expect(invitation.clubId).toBe(club.id);
+  });
+});
+
+// Nicht jede:r Athlet:in bekommt ein eigenes Konto (Athlete.accountMode):
+// Konto-Einladungen nur für "invitable", ohne bestehendes Konto und ohne
+// offene Einladung. Eltern-Einladungen bleiben davon unberührt.
+describe('invitationsService.createInvitation — Athlete.accountMode', () => {
+  async function setup(athlete: { accountMode?: string; hasLinkedUser?: boolean } = {}) {
+    const ctx = makeService();
+    const club = await ctx.clubs.create({ name: 'Club A' });
+    ctx.athletes.seed({ id: 'athlete-a', clubId: club.id, ...athlete });
+    return { ...ctx, club, requester: { ...ADMIN_OF_CLUB_A, clubId: club.id } };
+  }
+
+  it('lehnt eine athlete-Einladung für ein nur verwaltetes Profil ab (Standard "managed")', async () => {
+    const { service, requester } = await setup();
+    await expect(
+      service.createInvitation({ email: 'x@y.de', role: 'athlete', athleteId: 'athlete-a' }, requester),
+    ).rejects.toThrow(AthleteManagedOnlyError);
+  });
+
+  it('lehnt auch andere Konto-Rollen mit athleteId für ein verwaltetes Profil ab', async () => {
+    // athleteId wird bei jeder Rolle außer "parent" zu User.athleteId.
+    const { service, requester } = await setup();
+    await expect(
+      service.createInvitation({ email: 'x@y.de', role: 'trainer', athleteId: 'athlete-a' }, requester),
+    ).rejects.toThrow(AthleteManagedOnlyError);
+  });
+
+  it('erlaubt eine Eltern-Einladung für ein verwaltetes Profil', async () => {
+    const { service, requester, club } = await setup();
+    const invitation = await service.createInvitation({ email: 'eltern@y.de', role: 'parent', athleteId: 'athlete-a' }, requester);
+    expect(invitation.clubId).toBe(club.id);
+  });
+
+  it('lehnt eine Einladung ab, wenn bereits ein Konto verknüpft ist', async () => {
+    const { service, requester } = await setup({ accountMode: 'invitable', hasLinkedUser: true });
+    await expect(
+      service.createInvitation({ email: 'x@y.de', role: 'athlete', athleteId: 'athlete-a' }, requester),
+    ).rejects.toThrow(AthleteAccountExistsError);
+  });
+
+  it('lehnt eine zweite offene Einladung für dasselbe Profil ab', async () => {
+    const { service, requester } = await setup({ accountMode: 'invitable' });
+    await service.createInvitation({ email: 'x@y.de', role: 'athlete', athleteId: 'athlete-a' }, requester);
+    await expect(
+      service.createInvitation({ email: 'z@y.de', role: 'athlete', athleteId: 'athlete-a' }, requester),
+    ).rejects.toThrow(AthleteInvitationPendingError);
+  });
+
+  it('erlaubt eine neue Einladung, nachdem die offene widerrufen wurde (Link neu erzeugen)', async () => {
+    const { service, requester } = await setup({ accountMode: 'invitable' });
+    const first = await service.createInvitation({ email: 'x@y.de', role: 'athlete', athleteId: 'athlete-a' }, requester);
+    await service.revoke(first.id, requester);
+    const second = await service.createInvitation({ email: 'x@y.de', role: 'athlete', athleteId: 'athlete-a' }, requester);
+    expect(second.id).not.toBe(first.id);
+  });
+
+  it('eine offene Eltern-Einladung blockiert keine Konto-Einladung', async () => {
+    const { service, requester } = await setup({ accountMode: 'invitable' });
+    await service.createInvitation({ email: 'eltern@y.de', role: 'parent', athleteId: 'athlete-a' }, requester);
+    const invitation = await service.createInvitation({ email: 'x@y.de', role: 'athlete', athleteId: 'athlete-a' }, requester);
+    expect(invitation.role).toBe('athlete');
   });
 });
 

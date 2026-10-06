@@ -2490,3 +2490,78 @@ describe('syncService.push — Löschen eines Athletenprofils leert notes (Issue
     expect((stored as { notes?: unknown } | null)?.notes).toBe('');
   });
 });
+
+// Athletenprofile ohne/mit eigenem Konto (accountMode): ein Update eines
+// älteren Clients ohne dieses Feld darf ein gespeichertes "invitable"
+// nicht auf "managed" zurücksetzen — AthleteSchema hat deshalb bewusst
+// keinen Default für accountMode.
+describe('syncService.push — Athlete.accountMode', () => {
+  it('übernimmt accountMode "invitable" aus dem Payload', async () => {
+    const { service, gateway } = makeService();
+    const athlete = makeAthletePayload({ accountMode: 'invitable' });
+
+    const results = await service.push(
+      [{ id: 'evt-mode-create', store: 'athletes', entityId: athlete.id, action: 'create', payload: athlete, clientUpdatedAt: athlete.updatedAt }],
+      asAdmin(CLUB_A),
+    );
+    expect(results[0]!.status).toBe('applied');
+    expect(((await gateway.findById('athletes', athlete.id)) as { accountMode?: unknown } | null)?.accountMode).toBe('invitable');
+  });
+
+  it('behält ein gespeichertes "invitable" bei einem Update ohne accountMode', async () => {
+    const { service, gateway } = makeService();
+    const athlete = makeAthletePayload();
+    gateway.seed('athletes', { ...athlete, accountMode: 'invitable', updatedAt: new Date(athlete.updatedAt), deletedAt: null });
+
+    const update = { ...athlete, firstName: 'Umbenannt', updatedAt: new Date(Date.now() + 1000).toISOString() };
+    const results = await service.push(
+      [{ id: 'evt-mode-update', store: 'athletes', entityId: athlete.id, action: 'update', payload: update, clientUpdatedAt: update.updatedAt }],
+      asAdmin(CLUB_A),
+    );
+    expect(results[0]!.status).toBe('applied');
+    const stored = (await gateway.findById('athletes', athlete.id)) as { firstName?: unknown; accountMode?: unknown } | null;
+    expect(stored?.firstName).toBe('Umbenannt');
+    expect(stored?.accountMode).toBe('invitable');
+  });
+});
+
+// Zurück auf "managed" nur ohne verknüpftes Konto und ohne offene
+// Konto-Einladung (sync.service.ts, Prüfung vor resolveConflict()).
+describe('syncService.push — Athlete.accountMode zurück auf "managed"', () => {
+  async function pushModeChange(state: { hasLinkedUser?: boolean; hasOpenInvitation?: boolean } | null, existingMode = 'invitable') {
+    const { service, gateway } = makeService();
+    const athlete = makeAthletePayload();
+    gateway.seed('athletes', { ...athlete, accountMode: existingMode, updatedAt: new Date(athlete.updatedAt), deletedAt: null });
+    if (state) gateway.seedAthleteAccountState(athlete.id, state);
+    const update = { ...athlete, accountMode: 'managed', updatedAt: new Date(Date.now() + 1000).toISOString() };
+    const results = await service.push(
+      [{ id: `evt-managed-${Math.random()}`, store: 'athletes', entityId: athlete.id, action: 'update', payload: update, clientUpdatedAt: update.updatedAt }],
+      asAdmin(CLUB_A),
+    );
+    const stored = (await gateway.findById('athletes', athlete.id)) as { accountMode?: unknown } | null;
+    return { result: results[0]!, storedMode: stored?.accountMode };
+  }
+
+  it('erlaubt den Wechsel ohne Konto und ohne offene Einladung', async () => {
+    const { result, storedMode } = await pushModeChange(null);
+    expect(result.status).toBe('applied');
+    expect(storedMode).toBe('managed');
+  });
+
+  it('lehnt den Wechsel ab, wenn ein Konto verknüpft ist', async () => {
+    const { result, storedMode } = await pushModeChange({ hasLinkedUser: true });
+    expect(result).toMatchObject({ status: 'error', code: 'athlete_has_account' });
+    expect(storedMode).toBe('invitable');
+  });
+
+  it('lehnt den Wechsel ab, solange eine Konto-Einladung offen ist', async () => {
+    const { result, storedMode } = await pushModeChange({ hasOpenInvitation: true });
+    expect(result).toMatchObject({ status: 'error', code: 'athlete_has_account' });
+    expect(storedMode).toBe('invitable');
+  });
+
+  it('ein Update, das "managed" nur beibehält, wird nicht geprüft', async () => {
+    const { result } = await pushModeChange({ hasLinkedUser: true }, 'managed');
+    expect(result.status).toBe('applied');
+  });
+});

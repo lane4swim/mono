@@ -15,6 +15,8 @@ import { describeError } from '../apiClient.js';
 import { t } from '../i18n.js';
 import { openCreateClubModal, openEditClubModulesModal } from './clubForm.js';
 import { IS_DEMO } from '../demoMode.js';
+import { showInviteLinkModal } from '../inviteLink.js';
+import { buildAccountIndex, canInviteAthlete } from '../athleteAccount.js';
 import { mfaBadge, canResetMemberMfa, openResetMemberMfaModal, buildClubMfaPolicyCard, clubMfaPolicyControl } from './mfa.js';
 
 export const userManagementModule = {
@@ -76,10 +78,6 @@ function statusBadge(status) {
   return badge(t(`usermgmt.${key}`), variant);
 }
 
-function buildInviteUrl(token) {
-  return `${location.origin}${location.pathname}#/accept-invite/${token}`;
-}
-
 function renderView(container, clubs, invitations, members, legalInfo) {
   const wrap = el('div');
   wrap.appendChild(el('div', { class: 'page-head' }, [
@@ -98,7 +96,7 @@ function renderView(container, clubs, invitations, members, legalInfo) {
     {
       id: 'invitations',
       label: pendingCount ? `${t('usermgmt.tabInvitations')} (${pendingCount})` : t('usermgmt.tabInvitations'),
-      render: () => el('div', {}, [renderInviteSection(clubs, refresh), renderInvitationsList(invitations, clubs, refresh)]),
+      render: () => el('div', {}, [renderInviteSection(clubs, refresh, buildAccountIndex(members, invitations)), renderInvitationsList(invitations, clubs, refresh)]),
     },
   ]));
 
@@ -493,17 +491,17 @@ function renderClubsSection(clubs, onChanged) {
 }
 
 // ---------------- Admin/Superadmin: Team einladen ----------------
-function renderInviteSection(clubs, onChanged) {
+function renderInviteSection(clubs, onChanged, accountIndex) {
   const card = el('div', { class: 'card mb-16' }, [
     el('div', { class: 'flex justify-between items-center mb-16' }, [
       el('h3', { class: 'mt-0' }, t('usermgmt.inviteSection')),
-      el('button', { class: 'btn btn-accent btn-sm', onclick: () => openInviteModal(clubs, onChanged) }, t('usermgmt.inviteTrainerOrAthlete')),
+      el('button', { class: 'btn btn-accent btn-sm', onclick: () => openInviteModal(clubs, onChanged, accountIndex) }, t('usermgmt.inviteTrainerOrAthlete')),
     ]),
   ]);
   return card;
 }
 
-function openInviteModal(clubs, onChanged) {
+function openInviteModal(clubs, onChanged, accountIndex) {
   const isSuper = isSuperAdmin();
   const form = el('form', { class: 'form-grid' });
   const fRole = selectInput([
@@ -519,6 +517,36 @@ function openInviteModal(clubs, onChanged) {
   form.appendChild(field(t('usermgmt.formRole'), fRole));
   form.appendChild(field(t('usermgmt.formEmail'), fEmail));
   if (fClub) form.appendChild(field(t('usermgmt.colClub'), fClub, { span2: true }));
+
+  // Athlet:innen-Konten werden immer mit einem Athletenprofil verknüpft,
+  // und nur Profile mit "Eigenes Konto: Ja" ohne Konto/offene Einladung
+  // stehen zur Wahl (athleteAccount.js: canInviteAthlete()). Die Profile
+  // stammen aus dem lokalen Sync-Bestand des eigenen Vereins — ein
+  // Superadmin hat keinen und lädt wie bisher ohne Profil ein.
+  let fAthlete = null;
+  if (!isSuper) {
+    fAthlete = selectInput([], '');
+    const athleteField = field(t('usermgmt.formLinkedAthlete'), fAthlete, { span2: true });
+    const emptyHint = el('p', { class: 'hint span-2', style: 'display:none' }, t('usermgmt.noInvitableAthletes'));
+    form.appendChild(athleteField);
+    form.appendChild(emptyHint);
+    let invitableCount = 0;
+    const syncAthleteField = () => {
+      const isAthlete = fRole.value === 'athlete';
+      athleteField.style.display = isAthlete && invitableCount > 0 ? '' : 'none';
+      emptyHint.style.display = isAthlete && invitableCount === 0 ? '' : 'none';
+    };
+    fRole.addEventListener('change', syncAthleteField);
+    syncAthleteField();
+    getAll('athletes').then((athletes) => {
+      const invitable = athletes
+        .filter((a) => canInviteAthlete(a, accountIndex))
+        .sort((a, b) => a.lastName.localeCompare(b.lastName));
+      for (const a of invitable) fAthlete.appendChild(el('option', { value: a.id }, fullName(a)));
+      invitableCount = invitable.length;
+      syncAthleteField();
+    });
+  }
   const errorBox = el('p', { class: 'form-error', style: 'grid-column:1/-1;display:none' });
   form.appendChild(errorBox);
   const { row: actionsRow, submitBtn } = formActions({ onCancel: () => close(), submitLabel: t('common.create') });
@@ -527,12 +555,15 @@ function openInviteModal(clubs, onChanged) {
     e.preventDefault();
     errorBox.style.display = 'none';
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fEmail.value.trim())) { toast(t('usermgmt.validationEmail'), 'error'); return; }
+    const athleteId = fAthlete && fRole.value === 'athlete' ? fAthlete.value : undefined;
+    if (fAthlete && fRole.value === 'athlete' && !athleteId) { toast(t('usermgmt.linkedAthleteRequired'), 'error'); return; }
     submitBtn.disabled = true;
     try {
       const invitation = await api.createInvitation({
         email: fEmail.value.trim(),
         role: fRole.value,
         clubId: isSuper ? fClub.value : undefined,
+        athleteId,
       });
       toast(t('usermgmt.inviteCreated'));
       close();
@@ -548,27 +579,12 @@ function openInviteModal(clubs, onChanged) {
   const { close } = openModal({ title: t('usermgmt.inviteModalTitle'), bodyNode: form, wide: true });
 }
 
-function showInviteLinkModal(invitation) {
-  const url = buildInviteUrl(invitation.token);
-  const body = el('div');
-  body.appendChild(el('p', {}, t('usermgmt.inviteLinkHint', { date: fmtDateShort((invitation.expiresAt || '').slice(0, 10)) })));
-  const linkRow = el('div', { class: 'flex gap-8', style: 'margin-top:12px' }, [
-    el('input', { type: 'text', readonly: true, value: url, style: 'flex:1', onclick: (e) => e.target.select() }),
-    el('button', { class: 'btn btn-accent btn-sm', onclick: async () => {
-      try { await navigator.clipboard.writeText(url); toast(t('usermgmt.linkCopied')); }
-      catch { toast(t('usermgmt.linkCopied')); }
-    } }, t('usermgmt.copyLink')),
-  ]);
-  body.appendChild(linkRow);
-  openModal({ title: t('usermgmt.inviteLinkTitle'), bodyNode: body, wide: true });
-}
-
 // Zeigt den Einladungslink für eine BEREITS bestehende, noch nicht
 // angenommene Einladung erneut an — z. B. um ihn per SMS statt E-Mail zu
 // teilen. Wichtig: das Klartext-Token wird serverseitig NIE gespeichert
 // (nur sein Hash, analog zu einem Passwort) und lässt sich daher nicht
 // nachträglich auslesen. Diese Funktion widerruft die alte Einladung und
-// stellt eine neue mit denselben Daten (E-Mail/Rolle/Verein) aus — der
+// stellt eine neue mit denselben Daten (E-Mail/Rolle/Verein/Athletenprofil) aus — der
 // alte Link wird dadurch ungültig, was auch so kommuniziert wird
 // (siehe usermgmt.regenerateLinkConfirm).
 async function regenerateInvitationLink(invitation, onChanged) {
@@ -578,6 +594,8 @@ async function regenerateInvitationLink(invitation, onChanged) {
       email: invitation.email,
       role: invitation.role,
       clubId: invitation.clubId || undefined,
+      // Sonst verlöre der neue Link die Verknüpfung mit dem Athletenprofil.
+      athleteId: invitation.athleteId || undefined,
     });
     toast(t('usermgmt.linkRegenerated'));
     onChanged?.();

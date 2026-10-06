@@ -7,8 +7,8 @@
 // invitations.repository.memory.ts).
 import { describe, it, expect, afterEach, afterAll } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { PrismaClubRepository } from '../src/modules/invitations/invitations.repository.js';
-import { getTestPrisma, closeTestPrisma, truncateAll } from './helpers.js';
+import { PrismaClubRepository, PrismaAthleteRepository } from '../src/modules/invitations/invitations.repository.js';
+import { getTestPrisma, closeTestPrisma, truncateAll, createTestClub } from './helpers.js';
 
 const prisma = getTestPrisma();
 const repo = new PrismaClubRepository(prisma);
@@ -77,5 +77,22 @@ describe('PrismaClubRepository.createWithAdminInvitation()', () => {
     // genommen erfolgreich gewesen wäre.
     const orphanedClub = await prisma.club.findFirst({ where: { name: 'SV Sollte Nicht Bestehen Bleiben' } });
     expect(orphanedClub).toBeNull();
+  });
+});
+
+describe('PrismaAthleteRepository.findById()', () => {
+  const athletes = new PrismaAthleteRepository(prisma);
+
+  it('liefert accountMode (Spalten-Default "managed") und hasLinkedUser: false ohne Konto', async () => {
+    const club = await createTestClub(prisma);
+    const athlete = await prisma.athlete.create({ data: { clubId: club.id, firstName: 'Mara', lastName: 'Vogel' } });
+    expect(await athletes.findById(athlete.id)).toEqual({ id: athlete.id, clubId: club.id, accountMode: 'managed', hasLinkedUser: false });
+  });
+
+  it('meldet hasLinkedUser: true, sobald ein Konto über User.athleteId verknüpft ist', async () => {
+    const club = await createTestClub(prisma);
+    const athlete = await prisma.athlete.create({ data: { clubId: club.id, firstName: 'Mara', lastName: 'Vogel', accountMode: 'invitable' } });
+    await prisma.user.create({ data: { clubId: club.id, name: 'Mara', email: `${randomUUID()}@x.de`, passwordHash: 'h', role: 'athlete', roles: ['athlete'], athleteId: athlete.id } });
+    expect(await athletes.findById(athlete.id)).toMatchObject({ accountMode: 'invitable', hasLinkedUser: true });
   });
 });

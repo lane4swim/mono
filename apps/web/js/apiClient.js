@@ -116,7 +116,10 @@ export function describeError(err, { on401Message } = {}) {
 
 async function rawRequest(path, options = {}) {
   const url = `${getApiBaseUrl()}${path}`;
-  const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+  // Content-Type nur mit Body: Fastify lehnt einen Request mit
+  // "application/json", aber leerem Body ab (FST_ERR_CTP_EMPTY_JSON_BODY) —
+  // das traf jedes DELETE ohne Body (z. B. Einladung widerrufen).
+  const headers = { ...(options.body !== undefined ? { 'Content-Type': 'application/json' } : {}), ...(options.headers || {}) };
   if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
 
   let response;

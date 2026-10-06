@@ -35,6 +35,25 @@ export class AthleteClubMismatchError extends Error {
     super('Das referenzierte Athletenprofil gehört nicht zum Zielverein dieser Einladung.');
   }
 }
+// Konto-Einladungen für ein Athletenprofil (alle Rollen außer "parent",
+// deren athleteId beim Annehmen zu User.athleteId wird — siehe
+// auth.service.ts: acceptInvitation()). Eltern-Einladungen benennen nur
+// das Kind und sind davon nicht betroffen.
+export class AthleteManagedOnlyError extends Error {
+  constructor() {
+    super('Dieses Athletenprofil wird nur vom Verein verwaltet und kann nicht eingeladen werden.');
+  }
+}
+export class AthleteAccountExistsError extends Error {
+  constructor() {
+    super('Für dieses Athletenprofil existiert bereits ein Nutzerkonto.');
+  }
+}
+export class AthleteInvitationPendingError extends Error {
+  constructor() {
+    super('Für dieses Athletenprofil gibt es bereits eine offene Einladung.');
+  }
+}
 export class InvitationNotFoundError extends Error {
   constructor() {
     super('Einladung wurde nicht gefunden.');
@@ -294,6 +313,26 @@ export function createInvitationsService(deps: InvitationsServiceDeps) {
         const athlete = await deps.athletes.findById(input.athleteId);
         if (!athlete) throw new AthleteNotFoundError();
         if (athlete.clubId !== targetClubId) throw new AthleteClubMismatchError();
+
+        // Nicht jede:r Athlet:in bekommt ein eigenes Konto: Profile mit
+        // accountMode "managed" pflegen nur Admin/Trainer:innen. Eine
+        // Einladung, die das Profil mit einem Konto verknüpfen würde, ist
+        // nur für "invitable" erlaubt — und nur, solange weder ein Konto
+        // noch eine offene Einladung dafür existiert (sonst scheiterte die
+        // zweite Annahme ohnehin am Unique-Constraint auf User.athleteId).
+        if (input.role !== 'parent') {
+          if (athlete.accountMode !== 'invitable') throw new AthleteManagedOnlyError();
+          if (athlete.hasLinkedUser) throw new AthleteAccountExistsError();
+          const now = Date.now();
+          const pending = (await deps.invitations.listByClub(athlete.clubId)).some((inv) =>
+            inv.athleteId === athlete.id
+            && inv.role !== 'parent'
+            && !inv.usedAt
+            && !inv.revokedAt
+            && inv.expiresAt.getTime() >= now,
+          );
+          if (pending) throw new AthleteInvitationPendingError();
+        }
       }
 
       const ttlDays = input.role === 'admin' ? deps.clubInvitationTtlDays : deps.memberInvitationTtlDays;

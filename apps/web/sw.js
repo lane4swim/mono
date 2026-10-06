@@ -15,7 +15,7 @@
 // bliebe beliebig lange auf dem alten Stand, ohne jeden Hinweis. app.js
 // meldet stattdessen, dass eine neue Fassung bereitsteht, und lässt die
 // Person entscheiden, wann neu geladen wird.
-const CACHE_VERSION = 'lane1-v76';
+const CACHE_VERSION = 'lane1-v77';
 const PRECACHE_URLS = [
   './',
   './index.html',
@@ -48,6 +48,8 @@ const PRECACHE_URLS = [
   './js/ui.js',
   './js/modal.js',
   './js/forms.js',
+  './js/athleteAccount.js',
+  './js/inviteLink.js',
   './js/charts.js',
   './js/refdata.js',
   './js/seed.js',

@@ -10,6 +10,10 @@ import { isAdminOrSuperAdmin } from '../state.js';
 import { navigate } from '../router.js';
 import { t, trCode } from '../i18n.js';
 import { fetchAssignableTrainers } from './actionItems.js';
+import * as api from '../apiClient.js';
+import { describeError } from '../apiClient.js';
+import { accountStatus, canInviteAthlete, loadAccountIndex } from '../athleteAccount.js';
+import { showInviteLinkModal } from '../inviteLink.js';
 
 export const athletesModule = {
   id: 'athletes',
@@ -30,7 +34,7 @@ function renderList(container, athletes, groups) {
   wrap.appendChild(el('div', { class: 'page-head' }, [
     el('div', {}, [el('div', { class: 'page-eyebrow' }, t('athletes.eyebrow', { count: athletes.length })), el('h1', { class: 'mt-0' }, t('athletes.title'))]),
     el('div', { class: 'page-actions' }, [
-      isAdminOrSuperAdmin() ? el('button', { class: 'btn btn-primary', onclick: () => openAthleteModal(null, groups, refresh) }, t('athletes.addAthlete')) : null,
+      isAdminOrSuperAdmin() ? el('button', { class: 'btn btn-primary', onclick: () => openAthleteModal(null, groups, refresh, accountIndex) }, t('athletes.addAthlete')) : null,
     ].filter(Boolean)),
   ]));
   wrap.appendChild(laneWave());
@@ -59,6 +63,11 @@ function renderList(container, athletes, groups) {
   athletesPanel.appendChild(tableHost);
   container.appendChild(wrap);
 
+  // Kontozustand (Konto aktiv / eingeladen) gibt es nur für Admins und nur
+  // online — bis er geladen ist (oder ohne ihn) zeigt die Spalte das reine
+  // accountMode-Flag, siehe athleteAccount.js.
+  let accountIndex = null;
+
   function selectGroup(gid) {
     activeGroupId.value = gid;
     [...pillRow.children].forEach(p => p.classList.remove('active'));
@@ -76,7 +85,7 @@ function renderList(container, athletes, groups) {
     }
     const table = el('table');
     table.appendChild(el('thead', {}, el('tr', {}, [
-      el('th', {}, t('athletes.colName')), el('th', {}, t('athletes.colAge')), el('th', {}, t('athletes.colGroup')), el('th', {}, t('athletes.colStatus')), el('th', {}, ''),
+      el('th', {}, t('athletes.colName')), el('th', {}, t('athletes.colAge')), el('th', {}, t('athletes.colGroup')), el('th', {}, t('athletes.colStatus')), el('th', {}, t('athletes.colAccount')), el('th', {}, ''),
     ])));
     const tbody = el('tbody');
     filtered.sort((a, b) => a.lastName.localeCompare(b.lastName)).forEach(a => {
@@ -86,6 +95,7 @@ function renderList(container, athletes, groups) {
         el('td', {}, String(ageFromBirthdate(a.birthdate) ?? '—')),
         el('td', {}, group?.name || '—'),
         el('td', {}, badge(a.active ? t('athletes.statusActive') : t('athletes.statusInactive'), a.active ? 'done' : 'neutral')),
+        el('td', {}, accountBadge(a, accountIndex)),
         el('td', {}, el('button', { class: 'btn btn-ghost btn-sm', onclick: (e) => { e.stopPropagation(); navigate('athletes', a.id); } }, t('common.open'))),
       ]));
     });
@@ -93,6 +103,11 @@ function renderList(container, athletes, groups) {
     tableHost.appendChild(el('div', { class: 'table-wrap card' }, table));
   }
   drawTable();
+  loadAccountIndex().then((index) => {
+    if (!index) return;
+    accountIndex = index;
+    drawTable();
+  });
 
   function refresh() {
     return redraw(container, () => Promise.all([getAll('athletes'), getAll('groups')]), ([a2, g2]) => renderList(container, a2, g2));
@@ -104,7 +119,7 @@ async function renderDetail(container, athleteId, athletes, groups) {
   const athlete = athletes.find(a => a.id === athleteId);
   if (!athlete) { container.appendChild(emptyState(t('common.notFoundTitle'), t('athletes.notFoundMsg'), el('button', { class: 'btn btn-primary', onclick: () => navigate('athletes') }, t('athletes.backToOverview')))); return; }
 
-  const [results, actionItems, sessions] = await Promise.all([getAll('results'), getAll('actionItems'), getAll('sessions')]);
+  const [results, actionItems, sessions, accountIndex] = await Promise.all([getAll('results'), getAll('actionItems'), getAll('sessions'), loadAccountIndex()]);
   if (!isCurrent()) return;
   const group = groups.find(g => g.id === athlete.groupId);
   const myResults = results.filter(r => r.athleteId === athleteId);
@@ -120,9 +135,12 @@ async function renderDetail(container, athleteId, athletes, groups) {
       el('h1', { class: 'mt-0' }, fullName(athlete)),
     ]),
     el('div', { class: 'page-actions' }, isAdminOrSuperAdmin() ? [
-      el('button', { class: 'btn btn-ghost', onclick: () => openAthleteModal(athlete, groups, () => { navigate('athletes', athleteId); location.reload(); }) }, t('common.edit')),
+      canInviteAthlete(athlete, accountIndex)
+        ? el('button', { class: 'btn btn-accent', onclick: () => openAthleteInviteModal(athlete, () => { clear(container); renderDetail(container, athleteId, athletes, groups); }) }, t('athletes.inviteAthlete'))
+        : null,
+      el('button', { class: 'btn btn-ghost', onclick: () => openAthleteModal(athlete, groups, () => { navigate('athletes', athleteId); location.reload(); }, accountIndex) }, t('common.edit')),
       el('button', { class: 'btn btn-danger', onclick: () => confirmAction(t('athletes.deleteConfirm', { name: fullName(athlete) }), async () => { await remove('athletes', athleteId); toast(t('athletes.deleted')); navigate('athletes'); }) }, t('common.delete')),
-    ] : []),
+    ].filter(Boolean) : []),
   ]));
   wrap.appendChild(laneWave());
 
@@ -141,6 +159,7 @@ async function renderDetail(container, athleteId, athletes, groups) {
     el('p', {}, [el('strong', {}, `${t('athletes.genderLabel')}: `), genderLabel]),
     el('p', {}, [el('strong', {}, `${t('athletes.memberSince')}: `), athlete.joinDate ? fmtDateShort(athlete.joinDate) : '—']),
     el('p', {}, [el('strong', {}, `${t('athletes.groupLabel')}: `), group?.name || '—']),
+    el('p', {}, [el('strong', {}, `${t('athletes.accountLabel')}: `), accountBadge(athlete, accountIndex)]),
     athlete.notes ? el('p', {}, [el('strong', {}, `${t('athletes.notesLabel')}: `), athlete.notes]) : null,
   ]);
   grid.appendChild(infoCard);
@@ -168,7 +187,7 @@ async function renderDetail(container, athleteId, athletes, groups) {
   container.appendChild(wrap);
 }
 
-function openAthleteModal(athlete, groups, onSaved) {
+function openAthleteModal(athlete, groups, onSaved, accountIndex = null) {
   // Verteidigung in der Tiefe: neben dem Ausblenden der Buttons in
   // renderList()/renderDetail() wird hier zusätzlich geprüft — Trainer:innen
   // dürfen den Athleten-Stamm (Name/Identität) nicht anlegen oder ändern,
@@ -178,7 +197,7 @@ function openAthleteModal(athlete, groups, onSaved) {
     return;
   }
   const isEdit = !!athlete;
-  const data = athlete ? { ...athlete } : { firstName: '', lastName: '', birthdate: '', gender: 'w', groupId: groups[0]?.id || '', joinDate: todayISO(), active: true, notes: '', nationalIDType: '', nationalID: '' };
+  const data = athlete ? { ...athlete } : { firstName: '', lastName: '', birthdate: '', gender: 'w', groupId: groups[0]?.id || '', joinDate: todayISO(), active: true, notes: '', nationalIDType: '', nationalID: '', accountMode: 'managed' };
   const form = el('form', { class: 'form-grid' });
   const fFirst = textInput(data.firstName, { required: true });
   const fLast = textInput(data.lastName, { required: true });
@@ -190,6 +209,15 @@ function openAthleteModal(athlete, groups, onSaved) {
   const fNotes = el('textarea', {}, data.notes || '');
   const fIDType = textInput(data.nationalIDType || '', { placeholder: 'z. B. DSV' });
   const fID = textInput(data.nationalID || '', { placeholder: 'z. B. 404306' });
+  const fAccountMode = selectInput([
+    { value: 'managed', label: t('athletes.accountModeManaged') },
+    { value: 'invitable', label: t('athletes.accountModeInvitable') },
+  ], data.accountMode === 'invitable' ? 'invitable' : 'managed');
+  // Mit Konto oder offener Einladung nicht mehr auf "managed" umstellbar —
+  // der Server lehnt das ab (sync.service.ts, athlete_has_account); hier
+  // nur, wenn der Kontozustand bekannt ist (Admin, online).
+  const accountLocked = isEdit && ['active', 'invited'].includes(accountStatus(athlete, accountIndex));
+  if (accountLocked) fAccountMode.disabled = true;
 
   form.appendChild(field(t('athletes.formFirstName'), fFirst));
   form.appendChild(field(t('athletes.formLastName'), fLast));
@@ -199,6 +227,7 @@ function openAthleteModal(athlete, groups, onSaved) {
   form.appendChild(field(t('athletes.formJoinDate'), fJoin));
   form.appendChild(field(t('athletes.formNationalIDType'), fIDType, { hint: t('athletes.formNationalIDHint') }));
   form.appendChild(field(t('athletes.formNationalID'), fID));
+  form.appendChild(field(t('athletes.formAccountMode'), fAccountMode, { span2: true, hint: accountLocked ? t('athletes.formAccountModeLocked') : t('athletes.formAccountModeHint') }));
   form.appendChild(field(t('athletes.formNotes'), fNotes, { span2: true }));
   const activeField = field(t('athletes.formStatus'), el('div', { class: 'flex items-center gap-8' }, [fActive, el('span', { class: 'text-sm' }, t('athletes.formActiveLabel'))]), { span2: true });
   form.appendChild(activeField);
@@ -210,8 +239,9 @@ function openAthleteModal(athlete, groups, onSaved) {
     if (!fFirst.value.trim() || !fLast.value.trim()) { toast(t('athletes.validationName'), 'error'); return; }
     const obj = {
       ...data, firstName: fFirst.value.trim(), lastName: fLast.value.trim(), birthdate: toIsoDateTime(fBirth.value),
-      gender: fGender.value, groupId: fGroup.value, joinDate: toIsoDateTime(fJoin.value), active: fActive.checked, notes: fNotes.value.trim(),
+      gender: fGender.value, groupId: fGroup.value || null, joinDate: toIsoDateTime(fJoin.value), active: fActive.checked, notes: fNotes.value.trim(),
       nationalIDType: fIDType.value.trim() || null, nationalID: fID.value.trim() || null,
+      accountMode: fAccountMode.value,
     };
     await put('athletes', obj);
     toast(isEdit ? t('athletes.savedEdit') : t('athletes.savedCreate'));
@@ -220,6 +250,55 @@ function openAthleteModal(athlete, groups, onSaved) {
   });
 
   const { close } = openModal({ title: isEdit ? t('athletes.modalEditTitle', { name: fullName(athlete) }) : t('athletes.modalCreateTitle'), bodyNode: form, wide: true });
+}
+
+const ACCOUNT_BADGES = {
+  active: ['accountActive', 'done'],
+  invited: ['accountInvited', 'progress'],
+  managed: ['accountManaged', 'neutral'],
+  notInvited: ['accountNotInvited', 'open'],
+  invitable: ['accountInvitable', 'open'],
+};
+
+function accountBadge(athlete, accountIndex) {
+  const status = accountStatus(athlete, accountIndex);
+  const [key, variant] = ACCOUNT_BADGES[status];
+  const invitation = status === 'invited' ? accountIndex.pending.get(athlete.id) : null;
+  return badge(t(`athletes.${key}`, { date: invitation ? fmtDateShort(invitation.expiresAt.slice(0, 10)) : '' }), variant);
+}
+
+// Einladung direkt aus dem Athletenprofil: Rolle "athlete" mit athleteId,
+// beim Annehmen wird das neue Konto mit diesem Profil verknüpft. Nur für
+// Profile mit accountMode "invitable" ohne Konto/offene Einladung
+// erreichbar (canInviteAthlete()); der Server prüft dasselbe noch einmal.
+function openAthleteInviteModal(athlete, onInvited) {
+  const form = el('form', { class: 'form-grid' });
+  const fEmail = textInput('', { type: 'email', required: true });
+  form.appendChild(el('p', { class: 'hint span-2' }, t('athletes.inviteAthleteHint')));
+  form.appendChild(field(t('usermgmt.formEmail'), fEmail, { span2: true }));
+  const errorBox = el('p', { class: 'form-error', style: 'grid-column:1/-1;display:none' });
+  form.appendChild(errorBox);
+  const { row: actionsRow, submitBtn } = formActions({ onCancel: () => close(), submitLabel: t('common.create'), extraClass: 'span-2' });
+  form.appendChild(actionsRow);
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    errorBox.style.display = 'none';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fEmail.value.trim())) { toast(t('usermgmt.validationEmail'), 'error'); return; }
+    submitBtn.disabled = true;
+    try {
+      const invitation = await api.createInvitation({ email: fEmail.value.trim(), role: 'athlete', athleteId: athlete.id });
+      toast(t('usermgmt.inviteCreated'));
+      close();
+      showInviteLinkModal(invitation);
+      onInvited?.();
+    } catch (err) {
+      errorBox.textContent = describeError(err);
+      errorBox.style.display = 'block';
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
+  const { close } = openModal({ title: t('athletes.inviteAthleteTitle', { name: fullName(athlete) }), bodyNode: form, wide: true });
 }
 
 // Eine Checkbox je Trainer:in/Admin des eigenen Vereins — analog

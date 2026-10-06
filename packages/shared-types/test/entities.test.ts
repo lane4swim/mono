@@ -96,6 +96,19 @@ describe('AthleteSchema', () => {
   it('akzeptiert "notes" mit genau 10000 Zeichen', () => {
     expect(AthleteSchema.safeParse({ ...valid, notes: 'x'.repeat(10000) }).success).toBe(true);
   });
+
+  // Kein Default: sonst setzte ein Sync-Update eines feldlosen
+  // Altdatensatzes ein gespeichertes "invitable" auf "managed" zurück.
+  it('lässt "accountMode" ohne Angabe weg (kein Default)', () => {
+    const parsed = AthleteSchema.parse(valid);
+    expect('accountMode' in parsed).toBe(false);
+  });
+  it('akzeptiert accountMode "invitable"', () => {
+    expect(AthleteSchema.parse({ ...valid, accountMode: 'invitable' }).accountMode).toBe('invitable');
+  });
+  it('lehnt einen unbekannten accountMode ab', () => {
+    expect(AthleteSchema.safeParse({ ...valid, accountMode: 'self' }).success).toBe(false);
+  });
 });
 
 describe('CompetitionSchema', () => {

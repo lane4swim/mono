@@ -9,8 +9,8 @@
 //     (siehe deren Kommentar), der echte email-Unique-Constraint greift
 //     aber trotzdem -> muss als EmailAlreadyRegisteredError (409), nicht
 //     als ungefangener 500, ankommen.
-//   - Befund 11: zwei Einladungen referenzieren dieselbe athleteId (die
-//     Einladungsausstellung selbst prüft das nicht) -> der neue
+//   - zwei offene Einladungen referenzieren dieselbe athleteId (z. B.
+//     Altbestand, den createInvitation() heute ablehnen würde) -> der
 //     athleteId-Unique-Constraint (schema.prisma) greift beim zweiten
 //     Annehmen -> muss als AthleteAlreadyLinkedError (409) ankommen.
 import { describe, it, expect, afterEach, afterAll } from 'vitest';
@@ -25,6 +25,7 @@ import { createAuditLogService } from '../src/modules/auditLog/auditLog.service.
 import { PrismaAuditLogRepository } from '../src/modules/auditLog/auditLog.repository.js';
 import { InMemoryMailSender } from '../src/mail/mailer.memory.js';
 import { generateFreshKeyPair } from '../src/auth/keys.js';
+import { generateInvitationToken } from '../src/auth/tokens.js';
 import { getTestPrisma, closeTestPrisma, truncateAll, createTestClub } from './helpers.js';
 
 const prisma = getTestPrisma();
@@ -110,7 +111,7 @@ describe('authService.acceptInvitation() — P2002-Regressionen (Code-Review)', 
 
   it('lehnt die Annahme einer zweiten Einladung für ein bereits verknüpftes Athletenprofil mit AthleteAlreadyLinkedError ab (Befund 11)', async () => {
     const club = await createTestClub();
-    const athlete = await prisma.athlete.create({ data: { clubId: club.id, firstName: 'Mara', lastName: 'Vogel' } });
+    const athlete = await prisma.athlete.create({ data: { clubId: club.id, firstName: 'Mara', lastName: 'Vogel', accountMode: 'invitable' } });
     const { authService, invitationsService } = makeServices();
     const requester = await createTestSuperadmin();
 
@@ -120,17 +121,17 @@ describe('authService.acceptInvitation() — P2002-Regressionen (Code-Review)', 
     );
     await authService.acceptInvitation({ token: firstInvitation.token, name: 'Erste Person', password: 'ein-sicheres-passwort', consent: true });
 
-    // Die Einladungsausstellung selbst prüft nicht, ob athleteId bereits
-    // vergeben ist (siehe invitations.service.ts) — eine zweite Einladung
-    // für dieselbe athleteId lässt sich also ausstellen; erst beim
-    // tatsächlichen Annehmen greift der neue Unique-Constraint.
-    const secondInvitation = await invitationsService.createInvitation(
-      { email: 'zweite@example.org', role: 'athlete', clubId: club.id, athleteId: athlete.id },
-      requester,
-    );
+    // createInvitation() lehnt eine zweite Einladung für ein verknüpftes
+    // Profil inzwischen ab (AthleteAccountExistsError). Der Unique-
+    // Constraint beim Annehmen bleibt das Sicherheitsnetz für Altbestand
+    // und Wettläufe — die zweite Einladung wird deshalb direkt angelegt.
+    const second = generateInvitationToken(7);
+    await prisma.invitation.create({
+      data: { tokenHash: second.tokenHash, email: 'zweite@example.org', role: 'athlete', clubId: club.id, athleteId: athlete.id, invitedById: requester.id, expiresAt: second.expiresAt },
+    });
 
     await expect(
-      authService.acceptInvitation({ token: secondInvitation.token, name: 'Zweite Person', password: 'ein-anderes-passwort', consent: true }),
+      authService.acceptInvitation({ token: second.plainToken, name: 'Zweite Person', password: 'ein-anderes-passwort', consent: true }),
     ).rejects.toBeInstanceOf(AthleteAlreadyLinkedError);
   });
 });
