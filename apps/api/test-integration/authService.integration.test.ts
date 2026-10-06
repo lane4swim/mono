@@ -9,8 +9,8 @@
 //     (siehe deren Kommentar), der echte email-Unique-Constraint greift
 //     aber trotzdem -> muss als EmailAlreadyRegisteredError (409), nicht
 //     als ungefangener 500, ankommen.
-//   - Befund 11: zwei Einladungen referenzieren dieselbe athleteId (z. B.
-//     Altbestand von vor der Prüfung in createInvitation()) -> der neue
+//   - zwei offene Einladungen referenzieren dieselbe athleteId (z. B.
+//     Altbestand, den createInvitation() heute ablehnen würde) -> der
 //     athleteId-Unique-Constraint (schema.prisma) greift beim zweiten
 //     Annehmen -> muss als AthleteAlreadyLinkedError (409) ankommen.
 import { describe, it, expect, afterEach, afterAll } from 'vitest';
