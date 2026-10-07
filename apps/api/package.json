@@ -26,6 +26,7 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "prisma db seed",
     "create-superadmin": "tsx --env-file-if-exists=.env scripts/createSuperAdmin.ts",
+    "create-test-accounts": "tsx --env-file-if-exists=.env scripts/createTestAccounts.ts",
     "reset-mfa": "tsx --env-file-if-exists=.env scripts/resetMfa.ts",
     "purge-deleted-data": "tsx --env-file-if-exists=.env scripts/purgeDeletedData.ts",
     "notify-expiring-qualifications": "tsx --env-file-if-exists=.env scripts/notifyExpiringQualifications.ts",
