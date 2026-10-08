@@ -7,7 +7,8 @@
 // Codespace zudem nur über das Herauskopieren der Einladungslinks.
 //
 // Nutzung (bevorzugt über den Wrapper aus der Projektwurzel):
-//   bash scripts/create-test-accounts.sh [--count=2] [--club="Testverein"] [--reset-passwords]
+//   bash scripts/create-test-accounts.sh [--count=2] [--club="Testverein"] [--reset-passwords] [--disable-superadmin-mfa]
+// (--disable-superadmin-mfa wertet nur der Wrapper aus, siehe dort)
 // oder direkt (im Ordner apps/api):
 //   TEST_ACCOUNTS_CONFIRM=yes-test-accounts npm run create-test-accounts -- [Optionen]
 //
@@ -248,10 +249,12 @@ async function main() {
         console.log('(wird nur jetzt angezeigt — bei Verlust erneut mit --reset-passwords ausführen)');
       }
     }
-    if (created.some((a) => a.role === 'superadmin') || reset.some((a) => a.role === 'superadmin')) {
+    // MFA_ENFORCE fehlt = "true" (siehe config/env.ts).
+    const mfaEnforced = process.env.MFA_ENFORCE !== 'false';
+    if (mfaEnforced && [...created, ...reset].some((a) => a.role === 'superadmin')) {
       console.log(
-        'Hinweis: Superadmin-Konten müssen bei aktivem MFA_ENFORCE (Standard) bei der ersten Anmeldung ' +
-          'eine Authenticator-App einrichten.',
+        'Hinweis: Superadmin-Konten müssen bei aktivem MFA_ENFORCE bei der ersten Anmeldung eine ' +
+          'Authenticator-App einrichten (abschalten: bash scripts/create-test-accounts.sh --disable-superadmin-mfa).',
       );
     }
   } finally {

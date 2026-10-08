@@ -167,7 +167,8 @@ Codespace-Terminal, nachdem `scripts/setup-codespace.sh` durchgelaufen ist
 — einen Testverein samt Konten für jede Rolle an
 (`test-<rolle>-<n>@example.org`, gemeinsames, nur einmal ausgegebenes
 Zufallspasswort; Optionen `--count=N`, `--club="…"`,
-`--reset-passwords`). Details siehe
+`--reset-passwords`, `--disable-superadmin-mfa` schaltet zusätzlich die
+Zwei-Faktor-Pflicht für Superadmins per `MFA_ENFORCE=false` ab). Details siehe
 `docs/deployment/deployment-github-codespaces.md`, Abschnitt 12, und
 `apps/api/scripts/createTestAccounts.ts`. Bricht bei
 `NODE_ENV=production` außerhalb eines Codespace ab.
