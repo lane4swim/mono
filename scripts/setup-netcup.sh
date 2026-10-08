@@ -55,6 +55,12 @@ cd "$REPO_ROOT"
 
 log() { printf '\n\033[1;34m==> %s\033[0m\n' "$1"; }
 
+# Anleitung, auf die die Meldungen unten verweisen. scripts/setup-ovhcloud.sh
+# ruft dieses Script nach seinen eigenen Vorprüfungen mit
+# SETUP_GUIDE=docs/deployment/deployment-ovhcloud.md auf — die Abschnitte
+# 6–9 sind in beiden Anleitungen identisch nummeriert und inhaltlich gleich.
+SETUP_GUIDE="${SETUP_GUIDE:-docs/deployment/deployment-netcup.md}"
+
 # Escapt einen
 # Wert für die sichere Einbettung in ein einfach gequotetes SQL-Zeichenketten-
 # Literal (verdoppelt eingebettete `'`, die Standard-SQL-Escapierung) — NUR
@@ -75,7 +81,7 @@ if [[ -z "${DOMAIN:-}" ]]; then
   read -rp "Domain (muss bereits per DNS-A-Record auf diesen Server zeigen, z. B. training.mein-verein.de): " DOMAIN
 fi
 if [[ -z "${DOMAIN}" ]]; then
-  echo "Fehler: Domain darf nicht leer sein (siehe docs/deployment/deployment-netcup.md, Abschnitt 5)." >&2
+  echo "Fehler: Domain darf nicht leer sein (siehe ${SETUP_GUIDE}, Abschnitt 5)." >&2
   exit 1
 fi
 PUBLIC_URL="https://${DOMAIN}"
@@ -178,7 +184,7 @@ if [[ "$MIGRATOR_ROLE_CREATED" == "1" ]]; then
 # automatisch gelesen (nur "apps/api/.env" wird automatisch geladen).
 # Ausschließlich zum manuellen Nachschlagen für ein künftiges
 # "prisma migrate deploy" gedacht, siehe scripts/setup-netcup.sh
-# bzw. docs/deployment/deployment-netcup.md, Abschnitt 7.3 und 13.
+# bzw. ${SETUP_GUIDE}, Abschnitt 7.3 und 13.
 MIGRATE_DATABASE_URL="${MIGRATE_DATABASE_URL}"
 EOF
   chmod 600 "$MIGRATOR_ENV_FILE"
@@ -500,7 +506,7 @@ server {
     root ${REPO_ROOT}/apps/web;
     index index.html;
 
-    # Content-Security-Policy + Sicherheitsheader für das Frontend — siehe docs/deployment/deployment-netcup.md, Abschnitt 9 für die ausführliche
+    # Content-Security-Policy + Sicherheitsheader für das Frontend — siehe ${SETUP_GUIDE}, Abschnitt 9 für die ausführliche
     # Begründung (u. a. warum style-src 'unsafe-inline' ein bewusster,
     # dokumentierter Kompromiss ist, und warum HSTS trotz aktuell nur
     # HTTP hier bereits gesetzt wird — certbot in Schritt 10 ergänzt die
@@ -562,6 +568,41 @@ server {
 }
 NGINX
 
+# Schritt 9.1: www-data braucht das Durchgangsrecht (x) auf jedem
+# Verzeichnis bis apps/web. Ubuntu 24.04 legt Home-Verzeichnisse mit 750 an
+# (HOME_MODE in /etc/login.defs) — ohne diesen Schritt beantwortet Nginx
+# jede Anfrage mit 500/403 ("Permission denied" im Error-Log). Gesetzt wird
+# nur o+x, kein o+r: www-data kann damit Dateien unter bekanntem Pfad
+# öffnen, aber nicht auflisten, was sonst im Home-Verzeichnis liegt.
+log "Schritt 9.1: Nginx-Zugriff auf ${REPO_ROOT}/apps/web"
+WEB_DIR="${REPO_ROOT}/apps/web"
+dir="$WEB_DIR"
+while [[ "$dir" != "/" ]]; do
+  dir="$(dirname "$dir")"
+  mode="$(stat -c '%a' "$dir")"
+  if (( (8#${mode} & 1) == 0 )); then
+    if [[ -O "$dir" ]]; then
+      chmod o+x "$dir"
+    else
+      sudo chmod o+x "$dir"
+    fi
+    echo "  Durchgangsrecht für andere gesetzt: ${dir} (vorher ${mode})"
+  fi
+done
+if ! sudo -u www-data test -r "${WEB_DIR}/index.html"; then
+  # Ausgecheckt mit restriktiver umask (z. B. 077): die statischen Dateien
+  # liefert Nginx ohnehin öffentlich aus, Leserechte für andere sind hier
+  # also kein zusätzliches Risiko.
+  chmod -R o+rX "$WEB_DIR"
+  echo "  Leserechte für andere auf ${WEB_DIR} gesetzt."
+fi
+if sudo -u www-data test -r "${WEB_DIR}/index.html"; then
+  echo "  www-data kann ${WEB_DIR}/index.html lesen."
+else
+  echo "Fehler: www-data kann ${WEB_DIR}/index.html weiterhin nicht lesen (${SETUP_GUIDE}, Abschnitt 9.1)." >&2
+  exit 1
+fi
+
 sudo ln -sf /etc/nginx/sites-available/lane1 /etc/nginx/sites-enabled/lane1
 sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t
@@ -584,6 +625,6 @@ if [[ "$ENV_WAS_CREATED" == "1" ]]; then
   echo "Das erzeugte VAPID-Schlüsselpaar (Web-Push) steht in apps/api/.env unter VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY."
 fi
 echo "Öffentliche Adresse (noch ohne HTTPS): http://${DOMAIN}"
-echo "Weiter geht es manuell mit Schritt 10 (HTTPS mit Let's Encrypt) in docs/deployment/deployment-netcup.md:"
+echo "Weiter geht es manuell mit Schritt 10 (HTTPS mit Let's Encrypt) in ${SETUP_GUIDE}:"
 echo "  sudo apt install -y certbot python3-certbot-nginx"
 echo "  sudo certbot --nginx -d ${DOMAIN}"

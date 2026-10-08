@@ -1,6 +1,7 @@
 # shellcheck shell=bash
 # Zwei-Faktor-Anmeldung (Issue #97) in apps/api/.env — gemeinsam genutzt von
-# scripts/setup-codespace.sh und scripts/setup-netcup.sh (per `source`).
+# scripts/setup-codespace.sh und scripts/setup-netcup.sh (per `source`; letzteres
+# auch über scripts/setup-ovhcloud.sh).
 #
 # mfa_ensure_env <env-datei> <standard: true|false>
 #   - TOTP_ENCRYPTION_KEY: fehlt er (oder ist leer), wird ein neuer erzeugt.

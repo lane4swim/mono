@@ -513,5 +513,6 @@ Erweiterungen, z. B. Echtzeit-Sync).
 
 Für die Veröffentlichung auf einem Hetzner-Server siehe die separat
 erstellte `docs/deployment/deployment.md` (sowie die Varianten für andere Umgebungen:
-`docs/deployment/deployment-netcup.md`, `docs/deployment/deployment-raspberry-pi.md`,
+`docs/deployment/deployment-netcup.md`, `docs/deployment/deployment-ovhcloud.md`,
+`docs/deployment/deployment-raspberry-pi.md`,
 `docs/deployment/deployment-macos.md`, `docs/deployment/deployment-github-codespaces.md`).

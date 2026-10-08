@@ -1,10 +1,10 @@
-# Lane 1 auf einem netcup-Server veröffentlichen — Schritt-für-Schritt-Anleitung
+# Lane 1 auf einem OVHcloud-VPS veröffentlichen — Schritt-für-Schritt-Anleitung
 
 **Für wen ist diese Anleitung?** Für jemanden ohne (oder mit sehr wenig) Erfahrung in Serveradministration. Jeder Schritt wird erklärt — auch *warum* er nötig ist, nicht nur *wie*. Es wird nichts vorausgesetzt außer: ein Computer, eine Internetverbindung und die Bereitschaft, Befehle in ein schwarzes Textfenster ("Terminal") einzutippen.
 
-**Verhältnis zu `docs/deployment/deployment.md`:** Diese Anleitung ist die netcup-Variante der bestehenden Hetzner-Anleitung (`docs/deployment/deployment.md`) — auf Betriebssystemebene (Node.js, PostgreSQL, Nginx, PM2, Let's Encrypt) sind beide identisch, da Lane 1 dort keine Hoster-spezifischen Eigenheiten hat. Unterschiede gibt es ausschließlich bei **Abschnitt 1–2** (Produktwahl, Konto/Firewall im netcup-Kundenpanel statt Hetzner Cloud Console) sowie den Backup-/Monitoring-Hinweisen in Abschnitt 12/14. Wer bereits die Hetzner-Anleitung kennt, kann direkt zu diesen Abschnitten springen.
+**Verhältnis zu den anderen Anleitungen:** Diese Anleitung ist die OVHcloud-Variante der Hetzner-Anleitung ([`deployment.md`](./deployment.md)) und der netcup-Anleitung ([`deployment-netcup.md`](./deployment-netcup.md)). Ab Abschnitt 6 (Node.js, PostgreSQL, Nginx, PM2, Let's Encrypt) ist alles identisch. Unterschiede gibt es vor allem bei der Produktwahl, dem vorinstallierten Benutzer `ubuntu` statt `root`, der Firewall (OVHcloud hat keine zustandsbehaftete Cloud-Firewall wie Hetzner/netcup, siehe 2.2) und bei Backups/Monitoring. Die Übersicht in [0.1](#01-unterschiede-zu-hetzner-und-netcup-im-überblick) fasst alles zusammen.
 
-**Basis dieser Anleitung:** der zuvor erstellte `backend-plan.md` (Monorepo mit `apps/web` = Frontend, `apps/api` = Node.js-Backend, JWT-Auth, Sync-API). Diese Anleitung beschreibt die **Veröffentlichung** dieses Monorepos. Das Frontend (die PWA, die bereits fertig vorliegt) lässt sich schon **heute** eigenständig veröffentlichen — Backend-Schritte sind so markiert, dass klar ist, was erst nach dessen Umsetzung nötig ist.
+**Basis dieser Anleitung:** der zuvor erstellte `backend-plan.md` (Monorepo mit `apps/web` = Frontend, `apps/api` = Node.js-Backend, JWT-Auth, Sync-API). Diese Anleitung beschreibt die **Veröffentlichung** dieses Monorepos.
 
 ---
 
@@ -14,70 +14,89 @@ Am Ende dieser Anleitung ist unter einer eigenen Adresse (z. B. `https://trainin
 
 - die Lane-1-Weboberfläche (installierbar als App, funktioniert offline),
 - die dazugehörigen Hilfeseiten unter `/help/` (Kurzanleitung, FAQ, Admin-Handbuch — ebenfalls offline nutzbar),
-- optional das Node.js-Backend darunter, das die Geräte synchronisiert,
+- das Node.js-Backend darunter, das die Geräte synchronisiert,
 - alles verschlüsselt (HTTPS, kostenloses Zertifikat),
 - mit automatischen Neustarts, falls der Server einmal neu startet.
 
-### 0.1 Schritte 6–9 automatisiert per Script
+### 0.1 Unterschiede zu Hetzner und netcup im Überblick
 
-Wer die Befehle aus den Abschnitten 6–9 nicht Schritt für Schritt von Hand eintippen möchte, kann stattdessen `scripts/setup-netcup.sh` ausführen — es fasst alles von der Softwareinstallation bis zur Nginx-Konfiguration in einem Lauf zusammen (analog zu `scripts/setup-codespace.sh` für die Codespaces-Variante, siehe `docs/deployment/deployment-github-codespaces.md`, Abschnitt 0.2):
+| Thema | Hetzner ([`deployment.md`](./deployment.md)) | netcup ([`deployment-netcup.md`](./deployment-netcup.md)) | Diese OVHcloud-Variante |
+|---|---|---|---|
+| Produkt | Cloud CX22 (2 vCPU/4 GB/40 GB) | VPS 1000 (2–4 vCPU/4–8 GB/128–256 GB) | **VPS-1** (4 vCore/8 GB/75 GB) — siehe Abschnitt 1 |
+| Standort | Nürnberg/Falkenstein | Nürnberg/Karlsruhe | Frankfurt (DE) oder Gravelines/Straßburg (FR) — Standort bei der Bestellung **aktiv wählen**, die Voreinstellung ist nicht immer ein EU-Rechenzentrum |
+| Verwaltungsoberfläche | Cloud Console | CCP (Bestellung) + SCP (Betrieb) | OVHcloud Control Panel → **Bare Metal Cloud → VPS** |
+| Erste Anmeldung | `ssh root@…` | `ssh root@…` | **`ssh ubuntu@…`** — `root`-Login ist im OVHcloud-Image bereits gesperrt (Abschnitt 3/4.2) |
+| Vorgelagerte Firewall | Cloud Firewall (zustandsbehaftet, IPv4+IPv6) — empfohlen | SCP-Firewall (ab G12) — empfohlen | **Edge Network Firewall** — *zustandslos*, nur IPv4, max. 20 Regeln. **Optional**; `ufw` auf dem Server ist hier die eigentliche Firewall (Abschnitt 2.2) |
+| DDoS-Schutz | inklusive | inklusive | inklusive (Anti-DDoS, immer aktiv) |
+| SSH-Härtung | `sshd_config` direkt bearbeiten | `sshd_config` direkt bearbeiten | **Drop-in-Datei** unter `sshd_config.d/`, weil cloud-init dort `PasswordAuthentication yes` setzen kann (Abschnitt 4.5) |
+| Notfallzugang bei Aussperren | Konsole in der Cloud Console | VNC-Konsole im SCP | **KVM-Konsole** und **Rescue-Modus** im Control Panel |
+| Snapshots/Backups | Backups ca. 20 % Aufpreis, Snapshots | Snapshots im SCP | Snapshot-/Backup-Option im Control Panel (je nach Angebot inklusive oder kostenpflichtig, Abschnitt 12.2) |
+| Offsite-Backup | Hetzner Storage Box | netcup Storage | **OVHcloud Object Storage** (S3-kompatibel) oder beliebig per `rsync` |
+| SMTP | Hetzner hat keinen Mailversand; Port 25/465 anfangs gesperrt | netcup-Postfächer | OVHcloud-Postfächer (z. B. MX Plan, `ssl0.ovh.net`); Port 587 offen |
+| Monitoring | Cloud Console → Monitoring | SCP → Statistiken | Control Panel → VPS → Graphen + **OVHcloud-Monitoring** (Ping, E-Mail bei Ausfall) |
+| Setup-Script | — | `scripts/setup-netcup.sh` | `scripts/setup-ovhcloud.sh` (OVHcloud-Vorprüfungen, danach dieselben Schritte 6–9) |
+| Preis (Stand 2026) | ca. 5–6 €/Monat | ca. 5–11 €/Monat | ca. **5–8 €/Monat** (Preise meist **ohne** MwSt. angezeigt) |
+
+### 0.2 Schritte 6–9 automatisiert per Script
+
+Wer die Befehle aus den Abschnitten 6–9 nicht Schritt für Schritt von Hand eintippen möchte, kann stattdessen `scripts/setup-ovhcloud.sh` ausführen:
 
 ```bash
-bash scripts/setup-netcup.sh
+bash scripts/setup-ovhcloud.sh
 ```
 
-Vorausgesetzt sind die Abschnitte 1–5 (Server angelegt, SSH-Zugang als `deploy`-Benutzer, Grundhärtung erledigt, Domain per A-Record bereits auf den Server zeigend — **ohne funktionierendes DNS schlägt Schritt 10, siehe unten, später fehl**) sowie ein bereits im Arbeitsverzeichnis liegendes Repository (Abschnitt 7, Variante A oder B). Das Script deckt dann genau ab: Abschnitt 6 (Node.js/PostgreSQL/Nginx/PM2/Git installieren), 7 samt 7.1–7.4 (npm-Abhängigkeiten, `apps/api/.env` inkl. JWT- und VAPID-Schlüsseln, `prisma migrate deploy`, Backend bauen), 8 samt 8.1 (PM2 starten inkl. Autostart per `pm2 startup`/`pm2 save`, ersten Superadmin anlegen) und 9 samt 9.1 (Nginx konfigurieren, Verzeichnisrechte für Nginx) — mit denselben Befehlen und Begründungen, die in den jeweiligen Abschnitten unten ausführlich erklärt sind.
+Vorausgesetzt sind die Abschnitte 1–5 (Server bestellt, SSH-Zugang als `deploy`-Benutzer, Grundhärtung erledigt, Domain per A-Record bereits auf den Server zeigend — **ohne funktionierendes DNS schlägt Schritt 10 später fehl**) sowie ein bereits im Arbeitsverzeichnis liegendes Repository (Abschnitt 7, Variante A oder B).
 
-Das Script fragt dabei interaktiv nach allem, was nicht automatisch ermittelt werden kann:
+Das Script prüft zuerst die OVHcloud-spezifischen Punkte und führt danach dieselben Schritte aus wie `scripts/setup-netcup.sh` (die Abschnitte 6–9 sind bei beiden Hostern identisch):
 
-- **Domain** (Abschnitt 5) — nötig für `CORS_ORIGIN`/`FRONTEND_BASE_URL` und den Nginx-`server_name`.
-- **Superadmin-E-Mail-Adresse und -Passwort** (Schritt 8.1) — das Passwort wird mit verdeckter Eingabe und Bestätigung abgefragt, mindestens 12 Zeichen und keines aus bekannten Datenlecks; es gibt bewusst **kein** Default-Passwort (Sicherheitsreview 2026-08, Befund H1).
-- **SMTP-Zugangsdaten** (optional, Schritt 7.2) — wird gefragt, ob Einladungs-E-Mails direkt jetzt per SMTP versendet werden sollen; bei „Nein" bzw. ohne Antwort landen Einladungen vorerst nur im Server-Log (später jederzeit in `apps/api/.env` nachtragbar).
+1. **Vorprüfungen (nur OVHcloud-Script):**
+   - läuft nicht als `root` und `sudo` funktioniert,
+   - `ufw` ist aktiv und lässt SSH, 80 und 443 durch — ist `ufw` noch aus, bietet das Script an, es mit genau diesen Regeln einzuschalten (SSH wird dabei **vor** dem Einschalten freigegeben). Bei OVHcloud ist das wichtiger als bei Hetzner/netcup, weil die vorgelagerte Edge Network Firewall optional ist und IPv6 gar nicht filtert,
+2. **Abschnitt 6–9** wie in der netcup-Variante: Software installieren, npm-Abhängigkeiten, `apps/api/.env` inkl. JWT-/VAPID-/TOTP-Schlüssel, `prisma migrate deploy`, Backend bauen, PM2 samt Autostart, ersten Superadmin anlegen, Nginx konfigurieren samt Verzeichnisrechten für Nginx (9.1).
 
-Datenbank-Passwörter, das JWT-Schlüsselpaar und das VAPID-Schlüsselpaar (Web-Push, Phase 2/Abschnitt 1.2) werden automatisch erzeugt (nie interaktiv abgefragt) und landen ausschließlich in `apps/api/.env`, `apps/api/.env.migrate` bzw. `apps/api/keys/` — alle mit `chmod 600`/`700` geschützt. Für einen nicht-interaktiven Lauf (z. B. um alles vorab per Umgebungsvariable festzulegen) lassen sich sämtliche Werte auch vorgeben, siehe Kopfkommentar in `scripts/setup-netcup.sh`.
+Das Script fragt interaktiv nach der **Domain**, der **Superadmin-E-Mail-Adresse und dem -Passwort** (verdeckte Eingabe mit Bestätigung, kein Default-Passwort) und optional nach **SMTP-Zugangsdaten**. Datenbank-Passwörter und Schlüsselpaare werden automatisch erzeugt und landen ausschließlich in `apps/api/.env`, `apps/api/.env.migrate` bzw. `apps/api/keys/` (alle `chmod 600`/`700`). Für einen nicht-interaktiven Lauf lassen sich alle Werte per Umgebungsvariable vorgeben (siehe Kopfkommentar in `scripts/setup-ovhcloud.sh`). Es ist wiederholt ausführbar.
 
-Am Ende gibt das Script eine Zusammenfassung aus — ausschließlich die Superadmin-E-Mail-Adresse, nie ein Passwort — sowie den Hinweis, mit Abschnitt 10 (HTTPS) fortzufahren. Es ist wiederholt ausführbar: bereits installierte Software, eine bestehende `.env` und ein bereits angelegter Superadmin werden übersprungen statt erneut angelegt/überschrieben, PM2 und Nginx werden bei einem erneuten Lauf einfach neu gestartet.
-
-**Bewusst NICHT** Teil des Scripts: Abschnitt 1–5 (Produktwahl, Server-/SSH-Key-/Firewall-Einrichtung im netcup SCP, Server-Grundhärtung, Domain/DNS) und Abschnitt 10+ (HTTPS per certbot, Testen, Backups, künftige Updates, laufende Wartung) — dafür weiterhin den jeweiligen Abschnitten unten folgen.
+**Bewusst NICHT** Teil des Scripts: Abschnitt 1–5 (Bestellung, Benutzer, SSH-Härtung, Edge Network Firewall, Domain/DNS) und Abschnitt 10+ (HTTPS per certbot, Testen, Backups, Updates, Wartung).
 
 ---
 
-## 1. Produktwahl bei netcup
+## 1. Produktwahl bei OVHcloud
 
-netcup bietet mehrere vServer-/Root-Server-Linien an. Für dieses Projekt reicht die **kleinste bis zweitkleinste vServer-Linie (VPS, KVM-virtualisiert)** — ein dedizierter **Root Server (RS)** ist für diesen Zweck überdimensioniert und deutlich teurer.
+OVHcloud bietet mehrere Server-Linien an: **VPS**, **Public Cloud** (stundengenau abgerechnete Instanzen, OpenStack-basiert) und **Bare Metal/Dedicated Server**. Für dieses Projekt ist ein **VPS** die richtige Wahl — Public Cloud ist für einen einzelnen, dauerhaft laufenden Server komplizierter (Projekte, Security Groups, separate Abrechnung) und meist teurer, Dedicated Server sind deutlich überdimensioniert.
 
-### Empfehlung: **netcup VPS 1000 (aktuelle Generation, z. B. "G12")**
+### Empfehlung: **OVHcloud VPS-1**
 
 | Eigenschaft | Wert (Richtwert) |
 |---|---|
-| vCPU | 2–4 |
-| Arbeitsspeicher | 4–8 GB |
-| Festplatte | 128–256 GB NVMe SSD |
-| Preis (Stand Mitte 2026) | ca. **4–11 €/Monat**, je nach genauer Ausstattung |
-| Standort | Nürnberg oder Karlsruhe (Deutschland) — Daten bleiben in der EU |
-| Betriebssystem | **Ubuntu 24.04 LTS** |
+| vCore | 4 |
+| Arbeitsspeicher | 8 GB |
+| Festplatte | 75 GB SSD (NVMe) |
+| Datenvolumen | unbegrenzt (Bandbreite je nach Standort ca. 400 Mbit/s) |
+| Preis (Stand 2026) | ca. **5–8 €/Monat**, abhängig von Standort und Vertragslaufzeit (Angaben im Shop meist **ohne** MwSt.) |
+| Standort | **Frankfurt** (Deutschland) oder Gravelines/Straßburg (Frankreich) — Daten bleiben in der EU |
+| Betriebssystem | **Ubuntu 24.04** |
 
 **Warum genau dieses Produkt?**
-- Für einen Verein/ein Team mit einigen Dutzend bis wenigen hundert Nutzer:innen ist die Last gering — 2 vCPU/4 GB reichen für Node.js-API, PostgreSQL-Datenbank und das Ausliefern der Weboberfläche gleichzeitig.
-- Die VPS-Linie (vServer, KVM-virtualisiert, voller Root-Zugriff) bietet bei netcup das beste Preis-Leistungs-Verhältnis für diese Größenordnung — die separaten Root-Server-Produkte (RS-Linie, dedizierte Hardware) lohnen sich hier nicht.
-- Standort Deutschland/EU vereinfacht die DSGVO-Betrachtung, die im Backend-Plan (Abschnitt 12, Datenschutz) ohnehin als offener Punkt genannt wurde.
+- Der kleinste OVHcloud-VPS hat bereits mehr Reserve als die Hetzner-/netcup-Empfehlung (4 vCore/8 GB statt 2 vCPU/4 GB) — für einen Verein mit einigen Dutzend bis wenigen hundert Nutzer:innen mehr als ausreichend.
+- Anti-DDoS-Schutz und unbegrenzter Traffic sind inklusive.
+- OVHcloud ist ein europäisches Unternehmen mit Rechenzentren in Deutschland und Frankreich — das vereinfacht die DSGVO-Betrachtung (Backend-Plan, Abschnitt 12). **Der Standort muss bei der Bestellung aber aktiv gewählt werden** (siehe Schritt 2): OVHcloud betreibt auch Rechenzentren außerhalb der EU (z. B. Kanada, USA, Singapur), und manche Standorte kosten einen Aufpreis.
 
-> **Hinweis:** netcup benennt und bepreist seine VPS-Produkte immer wieder um (neue Generationen, z. B. "G11" → "G12"). Schau im Zweifel direkt im [netcup-Shop](https://www.netcup.com/en/server/vserver) nach dem aktuell kleinsten VPS mit ca. 2 vCPU/4 GB RAM und NVMe-SSD — die genaue Bezeichnung kann leicht abweichen, die Empfehlung bleibt dieselbe.
+> **Hinweis:** OVHcloud benennt und bepreist seine VPS-Produkte immer wieder um. Schau im Zweifel direkt im [OVHcloud-Shop](https://www.ovhcloud.com/de/vps/) nach dem aktuell kleinsten VPS mit mindestens 2 vCore/4 GB RAM — die genaue Bezeichnung kann abweichen, die Empfehlung bleibt dieselbe.
 
-Reicht der Server später nicht mehr aus, lässt er sich im netcup-Kundenpanel mit wenigen Klicks upgraden, ohne den Server neu aufsetzen zu müssen.
+Reicht der Server später nicht mehr aus, lässt er sich im Control Panel auf ein größeres VPS-Modell hochstufen, ohne ihn neu aufzusetzen. (Ein **Herabstufen** ist bei OVHcloud-VPS in der Regel nicht möglich — daher klein anfangen.)
 
 ---
 
-## 2. netcup-Konto und Server anlegen
+## 2. OVHcloud-Konto und Server anlegen
 
-1. Auf **[netcup.com](https://www.netcup.com)** ein Kundenkonto erstellen (E-Mail bestätigen, Zahlungsmethode hinterlegen).
-2. Im **Kundenpanel (CCP — Customer Control Panel)** das gewünschte VPS-Produkt bestellen:
-   - **Standort:** Nürnberg oder Karlsruhe
-   - **Image (Betriebssystem):** Ubuntu 24.04
-   - **SSH-Key:** siehe Schritt 2.1 — bereits bei der Bestellung hinterlegen, statt mit Passwort zu arbeiten
-   - **Name/Hostname:** z. B. `lane1-prod`
-3. Nach Abschluss der Bestellung landet der Server im **Server Control Panel (SCP)**, das für den laufenden Betrieb (Neustart, Snapshots, Netzwerk, Firewall) genutzt wird — getrennt vom Bestell-/Rechnungspanel CCP.
-4. Die öffentliche IP-Adresse des Servers wird im SCP angezeigt (merken/kopieren, wird ständig gebraucht).
+1. Auf **[ovhcloud.com](https://www.ovhcloud.com/de/)** ein Kundenkonto erstellen (E-Mail bestätigen, Zahlungsmethode hinterlegen). OVHcloud verlangt bei neuen Konten gelegentlich eine **Identitätsprüfung** (Ausweis-Upload), bevor die erste Bestellung freigeschaltet wird — das kann einige Stunden bis zu einem Werktag dauern. Für einen Verein ggf. direkt ein Konto auf den Verein (mit Vereinsdaten/USt-ID, falls vorhanden) anlegen, damit Rechnungen auf den Verein laufen.
+2. Den gewünschten VPS bestellen:
+   - **Modell:** VPS-1 (siehe oben)
+   - **Standort:** **Frankfurt** (oder Gravelines/Straßburg) — nicht einfach die Voreinstellung übernehmen
+   - **Image (Betriebssystem):** Ubuntu 24.04 (ohne vorinstallierte Anwendung/„Distribution only")
+   - **SSH-Key:** siehe Schritt 2.1 — bereits bei der Bestellung hinterlegen. Ohne Key schickt OVHcloud ein Passwort für den Benutzer `ubuntu` per E-Mail; das funktioniert zwar, sollte aber gleich in Schritt 4 durch einen Key ersetzt werden
+   - **Laufzeit:** monatlich kündbar oder mit Mindestlaufzeit (günstiger) — für den Start reicht monatlich
+3. Nach der Bereitstellung (meist wenige Minuten, bei neuen Konten nach der Identitätsprüfung) erscheint der Server im **OVHcloud Control Panel** unter **Bare Metal Cloud → Virtual Private Servers**. Dort stehen die öffentliche **IPv4-Adresse** (merken/kopieren, wird ständig gebraucht) und die **IPv6-Adresse**. Zusätzlich kommt eine E-Mail mit den Zugangsdaten.
 
 ### 2.1 SSH-Key erzeugen (einmalig, auf dem eigenen Computer)
 
@@ -98,19 +117,34 @@ ssh-keygen -t ed25519 -C "lane1-server"
 type $env:USERPROFILE\.ssh\id_ed25519.pub
 ```
 
-Den angezeigten Text (beginnt mit `ssh-ed25519 …`) bei der Server-Bestellung unter **„SSH-Key"** einfügen. Wurde der Server bereits ohne SSH-Key bestellt, lässt sich der Key nachträglich im SCP unter den Server-Einstellungen hinzufügen.
+Den angezeigten Text (beginnt mit `ssh-ed25519 …`) bei der Bestellung im Feld **„SSH-Schlüssel"** einfügen. Alternativ lässt er sich im Control Panel unter **Konto → Meine Dienste/Einstellungen → SSH-Schlüssel** hinterlegen. Wurde der Server bereits ohne Key bestellt: einmal per Passwort (aus der E-Mail) als `ubuntu` anmelden und den Key mit `ssh-copy-id ubuntu@DEINE-SERVER-IP` (Mac/Linux) übertragen — oder den VPS im Control Panel mit Key **neu installieren** (löscht alles, vor Schritt 6 aber unproblematisch).
 
-### 2.2 Firewall einrichten
+### 2.2 Firewall — Unterschied zu Hetzner/netcup
 
-netcup stellt für vServer ab Generation 12 eine kostenlose **Cloud-Firewall** direkt im SCP bereit (Menüpunkt **„Firewall"**/„Firewall Policies"). Dort eine Regel anlegen, die **eingehend** ausschließlich folgende Ports erlaubt und dem Server zuweist:
+Bei Hetzner und netcup gibt es eine **zustandsbehaftete** Cloud-Firewall: man erlaubt eingehend 22/80/443, und Antworten auf ausgehende Verbindungen (z. B. `apt update`, `npm install`, certbot) kommen automatisch durch. OVHcloud bietet stattdessen die **Edge Network Firewall**, die anders funktioniert:
 
-| Port | Protokoll | Quelle | Zweck |
-|---|---|---|---|
-| 22 | TCP | Alle | SSH (Serverzugriff) |
-| 80 | TCP | Alle | HTTP (wird später auf HTTPS umgeleitet) |
-| 443 | TCP | Alle | HTTPS |
+- **zustandslos**: sie kennt keine „Antwort auf eine eigene Anfrage" — ohne eine ausdrückliche Regel für bereits aufgebaute TCP-Verbindungen und für DNS-/NTP-Antworten bricht jede ausgehende Verbindung des Servers ab (Paketinstallation, npm, certbot, E-Mail-Versand),
+- filtert **nur IPv4**, IPv6 läuft ungefiltert daran vorbei,
+- maximal **20 Regeln** je IP-Adresse.
 
-Alles andere bleibt gesperrt — das ist bereits eine solide Grundsicherung. Bei älteren vServer-Generationen ohne SCP-Firewall-Funktion übernimmt stattdessen die Betriebssystem-Firewall (`ufw`, siehe Schritt 4.3) allein diese Aufgabe.
+**Empfehlung für diese Anleitung:** `ufw` auf dem Server (Schritt 4.3) ist bei OVHcloud die **eigentliche** Firewall und **Pflicht**. Die Edge Network Firewall ist eine **optionale** zusätzliche Schicht — wer sie nutzt, muss die Regeln exakt so anlegen wie unten, sonst sperrt man den Server von der Außenwelt ab. Für den Einstieg kann man sie auch weglassen und später ergänzen.
+
+**Optional: Edge Network Firewall einrichten** — Control Panel → **Bare Metal Cloud → Network → Public IP Addresses** → bei der IPv4-Adresse des VPS auf **„…" → „Configure the Edge Network Firewall"** (bzw. „Firewall erstellen", dann „Konfigurieren"). Regeln in dieser Reihenfolge anlegen (niedrigere Priorität = wird zuerst geprüft):
+
+| Priorität | Aktion | Protokoll | Weitere Angabe | Zweck |
+|---|---|---|---|---|
+| 0 | Erlauben | TCP | Option **„established"** | Antworten auf ausgehende Verbindungen (apt, npm, certbot, SMTP) |
+| 1 | Erlauben | UDP | **Quellport** 53 | DNS-Antworten |
+| 2 | Erlauben | UDP | **Quellport** 123 | Zeitsynchronisation (NTP) — sonst läuft die Uhr weg und TLS/TOTP-Codes schlagen fehl |
+| 3 | Erlauben | ICMP | — | Ping (u. a. für das OVHcloud-Monitoring, Abschnitt 14) |
+| 4 | Erlauben | TCP | Zielport 22 | SSH |
+| 5 | Erlauben | TCP | Zielport 80 | HTTP (certbot, Weiterleitung auf HTTPS) |
+| 6 | Erlauben | TCP | Zielport 443 | HTTPS |
+| 19 | Ablehnen | IPv4 | — | alles andere |
+
+Danach die Firewall **aktivieren** (Schalter in derselben Ansicht). Änderungen brauchen ein paar Minuten, bis sie greifen. Anschließend auf dem Server prüfen, dass ausgehende Verbindungen weiterhin funktionieren: `sudo apt update` und `curl -I https://deb.nodesource.com` müssen ohne Zeitüberschreitung antworten.
+
+> **Ausgesperrt?** Bei OVHcloud kommt man über das Control Panel → VPS → **„KVM"** (Konsole im Browser) immer noch an den Server, auch wenn Firewall oder SSH falsch konfiguriert sind. Notfalls hilft der **Rescue-Modus** (VPS startet ein Rettungssystem, die eigene Festplatte lässt sich darin einhängen und reparieren). Bei der Edge Network Firewall genügt es, sie im Control Panel wieder zu deaktivieren.
 
 ---
 
@@ -119,8 +153,10 @@ Alles andere bleibt gesperrt — das ist bereits eine solide Grundsicherung. Bei
 Terminal (Mac/Linux) bzw. PowerShell (Windows) öffnen:
 
 ```bash
-ssh root@DEINE-SERVER-IP
+ssh ubuntu@DEINE-SERVER-IP
 ```
+
+**Anders als bei Hetzner/netcup** heißt der vorinstallierte Benutzer `ubuntu`, nicht `root` — eine direkte Anmeldung als `root` ist im OVHcloud-Ubuntu-Image bereits gesperrt. `ubuntu` hat `sudo`-Rechte; Befehle mit Systemrechten daher mit vorangestelltem `sudo` ausführen.
 
 Beim ersten Verbinden erscheint eine Sicherheitsabfrage ("authenticity of host … can't be established"). Das ist normal beim allerersten Kontakt — mit `yes` bestätigen.
 
@@ -132,32 +168,41 @@ Alle folgenden Befehle **auf dem Server** eingeben (also innerhalb der SSH-Verbi
 
 ### 4.1 System aktualisieren
 ```bash
-apt update && apt upgrade -y
+sudo apt update && sudo apt upgrade -y
 ```
+Fragt `apt` während des Upgrades, ob eine geänderte Konfigurationsdatei (z. B. `sshd_config`) ersetzt werden soll, die vorgeschlagene Standardantwort (aktuelle Version behalten) übernehmen. Wird ein Neustart verlangt (`/var/run/reboot-required` existiert), mit `sudo reboot` neu starten und nach einer Minute wieder verbinden.
 
-### 4.2 Eigenen Benutzer statt „root" anlegen
-Dauerhaft als `root` zu arbeiten ist riskant (jeder Befehl hat sofort volle Rechte). Stattdessen:
+### 4.2 Eigenen Benutzer `deploy` anlegen
+Technisch ließe sich alles als `ubuntu` erledigen. Diese Anleitung (und alle Pfade in Cronjobs, Nginx-Konfiguration und `.env`) geht aber — wie die Hetzner- und netcup-Variante — von einem Benutzer `deploy` mit Projektordner `/home/deploy/lane1` aus. Deshalb:
 ```bash
-adduser deploy
-usermod -aG sudo deploy
-rsync --archive --chown=deploy:deploy ~/.ssh /home/deploy
+sudo adduser deploy
+sudo usermod -aG sudo deploy
+sudo rsync --archive --chown=deploy:deploy /home/ubuntu/.ssh /home/deploy
 ```
-Der letzte Befehl kopiert den SSH-Key auch für den neuen Benutzer, damit man sich gleich als `deploy` anmelden kann.
+Der letzte Befehl kopiert den SSH-Key des Benutzers `ubuntu` auch für `deploy` (anders als bei Hetzner/netcup liegt der Key hier nicht unter `/root/.ssh`, sondern unter `/home/ubuntu/.ssh`).
 
 Ab jetzt: neues Terminal-Fenster öffnen und testen:
 ```bash
 ssh deploy@DEINE-SERVER-IP
+sudo whoami     # muss "root" ausgeben (Passwort von deploy eingeben)
 ```
-Klappt das, kann das alte `root`-Fenster geschlossen werden — ab hier alles als `deploy` ausführen (Befehle, die Systemrechte brauchen, mit vorangestelltem `sudo`).
+Klappt das, kann das `ubuntu`-Fenster geschlossen werden — ab hier alles als `deploy` ausführen.
 
-### 4.3 Firewall auf Betriebssystemebene (zusätzlich zur SCP-Firewall aus Schritt 2.2)
+**Empfohlen:** den nicht mehr benötigten Benutzer `ubuntu` sperren (er hat denselben SSH-Key und volle `sudo`-Rechte ohne Passwortabfrage — ein zweiter, unbeobachteter Zugang):
+```bash
+sudo usermod --lock --expiredate 1 ubuntu
+```
+Das sperrt sowohl Passwort- als auch SSH-Key-Anmeldung, ohne den Benutzer zu löschen (rückgängig mit `sudo usermod --unlock --expiredate '' ubuntu`). **Erst ausführen, nachdem `ssh deploy@…` und `sudo` als `deploy` nachweislich funktionieren.**
+
+### 4.3 Firewall auf Betriebssystemebene (bei OVHcloud Pflicht, siehe 2.2)
 ```bash
 sudo ufw allow OpenSSH
-sudo ufw allow 80
-sudo ufw allow 443
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
 sudo ufw enable
+sudo ufw status verbose
 ```
-Mit `y` bestätigen.
+Mit `y` bestätigen. `ufw` filtert IPv4 **und** IPv6 (Standard in Ubuntu) und ist zustandsbehaftet — ausgehende Verbindungen funktionieren ohne Zusatzregeln. `scripts/setup-ovhcloud.sh` prüft diese Regeln und bietet an, `ufw` einzuschalten, falls es noch aus ist.
 
 ### 4.4 Schutz gegen automatisierte Anmeldeversuche
 ```bash
@@ -166,34 +211,42 @@ sudo apt install fail2ban -y
 Läuft mit sinnvollen Standardeinstellungen sofort im Hintergrund.
 
 ### 4.5 (Empfohlen) Passwort-Login und root-Login per SSH deaktivieren
+
+**Unterschied zu Hetzner/netcup:** Das OVHcloud-Image richtet den Server per *cloud-init* ein, und cloud-init legt — vor allem, wenn der Server ohne SSH-Key bestellt wurde — eine Datei `/etc/ssh/sshd_config.d/50-cloud-init.conf` mit `PasswordAuthentication yes` an. SSH übernimmt bei doppelten Einstellungen den **zuerst gelesenen** Wert, und die Dateien in `sshd_config.d/` werden **vor** dem Rest von `/etc/ssh/sshd_config` gelesen. Ein Ändern von `/etc/ssh/sshd_config` (wie in der Hetzner-/netcup-Anleitung) hätte dann **keine Wirkung**. Stattdessen eine eigene Datei anlegen, die alphabetisch vor `50-cloud-init.conf` liegt:
 ```bash
-sudo nano /etc/ssh/sshd_config
-```
-Darin folgende Zeilen suchen/anpassen (mit den Pfeiltasten navigieren, `Strg+O` zum Speichern, `Strg+X` zum Verlassen):
-```
+sudo tee /etc/ssh/sshd_config.d/00-lane1.conf >/dev/null <<'EOF'
 PasswordAuthentication no
+KbdInteractiveAuthentication no
 PermitRootLogin no
+EOF
+sudo sshd -t && sudo systemctl restart ssh
 ```
-Danach:
+Prüfen, welche Werte SSH tatsächlich verwendet:
 ```bash
-sudo systemctl restart ssh
+sudo sshd -T | grep -Ei '^(passwordauthentication|permitrootlogin|kbdinteractiveauthentication)'
 ```
-**Wichtig:** Vorher unbedingt bestätigen, dass die Anmeldung als `deploy` mit SSH-Key funktioniert (Schritt 4.2) — sonst sperrt man sich selbst aus.
+Alle drei müssen `no` zeigen.
+
+**Wichtig:** Vorher unbedingt bestätigen, dass die Anmeldung als `deploy` mit SSH-Key funktioniert (Schritt 4.2) — sonst sperrt man sich aus. (Notfalls hilft die KVM-Konsole, siehe Hinweis in 2.2 — für die KVM-Konsole braucht `deploy` ein Passwort, das in 4.2 per `adduser` vergeben wurde.)
 
 ---
 
 ## 5. Domain einrichten
 
-1. Eine Domain registrieren (falls noch nicht vorhanden), z. B. direkt über netcup (**netcup Domains**) oder einen beliebigen anderen Registrar.
-2. Beim DNS-Verwalter der Domain (oder im netcup-Kundenpanel unter **„Domains" → DNS-Verwaltung**, falls die Domain dort verwaltet wird) einen **A-Record** anlegen:
-   - Name: `training` (ergibt `training.mein-verein.de`) oder `@` für die Hauptdomain
-   - Wert: die öffentliche IP-Adresse des Servers aus Schritt 2
+1. Eine Domain registrieren (falls noch nicht vorhanden), z. B. direkt bei OVHcloud (**Web Cloud → Domainnamen**) oder einem beliebigen anderen Registrar.
+2. Beim DNS-Verwalter der Domain (bei OVHcloud: **Web Cloud → Domainnamen → *Domain* → „DNS-Zone" → „Eintrag hinzufügen"**) einen **A-Record** anlegen:
+   - Subdomain: `training` (ergibt `training.mein-verein.de`) oder leer für die Hauptdomain
+   - Ziel: die öffentliche **IPv4**-Adresse des Servers aus Schritt 2
    - TTL: Standardwert belassen
-3. DNS-Änderungen brauchen etwas Zeit (meist Minuten, manchmal bis zu einer Stunde). Prüfen mit:
+   - Gibt es für denselben Namen bereits einen A-Record (OVHcloud legt bei neuen Domains Standardeinträge auf eigene Parkseiten an), diesen **ändern statt einen zweiten anzulegen** — sonst landen Besucher:innen und certbot zufällig mal auf dem einen, mal auf dem anderen Ziel.
+3. **IPv6 (optional):** Zusätzlich einen **AAAA-Record** mit der IPv6-Adresse aus Schritt 2 nur dann anlegen, wenn IPv6 auf dem Server nachweislich funktioniert (`curl -6 -I https://www.ovhcloud.com` auf dem Server liefert eine Antwort). Ein AAAA-Record auf eine nicht erreichbare IPv6-Adresse lässt Let's Encrypt in Schritt 10 scheitern (es prüft bevorzugt per IPv6).
+4. DNS-Änderungen brauchen etwas Zeit (meist Minuten, bei OVHcloud-DNS-Zonen gelegentlich bis zu einer Stunde). Prüfen mit:
    ```bash
    ping training.mein-verein.de
    ```
    Antwortet die IP des Servers, ist alles bereit für Schritt 10 (HTTPS).
+
+> **Optional — Reverse-DNS:** Im Control Panel lässt sich für die IP-Adresse ein Reverse-DNS-Eintrag (`training.mein-verein.de`) setzen (Network → Public IP Addresses → „…" → „Reverse-DNS ändern"). Für Lane 1 nicht nötig, da E-Mails über einen externen SMTP-Server laufen (Schritt 7.2), aber hilfreich, um den Server in Logs wiederzuerkennen.
 
 ---
 
@@ -427,9 +480,16 @@ lehnt eine gleichzeitige Angabe sonst mit einer klaren Fehlermeldung ab).
 >
 > **Hinweis SMTP-Anbieter:** Für die Zugangsdaten reicht in der Regel das
 > E-Mail-Postfach des Vereins bzw. ein von dessen Hoster bereitgestelltes
-> SMTP-Konto — netcup bietet über die eigenen Hosting-/Domain-Produkte
-> auch eigene E-Mail-Postfächer inklusive SMTP-Zugang an, die sich dafür
-> eignen. Port 587 funktioniert mit jedem gängigen Anbieter.
+> SMTP-Konto. Wird die Domain bei OVHcloud verwaltet, eignet sich ein
+> OVHcloud-Postfach (z. B. aus dem kostenlosen „MX Plan" einer Domain oder
+> „Email Pro"): `SMTP_HOST="ssl0.ovh.net"`, `SMTP_PORT=587`,
+> `SMTP_SECURE=false`, `SMTP_USER` = vollständige E-Mail-Adresse. Anders
+> als bei Hetzner ist ausgehender Mailverkehr vom VPS nicht pauschal
+> gesperrt; OVHcloud überwacht aber Port 25 auf Spam und sperrt die IP bei
+> Auffälligkeiten — Lane 1 versendet ohnehin nur über Port 587 an einen
+> externen SMTP-Server, das ist davon nicht betroffen. Wer die Edge Network
+> Firewall nutzt (Schritt 2.2), braucht dafür die Regel „TCP established"
+> (Priorität 0), sonst laufen SMTP-Verbindungen in eine Zeitüberschreitung.
 
 **VAPID-Schlüsselpaar erzeugen** (Phase 2, Abschnitt 1.2 —
 Push-Benachrichtigungen; **optional**, kein Startabbruch ohne). Anders
@@ -467,7 +527,7 @@ Mit `NODE_ENV=production` und aktiver Pflicht startet der Server ohne
 solange Konten TOTP nutzen — ihre Codes und Wiederherstellungscodes wären
 sonst ungültig.
 
-`scripts/setup-netcup.sh` erledigt beides: es erzeugt den Schlüssel und
+`scripts/setup-ovhcloud.sh` erledigt beides: es erzeugt den Schlüssel und
 fragt nach der Pflicht (Standard: ja; vorgeben mit `MFA_ENFORCE=true` bzw.
 `false`). Vorhandene Werte bleiben bei einem erneuten Lauf unverändert.
 
@@ -731,16 +791,15 @@ server {
 Ubuntu 24.04 legt Home-Verzeichnisse mit den Rechten `750` an — andere
 Benutzer, auch der Nginx-Benutzer `www-data`, kommen nicht hinein. Nginx
 könnte `/home/deploy/lane1/apps/web` dann nicht lesen und beantwortet jede
-Anfrage mit einem Fehler (`500 Internal Server Error` bzw. `403 Forbidden`,
-im Log `/var/log/nginx/error.log` steht `Permission denied`). Deshalb
-einmalig das **Durchgangsrecht** setzen — damit kann `www-data` Dateien
-unter bekanntem Pfad öffnen, aber nicht auflisten, was sonst im
-Home-Verzeichnis liegt:
+Anfrage mit einem Fehler (`500 Internal Server Error` bzw. `403 Forbidden`, im Log
+`/var/log/nginx/error.log` steht `Permission denied`). Deshalb einmalig das
+**Durchgangsrecht** setzen — damit kann `www-data` Dateien unter bekanntem
+Pfad öffnen, aber nicht auflisten, was sonst im Home-Verzeichnis liegt:
 ```bash
 chmod o+x /home/deploy
 sudo -u www-data test -r /home/deploy/lane1/apps/web/index.html && echo OK
 ```
-Muss `OK` ausgeben. (`scripts/setup-netcup.sh` erledigt das automatisch.)
+Muss `OK` ausgeben. (`scripts/setup-ovhcloud.sh` erledigt das automatisch.)
 
 ### 9.2 Konfiguration aktivieren
 
@@ -833,11 +892,16 @@ Folgende Zeile ergänzen (läuft täglich um 3:00 Uhr):
 > cat /home/deploy/backups/backup-errors.log
 > ```
 
-### 12.2 netcup-Snapshots (komplettes Server-Abbild)
-Im **Server Control Panel (SCP)** unter dem jeweiligen vServer → **„Snapshots"** manuell einen Snapshot erstellen (z. B. vor größeren Änderungen wie einem Ubuntu-Upgrade). Snapshots liegen auf demselben Storage-Backend wie der Server selbst — sie ersetzen kein Offsite-Backup (siehe 12.3), schützen aber schnell vor einer fehlgeschlagenen Änderung ("in wenigen Minuten zurückrollen").
+### 12.2 OVHcloud-Snapshots und automatische Backups (komplettes Server-Abbild)
+Im Control Panel unter **Bare Metal Cloud → Virtual Private Servers → *VPS*** gibt es zwei getrennte Optionen:
+
+- **Snapshot** — ein manuelles Abbild, z. B. vor einem Ubuntu-Upgrade. Es gibt nur **einen** Snapshot-Platz: ein neuer Snapshot ersetzt den alten.
+- **Automatisches Backup** — tägliche Sicherung des gesamten VPS mit einigen Tagen Aufbewahrung.
+
+Ob diese Optionen im gebuchten Angebot enthalten sind oder als monatliche Zusatzoption gebucht werden müssen, hängt von VPS-Generation und Angebot ab — im Control Panel beim jeweiligen VPS unter „Optionen" nachsehen. Beides ersetzt kein Offsite-Backup (siehe 12.3), schützt aber schnell vor einer fehlgeschlagenen Änderung.
 
 ### 12.3 Offsite-Backup (empfohlen)
-Die tägliche `.sql`-Datei zusätzlich außerhalb des Servers sichern — z. B. mit einem **netcup Storage-Produkt** (Object Storage/Backup-Space) oder einem einfachen Cronjob, der die Datei per `rsync`/`scp` an einen anderen Ort kopiert. Ein Backup, das nur auf demselben Server liegt, hilft bei einem Totalausfall des Servers nicht.
+Die tägliche `.sql`-Datei zusätzlich außerhalb des Servers sichern — z. B. in einem **OVHcloud Object Storage**-Container (S3-kompatibel, abgerechnet nach Speichermenge — für ein paar Megabyte SQL-Dumps praktisch kostenlos; hochladen z. B. mit `rclone` oder `aws s3 cp`) **an einem anderen Standort als der VPS**, bei einem anderen Anbieter, oder per einfachem Cronjob, der die Datei per `rsync`/`scp` an einen anderen Ort kopiert. Ein Backup, das nur auf demselben Server liegt, hilft bei einem Totalausfall des Servers nicht.
 
 ### 12.4 DSGVO-Löschfristen durchsetzen (Purge-Cronjob)
 
@@ -958,7 +1022,7 @@ sudo systemctl reload nginx
 > echo "TOTP_ENCRYPTION_KEY=\"$(openssl rand -base64 32)\"" >> apps/api/.env
 > echo 'MFA_ENFORCE=true' >> apps/api/.env
 > ```
-> (`bash scripts/setup-netcup.sh` ergänzt beides ebenfalls, ohne andere Werte anzufassen.)
+> (`bash scripts/setup-ovhcloud.sh` ergänzt beides ebenfalls, ohne andere Werte anzufassen.)
 > Danach werden Superadmins bei ihrer nächsten Anmeldung durch die
 > Einrichtung geführt; laufende Sitzungen ohne TOTP enden spätestens nach
 > 15 Minuten.
@@ -970,7 +1034,9 @@ sudo systemctl reload nginx
 - `sudo apt update && sudo apt upgrade -y` — regelmäßig (z. B. monatlich) für Sicherheitsupdates.
 - `sudo apt install unattended-upgrades -y` — automatische Installation kritischer Sicherheitsupdates.
 - `htop` — Prozess-/Auslastungsübersicht direkt auf dem Server.
-- **Server Control Panel (SCP)** → betroffener vServer → **„Statistiken"/„Traffic"** — CPU-/RAM-/Netzwerk-Graphen ohne Zusatzinstallation.
+- Control Panel → **Bare Metal Cloud → Virtual Private Servers → *VPS*** — CPU-/RAM-/Netzwerk-Graphen ohne Zusatzinstallation.
+- Ebenda **„Monitoring"** einschalten: OVHcloud pingt den Server regelmäßig und schickt bei Ausfall eine E-Mail. Funktioniert nur, solange ICMP (Ping) erlaubt ist — `ufw` lässt Ping standardmäßig durch, in der Edge Network Firewall sorgt Regel 3 (Schritt 2.2) dafür. Das prüft nur, ob der Server läuft, nicht ob Lane 1 antwortet — dafür zusätzlich einen externen Uptime-Dienst (z. B. UptimeRobot) auf `https://training.mein-verein.de/health` richten.
+- Wartungsankündigungen kommen per E-Mail an die Konto-Adresse und stehen im Control Panel unter „Vorfälle/Travaux" ([status.ovhcloud.com](https://status.ovhcloud.com)) — die Kontakt-E-Mail des OVHcloud-Kontos daher an eine regelmäßig gelesene Adresse binden.
 
 ---
 
@@ -978,13 +1044,15 @@ sudo systemctl reload nginx
 
 | Posten | Kosten |
 |---|---|
-| netcup VPS (2 vCPU/4 GB, kleinste passende Stufe) | ca. 4–11 €/Monat |
-| Domain (bei netcup oder anderem Registrar) | ca. 10–15 €/**Jahr** |
+| OVHcloud VPS-1 (4 vCore/8 GB) | ca. 5–8 €/Monat (Shop-Preise meist zzgl. MwSt.; günstiger mit Mindestlaufzeit) |
+| Automatisches Backup/Snapshot (optional, falls nicht inklusive) | ca. 1–3 €/Monat |
+| Object Storage für Offsite-Backup (optional) | wenige Cent/Monat |
+| Domain (bei OVHcloud oder anderem Registrar) | ca. 10–15 €/**Jahr** |
 | SSL-Zertifikat (Let's Encrypt) | kostenlos |
-| netcup-Firewall (SCP, ab Generation 12) | kostenlos |
-| **Gesamt** | **ca. 5–11 €/Monat** + Domain |
+| Anti-DDoS, Edge Network Firewall | kostenlos |
+| **Gesamt** | **ca. 6–10 €/Monat** + Domain |
 
-> Wie bei jedem Hoster ändern sich Produktnamen und Preise über die Zeit — im Zweifel im [netcup-Shop](https://www.netcup.com/en/server/vserver) nachsehen.
+> Wie bei jedem Hoster ändern sich Produktnamen und Preise über die Zeit — im Zweifel im [OVHcloud-Shop](https://www.ovhcloud.com/de/vps/) nachsehen.
 
 ---
 
@@ -994,8 +1062,12 @@ sudo systemctl reload nginx
 |---|---|---|
 | Backend startet nicht, Log: „TOTP_ENCRYPTION_KEY fehlt, MFA_ENFORCE ist aber aktiv“ | Pflicht zur Zwei-Faktor-Anmeldung ohne Schlüssel | Schlüssel ergänzen (siehe Abschnitt Umgebungsvariablen) oder `MFA_ENFORCE=false` setzen |
 | Superadmin hat Authenticator-App und Wiederherstellungscodes verloren | — | `cd apps/api && npm run reset-mfa -- --email=...`, danach bei der Anmeldung neu einrichten |
-| Seite lädt gar nicht | DNS zeigt noch nicht auf den Server / Firewall blockiert | `ping domain`, SCP-Firewall-Regeln (Schritt 2.2), `sudo ufw status` |
+| Seite lädt gar nicht | DNS zeigt noch nicht auf den Server / Firewall blockiert | `ping domain`, `sudo ufw status`, Regeln der Edge Network Firewall (Schritt 2.2) |
+| `apt update`, `npm install`, certbot oder SMTP hängen mit Zeitüberschreitung | Edge Network Firewall aktiv, aber ohne „TCP established"- bzw. DNS-Regel (zustandslos, Schritt 2.2) | Regeln 0–2 aus Schritt 2.2 prüfen oder die Edge Network Firewall testweise deaktivieren |
 | Jede Seite liefert `500`/`403`, im Nginx-Log `Permission denied` | `www-data` darf nicht in `/home/deploy` (Ubuntu-24.04-Standard `750`) | Abschnitt 9.1: `chmod o+x /home/deploy` |
+| certbot scheitert, obwohl `ping domain` die richtige IPv4 zeigt | AAAA-Record zeigt auf eine IPv6-Adresse, die nicht antwortet | Abschnitt 5, Punkt 3: AAAA-Record entfernen oder IPv6 reparieren |
+| SSH fragt trotz Härtung noch nach einem Passwort | `50-cloud-init.conf` setzt `PasswordAuthentication yes` und wird vor `sshd_config` gelesen | Abschnitt 4.5: Drop-in-Datei `00-lane1.conf`, `sudo sshd -T` prüfen |
+| SSH-Zugang verloren | Firewall-/SSH-Fehlkonfiguration | Control Panel → VPS → **KVM**-Konsole bzw. Rescue-Modus (Hinweis in Schritt 2.2) |
 | „502 Bad Gateway" | Backend läuft nicht | `pm2 status`, `pm2 logs lane1-api` |
 | Backend startet gar nicht (`pm2 status` zeigt „errored") | Pflicht-Umgebungsvariable fehlt/ungültig, z. B. `JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY` in Produktion nicht gesetzt | `pm2 logs lane1-api` — `env.ts` gibt die genaue fehlende/ungültige Variable aus |
 | Login/Registrierung liefert die HTML-Startseite statt einer Fehlermeldung/eines Tokens | `/auth/`-Location-Block in nginx fehlt oder `proxy_pass` mit abschließendem `/` (siehe Warnhinweis Abschnitt 9) | `curl -i .../auth/login -X POST -d '{}'`, Antwort auf `<!DOCTYPE html>` prüfen |
@@ -1003,4 +1075,4 @@ sudo systemctl reload nginx
 | Push-Benachrichtigungen kommen nie an | `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY` nicht gesetzt (nur Server-Log, siehe Schritt 7.2) oder die beiden Cronjobs aus 12.5/12.6 fehlen | `pm2 logs lane1-api` auf „[push] Kein VAPID-Schlüssel konfiguriert" prüfen, `crontab -l` kontrollieren |
 | Kein Schloss-Symbol/HTTPS-Fehler | Zertifikat nicht erneuert oder DNS falsch bei Erstanfrage | `sudo certbot renew --dry-run` |
 | Änderungen erscheinen nicht | Browser-/Service-Worker-Cache | Hard-Reload (`Strg+Shift+R`), `CACHE_VERSION` in `sw.js` prüfen |
-| „Permission denied" bei SSH | falscher Benutzer/Key | Mit `deploy` statt `root` verbinden, richtigen Key prüfen |
+| „Permission denied" bei SSH | falscher Benutzer/Key | Mit `deploy` (bzw. vor Schritt 4.2 mit `ubuntu`) verbinden — `root` ist bei OVHcloud gesperrt; richtigen Key prüfen |
