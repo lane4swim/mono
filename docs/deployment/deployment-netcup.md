@@ -26,7 +26,7 @@ Wer die Befehle aus den Abschnitten 6–9 nicht Schritt für Schritt von Hand ei
 bash scripts/setup-netcup.sh
 ```
 
-Vorausgesetzt sind die Abschnitte 1–5 (Server angelegt, SSH-Zugang als `deploy`-Benutzer, Grundhärtung erledigt, Domain per A-Record bereits auf den Server zeigend — **ohne funktionierendes DNS schlägt Schritt 10, siehe unten, später fehl**) sowie ein bereits im Arbeitsverzeichnis liegendes Repository (Abschnitt 7, Variante A oder B). Das Script deckt dann genau ab: Abschnitt 6 (Node.js/PostgreSQL/Nginx/PM2/Git installieren), 7 samt 7.1–7.4 (npm-Abhängigkeiten, `apps/api/.env` inkl. JWT- und VAPID-Schlüsseln, `prisma migrate deploy`, Backend bauen), 8 samt 8.1 (PM2 starten inkl. Autostart per `pm2 startup`/`pm2 save`, ersten Superadmin anlegen) und 9 (Nginx konfigurieren) — mit denselben Befehlen und Begründungen, die in den jeweiligen Abschnitten unten ausführlich erklärt sind.
+Vorausgesetzt sind die Abschnitte 1–5 (Server angelegt, SSH-Zugang als `deploy`-Benutzer, Grundhärtung erledigt, Domain per A-Record bereits auf den Server zeigend — **ohne funktionierendes DNS schlägt Schritt 10, siehe unten, später fehl**) sowie ein bereits im Arbeitsverzeichnis liegendes Repository (Abschnitt 7, Variante A oder B). Das Script deckt dann genau ab: Abschnitt 6 (Node.js/PostgreSQL/Nginx/PM2/Git installieren), 7 samt 7.1–7.4 (npm-Abhängigkeiten, `apps/api/.env` inkl. JWT- und VAPID-Schlüsseln, `prisma migrate deploy`, Backend bauen), 8 samt 8.1 (PM2 starten inkl. Autostart per `pm2 startup`/`pm2 save`, ersten Superadmin anlegen) und 9 samt 9.1 (Nginx konfigurieren, Verzeichnisrechte für Nginx) — mit denselben Befehlen und Begründungen, die in den jeweiligen Abschnitten unten ausführlich erklärt sind.
 
 Das Script fragt dabei interaktiv nach allem, was nicht automatisch ermittelt werden kann:
 
@@ -726,6 +726,24 @@ server {
 > beim Backend an und wurde dort verarbeitet. Eine HTML-Antwort (erkennbar
 > an `<!DOCTYPE html>` im Body) bedeutet: nginx hat die Anfrage nicht
 > weitergeleitet, sondern selbst (falsch) als SPA-Route behandelt.
+### 9.1 Nginx Zugriff auf das Projektverzeichnis geben
+
+Ubuntu 24.04 legt Home-Verzeichnisse mit den Rechten `750` an — andere
+Benutzer, auch der Nginx-Benutzer `www-data`, kommen nicht hinein. Nginx
+könnte `/home/deploy/lane1/apps/web` dann nicht lesen und beantwortet jede
+Anfrage mit einem Fehler (`500 Internal Server Error` bzw. `403 Forbidden`,
+im Log `/var/log/nginx/error.log` steht `Permission denied`). Deshalb
+einmalig das **Durchgangsrecht** setzen — damit kann `www-data` Dateien
+unter bekanntem Pfad öffnen, aber nicht auflisten, was sonst im
+Home-Verzeichnis liegt:
+```bash
+chmod o+x /home/deploy
+sudo -u www-data test -r /home/deploy/lane1/apps/web/index.html && echo OK
+```
+Muss `OK` ausgeben. (`scripts/setup-netcup.sh` erledigt das automatisch.)
+
+### 9.2 Konfiguration aktivieren
+
 Aktivieren und testen:
 ```bash
 sudo ln -s /etc/nginx/sites-available/lane1 /etc/nginx/sites-enabled/
@@ -977,6 +995,7 @@ sudo systemctl reload nginx
 | Backend startet nicht, Log: „TOTP_ENCRYPTION_KEY fehlt, MFA_ENFORCE ist aber aktiv“ | Pflicht zur Zwei-Faktor-Anmeldung ohne Schlüssel | Schlüssel ergänzen (siehe Abschnitt Umgebungsvariablen) oder `MFA_ENFORCE=false` setzen |
 | Superadmin hat Authenticator-App und Wiederherstellungscodes verloren | — | `cd apps/api && npm run reset-mfa -- --email=...`, danach bei der Anmeldung neu einrichten |
 | Seite lädt gar nicht | DNS zeigt noch nicht auf den Server / Firewall blockiert | `ping domain`, SCP-Firewall-Regeln (Schritt 2.2), `sudo ufw status` |
+| Jede Seite liefert `500`/`403`, im Nginx-Log `Permission denied` | `www-data` darf nicht in `/home/deploy` (Ubuntu-24.04-Standard `750`) | Abschnitt 9.1: `chmod o+x /home/deploy` |
 | „502 Bad Gateway" | Backend läuft nicht | `pm2 status`, `pm2 logs lane1-api` |
 | Backend startet gar nicht (`pm2 status` zeigt „errored") | Pflicht-Umgebungsvariable fehlt/ungültig, z. B. `JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY` in Produktion nicht gesetzt | `pm2 logs lane1-api` — `env.ts` gibt die genaue fehlende/ungültige Variable aus |
 | Login/Registrierung liefert die HTML-Startseite statt einer Fehlermeldung/eines Tokens | `/auth/`-Location-Block in nginx fehlt oder `proxy_pass` mit abschließendem `/` (siehe Warnhinweis Abschnitt 9) | `curl -i .../auth/login -X POST -d '{}'`, Antwort auf `<!DOCTYPE html>` prüfen |

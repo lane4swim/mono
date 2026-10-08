@@ -703,6 +703,24 @@ server {
 > beim Backend an und wurde dort verarbeitet. Eine HTML-Antwort (erkennbar
 > an `<!DOCTYPE html>` im Body) bedeutet: nginx hat die Anfrage nicht
 > weitergeleitet, sondern selbst (falsch) als SPA-Route behandelt.
+### 9.1 Nginx Zugriff auf das Projektverzeichnis geben
+
+Ubuntu 24.04 legt Home-Verzeichnisse mit den Rechten `750` an — andere
+Benutzer, auch der Nginx-Benutzer `www-data`, kommen nicht hinein. Nginx
+könnte `/home/deploy/lane1/apps/web` dann nicht lesen und beantwortet jede
+Anfrage mit einem Fehler (`500 Internal Server Error` bzw. `403 Forbidden`,
+im Log `/var/log/nginx/error.log` steht `Permission denied`). Deshalb
+einmalig das **Durchgangsrecht** setzen — damit kann `www-data` Dateien
+unter bekanntem Pfad öffnen, aber nicht auflisten, was sonst im
+Home-Verzeichnis liegt:
+```bash
+chmod o+x /home/deploy
+sudo -u www-data test -r /home/deploy/lane1/apps/web/index.html && echo OK
+```
+Muss `OK` ausgeben.
+
+### 9.2 Konfiguration aktivieren
+
 Aktivieren und testen:
 ```bash
 sudo ln -s /etc/nginx/sites-available/lane1 /etc/nginx/sites-enabled/
@@ -951,6 +969,7 @@ sudo systemctl reload nginx
 | Backend startet nicht, Log: „TOTP_ENCRYPTION_KEY fehlt, MFA_ENFORCE ist aber aktiv“ | Pflicht zur Zwei-Faktor-Anmeldung ohne Schlüssel | Schlüssel ergänzen (siehe Abschnitt Umgebungsvariablen) oder `MFA_ENFORCE=false` setzen |
 | Superadmin hat Authenticator-App und Wiederherstellungscodes verloren | — | `cd apps/api && npm run reset-mfa -- --email=...`, danach bei der Anmeldung neu einrichten |
 | Seite lädt gar nicht | DNS zeigt noch nicht auf den Server / Firewall blockiert | `ping domain`, Hetzner-Firewall-Regeln |
+| Jede Seite liefert `500`/`403`, im Nginx-Log `Permission denied` | `www-data` darf nicht in `/home/deploy` (Ubuntu-24.04-Standard `750`) | Abschnitt 9.1: `chmod o+x /home/deploy` |
 | „502 Bad Gateway" | Backend läuft nicht | `pm2 status`, `pm2 logs lane1-api` |
 | Backend startet gar nicht (`pm2 status` zeigt „errored") | Pflicht-Umgebungsvariable fehlt/ungültig, z. B. `JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY` in Produktion nicht gesetzt | `pm2 logs lane1-api` — `env.ts` gibt die genaue fehlende/ungültige Variable aus |
 | Login/Registrierung liefert die HTML-Startseite statt einer Fehlermeldung/eines Tokens | `/auth/`-Location-Block in nginx fehlt oder `proxy_pass` mit abschließendem `/` (siehe Warnhinweis Abschnitt 9) | `curl -i .../auth/login -X POST -d '{}'`, Antwort auf `<!DOCTYPE html>` prüfen |

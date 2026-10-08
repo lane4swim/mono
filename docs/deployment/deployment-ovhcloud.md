@@ -2,7 +2,7 @@
 
 **Für wen ist diese Anleitung?** Für jemanden ohne (oder mit sehr wenig) Erfahrung in Serveradministration. Jeder Schritt wird erklärt — auch *warum* er nötig ist, nicht nur *wie*. Es wird nichts vorausgesetzt außer: ein Computer, eine Internetverbindung und die Bereitschaft, Befehle in ein schwarzes Textfenster ("Terminal") einzutippen.
 
-**Verhältnis zu den anderen Anleitungen:** Diese Anleitung ist die OVHcloud-Variante der Hetzner-Anleitung ([`deployment.md`](./deployment.md)) und der netcup-Anleitung ([`deployment-netcup.md`](./deployment-netcup.md)). Ab Abschnitt 6 (Node.js, PostgreSQL, Nginx, PM2, Let's Encrypt) ist alles identisch — mit einer Ausnahme in Abschnitt 9 (Verzeichnisrechte für Nginx, siehe 9.1). Unterschiede gibt es vor allem bei der Produktwahl, dem vorinstallierten Benutzer `ubuntu` statt `root`, der Firewall (OVHcloud hat keine zustandsbehaftete Cloud-Firewall wie Hetzner/netcup, siehe 2.2) und bei Backups/Monitoring. Die Übersicht in [0.1](#01-unterschiede-zu-hetzner-und-netcup-im-überblick) fasst alles zusammen.
+**Verhältnis zu den anderen Anleitungen:** Diese Anleitung ist die OVHcloud-Variante der Hetzner-Anleitung ([`deployment.md`](./deployment.md)) und der netcup-Anleitung ([`deployment-netcup.md`](./deployment-netcup.md)). Ab Abschnitt 6 (Node.js, PostgreSQL, Nginx, PM2, Let's Encrypt) ist alles identisch. Unterschiede gibt es vor allem bei der Produktwahl, dem vorinstallierten Benutzer `ubuntu` statt `root`, der Firewall (OVHcloud hat keine zustandsbehaftete Cloud-Firewall wie Hetzner/netcup, siehe 2.2) und bei Backups/Monitoring. Die Übersicht in [0.1](#01-unterschiede-zu-hetzner-und-netcup-im-überblick) fasst alles zusammen.
 
 **Basis dieser Anleitung:** der zuvor erstellte `backend-plan.md` (Monorepo mit `apps/web` = Frontend, `apps/api` = Node.js-Backend, JWT-Auth, Sync-API). Diese Anleitung beschreibt die **Veröffentlichung** dieses Monorepos.
 
@@ -29,7 +29,6 @@ Am Ende dieser Anleitung ist unter einer eigenen Adresse (z. B. `https://trainin
 | Vorgelagerte Firewall | Cloud Firewall (zustandsbehaftet, IPv4+IPv6) — empfohlen | SCP-Firewall (ab G12) — empfohlen | **Edge Network Firewall** — *zustandslos*, nur IPv4, max. 20 Regeln. **Optional**; `ufw` auf dem Server ist hier die eigentliche Firewall (Abschnitt 2.2) |
 | DDoS-Schutz | inklusive | inklusive | inklusive (Anti-DDoS, immer aktiv) |
 | SSH-Härtung | `sshd_config` direkt bearbeiten | `sshd_config` direkt bearbeiten | **Drop-in-Datei** unter `sshd_config.d/`, weil cloud-init dort `PasswordAuthentication yes` setzen kann (Abschnitt 4.5) |
-| Nginx-Rechte auf `/home/deploy` | nicht beschrieben | nicht beschrieben | `chmod o+x /home/deploy` (Abschnitt 9.1, vom Script automatisch erledigt) |
 | Notfallzugang bei Aussperren | Konsole in der Cloud Console | VNC-Konsole im SCP | **KVM-Konsole** und **Rescue-Modus** im Control Panel |
 | Snapshots/Backups | Backups ca. 20 % Aufpreis, Snapshots | Snapshots im SCP | Snapshot-/Backup-Option im Control Panel (je nach Angebot inklusive oder kostenpflichtig, Abschnitt 12.2) |
 | Offsite-Backup | Hetzner Storage Box | netcup Storage | **OVHcloud Object Storage** (S3-kompatibel) oder beliebig per `rsync` |
@@ -53,8 +52,7 @@ Das Script prüft zuerst die OVHcloud-spezifischen Punkte und führt danach dies
 1. **Vorprüfungen (nur OVHcloud-Script):**
    - läuft nicht als `root` und `sudo` funktioniert,
    - `ufw` ist aktiv und lässt SSH, 80 und 443 durch — ist `ufw` noch aus, bietet das Script an, es mit genau diesen Regeln einzuschalten (SSH wird dabei **vor** dem Einschalten freigegeben). Bei OVHcloud ist das wichtiger als bei Hetzner/netcup, weil die vorgelagerte Edge Network Firewall optional ist und IPv6 gar nicht filtert,
-   - Nginx darf das Projektverzeichnis lesen: Ubuntu 24.04 legt Home-Verzeichnisse mit `750` an, der Nginx-Benutzer `www-data` käme dann nicht bis `apps/web` und jede Seite endete mit einem Fehler. Das Script setzt dafür nur das Durchgangsrecht (`o+x`), kein Leserecht auf das Home-Verzeichnis (Abschnitt 9.1).
-2. **Abschnitt 6–9** wie in der netcup-Variante: Software installieren, npm-Abhängigkeiten, `apps/api/.env` inkl. JWT-/VAPID-/TOTP-Schlüssel, `prisma migrate deploy`, Backend bauen, PM2 samt Autostart, ersten Superadmin anlegen, Nginx konfigurieren.
+2. **Abschnitt 6–9** wie in der netcup-Variante: Software installieren, npm-Abhängigkeiten, `apps/api/.env` inkl. JWT-/VAPID-/TOTP-Schlüssel, `prisma migrate deploy`, Backend bauen, PM2 samt Autostart, ersten Superadmin anlegen, Nginx konfigurieren samt Verzeichnisrechten für Nginx (9.1).
 
 Das Script fragt interaktiv nach der **Domain**, der **Superadmin-E-Mail-Adresse und dem -Passwort** (verdeckte Eingabe mit Bestätigung, kein Default-Passwort) und optional nach **SMTP-Zugangsdaten**. Datenbank-Passwörter und Schlüsselpaare werden automatisch erzeugt und landen ausschließlich in `apps/api/.env`, `apps/api/.env.migrate` bzw. `apps/api/keys/` (alle `chmod 600`/`700`). Für einen nicht-interaktiven Lauf lassen sich alle Werte per Umgebungsvariable vorgeben (siehe Kopfkommentar in `scripts/setup-ovhcloud.sh`). Es ist wiederholt ausführbar.
 
@@ -793,7 +791,7 @@ server {
 Ubuntu 24.04 legt Home-Verzeichnisse mit den Rechten `750` an — andere
 Benutzer, auch der Nginx-Benutzer `www-data`, kommen nicht hinein. Nginx
 könnte `/home/deploy/lane1/apps/web` dann nicht lesen und beantwortet jede
-Anfrage mit einem Fehler (`403 Forbidden` bzw. `500`, im Log
+Anfrage mit einem Fehler (`500 Internal Server Error` bzw. `403 Forbidden`, im Log
 `/var/log/nginx/error.log` steht `Permission denied`). Deshalb einmalig das
 **Durchgangsrecht** setzen — damit kann `www-data` Dateien unter bekanntem
 Pfad öffnen, aber nicht auflisten, was sonst im Home-Verzeichnis liegt:
@@ -1066,7 +1064,7 @@ sudo systemctl reload nginx
 | Superadmin hat Authenticator-App und Wiederherstellungscodes verloren | — | `cd apps/api && npm run reset-mfa -- --email=...`, danach bei der Anmeldung neu einrichten |
 | Seite lädt gar nicht | DNS zeigt noch nicht auf den Server / Firewall blockiert | `ping domain`, `sudo ufw status`, Regeln der Edge Network Firewall (Schritt 2.2) |
 | `apt update`, `npm install`, certbot oder SMTP hängen mit Zeitüberschreitung | Edge Network Firewall aktiv, aber ohne „TCP established"- bzw. DNS-Regel (zustandslos, Schritt 2.2) | Regeln 0–2 aus Schritt 2.2 prüfen oder die Edge Network Firewall testweise deaktivieren |
-| Jede Seite liefert `403 Forbidden`/`500`, im Nginx-Log `Permission denied` | `www-data` darf nicht in `/home/deploy` (Ubuntu-24.04-Standard `750`) | Abschnitt 9.1: `chmod o+x /home/deploy` |
+| Jede Seite liefert `500`/`403`, im Nginx-Log `Permission denied` | `www-data` darf nicht in `/home/deploy` (Ubuntu-24.04-Standard `750`) | Abschnitt 9.1: `chmod o+x /home/deploy` |
 | certbot scheitert, obwohl `ping domain` die richtige IPv4 zeigt | AAAA-Record zeigt auf eine IPv6-Adresse, die nicht antwortet | Abschnitt 5, Punkt 3: AAAA-Record entfernen oder IPv6 reparieren |
 | SSH fragt trotz Härtung noch nach einem Passwort | `50-cloud-init.conf` setzt `PasswordAuthentication yes` und wird vor `sshd_config` gelesen | Abschnitt 4.5: Drop-in-Datei `00-lane1.conf`, `sudo sshd -T` prüfen |
 | SSH-Zugang verloren | Firewall-/SSH-Fehlkonfiguration | Control Panel → VPS → **KVM**-Konsole bzw. Rescue-Modus (Hinweis in Schritt 2.2) |

@@ -568,6 +568,41 @@ server {
 }
 NGINX
 
+# Schritt 9.1: www-data braucht das Durchgangsrecht (x) auf jedem
+# Verzeichnis bis apps/web. Ubuntu 24.04 legt Home-Verzeichnisse mit 750 an
+# (HOME_MODE in /etc/login.defs) — ohne diesen Schritt beantwortet Nginx
+# jede Anfrage mit 500/403 ("Permission denied" im Error-Log). Gesetzt wird
+# nur o+x, kein o+r: www-data kann damit Dateien unter bekanntem Pfad
+# öffnen, aber nicht auflisten, was sonst im Home-Verzeichnis liegt.
+log "Schritt 9.1: Nginx-Zugriff auf ${REPO_ROOT}/apps/web"
+WEB_DIR="${REPO_ROOT}/apps/web"
+dir="$WEB_DIR"
+while [[ "$dir" != "/" ]]; do
+  dir="$(dirname "$dir")"
+  mode="$(stat -c '%a' "$dir")"
+  if (( (8#${mode} & 1) == 0 )); then
+    if [[ -O "$dir" ]]; then
+      chmod o+x "$dir"
+    else
+      sudo chmod o+x "$dir"
+    fi
+    echo "  Durchgangsrecht für andere gesetzt: ${dir} (vorher ${mode})"
+  fi
+done
+if ! sudo -u www-data test -r "${WEB_DIR}/index.html"; then
+  # Ausgecheckt mit restriktiver umask (z. B. 077): die statischen Dateien
+  # liefert Nginx ohnehin öffentlich aus, Leserechte für andere sind hier
+  # also kein zusätzliches Risiko.
+  chmod -R o+rX "$WEB_DIR"
+  echo "  Leserechte für andere auf ${WEB_DIR} gesetzt."
+fi
+if sudo -u www-data test -r "${WEB_DIR}/index.html"; then
+  echo "  www-data kann ${WEB_DIR}/index.html lesen."
+else
+  echo "Fehler: www-data kann ${WEB_DIR}/index.html weiterhin nicht lesen (${SETUP_GUIDE}, Abschnitt 9.1)." >&2
+  exit 1
+fi
+
 sudo ln -sf /etc/nginx/sites-available/lane1 /etc/nginx/sites-enabled/lane1
 sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t
