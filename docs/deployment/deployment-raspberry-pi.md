@@ -658,6 +658,25 @@ server {
 > Adresse nicht korrekt zurück ins Netz ("NAT-Loopback/Hairpinning" —
 > von außen funktioniert es trotzdem meist einwandfrei).
 
+### 9.1 Nginx Zugriff auf das Projektverzeichnis geben
+
+Wie in `deployment.md`, Abschnitt 9.1 — auf Raspberry Pi OS sogar noch
+strenger: Raspberry Pi OS (ab Bookworm, Debian 12) legt Home-Verzeichnisse
+mit den Rechten `700` an (Ubuntu: `750`). Der Nginx-Benutzer `www-data`
+kommt dann nicht bis `/home/deploy/lane1/apps/web` und beantwortet jede
+Anfrage mit einem Fehler (`500 Internal Server Error` bzw. `403 Forbidden`,
+im Log `/var/log/nginx/error.log` steht `Permission denied`). Deshalb
+einmalig das **Durchgangsrecht** setzen — damit kann `www-data` Dateien
+unter bekanntem Pfad öffnen, aber nicht auflisten, was sonst im
+Home-Verzeichnis liegt:
+```bash
+chmod o+x /home/deploy
+sudo -u www-data test -r /home/deploy/lane1/apps/web/index.html && echo OK
+```
+Muss `OK` ausgeben.
+
+### 9.2 Konfiguration aktivieren
+
 Aktivieren und testen:
 ```bash
 sudo ln -s /etc/nginx/sites-available/lane1 /etc/nginx/sites-enabled/
@@ -875,6 +894,7 @@ Anders als bei Hetzner gibt es keine monatliche Servermiete — dafür Anschaffu
 | Superadmin hat Authenticator-App und Wiederherstellungscodes verloren | — | `cd apps/api && npm run reset-mfa -- --email=...`, danach bei der Anmeldung neu einrichten |
 | Seite von außerhalb des Heimnetzes gar nicht erreichbar, im WLAN aber schon | Portweiterleitung fehlt/falsch, CGNAT, oder Dynamic DNS zeigt auf veraltete IP | Abschnitte 5.1/5.3/5.4 erneut durchgehen, Online-„Port Checker" für 80/443, `ping domain` mit dem in 5.1 notierten öffentlichen IP vergleichen |
 | Seite lädt auch im Heimnetz gar nicht | DNS zeigt noch nicht auf die aktuelle IP / `ufw` blockiert | `ping domain`, `sudo ufw status` |
+| Jede Seite liefert `500`/`403`, im Nginx-Log `Permission denied` | `www-data` darf nicht in `/home/deploy` (Raspberry-Pi-OS-Standard `700`) | Abschnitt 9.1: `chmod o+x /home/deploy` |
 | „502 Bad Gateway" | Backend läuft nicht | `pm2 status`, `pm2 logs lane1-api` |
 | Backend startet gar nicht (`pm2 status` zeigt „errored") | Pflicht-Umgebungsvariable fehlt/ungültig, z. B. `JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY` in Produktion nicht gesetzt | `pm2 logs lane1-api` — `env.ts` gibt die genaue fehlende/ungültige Variable aus |
 | Login/Registrierung liefert die HTML-Startseite statt einer Fehlermeldung/eines Tokens | `/auth/`-Location-Block in nginx fehlt oder `proxy_pass` mit abschließendem `/` (siehe Warnhinweis Abschnitt 9) | `curl -i .../auth/login -X POST -d '{}'`, Antwort auf `<!DOCTYPE html>` prüfen |
