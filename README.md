@@ -160,6 +160,19 @@ Existiert bereits ein Superadmin-Konto, bricht das Skript ab (verhindert
 eine unbeabsichtigte Mehrfachanlage) — für den bewussten Ausnahmefall
 `--force` anhängen.
 
+### Testkonten für alle Rollen (Codespace)
+
+Für manuelle Tests legt `scripts/create-test-accounts.sh` — im
+Codespace-Terminal, nachdem `scripts/setup-codespace.sh` durchgelaufen ist
+— einen Testverein samt Konten für jede Rolle an
+(`test-<rolle>-<n>@example.org`, gemeinsames, nur einmal ausgegebenes
+Zufallspasswort; Optionen `--count=N`, `--club="…"`,
+`--reset-passwords`, `--disable-superadmin-mfa` schaltet zusätzlich die
+Zwei-Faktor-Pflicht für Superadmins per `MFA_ENFORCE=false` ab). Details siehe
+`docs/deployment/deployment-github-codespaces.md`, Abschnitt 12, und
+`apps/api/scripts/createTestAccounts.ts`. Bricht bei
+`NODE_ENV=production` außerhalb eines Codespace ab.
+
 ### Auth-/Einladungs-Endpunkte
 
 | Methode & Pfad | Zweck | Berechtigung | Rate-Limit |
