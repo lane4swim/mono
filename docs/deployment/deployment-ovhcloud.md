@@ -22,20 +22,20 @@ Am Ende dieser Anleitung ist unter einer eigenen Adresse (z. B. `https://trainin
 
 | Thema | Hetzner ([`deployment.md`](./deployment.md)) | netcup ([`deployment-netcup.md`](./deployment-netcup.md)) | Diese OVHcloud-Variante |
 |---|---|---|---|
-| Produkt | Cloud CX22 (2 vCPU/4 GB/40 GB) | VPS 1000 (2–4 vCPU/4–8 GB/128–256 GB) | **VPS-1** (4 vCore/8 GB/75 GB) — siehe Abschnitt 1 |
-| Standort | Nürnberg/Falkenstein | Nürnberg/Karlsruhe | Frankfurt (DE) oder Gravelines/Straßburg (FR) — Standort bei der Bestellung **aktiv wählen**, die Voreinstellung ist nicht immer ein EU-Rechenzentrum |
+| Produkt | Cloud CX22 (2 vCPU/4 GB/40 GB) | VPS 1000 (2–4 vCPU/4–8 GB/128–256 GB) | **VPS-1** (aktuelle Reihe: 2 vCore/4 GB/40 GB NVMe) — siehe Abschnitt 1 |
+| Standort | Nürnberg/Falkenstein | Nürnberg/Karlsruhe | ein EU-Rechenzentrum, z. B. Gravelines/Straßburg (FR) oder — falls im Bestellprozess angeboten — Frankfurt (DE). Standort **aktiv wählen**, die Voreinstellung ist nicht immer ein EU-Rechenzentrum; **keinen „Local Zone"-VPS** (ohne Anti-DDoS) |
 | Verwaltungsoberfläche | Cloud Console | CCP (Bestellung) + SCP (Betrieb) | OVHcloud Control Panel → **Bare Metal Cloud → VPS** |
 | Erste Anmeldung | `ssh root@…` | `ssh root@…` | **`ssh ubuntu@…`** — `root`-Login ist im OVHcloud-Image bereits gesperrt (Abschnitt 3/4.2) |
 | Vorgelagerte Firewall | Cloud Firewall (zustandsbehaftet, IPv4+IPv6) — empfohlen | SCP-Firewall (ab G12) — empfohlen | **Edge Network Firewall** — *zustandslos*, nur IPv4, max. 20 Regeln. **Optional**; `ufw` auf dem Server ist hier die eigentliche Firewall (Abschnitt 2.2) |
 | DDoS-Schutz | inklusive | inklusive | inklusive (Anti-DDoS, immer aktiv) |
 | SSH-Härtung | `sshd_config` direkt bearbeiten | `sshd_config` direkt bearbeiten | **Drop-in-Datei** unter `sshd_config.d/`, weil cloud-init dort `PasswordAuthentication yes` setzen kann (Abschnitt 4.5) |
 | Notfallzugang bei Aussperren | Konsole in der Cloud Console | VNC-Konsole im SCP | **KVM-Konsole** und **Rescue-Modus** im Control Panel |
-| Snapshots/Backups | Backups ca. 20 % Aufpreis, Snapshots | Snapshots im SCP | Snapshot-/Backup-Option im Control Panel (je nach Angebot inklusive oder kostenpflichtig, Abschnitt 12.2) |
+| Snapshots/Backups | Backups ca. 20 % Aufpreis, Snapshots | Snapshots im SCP | **tägliches Backup (24 h) inklusive**; 7-Tage-Backup („Premium") und Snapshot kostenpflichtig (Abschnitt 12.2) |
 | Offsite-Backup | Hetzner Storage Box | netcup Storage | **OVHcloud Object Storage** (S3-kompatibel) oder beliebig per `rsync` |
-| SMTP | Hetzner hat keinen Mailversand; Port 25/465 anfangs gesperrt | netcup-Postfächer | OVHcloud-Postfächer (z. B. MX Plan, `ssl0.ovh.net`); Port 587 offen |
-| Monitoring | Cloud Console → Monitoring | SCP → Statistiken | Control Panel → VPS → Graphen + **OVHcloud-Monitoring** (Ping, E-Mail bei Ausfall) |
+| SMTP | Hetzner hat keinen Mailversand; Port 25/465 anfangs gesperrt | netcup-Postfächer | OVHcloud-Postfächer (z. B. MX Plan, `ssl0.ovh.net:465`); **Port 25 standardmäßig gesperrt**, 465/587 offen |
+| Monitoring | Cloud Console → Monitoring | SCP → Statistiken | Control Panel → VPS → Ressourcen-Graphen; Erreichbarkeit per externem Uptime-Dienst |
 | Setup-Script | — | `scripts/setup-netcup.sh` | `scripts/setup-ovhcloud.sh` (OVHcloud-Vorprüfungen, danach dieselben Schritte 6–9) |
-| Preis (Stand 2026) | ca. 5–6 €/Monat | ca. 5–11 €/Monat | ca. **5–8 €/Monat** (Preise meist **ohne** MwSt. angezeigt) |
+| Preis (Stand 2026) | ca. 5–6 €/Monat | ca. 5–11 €/Monat | ab ca. **5 €/Monat** (Richtwert, Preise im Shop meist **ohne** MwSt.; zum 1. April 2026 angehoben — im Shop prüfen) |
 
 ### 0.2 Schritte 6–9 automatisiert per Script
 
@@ -68,22 +68,24 @@ OVHcloud bietet mehrere Server-Linien an: **VPS**, **Public Cloud** (stundengena
 
 | Eigenschaft | Wert (Richtwert) |
 |---|---|
-| vCore | 4 |
-| Arbeitsspeicher | 8 GB |
-| Festplatte | 75 GB SSD (NVMe) |
-| Datenvolumen | unbegrenzt (Bandbreite je nach Standort ca. 400 Mbit/s) |
-| Preis (Stand 2026) | ca. **5–8 €/Monat**, abhängig von Standort und Vertragslaufzeit (Angaben im Shop meist **ohne** MwSt.) |
-| Standort | **Frankfurt** (Deutschland) oder Gravelines/Straßburg (Frankreich) — Daten bleiben in der EU |
+| vCore | 2 |
+| Arbeitsspeicher | 4 GB |
+| Festplatte | 40 GB SSD (NVMe) |
+| Datenvolumen | unbegrenzt (Bandbreite ca. 500 Mbit/s) |
+| Backup | tägliches automatisches Backup (letzte 24 Stunden) inklusive |
+| Preis (Stand Oktober 2026) | ab ca. **5 €/Monat** — Richtwert: OVHcloud weist auf seinen englischsprachigen Seiten „ab 4,54 $/Monat" aus und hat die VPS-Preise zum 1. April 2026 angehoben; den aktuellen Euro-Preis (meist **ohne** MwSt., günstiger bei 6/12 Monaten Vorauszahlung) im Shop prüfen |
+| Standort | ein Rechenzentrum in der EU, z. B. Gravelines oder Straßburg (Frankreich); Frankfurt/Limburg (Deutschland), sofern im Bestellprozess für VPS angeboten |
 | Betriebssystem | **Ubuntu 24.04** |
 
 **Warum genau dieses Produkt?**
-- Der kleinste OVHcloud-VPS hat bereits mehr Reserve als die Hetzner-/netcup-Empfehlung (4 vCore/8 GB statt 2 vCPU/4 GB) — für einen Verein mit einigen Dutzend bis wenigen hundert Nutzer:innen mehr als ausreichend.
-- Anti-DDoS-Schutz und unbegrenzter Traffic sind inklusive.
-- OVHcloud ist ein europäisches Unternehmen mit Rechenzentren in Deutschland und Frankreich — das vereinfacht die DSGVO-Betrachtung (Backend-Plan, Abschnitt 12). **Der Standort muss bei der Bestellung aber aktiv gewählt werden** (siehe Schritt 2): OVHcloud betreibt auch Rechenzentren außerhalb der EU (z. B. Kanada, USA, Singapur), und manche Standorte kosten einen Aufpreis.
+- Der kleinste OVHcloud-VPS entspricht der Hetzner-Empfehlung (2 vCPU/4 GB) — für einen Verein mit einigen Dutzend bis wenigen hundert Nutzer:innen ausreichend. 40 GB Speicher reichen für Betriebssystem, Anwendung, Datenbank und einige Wochen lokaler SQL-Backups (Abschnitt 12.1); ältere Backups regelmäßig auslagern (12.3).
+- In der vorherigen Produktreihe hieß ein Modell mit 4 vCore/8 GB/75 GB „VPS-1". Wer einen solchen VPS bereits hat oder im Shop noch angeboten bekommt, kann ihn genauso verwenden.
+- Anti-DDoS-Schutz, unbegrenzter Traffic und ein tägliches Backup sind inklusive. **Ausnahme: VPS in „Local Zones"** (kleinere Standorte nahe bei Ballungsräumen) haben laut OVHcloud **keinen** Anti-DDoS-Schutz — für Lane 1 einen regulären VPS in einem Rechenzentrum wählen.
+- OVHcloud ist ein europäisches Unternehmen mit Rechenzentren in Deutschland und Frankreich — das vereinfacht die DSGVO-Betrachtung (Backend-Plan, Abschnitt 12). **Der Standort muss bei der Bestellung aber aktiv gewählt werden** (siehe Schritt 2): OVHcloud betreibt auch Rechenzentren außerhalb der EU (z. B. Kanada, USA, Singapur), und der Preis kann je nach Standort abweichen. Ein späterer Wechsel des Rechenzentrums ist nicht vorgesehen — ein Upgrade bleibt im selben Rechenzentrum.
 
-> **Hinweis:** OVHcloud benennt und bepreist seine VPS-Produkte immer wieder um. Schau im Zweifel direkt im [OVHcloud-Shop](https://www.ovhcloud.com/de/vps/) nach dem aktuell kleinsten VPS mit mindestens 2 vCore/4 GB RAM — die genaue Bezeichnung kann abweichen, die Empfehlung bleibt dieselbe.
+> **Hinweis:** OVHcloud benennt und bepreist seine VPS-Produkte immer wieder um. Schau im Zweifel direkt im [OVHcloud-Shop](https://www.ovhcloud.com/de/vps/) nach dem aktuell kleinsten (regulären, nicht „Local Zone") VPS mit mindestens 2 vCore/4 GB RAM — die genaue Bezeichnung kann abweichen, die Empfehlung bleibt dieselbe.
 
-Reicht der Server später nicht mehr aus, lässt er sich im Control Panel auf ein größeres VPS-Modell hochstufen, ohne ihn neu aufzusetzen. (Ein **Herabstufen** ist bei OVHcloud-VPS in der Regel nicht möglich — daher klein anfangen.)
+Reicht der Server später nicht mehr aus, lässt er sich im Control Panel auf ein größeres VPS-Modell hochstufen, ohne ihn neu aufzusetzen. Ein **Herabstufen** geht laut OVHcloud nicht direkt: dafür muss man einen neuen, kleineren VPS bestellen, die Daten umziehen und den alten kündigen — daher klein anfangen.
 
 ---
 
@@ -92,9 +94,9 @@ Reicht der Server später nicht mehr aus, lässt er sich im Control Panel auf ei
 1. Auf **[ovhcloud.com](https://www.ovhcloud.com/de/)** ein Kundenkonto erstellen (E-Mail bestätigen, Zahlungsmethode hinterlegen). OVHcloud verlangt bei neuen Konten gelegentlich eine **Identitätsprüfung** (Ausweis-Upload), bevor die erste Bestellung freigeschaltet wird — das kann einige Stunden bis zu einem Werktag dauern. Für einen Verein ggf. direkt ein Konto auf den Verein (mit Vereinsdaten/USt-ID, falls vorhanden) anlegen, damit Rechnungen auf den Verein laufen.
 2. Den gewünschten VPS bestellen:
    - **Modell:** VPS-1 (siehe oben)
-   - **Standort:** **Frankfurt** (oder Gravelines/Straßburg) — nicht einfach die Voreinstellung übernehmen
+   - **Standort:** ein EU-Rechenzentrum (z. B. Gravelines, Straßburg oder — falls angeboten — Frankfurt) — nicht einfach die Voreinstellung übernehmen, und keinen „Local Zone"-Standort
    - **Image (Betriebssystem):** Ubuntu 24.04 (ohne vorinstallierte Anwendung/„Distribution only")
-   - **SSH-Key:** siehe Schritt 2.1 — bereits bei der Bestellung hinterlegen. Ohne Key schickt OVHcloud ein Passwort für den Benutzer `ubuntu` per E-Mail; das funktioniert zwar, sollte aber gleich in Schritt 4 durch einen Key ersetzt werden
+   - **SSH-Key:** siehe Schritt 2.1 — bereits bei der Bestellung hinterlegen. Ohne Key enthält die Bereitstellungs-E-Mail einen sicheren Link zu einem **temporären Passwort** für den Benutzer `ubuntu`; das funktioniert zwar, sollte aber gleich in Schritt 4 durch einen Key ersetzt werden
    - **Laufzeit:** monatlich kündbar oder mit Mindestlaufzeit (günstiger) — für den Start reicht monatlich
 3. Nach der Bereitstellung (meist wenige Minuten, bei neuen Konten nach der Identitätsprüfung) erscheint der Server im **OVHcloud Control Panel** unter **Bare Metal Cloud → Virtual Private Servers**. Dort stehen die öffentliche **IPv4-Adresse** (merken/kopieren, wird ständig gebraucht) und die **IPv6-Adresse**. Zusätzlich kommt eine E-Mail mit den Zugangsdaten.
 
@@ -136,7 +138,7 @@ Bei Hetzner und netcup gibt es eine **zustandsbehaftete** Cloud-Firewall: man er
 | 0 | Erlauben | TCP | Option **„established"** | Antworten auf ausgehende Verbindungen (apt, npm, certbot, SMTP) |
 | 1 | Erlauben | UDP | **Quellport** 53 | DNS-Antworten |
 | 2 | Erlauben | UDP | **Quellport** 123 | Zeitsynchronisation (NTP) — sonst läuft die Uhr weg und TLS/TOTP-Codes schlagen fehl |
-| 3 | Erlauben | ICMP | — | Ping (u. a. für das OVHcloud-Monitoring, Abschnitt 14) |
+| 3 | Erlauben | ICMP | — | Ping und Traceroute (von OVHcloud empfohlen) |
 | 4 | Erlauben | TCP | Zielport 22 | SSH |
 | 5 | Erlauben | TCP | Zielport 80 | HTTP (certbot, Weiterleitung auf HTTPS) |
 | 6 | Erlauben | TCP | Zielport 443 | HTTPS |
@@ -144,7 +146,7 @@ Bei Hetzner und netcup gibt es eine **zustandsbehaftete** Cloud-Firewall: man er
 
 Danach die Firewall **aktivieren** (Schalter in derselben Ansicht). Änderungen brauchen ein paar Minuten, bis sie greifen. Anschließend auf dem Server prüfen, dass ausgehende Verbindungen weiterhin funktionieren: `sudo apt update` und `curl -I https://deb.nodesource.com` müssen ohne Zeitüberschreitung antworten.
 
-> **Ausgesperrt?** Bei OVHcloud kommt man über das Control Panel → VPS → **„KVM"** (Konsole im Browser) immer noch an den Server, auch wenn Firewall oder SSH falsch konfiguriert sind. Notfalls hilft der **Rescue-Modus** (VPS startet ein Rettungssystem, die eigene Festplatte lässt sich darin einhängen und reparieren). Bei der Edge Network Firewall genügt es, sie im Control Panel wieder zu deaktivieren.
+> **Ausgesperrt?** Über das Control Panel → VPS → **„KVM"** öffnet sich eine Konsole im Browser, die nicht über das Netzwerk und damit nicht über Firewall oder SSH läuft — Anmeldung dort mit Benutzername und **Passwort** (deshalb bekommt `deploy` in Schritt 4.2 ein Passwort). Ist auch das Passwort verloren, hilft laut OVHcloud nur der **Rescue-Modus** (VPS startet ein Rettungssystem, die eigene Festplatte lässt sich darin einhängen und reparieren). Bei der Edge Network Firewall genügt es, sie im Control Panel wieder zu deaktivieren.
 
 ---
 
@@ -156,7 +158,7 @@ Terminal (Mac/Linux) bzw. PowerShell (Windows) öffnen:
 ssh ubuntu@DEINE-SERVER-IP
 ```
 
-**Anders als bei Hetzner/netcup** heißt der vorinstallierte Benutzer `ubuntu`, nicht `root` — eine direkte Anmeldung als `root` ist im OVHcloud-Ubuntu-Image bereits gesperrt. `ubuntu` hat `sudo`-Rechte; Befehle mit Systemrechten daher mit vorangestelltem `sudo` ausführen.
+**Anders als bei Hetzner/netcup** heißt der vorinstallierte Benutzer `ubuntu`, nicht `root` — eine direkte Anmeldung als `root` ist im OVHcloud-Ubuntu-Image bereits gesperrt. `ubuntu` hat `sudo`-Rechte; Befehle mit Systemrechten daher mit vorangestelltem `sudo` ausführen. Wurde ohne SSH-Key bestellt, verlangt der Server bei der ersten Anmeldung mit dem temporären Passwort ein **neues Passwort** und **trennt die Verbindung danach** — das ist normal, einfach mit dem neuen Passwort erneut verbinden.
 
 Beim ersten Verbinden erscheint eine Sicherheitsabfrage ("authenticity of host … can't be established"). Das ist normal beim allerersten Kontakt — mit `yes` bestätigen.
 
@@ -482,12 +484,12 @@ lehnt eine gleichzeitige Angabe sonst mit einer klaren Fehlermeldung ab).
 > E-Mail-Postfach des Vereins bzw. ein von dessen Hoster bereitgestelltes
 > SMTP-Konto. Wird die Domain bei OVHcloud verwaltet, eignet sich ein
 > OVHcloud-Postfach (z. B. aus dem kostenlosen „MX Plan" einer Domain oder
-> „Email Pro"): `SMTP_HOST="ssl0.ovh.net"`, `SMTP_PORT=587`,
-> `SMTP_SECURE=false`, `SMTP_USER` = vollständige E-Mail-Adresse. Anders
-> als bei Hetzner ist ausgehender Mailverkehr vom VPS nicht pauschal
-> gesperrt; OVHcloud überwacht aber Port 25 auf Spam und sperrt die IP bei
-> Auffälligkeiten — Lane 1 versendet ohnehin nur über Port 587 an einen
-> externen SMTP-Server, das ist davon nicht betroffen. Wer die Edge Network
+> „Email Pro"): laut OVHcloud-Dokumentation `SMTP_HOST="ssl0.ovh.net"`
+> (oder `smtp.mail.ovh.net`), `SMTP_PORT=465`, `SMTP_SECURE=true`,
+> `SMTP_USER` = vollständige E-Mail-Adresse. **Port 25 ist auf
+> OVHcloud-VPS standardmäßig gesperrt** (Freischaltung nur über den
+> Support) — Lane 1 versendet ohnehin über 465 bzw. 587 an einen externen
+> SMTP-Server, das ist davon nicht betroffen. Wer die Edge Network
 > Firewall nutzt (Schritt 2.2), braucht dafür die Regel „TCP established"
 > (Priorität 0), sonst laufen SMTP-Verbindungen in eine Zeitüberschreitung.
 
@@ -895,10 +897,11 @@ Folgende Zeile ergänzen (läuft täglich um 3:00 Uhr):
 ### 12.2 OVHcloud-Snapshots und automatische Backups (komplettes Server-Abbild)
 Im Control Panel unter **Bare Metal Cloud → Virtual Private Servers → *VPS*** gibt es zwei getrennte Optionen:
 
-- **Snapshot** — ein manuelles Abbild, z. B. vor einem Ubuntu-Upgrade. Es gibt nur **einen** Snapshot-Platz: ein neuer Snapshot ersetzt den alten.
-- **Automatisches Backup** — tägliche Sicherung des gesamten VPS mit einigen Tagen Aufbewahrung.
+- **Automatisches Backup (inklusive)** — eine tägliche Sicherung des gesamten VPS ist bei jeder Bestellung kostenlos dabei; aufbewahrt wird jeweils nur die **letzte** (24 Stunden).
+- **Premium Automated Backup (kostenpflichtig)** — tägliche Sicherung zu einer wählbaren Uhrzeit, die letzten **7 Tage** bleiben verfügbar. Empfehlenswert, weil ein Fehler, der erst nach mehr als einem Tag auffällt, sonst schon im einzigen Backup steckt.
+- **Snapshot (kostenpflichtig)** — ein manuelles Abbild, z. B. vor einem Ubuntu-Upgrade. Es gibt nur **einen** Snapshot gleichzeitig: vor einem neuen muss der alte gelöscht werden.
 
-Ob diese Optionen im gebuchten Angebot enthalten sind oder als monatliche Zusatzoption gebucht werden müssen, hängt von VPS-Generation und Angebot ab — im Control Panel beim jeweiligen VPS unter „Optionen" nachsehen. Beides ersetzt kein Offsite-Backup (siehe 12.3), schützt aber schnell vor einer fehlgeschlagenen Änderung.
+Preise je nach Speichergröße des VPS, siehe Control Panel beim jeweiligen VPS. Nichts davon ersetzt ein Offsite-Backup (siehe 12.3) — die Abbilder liegen bei demselben Anbieter.
 
 ### 12.3 Offsite-Backup (empfohlen)
 Die tägliche `.sql`-Datei zusätzlich außerhalb des Servers sichern — z. B. in einem **OVHcloud Object Storage**-Container (S3-kompatibel, abgerechnet nach Speichermenge — für ein paar Megabyte SQL-Dumps praktisch kostenlos; hochladen z. B. mit `rclone` oder `aws s3 cp`) **an einem anderen Standort als der VPS**, bei einem anderen Anbieter, oder per einfachem Cronjob, der die Datei per `rsync`/`scp` an einen anderen Ort kopiert. Ein Backup, das nur auf demselben Server liegt, hilft bei einem Totalausfall des Servers nicht.
@@ -1035,7 +1038,7 @@ sudo systemctl reload nginx
 - `sudo apt install unattended-upgrades -y` — automatische Installation kritischer Sicherheitsupdates.
 - `htop` — Prozess-/Auslastungsübersicht direkt auf dem Server.
 - Control Panel → **Bare Metal Cloud → Virtual Private Servers → *VPS*** — CPU-/RAM-/Netzwerk-Graphen ohne Zusatzinstallation.
-- Ebenda **„Monitoring"** einschalten: OVHcloud pingt den Server regelmäßig und schickt bei Ausfall eine E-Mail. Funktioniert nur, solange ICMP (Ping) erlaubt ist — `ufw` lässt Ping standardmäßig durch, in der Edge Network Firewall sorgt Regel 3 (Schritt 2.2) dafür. Das prüft nur, ob der Server läuft, nicht ob Lane 1 antwortet — dafür zusätzlich einen externen Uptime-Dienst (z. B. UptimeRobot) auf `https://training.mein-verein.de/health` richten.
+- Für die Erreichbarkeit einen externen Uptime-Dienst (z. B. UptimeRobot) auf `https://training.mein-verein.de/health` richten — das prüft nicht nur, ob der Server läuft, sondern auch, ob Lane 1 antwortet.
 - Wartungsankündigungen kommen per E-Mail an die Konto-Adresse und stehen im Control Panel unter „Vorfälle/Travaux" ([status.ovhcloud.com](https://status.ovhcloud.com)) — die Kontakt-E-Mail des OVHcloud-Kontos daher an eine regelmäßig gelesene Adresse binden.
 
 ---
@@ -1044,13 +1047,13 @@ sudo systemctl reload nginx
 
 | Posten | Kosten |
 |---|---|
-| OVHcloud VPS-1 (4 vCore/8 GB) | ca. 5–8 €/Monat (Shop-Preise meist zzgl. MwSt.; günstiger mit Mindestlaufzeit) |
-| Automatisches Backup/Snapshot (optional, falls nicht inklusive) | ca. 1–3 €/Monat |
+| OVHcloud VPS-1 (2 vCore/4 GB, tägliches Backup inklusive) | ab ca. 5 €/Monat (Richtwert; Shop-Preise meist zzgl. MwSt., günstiger bei Vorauszahlung) |
+| Premium Automated Backup (7 Tage) bzw. Snapshot (optional) | je nach Speichergröße des VPS |
 | Object Storage für Offsite-Backup (optional) | wenige Cent/Monat |
 | Domain (bei OVHcloud oder anderem Registrar) | ca. 10–15 €/**Jahr** |
 | SSL-Zertifikat (Let's Encrypt) | kostenlos |
 | Anti-DDoS, Edge Network Firewall | kostenlos |
-| **Gesamt** | **ca. 6–10 €/Monat** + Domain |
+| **Gesamt** | **ab ca. 5 €/Monat** + Domain + optionale Backup-Zusatzoptionen |
 
 > Wie bei jedem Hoster ändern sich Produktnamen und Preise über die Zeit — im Zweifel im [OVHcloud-Shop](https://www.ovhcloud.com/de/vps/) nachsehen.
 
@@ -1067,7 +1070,7 @@ sudo systemctl reload nginx
 | Jede Seite liefert `500`/`403`, im Nginx-Log `Permission denied` | `www-data` darf nicht in `/home/deploy` (Ubuntu-24.04-Standard `750`) | Abschnitt 9.1: `chmod o+x /home/deploy` |
 | certbot scheitert, obwohl `ping domain` die richtige IPv4 zeigt | AAAA-Record zeigt auf eine IPv6-Adresse, die nicht antwortet | Abschnitt 5, Punkt 3: AAAA-Record entfernen oder IPv6 reparieren |
 | SSH fragt trotz Härtung noch nach einem Passwort | `50-cloud-init.conf` setzt `PasswordAuthentication yes` und wird vor `sshd_config` gelesen | Abschnitt 4.5: Drop-in-Datei `00-lane1.conf`, `sudo sshd -T` prüfen |
-| SSH-Zugang verloren | Firewall-/SSH-Fehlkonfiguration | Control Panel → VPS → **KVM**-Konsole bzw. Rescue-Modus (Hinweis in Schritt 2.2) |
+| SSH-Zugang verloren | Firewall-/SSH-Fehlkonfiguration | Control Panel → VPS → **KVM**-Konsole (mit Passwort); ohne Passwort Rescue-Modus (Hinweis in Schritt 2.2) |
 | „502 Bad Gateway" | Backend läuft nicht | `pm2 status`, `pm2 logs lane1-api` |
 | Backend startet gar nicht (`pm2 status` zeigt „errored") | Pflicht-Umgebungsvariable fehlt/ungültig, z. B. `JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY` in Produktion nicht gesetzt | `pm2 logs lane1-api` — `env.ts` gibt die genaue fehlende/ungültige Variable aus |
 | Login/Registrierung liefert die HTML-Startseite statt einer Fehlermeldung/eines Tokens | `/auth/`-Location-Block in nginx fehlt oder `proxy_pass` mit abschließendem `/` (siehe Warnhinweis Abschnitt 9) | `curl -i .../auth/login -X POST -d '{}'`, Antwort auf `<!DOCTYPE html>` prüfen |
