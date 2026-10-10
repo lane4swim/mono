@@ -13,6 +13,53 @@ Zu jedem Feature: kurze Beschreibung, Nutzen, grobe Einschätzung zum Bezug
 zur bestehenden Architektur (Sync-API, Rollen-/Mandantenmodell, zubuchbare
 Module).
 
+## Zusammenfassung: Umsetzungsstand (Stand Oktober 2026)
+
+Überblick über alle Ideen dieses Dokuments sowie die außerhalb davon
+umgesetzten Feature-Pläne aus `docs/Plans/`, gruppiert nach Status. Die
+Nummern verweisen auf die Abschnitte unten.
+
+### Umgesetzt
+
+| Bereich | Feature | Nachweis |
+|---|---|---|
+| Trainingsplanung | 3.1 Vorlagen-Zyklen, 3.2 Belastungssteuerung inkl. RPE, 3.3 Anwesenheitsstatistik | `docs/Plans/trainingsplanung-phase1-plan.md` (Phase 1) |
+| Kommunikation | 1.2 Web-Push, 4.1 Ankündigungen, 4.2 Eltern-Zugang (Rolle `parent`) | `docs/Plans/phase2-plan.md` (Phase 2) |
+| Vereinsverwaltung | 5.1 Mehrere Gruppen-Trainer:innen, 5.2 Audit-Log | `docs/Plans/vereinsverwaltung-phase3-plan.md` (Phase 3) |
+| Wettkampf & Ergebnisse | DSV7-Ergebnisimport, Live-Wettkampfmodus mit Stoppuhr und Zwischenzeiten | `docs/Plans/dsv7-lenex-import-plan.md` (nur DSV7-Teil) |
+| Personal & Qualifikationen | Nutzer-Qualifikationen inkl. Ablauf-Erinnerung, Kampfrichter-Modul (Phasen A–C, Mehrfachrollen) | `docs/Plans/nutzer-qualifikationen-plan.md`, `docs/Plans/kampfrichter-modul-plan.md` |
+| Sicherheit & Recht | Zwei-Faktor-Anmeldung (TOTP), DSGVO-Auskunft/-Löschung, Impressum/Datenschutz je Verein | `docs/Plans/zwei-faktor-anmeldung-plan.md`, `docs/Plans/club-legal-info-plan.md` |
+| Plattform | Backend + Sync-API, zubuchbare Modul-Pakete, Beckenlängen-Regeneration, Kontomodus für Athletenprofile | `docs/Plans/backend-plan.md`, `docs/Plans/beckenlaenge-regeneration-plan.md` |
+
+### Teilweise umgesetzt
+
+| Feature | Stand | Offen |
+|---|---|---|
+| 6.2 Mehrsprachigkeit | Deutsch und Englisch (`apps/web/js/i18n/`) | weitere Sprachen nach Bedarf |
+| Automatische Hintergrundjobs (siehe 6.4) | Purge-, Qualifikations- und Trainings-Erinnerungsjobs sind als CLI-Skripte vorhanden | laufen nur mit manuell eingerichtetem Cron; ohne ihn bleibt die endgültige DSGVO-Löschung aus (README, „Bekannte offene Punkte") |
+
+### Als nächstes geplant (Phase 4)
+
+| Feature | Bereich |
+|---|---|
+| 2.2 Automatische Bestenlisten/Vereinsrekorde | Wettkampf & Ergebnisse |
+| 6.3 Datenexport für externe Auswertung (CSV/Excel) | Technik/Plattform |
+
+### Offen, noch nicht terminiert
+
+| Bereich | Features |
+|---|---|
+| Wettkampf & Ergebnisse | 1.3 Lenex-Import, 2.1 Startlisten-Export, 2.3 Wettkampfmeldung als Workflow, 2.4 Pflicht-/Normzeiten, 2.5 World-Aquatics-Punkte, 2.6 Split-/Pacing-Analyse, 2.7 Staffel-Aufstellung |
+| Trainingsplanung | 3.4 Leistungstests und Trainingszonen, 3.5 Persönliche Ziele |
+| Kommunikation & Organisation | 4.3 Vorab-Abmeldung vom Training, 4.4 Kalender-Abo (iCal) |
+| Vereinsverwaltung | 1.1 Vereins-Branding |
+| Technik/Plattform | 6.1 Echtzeit-Sync, 6.4 Integrierter Job-Scheduler, 6.5 Vereinsweiter Datenexport/Backup |
+| Kampfrichter-Modul | 7.1 Einsatzplanung, 7.2 Vereinsübergreifende Freigabe |
+
+Neu in der Ergänzung vom Oktober 2026 sind 2.4–2.7, 3.4–3.5, 4.3–4.4 und
+6.4–6.5. Empfehlung zur Priorisierung nach Phase 4 siehe Abschnitt
+„Priorisierung" am Ende.
+
 ## 1. Bereits in `docs/todo.md` vorgemerkt (hier vertieft)
 
 ### 1.1 CD-fähig je Verein (Vereins-Branding)
@@ -91,6 +138,50 @@ bestätigt/wählt aus" ist nicht abgebildet.
   Rollenrechte analog zum bestehenden Muster (athlete: eigene Anfrage
   anlegen, trainer/admin: bestätigen).
 
+### 2.4 Pflicht-/Normzeiten-Tracker
+Hinterlegbare Pflicht- bzw. Normzeiten je Strecke, Altersklasse und
+Beckenlänge (Vereins-, Bezirks-, Landes-, Deutsche Meisterschaften). Je
+Athlet:in wird angezeigt, welche Normen bereits erfüllt sind und wie weit
+die Bestzeit von den übrigen entfernt ist; daraus lassen sich
+Meldevorschläge ableiten.
+- **Nutzen:** Trainer:innen sehen auf einen Blick, wer für welchen
+  Wettkampf startberechtigt ist; Athlet:innen bekommen ein konkretes,
+  messbares Ziel.
+- **Bezug zur Architektur:** Kleiner neuer Store (Normzeiten-Tabellen,
+  vereinsgescoped, zubuchbar) plus reine Auswertung über `results`; nutzt
+  `EVENTS`/`COURSES` aus `refdata.js` und `swimTime.js`. Ergänzt 2.1 und
+  2.3 (Meldung).
+
+### 2.5 World-Aquatics-Punkte je Ergebnis
+Berechnung der Punkte nach World-Aquatics-Formel (Basiszeiten-Tabelle je
+Strecke/Geschlecht/Beckenlänge) für jedes Ergebnis.
+- **Nutzen:** Leistungen werden über Lagen, Strecken und Beckenlängen
+  hinweg vergleichbar; ein einzelner Leistungsverlauf je Athlet:in statt
+  vieler Einzelkurven, gute Grundlage für Bestenlisten (2.2).
+- **Bezug zur Architektur:** Reine Berechnung, keine Schemaänderung; die
+  Basiszeiten liegen als Referenzdaten neben `refdata.js`. Anzeige in
+  `times.js`/`stats.js`.
+
+### 2.6 Split-/Pacing-Analyse
+`Result.laps` speichert Zwischenzeiten bereits (u. a. aus
+`competitionLive.js`), sie werden aber nicht ausgewertet. Vorgeschlagen:
+Vergleich der Splits mit dem Bestzeit-Rennen, Renneinteilung (gleichmäßig,
+positiver/negativer Split), Markierung des Abschnitts mit dem größten
+Zeitverlust.
+- **Nutzen:** Konkrete Ansatzpunkte für die Rennanalyse nach dem
+  Wettkampf statt nur einer Endzeit.
+- **Bezug zur Architektur:** Rein lesend auf bestehenden Daten; ein neuer
+  Diagrammtyp in `charts.js`, kein Speicherbedarf.
+
+### 2.7 Staffel-Aufstellung
+Vorschlag der schnellsten Staffeln (4×50/4×100 Freistil und Lagen) aus
+den Bestzeiten unter Berücksichtigung von Altersklassen- und
+Geschlechterregeln, mit manueller Anpassung.
+- **Nutzen:** Spart Rechenarbeit vor Meldeschluss und macht die Auswahl
+  für Athlet:innen nachvollziehbar.
+- **Bezug zur Architektur:** Reine Berechnung über `results`/`athletes`;
+  das Ergebnis kann direkt als `StartlistEntry` übernommen werden.
+
 ## 3. Trainingsplanung
 
 ### 3.1 Wiederkehrende Trainingspläne / Vorlagen-Zyklen
@@ -122,6 +213,28 @@ Anwesenheit als Frühindikator für Drop-out).
   verliert.
 - **Bezug zur Architektur:** Reine Auswertung, keine neuen Modelle.
 
+### 3.4 Leistungstests und Trainingszonen
+Wiederkehrende Standardtests (z. B. T30, CSS-Test 400/200 m,
+Stufentest) werden erfasst und im Zeitverlauf ausgewertet. Daraus ergeben
+sich je Athlet:in Tempozonen, mit denen der Set-Editor Zielzeiten je
+Intervall individuell anzeigen kann.
+- **Nutzen:** Verbindet die bestehende Belastungserfassung (3.2) mit der
+  eigentlichen Planung: Intensitäten werden je Person konkret statt
+  pauschal vorgegeben.
+- **Bezug zur Architektur:** Neuer Store oder ein eigener Einheiten-Typ
+  für Testergebnisse; Erweiterung von `setEditor.js` und `planLive.js` um
+  die Zielzeit-Anzeige.
+
+### 3.5 Persönliche Ziele
+Athlet:innen hinterlegen Zielzeiten mit Termin (z. B. „100 m Brust unter
+1:20 bis zu den Landesmeisterschaften"); der Fortschritt erscheint im
+Zeitenverlauf, optional entsteht daraus ein Handlungsfeld.
+- **Nutzen:** Motivation und ein strukturierter Anlass für
+  Trainer-Athlet-Gespräche.
+- **Bezug zur Architektur:** Baut auf `actionItems` und `times.js` auf;
+  die Rolle `athlete` schreibt eigene Ziele, das Rechtemuster existiert
+  bereits (vgl. Kommentare/Handlungsfelder).
+
 ## 4. Kommunikation
 
 ### 4.1 Vereinsinterne Nachrichten/Ankündigungen
@@ -147,6 +260,27 @@ Ergebnisse des Kindes — read-only.
   DSGVO-Aspekt (Datenminimierung, Einwilligung) ist zu klären, da bereits
   eine Consent-Infrastruktur besteht (`consentGivenAt`/`-Version`), die
   sich erweitern ließe.
+
+### 4.3 Vorab-Abmeldung vom Training
+Athlet:innen oder Eltern melden sich vor einer Einheit ab („kann nicht
+kommen", optional mit Grund). Trainer:innen sehen die erwartete
+Teilnehmerzahl, die Anwesenheitsliste ist entsprechend vorbelegt.
+- **Nutzen:** Einer der häufigsten Praxisfälle; ersetzt Abmeldungen per
+  Messenger und erleichtert die Planung der Einheit (Bahnen, Gruppen).
+- **Bezug zur Architektur:** Zusätzlicher Status im
+  `AttendanceRecordSchema` (z. B. `excused`) oder ein kleiner eigener
+  Store für Abmeldungen vor dem Termin; Rolle `parent` und
+  Trainings-Erinnerungen per Push sind bereits vorhanden.
+
+### 4.4 Kalender-Abo (iCal)
+Jede Person erhält eine private `.ics`-URL mit ihren Trainingseinheiten,
+Wettkämpfen und Kampfrichter-Einsätzen, die sich in Google-, Apple- oder
+Outlook-Kalender abonnieren lässt.
+- **Nutzen:** Termine erscheinen dort, wo Athlet:innen, Eltern und
+  Trainer:innen ohnehin planen, ohne dass sie die App öffnen müssen.
+- **Bezug zur Architektur:** Lesender REST-Endpunkt mit widerrufbarem
+  Token je Person, vereins- und rollengescoped. Braucht einen Hinweis im
+  Datenschutztext; Erzeugen und Widerrufen gehören ins Audit-Log (5.2).
 
 ## 5. Vereinsverwaltung
 
@@ -211,6 +345,30 @@ Trainer:innen in Excel/Google Sheets weiterverarbeiten können.
 - **Bezug zur Architektur:** Reine Client-seitige Umformung bestehender
   Daten, kein Server-Endpunkt nötig (analog zu `planPdfExport.js`, das
   auch komplett client-seitig ohne Vendor-Library arbeitet).
+
+### 6.4 Integrierter Job-Scheduler
+Die Hintergrundjobs unter `apps/api/src/jobs/` (endgültige Löschung,
+Sync-Bookkeeping-Bereinigung, Qualifikations- und
+Trainings-Erinnerungen) laufen heute nur, wenn auf dem Server manuell ein
+Cron eingerichtet wird. Die README führt das als bekannten offenen Punkt.
+Vorgeschlagen: ein eigener Scheduler-Dienst in `docker-compose.yml` oder
+ein optional zuschaltbarer In-Process-Scheduler.
+- **Nutzen:** Schließt eine DSGVO-Lücke (ohne Cron bleiben zur Löschung
+  vorgemerkte Konten dauerhaft im Soft-Delete-Zustand) und macht
+  Erinnerungen ohne Zusatzaufwand bei der Installation verlässlich.
+- **Bezug zur Architektur:** Die Job-Funktionen existieren bereits; nötig
+  sind nur Verdrahtung, eine Sperre gegen parallele Läufe (mehrere
+  API-Instanzen) und eine Status-/Gesundheitsanzeige für den letzten Lauf.
+
+### 6.5 Vereinsweiter Datenexport/Backup für Admins
+Bisher gibt es nur die personenbezogene DSGVO-Auskunft und den
+Bibliothek-Transfer. Admins fehlt ein vollständiger Export aller Daten
+des eigenen Vereins, etwa als Sicherung oder beim Plattformwechsel.
+- **Nutzen:** Datenportabilität auf Vereinsebene und Unabhängigkeit vom
+  Betreiber der Instanz; senkt die Hürde für die Einführung.
+- **Bezug zur Architektur:** Server-Endpunkt (nur `admin`, eigener
+  Verein), der über `entityRegistry.ts` und `ENTITY_SCHEMAS` generisch alle
+  Stores exportiert; Aufruf wird im Audit-Log protokolliert.
 
 ## 7. Kampfrichter-Modul (Ausbau)
 
@@ -279,5 +437,17 @@ nur 2.2, nicht 2.1/2.3).
   wenigsten dringlich für den Kernbetrieb.
 
 **Nicht in dieser Phasenplanung enthalten** (Abschnitte 1.1, 1.3, 2.1, 2.3,
-6.1, 6.2, 7.1, 7.2) sind für spätere, noch nicht terminierte Entwicklungen
-vorgesehen und werden erst nach Abschluss von Phase 4 erneut priorisiert.
+2.4–2.7, 3.4, 3.5, 4.3, 4.4, 6.1, 6.2, 6.4, 6.5, 7.1, 7.2) sind für spätere,
+noch nicht terminierte Entwicklungen vorgesehen und werden erst nach
+Abschluss von Phase 4 erneut priorisiert.
+
+**Empfehlung für die Ergänzung vom Oktober 2026** (noch nicht
+entschieden):
+- **6.4 Job-Scheduler** unabhängig von der Phasenplanung vorziehen:
+  geringer Aufwand, schließt eine dokumentierte DSGVO-Lücke.
+- **4.3 Vorab-Abmeldung** als erster Kandidat nach Phase 4: hoher
+  Alltagsnutzen für alle Rollen auf bereits vorhandener Infrastruktur
+  (Rolle `parent`, Push).
+- **2.4 Pflicht-/Normzeiten** und **2.5 World-Aquatics-Punkte** zusammen
+  mit oder direkt nach Phase 4: reine Auswertungen auf bestehenden Daten,
+  die fachlich zu 2.2 (Bestenlisten) passen.
