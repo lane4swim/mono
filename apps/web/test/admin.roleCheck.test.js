@@ -18,6 +18,7 @@ const apiMocks = {
   logoutRemote: vi.fn(() => Promise.resolve()),
   clearTokens: vi.fn(),
   listClubs: vi.fn(() => Promise.resolve({ clubs: [] })),
+  getJobsStatus: vi.fn(() => Promise.resolve({ schedulerEnabled: true, jobs: [] })),
   describeError: vi.fn((err) => String(err?.message || err)),
 };
 vi.mock('../js/apiClient.js', () => apiMocks);

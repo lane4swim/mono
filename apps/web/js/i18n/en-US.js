@@ -584,7 +584,7 @@ export default {
     clubPolicyPendingAdmins: 'Admins without two-factor sign-in: {count}. They will be asked to set it up at their next sign-in.',
   },
   usermgmt: {
-    tabClubs: 'Clubs', tabMembers: 'Members', tabClub: 'Club details', tabInvitations: 'Invitations',
+    tabJobs: 'Background jobs', tabClubs: 'Clubs', tabMembers: 'Members', tabClub: 'Club details', tabInvitations: 'Invitations',
     eyebrow: 'Administration', title: 'User Management',
     demoDisabled: 'User management is not available in this demo — it runs on real club/invitation data that this demo has no backend for.',
     superadminIntro: 'As a super administrator, you create new clubs and invite their first admin via a time-limited link.',
@@ -793,6 +793,33 @@ export default {
     settingsSaved: 'Settings saved',
     formThresholds: 'Days before expiry (comma-separated)',
     validationThresholds: 'Please provide at least one valid number of days.',
+  },
+  jobs: {
+    title: 'Background jobs', refresh: 'Refresh', loading: 'Loading status …',
+    schedulerEnabled: 'Jobs run automatically inside the server (built-in scheduler). No cron setup is needed.',
+    schedulerDisabled: 'The built-in scheduler is turned off (JOB_SCHEDULER_ENABLED=false). Jobs only run if they are set up as cron jobs on the server — without them, accounts scheduled for deletion are never removed.',
+    colJob: 'Job', colSchedule: 'Schedule', colLastRun: 'Last run', colStatus: 'Status', colResult: 'Result', colNextRun: 'Next run',
+    scheduleDaily: 'Daily from {time}', scheduleInterval: 'Every {hours} hours',
+    statusRunning: 'Running', statusSuccess: 'Succeeded', statusPartial: 'Partially failed', statusFailed: 'Failed',
+    statusNever: 'Never run', statusStale: 'Needs attention',
+    runningSince: 'running since {time}', nextRunNow: 'at the next check', nextRunCronOnly: 'cron only',
+    consecutiveFailures: '{count} failures in a row',
+    name: {
+      purgeDeletedData: 'Deletion & cleanup',
+      notifyExpiringQualifications: 'Qualification reminders',
+      notifyUpcomingSessions: 'Training reminders',
+    },
+    description: {
+      purgeDeletedData: 'Final deletion of accounts scheduled for removal (GDPR), cleanup of sync data and old audit log entries',
+      notifyExpiringQualifications: 'Email/push before qualifications expire',
+      notifyUpcomingSessions: 'Push before upcoming training sessions',
+    },
+    summary: {
+      purgedAccounts: 'accounts deleted', failedAccounts: 'deletions failed',
+      deletedSyncedEvents: 'sync entries removed', deletedSyncTombstones: 'deletion markers removed',
+      deletedAuditEntries: 'audit log entries removed',
+      remindersSent: 'reminders sent', failed: 'failed',
+    },
   },
   auditLog: {
     eyebrow: 'Security log', title: 'Audit Log',

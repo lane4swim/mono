@@ -608,7 +608,7 @@ export default {
     clubPolicyPendingAdmins: 'Admins ohne Zwei-Faktor-Anmeldung: {count}. Sie werden bei ihrer nächsten Anmeldung zur Einrichtung aufgefordert.',
   },
   usermgmt: {
-    tabClubs: 'Vereine', tabMembers: 'Mitglieder', tabClub: 'Vereinsangaben', tabInvitations: 'Einladungen',
+    tabJobs: 'Hintergrundjobs', tabClubs: 'Vereine', tabMembers: 'Mitglieder', tabClub: 'Vereinsangaben', tabInvitations: 'Einladungen',
     eyebrow: 'Verwaltung', title: 'Nutzerverwaltung',
     demoDisabled: 'Die Nutzerverwaltung ist in dieser Demo nicht verfügbar — sie läuft über echte Vereins-/Einladungsdaten, für die diese Demo kein Backend hat.',
     superadminIntro: 'Als Superadministrator:in legen Sie neue Vereine an und laden deren ersten Admin per zeitlich befristetem Link ein.',
@@ -817,6 +817,33 @@ export default {
     settingsSaved: 'Einstellungen gespeichert',
     formThresholds: 'Tage vor Ablauf (kommagetrennt)',
     validationThresholds: 'Bitte mindestens einen gültigen Tage-Wert angeben.',
+  },
+  jobs: {
+    title: 'Hintergrundjobs', refresh: 'Aktualisieren', loading: 'Lade Status …',
+    schedulerEnabled: 'Die Jobs laufen automatisch im Server (integrierter Scheduler). Eine Cron-Einrichtung ist nicht nötig.',
+    schedulerDisabled: 'Der integrierte Scheduler ist abgeschaltet (JOB_SCHEDULER_ENABLED=false). Die Jobs laufen nur, wenn sie auf dem Server per Cron eingerichtet sind — ohne sie bleiben zur Löschung vorgemerkte Konten dauerhaft bestehen.',
+    colJob: 'Job', colSchedule: 'Zeitplan', colLastRun: 'Letzter Lauf', colStatus: 'Status', colResult: 'Ergebnis', colNextRun: 'Nächster Lauf',
+    scheduleDaily: 'Täglich ab {time} Uhr', scheduleInterval: 'Alle {hours} Stunden',
+    statusRunning: 'Läuft', statusSuccess: 'Erfolgreich', statusPartial: 'Teilweise fehlgeschlagen', statusFailed: 'Fehlgeschlagen',
+    statusNever: 'Noch nie gelaufen', statusStale: 'Auffällig',
+    runningSince: 'läuft seit {time}', nextRunNow: 'beim nächsten Prüftakt', nextRunCronOnly: 'nur per Cron',
+    consecutiveFailures: '{count} Fehlschläge in Folge',
+    name: {
+      purgeDeletedData: 'Löschung & Bereinigung',
+      notifyExpiringQualifications: 'Qualifikations-Erinnerungen',
+      notifyUpcomingSessions: 'Trainings-Erinnerungen',
+    },
+    description: {
+      purgeDeletedData: 'Endgültige Löschung vorgemerkter Konten (DSGVO), Bereinigung von Sync-Daten und altem Audit-Log',
+      notifyExpiringQualifications: 'E-Mail/Push vor Ablauf von Qualifikationen',
+      notifyUpcomingSessions: 'Push vor bevorstehenden Trainingseinheiten',
+    },
+    summary: {
+      purgedAccounts: 'Konten gelöscht', failedAccounts: 'Löschungen fehlgeschlagen',
+      deletedSyncedEvents: 'Sync-Einträge entfernt', deletedSyncTombstones: 'Löschmarkierungen entfernt',
+      deletedAuditEntries: 'Audit-Log-Einträge entfernt',
+      remindersSent: 'Erinnerungen versendet', failed: 'fehlgeschlagen',
+    },
   },
   auditLog: {
     eyebrow: 'Sicherheitsprotokoll', title: 'Audit-Log',

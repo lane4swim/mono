@@ -1,6 +1,6 @@
 // Löscht Audit-Log-Einträge nach Ablauf der Aufbewahrungsfrist (Issue #96,
-// AUDIT_LOG_RETENTION_DAYS). Läuft im selben täglichen Cron-Lauf wie der
-// DSGVO-Hard-Purge (scripts/purgeDeletedData.ts). Reine Orchestrierung ohne
+// AUDIT_LOG_RETENTION_DAYS). Läuft im selben täglichen Job wie der
+// DSGVO-Hard-Purge ("purge-deleted-data", scheduler/jobDefinitions.ts). Reine Orchestrierung ohne
 // eigenen DB-Zugriff, analog jobs/purgeSyncBookkeeping.ts.
 import type { AuditLogRepository } from '../modules/auditLog/auditLog.repository.js';
 

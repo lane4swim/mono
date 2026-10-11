@@ -783,13 +783,47 @@ Das ist deutlich umständlicher als ein Hetzner-Snapshot und eignet sich eher f�
 
 Die tägliche `.sql`-Datei aus 12.1 zusätzlich **außerhalb des eigenen Zuhauses** sichern — z. B. mit einer günstigen **Hetzner Storage Box** (unabhängig von einem Hetzner-Server nutzbar) oder einem einfachen Cronjob, der die Datei per `rsync`/`scp` an einen anderen Ort kopiert. Bei einem einzelnen Gerät zuhause ist das noch wichtiger als bei einem Rechenzentrums-Server: Diebstahl, Brand, Wasserschaden oder ein einfacher Defekt der Speicherkarte träfen sonst **gleichzeitig** die laufende Anwendung UND alle lokalen Backups.
 
-### 12.4 DSGVO-Löschfristen durchsetzen (Purge-Cronjob)
+### 12.4 Hintergrundjobs (integrierter Scheduler)
+
+Drei Hintergrundjobs laufen **automatisch im API-Prozess**, ohne dass ein
+Cronjob eingerichtet werden muss (integrierter Job-Scheduler,
+`apps/api/src/jobs/scheduler/`):
+
+| Job | Zeitplan | Aufgabe |
+|---|---|---|
+| `purge-deleted-data` | täglich ab 02:00 UTC | Endgültige Löschung als gelöscht markierter Konten nach `DATA_ERASURE_RETENTION_DAYS` (DSGVO Art. 17), Bereinigung von Sync-Bookkeeping und altem Audit-Log |
+| `notify-expiring-qualifications` | täglich ab 03:00 UTC | E-Mail-/Push-Erinnerungen vor Ablauf von Qualifikationen |
+| `notify-upcoming-sessions` | alle 6 Stunden | Push-Erinnerungen vor bevorstehenden Trainingseinheiten |
+
+Ein verpasster Termin (Server aus, Neustart) wird beim nächsten Prüftakt
+(Standard alle 5 Minuten, `JOB_SCHEDULER_TICK_SECONDS`) nachgeholt.
+Laufen mehrere API-Instanzen, sorgt eine Sperre in der Datenbank dafür,
+dass jeder Job nur einmal läuft.
+
+**Kontrolle:** `curl -s https://<deine-domain>/health` liefert zusätzlich
+`"jobs": "ok"` — `"stale"` bedeutet, dass ein Job seit mehr als zwei
+Perioden nicht gelaufen ist oder dreimal in Folge fehlgeschlagen ist
+(Details: Superadmin-Oberfläche unter `/admin` bzw. Nutzerverwaltung →
+Reiter „Hintergrundjobs", oder `pm2 logs lane1-api` nach `[scheduler]`
+durchsuchen).
+
+**Bestehende Installationen mit Cronjobs** (bis Oktober 2026 dokumentiert,
+siehe 12.4.1 sowie `deployment.md`, 12.5/12.6): die Einträge dürfen bleiben — Skripte und Scheduler
+nutzen dieselbe Sperre und laufen nie gleichzeitig. Sie sind aber
+überflüssig und können mit `crontab -e` entfernt werden.
+
+**Scheduler bewusst abschalten:** `JOB_SCHEDULER_ENABLED=false` in
+`apps/api/.env` setzen. Dann **müssen** der folgende Cronjob (und für
+Erinnerungen die aus `deployment.md`, 12.5/12.6) eingerichtet sein — sonst bleiben als gelöscht markierte Daten dauerhaft in
+der Datenbank stehen (DSGVO-Verstoß).
+
+#### 12.4.1 Purge per Cronjob (nur mit `JOB_SCHEDULER_ENABLED=false`)
 
 Löscht ein Konto sein eigenes Nutzerkonto (Mein Profil → Konto löschen,
 DSGVO Art. 17), wird es zunächst nur als gelöscht **markiert**
 (Soft-Delete) — die endgültige, unwiderrufliche Löschung übernimmt ein
 separates Skript, das `DATA_ERASURE_RETENTION_DAYS` Tage (Standard: 30,
-siehe `.env`) nach der Löschanfrage läuft. Ohne diesen Cronjob bleiben als
+siehe `.env`) nach der Löschanfrage läuft. Ohne Scheduler und ohne diesen Cronjob bleiben als
 gelöscht markierte Daten dauerhaft in der Datenbank stehen — ein
 DSGVO-Verstoß. Einrichten:
 ```bash

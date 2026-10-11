@@ -272,3 +272,20 @@ describe('loadEnv — MFA_ENFORCE ohne TOTP_ENCRYPTION_KEY in Produktion', () =>
     expect(loadEnv({ ...validEnv, NODE_ENV: 'development' }).MFA_ENFORCE).toBe(true);
   });
 });
+
+describe('JOB_SCHEDULER_*', () => {
+  it('Scheduler ist standardmäßig eingeschaltet, Takt 300 Sekunden', () => {
+    const env = loadEnv(validEnv);
+    expect(env.JOB_SCHEDULER_ENABLED).toBe(true);
+    expect(env.JOB_SCHEDULER_TICK_SECONDS).toBe(300);
+  });
+
+  it('lässt sich mit "false" abschalten', () => {
+    expect(loadEnv({ ...validEnv, JOB_SCHEDULER_ENABLED: 'false' }).JOB_SCHEDULER_ENABLED).toBe(false);
+  });
+
+  it('lehnt Tippfehler und zu kurze Takte beim Start ab', () => {
+    expect(() => loadEnv({ ...validEnv, JOB_SCHEDULER_ENABLED: 'nein' })).toThrow(/JOB_SCHEDULER_ENABLED/);
+    expect(() => loadEnv({ ...validEnv, JOB_SCHEDULER_TICK_SECONDS: '1' })).toThrow(/JOB_SCHEDULER_TICK_SECONDS/);
+  });
+});

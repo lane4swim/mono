@@ -990,3 +990,42 @@ model Announcement {
   @@index([groupId])
   @@map("announcements")
 }
+
+// ============================================================
+// Integrierter Job-Scheduler (docs/future-features-brainstorm.md, 6.4).
+// ============================================================
+
+// Zustand je Hintergrundjob (Name aus jobs/scheduler/jobDefinitions.ts):
+// Lease gegen parallele Läufe mehrerer API-Instanzen bzw. eines zusätzlich
+// noch eingerichteten Cronjobs, plus Ergebnis des letzten abgeschlossenen
+// Laufs für die Superadmin-Statusanzeige. Bewusst eine Zeile statt einer
+// Historie: der Status braucht nur den letzten Lauf, Details stehen im
+// Server-Log.
+//
+// Lease statt pg_advisory_lock: eine Session-Sperre hängt an genau EINER
+// Verbindung, Prismas Verbindungspool garantiert die aber nicht. Das
+// atomare UPDATE in jobState.repository.ts (tryAcquire) braucht keine
+// Verbindungsbindung und gibt sich nach einem Absturz über lockedUntil
+// selbst wieder frei.
+model ScheduledJobState {
+  name         String    @id
+  lockedBy     String?
+  lockedUntil  DateTime?
+  // Beginn des gerade laufenden (oder abgestürzten) Laufs; null, sobald er
+  // abgeschlossen ist.
+  runningSince DateTime?
+  // Beginn/Ende des letzten ABGESCHLOSSENEN Laufs — Grundlage der
+  // Fälligkeitsprüfung, damit ein abgestürzter Lauf nach Ablauf der Lease
+  // nachgeholt wird statt bis zum nächsten Termin zu warten.
+  lastStartedAt       DateTime?
+  lastFinishedAt      DateTime?
+  // "success" | "partial" (einzelne Einträge fehlgeschlagen) | "failed"
+  lastStatus          String?
+  // Nur Zähler (z. B. { processed, failed }) — keine Konto-IDs, die
+  // Einzelfehler stehen ausschließlich im Server-Log.
+  lastSummary         Json      @default("{}")
+  lastError           String?
+  consecutiveFailures Int       @default(0)
+
+  @@map("scheduled_job_states")
+}

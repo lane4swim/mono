@@ -1,9 +1,9 @@
 // Orchestrierung des Aufräumens alter Sync-Bookkeeping-Zeilen (SyncedEvent,
 // SyncTombstone — siehe syncBookkeeping.repository.ts für die Begründung
-// der beiden unterschiedlichen Aufbewahrungsfristen). Wird zusammen mit dem
-// DSGVO-Hard-Purge von scripts/purgeDeletedData.ts per Cron ausgeführt —
-// ein eigener Cron-Eintrag wäre hier unnötiger Betriebsaufwand für dieselbe
-// tägliche Kadenz.
+// der beiden unterschiedlichen Aufbewahrungsfristen). Läuft zusammen mit
+// dem DSGVO-Hard-Purge im täglichen Job "purge-deleted-data"
+// (scheduler/jobDefinitions.ts) — ein eigener Job wäre bei derselben
+// täglichen Kadenz unnötiger Aufwand.
 //
 // Absichtlich als reine Orchestrierungsfunktion (kein eigener DB-Zugriff)
 // gehalten, damit sie ohne Datenbank testbar ist (siehe

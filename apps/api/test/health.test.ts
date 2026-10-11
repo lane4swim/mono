@@ -14,6 +14,7 @@ import { InMemoryProfileDataGateway } from '../src/modules/profile/profile.repos
 import { createAuditLogService } from '../src/modules/auditLog/auditLog.service.js';
 import { InMemoryAuditLogRepository } from '../src/modules/auditLog/auditLog.repository.memory.js';
 import { InMemoryParentLinkRepository } from '../src/modules/parents/parents.repository.memory.js';
+import { InMemoryJobStateRepository } from '../src/jobs/scheduler/jobState.repository.memory.js';
 import { CURRENT_CONSENT_VERSION } from '@lane1/shared-types';
 
 const testEnv = loadEnv({
@@ -61,7 +62,7 @@ async function buildTestApp(): Promise<FastifyInstance> {
     auditLog,
   });
   const syncService = createSyncService({ gateway: new InMemorySyncGateway() });
-  return buildApp(testEnv, { authService, invitationsService, syncService, clubs, keyPair });
+  return buildApp(testEnv, { authService, invitationsService, syncService, clubs, keyPair, jobStates: new InMemoryJobStateRepository() });
 }
 
 describe('GET /health', () => {

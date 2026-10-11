@@ -1,6 +1,7 @@
 // Orchestrierung der Push-Erinnerung an bevorstehende Trainingseinheiten
-// (Phase 2, Abschnitt 1.5.2 — docs/Plans/phase2-plan.md). Wird von
-// scripts/notifyUpcomingSessions.ts per Cron ausgeführt.
+// (Phase 2, Abschnitt 1.5.2 — docs/Plans/phase2-plan.md). Wird vom
+// integrierten Scheduler (scheduler/jobDefinitions.ts) bzw. manuell über
+// scripts/notifyUpcomingSessions.ts ausgeführt.
 //
 // Absichtlich als reine Orchestrierungsfunktion (kein eigener DB-Zugriff)
 // gehalten, damit sie ohne Datenbank testbar ist — analog

@@ -1,7 +1,8 @@
 // Orchestrierung des zeitversetzten Hard-Purge (Art. 17 DSGVO): findet
 // alle Löschanfragen, deren Aufbewahrungsfrist abgelaufen ist, und löscht
 // die zugehörigen Daten unwiderruflich. Wird von scripts/purgeDeletedData.ts
-// per Cron ausgeführt — siehe README für die Cron-Einrichtung.
+// bzw. vom integrierten Scheduler (scheduler/jobDefinitions.ts) täglich
+// ausgeführt — siehe README, „Hintergrundjobs“.
 //
 // Absichtlich als reine Orchestrierungsfunktion (kein eigener DB-Zugriff)
 // gehalten, damit sie ohne Datenbank testbar ist (siehe

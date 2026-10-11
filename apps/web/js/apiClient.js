@@ -444,6 +444,12 @@ export function listAuditLog({ clubId, before, limit } = {}) {
   return request(`/api/audit-log${query ? `?${query}` : ''}`);
 }
 
+// Status der Hintergrundjobs (docs/future-features-brainstorm.md, 6.4) —
+// nur superadmin. Antwort: { schedulerEnabled, jobs }.
+export function getJobsStatus() {
+  return request('/api/admin/jobs');
+}
+
 // ---- Qualifikationsmanagement (docs/Plans/nutzer-qualifikationen-plan.md) ---
 // Läuft NICHT über die generische Sync-API (siehe dortiger Abschnitt 1.1)
 // — eigene REST-Endpunkte, analog Einladungen/Vereinen oben. Antwort:
