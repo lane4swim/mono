@@ -226,6 +226,10 @@ button{ font-family: inherit; }
 .btn-accent:hover{ background: var(--c-chlorine-d); }
 .btn-ghost{ background: transparent; color: var(--c-petrol); border-color: var(--c-line); }
 .btn-ghost:hover{ background: var(--c-foam-2); }
+/* Auf der dunklen Kopfleiste (Abmelden) wäre Petrol kaum lesbar — dieselbe
+   helle Gestaltung wie .view-switch-btn. */
+.topbar .btn-ghost{ color: var(--c-white); border-color: var(--c-line-dark); }
+.topbar .btn-ghost:hover{ background: rgba(255,255,255,0.14); }
 .btn-danger{ background: var(--c-white); color: var(--c-danger); border-color: #F1C9C4; }
 .btn-danger:hover{ background: #FDF1EF; }
 .btn-sm{ padding: 5px 10px; font-size: var(--fs-xs); }
@@ -418,7 +422,10 @@ tr.live-row-done .live-set-desc{ text-decoration: line-through; color: var(--c-s
 
 /* Phase 4 — Login / Einladungsannahme */
 .auth-screen{
-  min-height: 100dvh; display: flex; align-items: center; justify-content: center;
+  /* Spalte: der Rechtliches-Link (authScreens.js: appendLegalFooterLink)
+     steht unter dem Anmeldekasten statt daneben — in einer Zeile ragte er
+     auf schmalen Bildschirmen über den Rand. */
+  min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center;
   padding: 24px; background: var(--c-foam);
 }
 .auth-screen[hidden]{ display:none; }
@@ -440,6 +447,16 @@ tr.live-row-done .live-set-desc{ text-decoration: line-through; color: var(--c-s
 }
 .current-user-label{ font-size: var(--fs-sm); color: var(--c-slate); margin-right: 8px; white-space: nowrap; }
 .topbar-user{ display: flex; align-items: center; gap: 8px; }
+/* Schmale Bildschirme: Marke, Verbindungsstatus, Sprachauswahl, Name und
+   Abmelden passten nicht nebeneinander — die Seite ließ sich seitlich
+   scrollen. Der Name steht ohnehin unter „Mein", der Verbindungsstatus
+   bleibt am Punkt (Farbe) und am title-Attribut erkennbar. */
+@media (max-width: 600px){
+  .topbar{ gap: 10px; padding: 0 12px; }
+  .current-user-label{ display: none; }
+  #net-indicator .net-label{ display: none; }
+  #net-indicator{ padding: 7px; }
+}
 
 /* ---- Info-Seite (Impressum/DSGVO/Cookies/AGB) ---- */
 .legal-section{

@@ -15,6 +15,7 @@ import { field, textInput } from '../js/forms.js';
 import { t, getLocale, setLocale, detectInitialLocale } from '../js/i18n.js';
 import { CURRENT_CONSENT_VERSION } from '../js/state.js';
 import { openCreateClubModal, openEditClubModulesModal } from '../js/modules/clubForm.js';
+import { renderMfaStep, renderForcedMfaSetup } from '../js/modules/mfa.js';
 import { renderBackgroundJobsCard } from '../js/modules/backgroundJobs.js';
 
 // Diese Oberfläche zeigt bei einem 401 an JEDER Stelle (Login, Vereinsliste
@@ -121,8 +122,13 @@ function renderLoginForm(errorMessage) {
     }
     submitBtn.disabled = true;
     try {
-      const user = await api.login({ email: fEmail.value.trim(), password: fPassword.value, consent: true });
-      await handleAuthenticated(user);
+      const result = await api.login({ email: fEmail.value.trim(), password: fPassword.value, consent: true, consentVersion: CURRENT_CONSENT_VERSION });
+      // Superadmins brauchen eine Zwei-Faktor-Anmeldung, solange
+      // MFA_ENFORCE gilt: statt einer Sitzung kommt dann ein mfaToken bzw.
+      // — noch ohne eingerichtetes TOTP — ein setupToken.
+      if (result.mfaRequired) { continueWithSecondFactor(result.mfaToken); return; }
+      if (result.mfaSetupRequired) { continueWithForcedSetup(result.setupToken); return; }
+      await handleAuthenticated(result);
     } catch (err) {
       errorBox.textContent = describeAdminError(err);
       errorBox.style.display = 'block';
@@ -133,6 +139,30 @@ function renderLoginForm(errorMessage) {
 
   box.appendChild(form);
   authScreenEl.appendChild(box);
+}
+
+// Zweiter Anmeldeschritt und erzwungene TOTP-Einrichtung — dieselben
+// Bildschirme wie in der Haupt-App (modules/mfa.js), hier aber direkt über
+// apiClient.js statt state.js, da diese Oberfläche keine lokale Sitzung
+// (IndexedDB) aufbaut. `message` null = Rückkehr auf eigenen Wunsch.
+function continueWithSecondFactor(mfaToken) {
+  renderMfaStep(authScreenEl, {
+    onSubmit: (secondFactor) => api.loginMfa({ mfaToken, ...secondFactor }),
+    onSuccess: (user) => handleAuthenticated(user),
+    onExpired: (message) => showLogin(message || undefined),
+  });
+}
+
+function continueWithForcedSetup(setupToken) {
+  renderForcedMfaSetup(authScreenEl, {
+    setupToken,
+    onConfirm: async (code) => {
+      const { recoveryCodes, user } = await api.confirmForcedMfaSetup(setupToken, code);
+      return { recoveryCodes, finish: async () => user };
+    },
+    onSuccess: (user) => handleAuthenticated(user),
+    onExpired: (message) => showLogin(message || undefined),
+  });
 }
 
 // Baut den Einladungslink relativ zum SITE-ROOT, nicht relativ zu "/admin"

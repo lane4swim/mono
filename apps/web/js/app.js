@@ -168,9 +168,12 @@ function startBackgroundSync() {
 //   - eine Sitzung besteht (sonst gäbe es keinen gültigen Access Token),
 //   - der Browser meldet eine Internetverbindung (navigator.onLine) —
 //     verhindert unnötige, sicher fehlschlagende Anfragen im Offline-Fall,
-//   - kein anderer Hintergrund-Sync läuft bereits.
+//   - kein anderer Hintergrund-Sync läuft bereits,
+//   - das Konto gehört zu einem Verein — ein reines Superadmin-Konto hat
+//     keine Vereinsdaten, die Sync-API lehnt es mit 403 ab.
 async function backgroundSync() {
   if (!isLoggedIn()) return;
+  if (!getCurrentUser()?.clubId) return;
   if (!navigator.onLine) return;
   if (backgroundSyncInProgress) return;
 
@@ -196,7 +199,10 @@ async function backgroundSync() {
 function updateNetStatus() {
   const online = navigator.onLine;
   netIndicator.classList.toggle('net-offline', !online);
-  netIndicator.querySelector('.net-label').textContent = online ? t('topbar.offlineReady') : t('topbar.offlineMode');
+  const label = online ? t('topbar.offlineReady') : t('topbar.offlineMode');
+  netIndicator.querySelector('.net-label').textContent = label;
+  // Auf schmalen Bildschirmen ist nur der Punkt sichtbar (styles.css).
+  netIndicator.title = label;
 }
 
 // Ersetzt den früheren Profil-Umschalter: zeigt Name+Rolle der eingeloggten
