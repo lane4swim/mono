@@ -17,6 +17,7 @@ import { openCreateClubModal, openEditClubModulesModal } from './clubForm.js';
 import { IS_DEMO } from '../demoMode.js';
 import { showInviteLinkModal } from '../inviteLink.js';
 import { buildAccountIndex, canInviteAthlete } from '../athleteAccount.js';
+import { renderBackgroundJobsCard } from './backgroundJobs.js';
 import { mfaBadge, canResetMemberMfa, openResetMemberMfaModal, buildClubMfaPolicyCard, clubMfaPolicyControl } from './mfa.js';
 
 export const userManagementModule = {
@@ -86,8 +87,9 @@ function renderView(container, clubs, invitations, members, legalInfo) {
   wrap.appendChild(laneWave());
   wrap.appendChild(el('p', {}, isSuperAdmin() ? t('usermgmt.superadminIntro') : t('usermgmt.adminIntro')));
 
-  // Reiter je Aufgabe: superadmin verwaltet Vereine, admin den eigenen
-  // Verein (Mitglieder + Vereinsangaben); Einladungen gibt es für beide.
+  // Reiter je Aufgabe: superadmin verwaltet Vereine und sieht den Status
+  // der Hintergrundjobs, admin den eigenen Verein (Mitglieder +
+  // Vereinsangaben); Einladungen gibt es für beide.
   const pendingCount = invitations.filter((i) => statusOf(i) === 'pending').length;
   wrap.appendChild(tabbedView('usermgmt', [
     isSuperAdmin() && { id: 'clubs', label: t('usermgmt.tabClubs'), render: () => renderClubsSection(clubs, refresh) },
@@ -98,6 +100,9 @@ function renderView(container, clubs, invitations, members, legalInfo) {
       label: pendingCount ? `${t('usermgmt.tabInvitations')} (${pendingCount})` : t('usermgmt.tabInvitations'),
       render: () => el('div', {}, [renderInviteSection(clubs, refresh, buildAccountIndex(members, invitations)), renderInvitationsList(invitations, clubs, refresh)]),
     },
+    // Hintergrundjobs (docs/future-features-brainstorm.md, 6.4) betreffen
+    // die gesamte Instanz, nicht einen Verein — daher nur für superadmin.
+    isSuperAdmin() && { id: 'jobs', label: t('usermgmt.tabJobs'), render: () => renderBackgroundJobsCard() },
   ]));
 
   wrap.appendChild(el('p', { class: 'hint', style: 'margin-top:24px' }, t('usermgmt.note')));

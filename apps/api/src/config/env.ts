@@ -113,6 +113,18 @@ const EnvSchema = z.object({
   VAPID_PUBLIC_KEY: z.string().optional(),
   VAPID_PRIVATE_KEY: z.string().optional(),
   VAPID_SUBJECT: z.string().optional(),
+
+  // Integrierter Job-Scheduler (src/jobs/scheduler/): führt DSGVO-Purge,
+  // Sync-Bookkeeping-/Audit-Log-Bereinigung und die Erinnerungsjobs im
+  // API-Prozess aus, ohne dass ein Cron eingerichtet werden muss. Standard
+  // "true" — sonst blieben zur Löschung vorgemerkte Konten ohne Cron
+  // dauerhaft im Soft-Delete-Zustand. "false" nur, wenn die Jobs bewusst
+  // weiter extern per Cron laufen sollen. Mehrere API-Instanzen
+  // koordinieren sich über eine Datenbank-Lease, laufen also nie doppelt.
+  JOB_SCHEDULER_ENABLED: z.enum(['true', 'false']).default('true').transform((v) => v === 'true'),
+  // Prüftakt in Sekunden: so oft schaut der Scheduler, ob ein Job fällig
+  // ist (die Jobs selbst laufen täglich bzw. alle 6 Stunden).
+  JOB_SCHEDULER_TICK_SECONDS: z.coerce.number().int().min(10).default(300),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

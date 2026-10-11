@@ -12,6 +12,9 @@ import { registerSecurityPlugins } from './plugins/security.js';
 import { registerHttpErrorHandler } from './plugins/httpErrorHandler.js';
 import authenticatePlugin from './plugins/authenticate.js';
 import { healthRoutes } from './modules/health/health.route.js';
+import { jobsRoutes } from './modules/jobs/jobs.route.js';
+import { createJobsStatusService } from './modules/jobs/jobs.service.js';
+import { PrismaJobStateRepository, type JobStateRepository } from './jobs/scheduler/jobState.repository.js';
 import { authRoutes } from './modules/auth/auth.route.js';
 import { syncRoutes, type ClubModulesLookup } from './modules/sync/sync.route.js';
 import { PrismaAnnouncementRecipientsGateway } from './modules/sync/announcementRecipients.repository.js';
@@ -72,6 +75,9 @@ export interface BuildAppOverrides {
   pushSubscriptions?: PushSubscriptionRepository;
   keyPair?: ReturnType<typeof resolveKeyPair>;
   mfaService?: MfaService;
+  // Zustand der Hintergrundjobs (Statusanzeige + /health, siehe
+  // modules/jobs) — In-Memory-Override für Tests ohne Datenbank.
+  jobStates?: JobStateRepository;
 }
 
 // Standardmäßige Gültigkeitsdauer von Einladungen (kann später konfigurierbar
@@ -320,7 +326,13 @@ export async function buildApp(env: Env, overrides: BuildAppOverrides = {}): Pro
       auditLog: auditLogService,
     });
 
-  await app.register(healthRoutes);
+  const jobsStatusService = createJobsStatusService({
+    state: overrides.jobStates ?? new PrismaJobStateRepository(getPrisma()),
+    schedulerEnabled: env.JOB_SCHEDULER_ENABLED,
+  });
+
+  await app.register(healthRoutes, { jobsStatusService });
+  await app.register(jobsRoutes, { jobsStatusService });
   await app.register(authRoutes, { authService });
   await app.register(syncRoutes, {
     syncService,

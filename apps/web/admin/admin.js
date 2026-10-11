@@ -15,6 +15,7 @@ import { field, textInput } from '../js/forms.js';
 import { t, getLocale, setLocale, detectInitialLocale } from '../js/i18n.js';
 import { CURRENT_CONSENT_VERSION } from '../js/state.js';
 import { openCreateClubModal, openEditClubModulesModal } from '../js/modules/clubForm.js';
+import { renderBackgroundJobsCard } from '../js/modules/backgroundJobs.js';
 
 // Diese Oberfläche zeigt bei einem 401 an JEDER Stelle (Login, Vereinsliste
 // laden, Verein anlegen) bewusst t('auth.errorInvalidCredentials') statt
@@ -189,6 +190,9 @@ async function renderClubsView() {
 
   const listHost = el('div', { class: 'card' }, el('p', {}, t('common.loading')));
   viewEl.appendChild(listHost);
+  // Status der Hintergrundjobs (docs/future-features-brainstorm.md, 6.4) —
+  // lädt unabhängig von der Vereinsliste.
+  viewEl.appendChild(el('div', { style: 'margin-top:16px' }, renderBackgroundJobsCard()));
 
   try {
     const { clubs } = await api.listClubs();

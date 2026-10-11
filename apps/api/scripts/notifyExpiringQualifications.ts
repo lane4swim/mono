@@ -1,59 +1,17 @@
-// Verschickt Ablauf-Erinnerungen für Qualifikationen (docs/nutzer-
-// qualifikationen-plan.md, Abschnitt 5) an die betroffene Person und die
-// Admins ihres Vereins. Nur relevant für Vereine, die das Modul
-// 'qualifications' gebucht haben — siehe
-// jobs/qualificationReminder.repository.ts.
+// Führt den Job "notify-expiring-qualifications" sofort aus: Ablauf-
+// Erinnerungen für Qualifikationen (docs/nutzer-qualifikationen-plan.md,
+// Abschnitt 5) an die betroffene Person und die Admins ihres Vereins. Nur
+// relevant für Vereine, die das Modul 'qualifications' gebucht haben.
 //
-// Gedacht für einen täglichen Cron-Job, z. B.:
-//
-//   0 4 * * * cd /pfad/zu/apps/api && npm run notify-expiring-qualifications >> /var/log/lane1-qualifications.log 2>&1
-//
-// (eine Stunde nach dem DSGVO-/Sync-Bookkeeping-Purge in
-// scripts/purgeDeletedData.ts — beide sind unabhängig voneinander, ein
-// gemeinsamer Cron-Eintrag wäre hier kein Mehrwert, da dieser Lauf einen
-// E-Mail-Versand auslöst und deshalb separat protokolliert/beobachtet
-// werden soll.)
+// Im Normalbetrieb übernimmt das der integrierte Scheduler der API
+// (src/jobs/scheduler/, JOB_SCHEDULER_ENABLED) — ein Cronjob ist nicht mehr
+// nötig. Dieses Skript bleibt für manuelle Läufe und für Installationen mit
+// abgeschaltetem Scheduler; es nutzt dieselbe Sperre wie der Scheduler.
 //
 // Nutzung manuell: npm run notify-expiring-qualifications (im Ordner apps/api)
-import { PrismaClient } from '@prisma/client';
-import { loadEnv } from '../src/config/env.js';
-import { resolveMailer, resolvePushSender } from '../src/app.js';
-import { PrismaNotifyExpiringQualificationsGateway } from '../src/jobs/qualificationReminder.repository.js';
-import { notifyExpiringQualifications } from '../src/jobs/notifyExpiringQualifications.js';
-import { PrismaPushSubscriptionRepository } from '../src/modules/push/push.repository.js';
+import { runJobFromCli } from '../src/jobs/scheduler/cli.js';
 
-async function main() {
-  const env = loadEnv();
-  const prisma = new PrismaClient();
-  try {
-    const gateway = new PrismaNotifyExpiringQualificationsGateway(prisma);
-    const mailer = resolveMailer(env);
-    // Push (Phase 2, Abschnitt 1.5.1): optionaler Zusatzkanal neben
-    // E-Mail — siehe notifyExpiringQualifications.ts: PushDeps-Kommentar.
-    const push = { pusher: resolvePushSender(env), pushSubscriptions: new PrismaPushSubscriptionRepository(prisma) };
-    const result = await notifyExpiringQualifications(gateway, mailer, new Date(), push);
-
-    console.log(`[qualifications] ${new Date().toISOString()} — ${result.remindersSent} Erinnerung(en) versendet.`);
-    if (result.failed.length > 0) {
-      console.error(`[qualifications] ${result.failed.length} Fehlschlag/-schläge:`);
-      for (const failure of result.failed) {
-        // willRetry unterscheidet, ob der nächste Cron-Lauf das automatisch
-        // nachholt (Fehlschlag bei der qualifizierten Person selbst) oder
-        // nicht (ein einzelner Admin-Versand — die Schwelle gilt bereits als
-        // erledigt, siehe notifyExpiringQualifications.ts: NotifyResult).
-        const retryNote = failure.willRetry
-          ? 'wird beim nächsten Lauf erneut versucht'
-          : 'wird NICHT automatisch wiederholt — Schwelle bereits als erledigt markiert';
-        console.error(`  - qualificationId ${failure.qualificationId} (Schwelle ${failure.thresholdDays} Tage): ${failure.error} [${retryNote}]`);
-      }
-      process.exitCode = 1;
-    }
-  } finally {
-    await prisma.$disconnect();
-  }
-}
-
-main().catch((err) => {
+runJobFromCli('notify-expiring-qualifications', 'qualifications').catch((err) => {
   console.error('[qualifications] Unerwarteter Fehler:', err);
   process.exit(1);
 });

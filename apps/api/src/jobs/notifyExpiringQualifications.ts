@@ -1,6 +1,7 @@
 // Orchestrierung der Ablauf-Erinnerungen für Qualifikationen (docs/
-// nutzer-qualifikationen-plan.md, Abschnitt 5). Wird von
-// scripts/notifyExpiringQualifications.ts per Cron ausgeführt.
+// nutzer-qualifikationen-plan.md, Abschnitt 5). Wird vom
+// integrierten Scheduler (scheduler/jobDefinitions.ts) bzw. manuell über
+// scripts/notifyExpiringQualifications.ts ausgeführt.
 //
 // Absichtlich als reine Orchestrierungsfunktion (kein eigener DB-Zugriff)
 // gehalten, damit sie ohne Datenbank testbar ist (siehe

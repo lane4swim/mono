@@ -25,10 +25,9 @@ synchronisiert wirklich mit dem Backend, und die Nutzerverwaltung
 
 ## Bekannte offene Punkte
 
-- **`purgeExpiredDeletions` läuft nicht automatisch** — das CLI-Skript
-  (`npm run purge-deleted-data`) muss per Cron eingerichtet werden (siehe
-  Abschnitt „DSGVO: Auskunft & Löschung" unten); ohne eingerichteten Cron
-  bleiben zur Löschung vorgemerkte Konten dauerhaft im Soft-Delete-Zustand.
+Derzeit keine. (Bis Oktober 2026 lief `purgeExpiredDeletions` nur mit
+manuell eingerichtetem Cron; seitdem übernimmt das der integrierte
+Job-Scheduler, siehe „Hintergrundjobs" unten.)
 
 ## Struktur
 
@@ -301,12 +300,9 @@ Vervollständigt die bereits in Phase 1 vorbereitete Consent-Infrastruktur
    fachliche Daten bekommen `deletedAt` gesetzt, alle Refresh Tokens werden
    widerrufen) und legt einen `DataDeletionRequest` mit `purgeAfter` an
    (Standard: 30 Tage, konfigurierbar über `DATA_ERASURE_RETENTION_DAYS`).
-2. Ein täglicher Cron-Job führt den endgültigen, unwiderruflichen Hard-Purge
-   aus, sobald `purgeAfter` erreicht ist:
-   ```bash
-   0 3 * * * cd /pfad/zu/apps/api && npm run purge-deleted-data >> /var/log/lane1-purge.log 2>&1
-   ```
-   Löscht dabei: RefreshTokens, (falls verknüpft) Athletenprofil samt
+2. Der tägliche Job `purge-deleted-data` des integrierten Schedulers (siehe
+   „Hintergrundjobs" unten) führt den endgültigen, unwiderruflichen
+   Hard-Purge aus, sobald `purgeAfter` erreicht ist. Löscht dabei: RefreshTokens, (falls verknüpft) Athletenprofil samt
    Ergebnissen/Startlisteneinträgen/Handlungsfeldern, entfernt die
    Anwesenheits-Einträge dieser Person aus den JSON-Anwesenheitslisten
    aller Trainingseinheiten des Vereins, und zuletzt den `User`-Datensatz
@@ -332,8 +328,8 @@ Verbesserungen:**
    eine klare Meldung („… existiert nicht mehr …") statt der rohen
    Postgres-Fehlermeldung.
 
-**Sync-Bookkeeping-Bereinigung:** derselbe tägliche Cron-Lauf (`npm run
-purge-deleted-data`) entfernt zusätzlich veraltete Zeilen aus zwei intern
+**Sync-Bookkeeping-Bereinigung:** derselbe tägliche Job
+(`purge-deleted-data`) entfernt zusätzlich veraltete Zeilen aus zwei intern
 buchführenden Tabellen, die sonst unbegrenzt wachsen würden — `SyncedEvent`
 (Idempotenz-Ledger für `POST /api/sync/push`, Standard 90 Tage, über
 `SYNC_EVENT_RETENTION_DAYS` konfigurierbar) und `SyncTombstone` (siehe
@@ -349,6 +345,36 @@ Lösch-Button verlangt eine erfolgreiche Server-Antwort, bevor der lokale
 Cache aufgeräumt wird — ein fehlgeschlagener Serveraufruf darf nie dazu
 führen, dass nur lokal etwas verschwindet, während das Konto serverseitig
 unverändert weiterbesteht.
+
+## Hintergrundjobs (integrierter Scheduler)
+
+Der API-Prozess führt drei Hintergrundjobs selbst aus
+(`apps/api/src/jobs/scheduler/`) — ein Cronjob ist nicht nötig:
+
+| Job | Zeitplan | Aufgabe |
+|---|---|---|
+| `purge-deleted-data` | täglich ab 02:00 UTC | DSGVO-Hard-Purge (siehe oben), Sync-Bookkeeping- und Audit-Log-Bereinigung |
+| `notify-expiring-qualifications` | täglich ab 03:00 UTC | Ablauf-Erinnerungen für Qualifikationen |
+| `notify-upcoming-sessions` | alle 6 Stunden | Push-Erinnerungen an bevorstehende Trainingseinheiten |
+
+- **Fälligkeit statt Uhrzeit-Trigger:** alle `JOB_SCHEDULER_TICK_SECONDS`
+  (Standard 300) prüft der Scheduler, ob ein Job fällig ist. Ein
+  verpasster Termin (Server aus, Neustart) wird dadurch nachgeholt.
+- **Sperre über die Datenbank** (Tabelle `scheduled_job_states`): mehrere
+  API-Instanzen und zusätzlich noch eingerichtete Cronjobs führen einen Job
+  nie gleichzeitig aus. Ein abgestürzter Lauf gibt die Sperre nach einer
+  Stunde frei und wird dann nachgeholt.
+- **Status:** `GET /api/admin/jobs` (nur superadmin) liefert letzten Lauf,
+  Ergebnis-Zähler, Fehler und nächsten Termin je Job — angezeigt in der
+  Superadmin-Oberfläche (`/admin`) und in der Nutzerverwaltung (Reiter
+  „Hintergrundjobs"). Der öffentliche `GET /health` meldet nur
+  `"jobs": "ok" | "stale" | "unknown"`.
+- **Manuell ausführen:** `npm run purge-deleted-data`,
+  `npm run notify-expiring-qualifications`, `npm run notify-upcoming-sessions`
+  (im Ordner `apps/api`) — unter derselben Sperre, erscheinen im Status.
+- **Abschalten:** `JOB_SCHEDULER_ENABLED=false`. Dann müssen die Jobs per
+  Cron laufen (`docs/deployment/deployment.md`, Abschnitt 12.4) — sonst
+  bleiben zur Löschung vorgemerkte Konten dauerhaft im Soft-Delete-Zustand.
 
 ## DSGVO: Rechtliche Vereinsangaben (Impressum & Datenschutzhinweis)
 

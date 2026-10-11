@@ -30,13 +30,13 @@ Nummern verweisen auf die Abschnitte unten.
 | Personal & Qualifikationen | Nutzer-Qualifikationen inkl. Ablauf-Erinnerung, Kampfrichter-Modul (Phasen A–C, Mehrfachrollen) | `docs/Plans/nutzer-qualifikationen-plan.md`, `docs/Plans/kampfrichter-modul-plan.md` |
 | Sicherheit & Recht | Zwei-Faktor-Anmeldung (TOTP), DSGVO-Auskunft/-Löschung, Impressum/Datenschutz je Verein | `docs/Plans/zwei-faktor-anmeldung-plan.md`, `docs/Plans/club-legal-info-plan.md` |
 | Plattform | Backend + Sync-API, zubuchbare Modul-Pakete, Beckenlängen-Regeneration, Kontomodus für Athletenprofile | `docs/Plans/backend-plan.md`, `docs/Plans/beckenlaenge-regeneration-plan.md` |
+| Technik/Plattform | 6.4 Integrierter Job-Scheduler inkl. Superadmin-Statusanzeige | `apps/api/src/jobs/scheduler/`, README „Hintergrundjobs" |
 
 ### Teilweise umgesetzt
 
 | Feature | Stand | Offen |
 |---|---|---|
 | 6.2 Mehrsprachigkeit | Deutsch und Englisch (`apps/web/js/i18n/`) | weitere Sprachen nach Bedarf |
-| Automatische Hintergrundjobs (siehe 6.4) | Purge-, Qualifikations- und Trainings-Erinnerungsjobs sind als CLI-Skripte vorhanden | laufen nur mit manuell eingerichtetem Cron; ohne ihn bleibt die endgültige DSGVO-Löschung aus (README, „Bekannte offene Punkte") |
 
 ### Als nächstes geplant (Phase 4)
 
@@ -53,7 +53,7 @@ Nummern verweisen auf die Abschnitte unten.
 | Trainingsplanung | 3.4 Leistungstests und Trainingszonen, 3.5 Persönliche Ziele |
 | Kommunikation & Organisation | 4.3 Vorab-Abmeldung vom Training, 4.4 Kalender-Abo (iCal) |
 | Vereinsverwaltung | 1.1 Vereins-Branding |
-| Technik/Plattform | 6.1 Echtzeit-Sync, 6.4 Integrierter Job-Scheduler, 6.5 Vereinsweiter Datenexport/Backup |
+| Technik/Plattform | 6.1 Echtzeit-Sync, 6.5 Vereinsweiter Datenexport/Backup |
 | Kampfrichter-Modul | 7.1 Einsatzplanung, 7.2 Vereinsübergreifende Freigabe |
 
 Neu in der Ergänzung vom Oktober 2026 sind 2.4–2.7, 3.4–3.5, 4.3–4.4 und
@@ -347,6 +347,10 @@ Trainer:innen in Excel/Google Sheets weiterverarbeiten können.
   auch komplett client-seitig ohne Vendor-Library arbeitet).
 
 ### 6.4 Integrierter Job-Scheduler
+**Umgesetzt (Oktober 2026)** — In-Process-Scheduler, standardmäßig aktiv
+(`JOB_SCHEDULER_ENABLED`), Datenbank-Lease gegen parallele Läufe,
+Statusanzeige für Superadmins; siehe README, „Hintergrundjobs".
+
 Die Hintergrundjobs unter `apps/api/src/jobs/` (endgültige Löschung,
 Sync-Bookkeeping-Bereinigung, Qualifikations- und
 Trainings-Erinnerungen) laufen heute nur, wenn auf dem Server manuell ein
@@ -444,7 +448,8 @@ Abschluss von Phase 4 erneut priorisiert.
 **Empfehlung für die Ergänzung vom Oktober 2026** (noch nicht
 entschieden):
 - **6.4 Job-Scheduler** unabhängig von der Phasenplanung vorziehen:
-  geringer Aufwand, schließt eine dokumentierte DSGVO-Lücke.
+  geringer Aufwand, schließt eine dokumentierte DSGVO-Lücke. *(Umgesetzt
+  im Oktober 2026.)*
 - **4.3 Vorab-Abmeldung** als erster Kandidat nach Phase 4: hoher
   Alltagsnutzen für alle Rollen auf bereits vorhandener Infrastruktur
   (Rolle `parent`, Push).

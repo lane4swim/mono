@@ -906,13 +906,47 @@ Preise je nach Speichergröße des VPS, siehe Control Panel beim jeweiligen VPS.
 ### 12.3 Offsite-Backup (empfohlen)
 Die tägliche `.sql`-Datei zusätzlich außerhalb des Servers sichern — z. B. in einem **OVHcloud Object Storage**-Container (S3-kompatibel, abgerechnet nach Speichermenge — für ein paar Megabyte SQL-Dumps praktisch kostenlos; hochladen z. B. mit `rclone` oder `aws s3 cp`) **an einem anderen Standort als der VPS**, bei einem anderen Anbieter, oder per einfachem Cronjob, der die Datei per `rsync`/`scp` an einen anderen Ort kopiert. Ein Backup, das nur auf demselben Server liegt, hilft bei einem Totalausfall des Servers nicht.
 
-### 12.4 DSGVO-Löschfristen durchsetzen (Purge-Cronjob)
+### 12.4 Hintergrundjobs (integrierter Scheduler)
+
+Drei Hintergrundjobs laufen **automatisch im API-Prozess**, ohne dass ein
+Cronjob eingerichtet werden muss (integrierter Job-Scheduler,
+`apps/api/src/jobs/scheduler/`):
+
+| Job | Zeitplan | Aufgabe |
+|---|---|---|
+| `purge-deleted-data` | täglich ab 02:00 UTC | Endgültige Löschung als gelöscht markierter Konten nach `DATA_ERASURE_RETENTION_DAYS` (DSGVO Art. 17), Bereinigung von Sync-Bookkeeping und altem Audit-Log |
+| `notify-expiring-qualifications` | täglich ab 03:00 UTC | E-Mail-/Push-Erinnerungen vor Ablauf von Qualifikationen |
+| `notify-upcoming-sessions` | alle 6 Stunden | Push-Erinnerungen vor bevorstehenden Trainingseinheiten |
+
+Ein verpasster Termin (Server aus, Neustart) wird beim nächsten Prüftakt
+(Standard alle 5 Minuten, `JOB_SCHEDULER_TICK_SECONDS`) nachgeholt.
+Laufen mehrere API-Instanzen, sorgt eine Sperre in der Datenbank dafür,
+dass jeder Job nur einmal läuft.
+
+**Kontrolle:** `curl -s https://<deine-domain>/health` liefert zusätzlich
+`"jobs": "ok"` — `"stale"` bedeutet, dass ein Job seit mehr als zwei
+Perioden nicht gelaufen ist oder dreimal in Folge fehlgeschlagen ist
+(Details: Superadmin-Oberfläche unter `/admin` bzw. Nutzerverwaltung →
+Reiter „Hintergrundjobs", oder `pm2 logs lane1-api` nach `[scheduler]`
+durchsuchen).
+
+**Bestehende Installationen mit Cronjobs** (bis Oktober 2026 dokumentiert,
+siehe 12.4.1–12.6): die Einträge dürfen bleiben — Skripte und Scheduler
+nutzen dieselbe Sperre und laufen nie gleichzeitig. Sie sind aber
+überflüssig und können mit `crontab -e` entfernt werden.
+
+**Scheduler bewusst abschalten:** `JOB_SCHEDULER_ENABLED=false` in
+`apps/api/.env` setzen. Dann **müssen** die folgenden Cronjobs
+eingerichtet sein — sonst bleiben als gelöscht markierte Daten dauerhaft in
+der Datenbank stehen (DSGVO-Verstoß).
+
+#### 12.4.1 Purge per Cronjob (nur mit `JOB_SCHEDULER_ENABLED=false`)
 
 Löscht ein Konto sein eigenes Nutzerkonto (Mein Profil → Konto löschen,
 DSGVO Art. 17), wird es zunächst nur als gelöscht **markiert**
 (Soft-Delete) — die endgültige, unwiderrufliche Löschung übernimmt ein
 separates Skript, das `DATA_ERASURE_RETENTION_DAYS` Tage (Standard: 30,
-siehe `.env`) nach der Löschanfrage läuft. Ohne diesen Cronjob bleiben als
+siehe `.env`) nach der Löschanfrage läuft. Ohne Scheduler und ohne diesen Cronjob bleiben als
 gelöscht markierte Daten dauerhaft in der Datenbank stehen — ein
 DSGVO-Verstoß. Einrichten:
 ```bash
@@ -943,7 +977,7 @@ Datenbank-Backup aus 12.1):
 > Node ≥ 20.6 unterstützt `--env-file` nativ, `tsx` reicht es unverändert
 > an den zugrundeliegenden Node-Prozess durch.
 
-### 12.5 Ablauf-Erinnerungen für Qualifikationen (Cronjob)
+### 12.5 Ablauf-Erinnerungen für Qualifikationen (Cronjob, nur mit `JOB_SCHEDULER_ENABLED=false`)
 
 Nur relevant, wenn mindestens ein Verein das Modul „Qualifikationsmanagement"
 gebucht hat. Verschickt E-Mail- (und, sofern `VAPID_*` gesetzt ist,
@@ -961,7 +995,7 @@ Purge-Cronjob aus 12.4):
 Absoluter `tsx`-Pfad und `--env-file-if-exists=.env` aus demselben Grund
 wie beim Purge-Cronjob oben (siehe dortige Erklärung).
 
-### 12.6 Erinnerungen an bevorstehende Trainingseinheiten (Cronjob)
+### 12.6 Erinnerungen an bevorstehende Trainingseinheiten (Cronjob, nur mit `JOB_SCHEDULER_ENABLED=false`)
 
 Nur relevant, wenn mindestens ein Verein das Modul „Einheiten & Feedback"
 gebucht hat, UND nur wirksam, wenn `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`
@@ -1075,7 +1109,7 @@ sudo systemctl reload nginx
 | Backend startet gar nicht (`pm2 status` zeigt „errored") | Pflicht-Umgebungsvariable fehlt/ungültig, z. B. `JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY` in Produktion nicht gesetzt | `pm2 logs lane1-api` — `env.ts` gibt die genaue fehlende/ungültige Variable aus |
 | Login/Registrierung liefert die HTML-Startseite statt einer Fehlermeldung/eines Tokens | `/auth/`-Location-Block in nginx fehlt oder `proxy_pass` mit abschließendem `/` (siehe Warnhinweis Abschnitt 9) | `curl -i .../auth/login -X POST -d '{}'`, Antwort auf `<!DOCTYPE html>` prüfen |
 | Einladungs-E-Mails kommen nicht an | `SMTP_HOST` nicht gesetzt (nur Server-Log) | `pm2 logs lane1-api` auf SMTP-Fehler prüfen, `.env` kontrollieren |
-| Push-Benachrichtigungen kommen nie an | `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY` nicht gesetzt (nur Server-Log, siehe Schritt 7.2) oder die beiden Cronjobs aus 12.5/12.6 fehlen | `pm2 logs lane1-api` auf „[push] Kein VAPID-Schlüssel konfiguriert" prüfen, `crontab -l` kontrollieren |
+| Push-Benachrichtigungen kommen nie an | `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY` nicht gesetzt (nur Server-Log, siehe Schritt 7.2) oder der Job `notify-upcoming-sessions` läuft nicht (siehe 12.4) | `pm2 logs lane1-api` auf „[push] Kein VAPID-Schlüssel konfiguriert" prüfen; `/health` auf `"jobs": "ok"` prüfen (bei `JOB_SCHEDULER_ENABLED=false`: `crontab -l` kontrollieren) |
 | Kein Schloss-Symbol/HTTPS-Fehler | Zertifikat nicht erneuert oder DNS falsch bei Erstanfrage | `sudo certbot renew --dry-run` |
 | Änderungen erscheinen nicht | Browser-/Service-Worker-Cache | Hard-Reload (`Strg+Shift+R`), `CACHE_VERSION` in `sw.js` prüfen |
 | „Permission denied" bei SSH | falscher Benutzer/Key | Mit `deploy` (bzw. vor Schritt 4.2 mit `ubuntu`) verbinden — `root` ist bei OVHcloud gesperrt; richtigen Key prüfen |

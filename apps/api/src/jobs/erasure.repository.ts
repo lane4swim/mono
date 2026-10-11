@@ -3,7 +3,7 @@
 // Löschanfrage übernimmt (Soft-Delete + DataDeletionRequest anlegen),
 // kümmert sich dieses Gateway um den zeitversetzten, UNWIDERRUFLICHEN
 // Hard-Purge, sobald die Aufbewahrungsfrist (purgeAfter) abgelaufen ist —
-// ausgeführt über scripts/purgeDeletedData.ts (per Cron) und
+// ausgeführt vom integrierten Scheduler bzw. scripts/purgeDeletedData.ts und
 // orchestriert von jobs/purgeExpiredDeletions.ts.
 import type { PrismaClient, Prisma } from '@prisma/client';
 import { newAuditPseudonym, pseudonymizeAuditEntry } from './auditLogPseudonymization.js';
