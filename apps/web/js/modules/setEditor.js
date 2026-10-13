@@ -563,7 +563,10 @@ function appendEquipmentEditor(container, s, exercises, onChange) {
   // statt beim nächsten Speichern stillschweigend "kein Material" zu zeigen.
   let equipment = equipmentForEntry(s, exercises);
   const display = el('div');
-  const editorHost = el('div');
+  // Bearbeiten-Knopf und aufgeklappter Editor sind nur am ausgewählten
+  // Satz sichtbar (CSS: .set-row:not(.is-selected) .equipment-edit) — die
+  // Material-Badges selbst bleiben immer sichtbar.
+  const editorHost = el('div', { class: 'equipment-edit' });
   container.appendChild(display);
   container.appendChild(editorHost);
   let editorOpen = false;
@@ -576,7 +579,7 @@ function appendEquipmentEditor(container, s, exercises, onChange) {
     clear(display);
     const badges = equipment.map(eq => badge(trLabel(EQUIPMENT_ITEMS, eq, 'equipment'), 'pb'));
     const editBtn = el('button', {
-      type: 'button', class: 'btn btn-ghost btn-sm',
+      type: 'button', class: 'btn btn-ghost btn-sm equipment-edit',
       onclick: () => { editorOpen = !editorOpen; drawEditor(); },
     }, editorOpen ? t('common.close') : t('setEditor.editEquipment'));
     display.appendChild(el('div', { class: 'pill-group', style: 'margin-top:4px' }, [...badges, editBtn]));

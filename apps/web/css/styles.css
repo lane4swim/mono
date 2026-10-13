@@ -360,6 +360,7 @@ tr.live-row-done .live-set-desc{ text-decoration: line-through; color: var(--c-s
 .is-selected > .entry-head > .entry-actions{ visibility:visible; }
 .entry-insert-bar{ display:none; grid-column: 1 / -1; gap:6px; flex-wrap:wrap; margin: 2px 0 4px; }
 .is-selected > .entry-insert-bar{ display:flex; }
+.set-row:not(.is-selected) .equipment-edit{ display:none; }
 
 /* Einfügedialog an der per "darüber/darunter einfügen" gewählten Stelle. */
 .insert-panel{
