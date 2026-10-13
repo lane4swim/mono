@@ -17,9 +17,9 @@
 //
 // Die Reihenfolge der Einträge IST die fachliche Aussage des Plans (was
 // wird wann geschwommen), deshalb kann jeder Eintrag an jeder Stelle
-// entstehen und sich bewegen: zwischen zwei bestehenden Einträgen
-// einfügen (siehe buildInsertPoint()) und eine Position auf-/abwärts
-// verschieben (siehe moveEntry()/entryControls()). Beides gilt
+// entstehen und sich bewegen: über/unter dem ausgewählten Eintrag
+// einfügen (siehe createEditorState()/buildInsertPanel()) und eine
+// Position auf-/abwärts verschieben (siehe moveEntry()/entryControls()). Beides gilt
 // gleichermaßen für die oberste Ebene (Sätze, Wiederholungsblöcke UND
 // Abschnitte) wie für die Sätze/Blöcke INNERHALB eines Abschnitts bzw.
 // die Sätze INNERHALB eines Wiederholungsblocks — da jede Ebene auf ihrer
@@ -389,36 +389,143 @@ function buildExerciseOptions(exercises) {
     .map(ex => ({ value: ex.id, label: `${trLabel(EXERCISE_CATEGORIES, ex.category, 'exerciseCategories')} · ${ex.name}` }))];
 }
 
-// Bündelt die drei Aktionen, die JEDER Eintrag kennt — hoch, runter,
-// entfernen — für Position `index` in `list`. Sätze auf oberster Ebene,
-// Wiederholungsblöcke und Sätze innerhalb eines Blocks teilen sich
-// dadurch exakt dieselbe Umsortier-Semantik; `redraw` zeichnet die
-// besitzende Liste neu (und aktualisiert deren Summen).
-function entryControls(list, index, redraw) {
+// ---- Auswahl & Einfügen (ein Zustand je Editor-Instanz) ----
+//
+// Die Zeilen-Aktionen (hoch/runter/entfernen, darüber/darunter einfügen)
+// erscheinen NUR am gerade ausgewählten Eintrag — sonst würde eine lange
+// Liste von Knöpfen dominiert. Ausgewählt wird per Klick in den Eintrag
+// oder per Fokus (Tab) auf eines seiner Felder. Das Umschalten der Auswahl
+// tauscht nur eine CSS-Klasse (kein Neuzeichnen), damit der Fokus im
+// gerade bearbeiteten Eingabefeld erhalten bleibt.
+//
+// Der Dialog zum Anlegen eines neuen Eintrags (buildAddControls()) ist
+// standardmäßig nur in einer LEEREN Liste sichtbar; sonst öffnet ihn erst
+// "darüber/darunter einfügen" genau an dieser Stelle (`pending`). Es gibt
+// immer höchstens EINEN offenen Einfügedialog im ganzen Editor, deshalb
+// zeichnen Strukturänderungen (einfügen, verschieben, entfernen) stets den
+// gesamten Editor neu (`redrawAll`) statt nur die betroffene Teilliste.
+function createEditorState() {
+  const state = {
+    selected: null,      // ausgewählter Eintrag (Objektreferenz, überlebt Neuzeichnen)
+    selectedNode: null,  // zugehöriger DOM-Knoten der aktuellen Zeichnung
+    pending: null,       // { list, index } — offener Einfügedialog
+    redrawAll: () => {},
+
+    // Markiert `node` als auswählbaren Eintrag. Klicks/Fokus in einem
+    // verschachtelten Eintrag (Satz im Block im Abschnitt) wählen nur den
+    // INNERSTEN aus — die äußeren Knoten sehen dasselbe Event beim
+    // Hochblubbern, ignorieren es aber über den closest()-Vergleich.
+    bindSelectable(node, entry) {
+      node.classList.add('entry-selectable');
+      if (state.selected === entry) {
+        node.classList.add('is-selected');
+        state.selectedNode = node;
+      }
+      const handler = (e) => {
+        // Nach einer Aktion, die neu gezeichnet hat (z. B. Entfernen),
+        // ist `node` bereits ausgehängt — dann nichts mehr auswählen.
+        if (!node.isConnected) return;
+        if (e.target.closest?.('.entry-selectable') !== node) return;
+        state.select(entry, node);
+      };
+      node.addEventListener('click', handler);
+      node.addEventListener('focusin', handler);
+    },
+
+    select(entry, node) {
+      if (state.selectedNode && state.selectedNode !== node) state.selectedNode.classList.remove('is-selected');
+      state.selected = entry;
+      state.selectedNode = node;
+      node.classList.add('is-selected');
+    },
+
+    openInsert(list, index) {
+      state.pending = { list, index };
+      state.redrawAll();
+    },
+
+    closeInsert() {
+      state.pending = null;
+      state.redrawAll();
+    },
+
+    // Fügt ein, wählt den neuen Eintrag aus und setzt den Fokus in sein
+    // erstes Eingabefeld — so kann direkt weitergetippt werden.
+    insert(list, index, entry) {
+      insertEntry(list, index, entry);
+      state.pending = null;
+      state.selected = entry;
+      state.redrawAll();
+      state.selectedNode?.querySelector('input')?.focus();
+    },
+
+    // Nach dem Verschieben bleibt der Eintrag ausgewählt; der Fokus wandert
+    // auf denselben Pfeil-Knopf in der neuen Zeichnung, damit mehrfaches
+    // Verschieben per Tastatur ohne erneutes Hin-Tabben möglich ist.
+    move(list, index, delta, action) {
+      if (!moveEntry(list, index, delta)) return;
+      state.pending = null;
+      state.redrawAll();
+      state.selectedNode?.querySelector(`[data-entry-action="${action}"]`)?.focus();
+    },
+
+    remove(list, index) {
+      const [removed] = list.splice(index, 1);
+      if (removed === state.selected) { state.selected = null; state.selectedNode = null; }
+      state.pending = null;
+      state.redrawAll();
+    },
+  };
+  return state;
+}
+
+// Bündelt die Aktionen, die JEDER Eintrag kennt — hoch, runter, entfernen,
+// darüber/darunter einfügen — für Position `index` in `list`. Sätze auf
+// oberster Ebene, Wiederholungsblöcke, Abschnitte und Sätze innerhalb
+// eines Blocks/Abschnitts teilen sich dadurch exakt dieselbe Semantik.
+function entryControls(list, index, state) {
   return {
     canMoveUp: index > 0,
     canMoveDown: index < list.length - 1,
-    onMoveUp: () => { if (moveEntry(list, index, -1)) redraw(); },
-    onMoveDown: () => { if (moveEntry(list, index, 1)) redraw(); },
-    onRemove: () => { list.splice(index, 1); redraw(); },
+    onMoveUp: () => state.move(list, index, -1, 'up'),
+    onMoveDown: () => state.move(list, index, 1, 'down'),
+    onRemove: () => state.remove(list, index),
+    onInsertAbove: () => state.openInsert(list, index),
+    onInsertBelow: () => state.openInsert(list, index + 1),
+    bind: (node, entry) => state.bindSelectable(node, entry),
   };
 }
 
-// Die beiden Pfeil-Schaltflächen zu einem entryControls()-Objekt. Am
-// Listenrand werden sie deaktiviert statt ausgeblendet, damit die Zeilen
-// nicht unterschiedlich breit werden und die Position der übrigen Knöpfe
-// stabil bleibt.
-function orderButtons(controls) {
-  return [
+// Hoch/runter/entfernen als drei gleich große Symbol-Knöpfe in einer
+// Gruppe fester Breite — identisch für Sätze, Blöcke und Abschnitte, damit
+// die Aktionen aller Ebenen in derselben Spalte stehen. Nicht ausgewählte
+// Einträge blenden die Gruppe per CSS aus (visibility, damit die Spalte
+// ihre Breite behält). Am Listenrand werden die Pfeile deaktiviert statt
+// entfernt, damit die übrigen Knöpfe ihre Position behalten.
+function entryActions(controls, removeLabel) {
+  return el('div', { class: 'entry-actions' }, [
     el('button', {
       type: 'button', class: 'btn btn-ghost btn-sm', title: t('setEditor.moveUp'), 'aria-label': t('setEditor.moveUp'),
-      disabled: !controls.canMoveUp, onclick: controls.onMoveUp,
+      'data-entry-action': 'up', disabled: !controls.canMoveUp, onclick: controls.onMoveUp,
     }, '↑'),
     el('button', {
       type: 'button', class: 'btn btn-ghost btn-sm', title: t('setEditor.moveDown'), 'aria-label': t('setEditor.moveDown'),
-      disabled: !controls.canMoveDown, onclick: controls.onMoveDown,
+      'data-entry-action': 'down', disabled: !controls.canMoveDown, onclick: controls.onMoveDown,
     }, '↓'),
-  ];
+    el('button', {
+      type: 'button', class: 'btn btn-danger btn-sm', title: removeLabel, 'aria-label': removeLabel,
+      'data-entry-action': 'remove', onclick: controls.onRemove,
+    }, '×'),
+  ]);
+}
+
+// "Darüber/darunter einfügen" — nur am ausgewählten Eintrag sichtbar
+// (CSS: .is-selected > .entry-insert-bar).
+function insertBar(controls) {
+  return el('div', { class: 'entry-insert-bar' }, [
+    el('button', { type: 'button', class: 'btn btn-ghost btn-sm', 'data-entry-action': 'insert-above', onclick: controls.onInsertAbove }, t('setEditor.insertAbove')),
+    el('button', { type: 'button', class: 'btn btn-ghost btn-sm', 'data-entry-action': 'insert-below', onclick: controls.onInsertBelow }, t('setEditor.insertBelow')),
+  ]);
 }
 
 // Code-Review, Befund L6: buildSetRow() mischte den Aufbau der fünf
@@ -456,7 +563,10 @@ function appendEquipmentEditor(container, s, exercises, onChange) {
   // statt beim nächsten Speichern stillschweigend "kein Material" zu zeigen.
   let equipment = equipmentForEntry(s, exercises);
   const display = el('div');
-  const editorHost = el('div');
+  // Bearbeiten-Knopf und aufgeklappter Editor sind nur am ausgewählten
+  // Satz sichtbar (CSS: .set-row:not(.is-selected) .equipment-edit) — die
+  // Material-Badges selbst bleiben immer sichtbar.
+  const editorHost = el('div', { class: 'equipment-edit' });
   container.appendChild(display);
   container.appendChild(editorHost);
   let editorOpen = false;
@@ -469,7 +579,7 @@ function appendEquipmentEditor(container, s, exercises, onChange) {
     clear(display);
     const badges = equipment.map(eq => badge(trLabel(EQUIPMENT_ITEMS, eq, 'equipment'), 'pb'));
     const editBtn = el('button', {
-      type: 'button', class: 'btn btn-ghost btn-sm',
+      type: 'button', class: 'btn btn-ghost btn-sm equipment-edit',
       onclick: () => { editorOpen = !editorOpen; drawEditor(); },
     }, editorOpen ? t('common.close') : t('setEditor.editEquipment'));
     display.appendChild(el('div', { class: 'pill-group', style: 'margin-top:4px' }, [...badges, editBtn]));
@@ -501,7 +611,7 @@ function appendEquipmentEditor(container, s, exercises, onChange) {
 }
 
 // Renders one plain-set row. `controls` (see entryControls()) supplies the
-// row's ×/↑/↓ actions; the caller owns the array and re-draws itself
+// row's ×/↑/↓/insert actions and its selection binding; the caller owns the array and re-draws itself
 // afterwards. `onEquipmentChange` (optional) is called after this set's
 // own material is edited, so the caller can refresh any aggregate
 // summary (e.g. the day's equipment list) that depends on it.
@@ -523,10 +633,7 @@ function buildSetRow(s, exercises, controls, onEquipmentChange) {
     el('input', { type: 'text', value: s.description || '', placeholder: t('setEditor.descriptionPlaceholder'), oninput: (e) => s.description = e.target.value }),
     el('input', { type: 'number', min: '1', value: s.reps ?? 1, oninput: (e) => s.reps = parseInt(e.target.value) || 1 }),
     el('input', { type: 'number', min: '0', value: s.restSec ?? 0, oninput: (e) => s.restSec = parseInt(e.target.value) || 0 }),
-    el('div', { class: 'set-row-actions' }, [
-      ...orderButtons(controls),
-      el('button', { type: 'button', class: 'btn btn-danger btn-sm', title: t('setEditor.removeRow'), 'aria-label': t('setEditor.removeRow'), onclick: controls.onRemove }, '×'),
-    ]),
+    entryActions(controls, t('setEditor.removeRow')),
   ]);
 
   // Everything below the main 5 columns (intensity, catalog hint, equipment)
@@ -546,14 +653,17 @@ function buildSetRow(s, exercises, controls, onEquipmentChange) {
   appendEquipmentEditor(extra, s, exercises, onEquipmentChange);
 
   row.appendChild(extra);
+  row.appendChild(insertBar(controls));
+  controls.bind(row, s);
   return row;
 }
 
 // Die "Hinzufügen"-Steuerelemente (leerer Satz / Wiederholungsblock /
 // Abschnitt / Übung aus dem Katalog) an EINER Stelle, weil sie an
-// mehreren Orten gebraucht werden: am Listenende, am Block-/Abschnittsende
-// und in jedem Einfügepunkt zwischen zwei Einträgen. Der Unterschied ist
-// allein, WOHIN der neue Eintrag wandert — das entscheidet `onAdd`.
+// mehreren Orten gebraucht werden: in einer leeren Liste (oberste Ebene,
+// Block, Abschnitt) und im Einfügedialog über/unter dem ausgewählten
+// Eintrag. Der Unterschied ist allein, WOHIN der neue Eintrag wandert —
+// das entscheidet `onAdd`.
 // `allowBlock: false` innerhalb eines Blocks, weil Blöcke sich nicht
 // verschachteln (siehe Datenmodell oben). `allowSection` ist NUR auf
 // oberster Ebene true (Standard hier: false) — Abschnitte selbst lassen
@@ -619,73 +729,80 @@ function buildAddControls(exercises, { onAdd, allowBlock = true, allowSection = 
   return container;
 }
 
-// Ein Einfügepunkt ZWISCHEN zwei Einträgen (bzw. vor dem ersten): eine
-// dezente Trennlinie mit "+"-Knopf, der dieselben Steuerelemente wie am
-// Listenende aufklappt — nur wird hier an Position `index` eingefügt
-// statt angehängt. Dadurch braucht es keinen separaten "Wohin?"-Dialog:
-// die Einfügestelle IST der angeklickte Punkt.
-function buildInsertPoint(list, index, exercises, { allowBlock = true, allowSection = false, sectionTemplates = [], redraw }) {
-  const host = el('div', { class: 'insert-point-host' });
-  const panelHost = el('div');
-  let open = false;
-
-  const toggle = el('button', {
-    type: 'button', class: 'btn btn-ghost btn-sm insert-point-btn',
-    title: t('setEditor.insertHere'), 'aria-label': t('setEditor.insertHere'),
-    onclick: () => { open = !open; drawPanel(); },
-  }, '+');
-
-  host.appendChild(el('div', { class: 'insert-point' }, [el('span', { class: 'insert-point-line' }), toggle, el('span', { class: 'insert-point-line' })]));
-  host.appendChild(panelHost);
-
-  function drawPanel() {
-    clear(panelHost);
-    toggle.textContent = open ? '×' : '+';
-    if (!open) return;
-    panelHost.appendChild(el('div', { class: 'insert-panel' }, [
+// Der Einfügedialog an der per "darüber/darunter einfügen" gewählten
+// Stelle: dieselben Steuerelemente wie in einer leeren Liste, nur wird an
+// Position `index` eingefügt statt angehängt — die Einfügestelle IST der
+// gewählte Eintrag, ein separater "Wohin?"-Schritt entfällt.
+function buildInsertPanel(list, index, exercises, state, { allowBlock = true, allowSection = false, sectionTemplates = [] }) {
+  return el('div', { class: 'insert-panel' }, [
+    el('div', { class: 'insert-panel-head' }, [
       el('span', { class: 'hint' }, t('setEditor.insertHereHint')),
-      buildAddControls(exercises, {
-        allowBlock,
-        allowSection,
-        sectionTemplates,
-        // Nach dem Einfügen zeichnet redraw() die ganze Liste neu — das
-        // Panel verschwindet dabei von selbst, ohne eigenes Aufräumen.
-        onAdd: (entry) => { insertEntry(list, index, entry); redraw(); },
-      }),
-    ]));
-  }
-  drawPanel();
-
-  return host;
+      el('button', {
+        type: 'button', class: 'btn btn-ghost btn-sm', title: t('setEditor.cancelInsert'), 'aria-label': t('setEditor.cancelInsert'),
+        onclick: () => state.closeInsert(),
+      }, '×'),
+    ]),
+    buildAddControls(exercises, {
+      allowBlock,
+      allowSection,
+      sectionTemplates,
+      onAdd: (entry) => state.insert(list, index, entry),
+    }),
+  ]);
 }
 
-// Renders one repeat-block: header (label + × repeatCount + move/remove),
-// its own inner rows/insert points/controls (reusing buildSetRow), and a
-// live subtotal. `controls` (see entryControls()) moves or removes the
-// block itself within the parent list. `onRedrawParent` re-renders the
-// outer list so the parent's total-distance hint stays correct whenever
-// something inside the block changes.
-function buildBlockRow(block, exercises, controls, onRedrawParent) {
-  const container = el('div', { class: 'day-block', style: 'margin:10px 0;border-style:dashed;border-color:var(--c-chlorine-d)' });
+// Zeichnet die Einträge einer Liste (oberste Ebene, Abschnitt oder Block)
+// samt eventuell offenem Einfügedialog in `host`. Ist die Liste leer, steht
+// dort statt der Einträge der Hinweis `emptyHint` plus die
+// Hinzufügen-Steuerelemente — der einzige Fall, in dem sie ohne
+// "darüber/darunter einfügen" sichtbar sind, weil es noch keinen Eintrag
+// gibt, an dem man sie aufrufen könnte. `buildEntry(entry, controls)`
+// liefert den DOM-Knoten eines Eintrags.
+function drawEntryList(host, list, exercises, state, { emptyHint, addOptions, buildEntry }) {
+  const panelAt = (i) => (state.pending && state.pending.list === list && state.pending.index === i
+    ? buildInsertPanel(list, i, exercises, state, addOptions)
+    : null);
+  list.forEach((entry, i) => {
+    const panel = panelAt(i);
+    if (panel) host.appendChild(panel);
+    host.appendChild(buildEntry(entry, entryControls(list, i, state)));
+  });
+  const endPanel = panelAt(list.length);
+  if (endPanel && list.length > 0) host.appendChild(endPanel);
+  if (list.length === 0) {
+    host.appendChild(el('p', { class: 'hint', style: 'padding:4px 0' }, emptyHint));
+    host.appendChild(buildAddControls(exercises, {
+      ...addOptions,
+      onAdd: (entry) => state.insert(list, 0, entry),
+    }));
+  }
+}
+
+// Renders one repeat-block: header (label + × repeatCount + actions), its
+// own inner rows (reusing buildSetRow), and a live subtotal. `controls`
+// (see entryControls()) moves, removes or inserts next to the block itself
+// within the parent list. `onRedrawParent` refreshes the outer totals
+// whenever a non-structural value inside the block changes.
+function buildBlockRow(block, exercises, controls, onRedrawParent, state) {
+  const container = el('div', { class: 'editor-block' });
 
   const labelInput = el('input', {
     type: 'text', value: block.label || '', placeholder: t('setEditor.blockNamePlaceholder'),
-    style: 'min-width:180px', oninput: (e) => block.label = e.target.value,
+    oninput: (e) => block.label = e.target.value,
   });
   const repeatInput = el('input', {
     type: 'number', min: '1', value: block.repeatCount || 1, style: 'width:60px',
     oninput: (e) => { block.repeatCount = Math.max(1, parseInt(e.target.value) || 1); updateSubtotal(); onRedrawParent(); },
   });
-  const removeBlockBtn = el('button', { type: 'button', class: 'btn btn-danger btn-sm', onclick: controls.onRemove }, t('setEditor.removeBlock'));
 
-  container.appendChild(el('div', { class: 'day-block-head' }, [
-    el('div', { class: 'flex items-center gap-8' }, [badge(t('setEditor.repeatBlockBadge'), 'progress'), labelInput]),
-    el('div', { class: 'flex items-center gap-8' }, [
+  container.appendChild(el('div', { class: 'entry-head' }, [
+    el('div', { class: 'entry-head-main' }, [
+      badge(t('setEditor.repeatBlockBadge'), 'progress'), labelInput,
       el('span', { class: 'text-sm', style: 'white-space:nowrap' }, t('setEditor.repeats')), repeatInput,
-      ...orderButtons(controls),
-      removeBlockBtn,
     ]),
+    entryActions(controls, t('setEditor.removeBlock')),
   ]));
+  container.appendChild(insertBar(controls));
 
   const innerHost = el('div');
   container.appendChild(innerHost);
@@ -697,63 +814,42 @@ function buildBlockRow(block, exercises, controls, onRedrawParent) {
     subtotalEl.textContent = t('setEditor.blockSummary', { inner, n: block.repeatCount || 1, total: inner * (block.repeatCount || 1) });
   }
 
-  // Neuzeichnen der Blockinhalte: aktualisiert immer auch die
-  // Block-Zwischensumme UND die Gesamtsumme der äußeren Liste, weil jede
-  // Änderung im Block (einfügen, verschieben, entfernen) beide betrifft.
-  function drawInner() {
-    clear(innerHost);
-    block.sets = block.sets || [];
-    block.sets.forEach((s, si) => {
-      innerHost.appendChild(buildInsertPoint(block.sets, si, exercises, { allowBlock: false, redraw: redrawInner }));
-      innerHost.appendChild(buildSetRow(s, exercises, entryControls(block.sets, si, redrawInner), onRedrawParent));
-    });
-    if (block.sets.length === 0) {
-      innerHost.appendChild(el('p', { class: 'hint', style: 'padding:4px 0' }, t('setEditor.noSetsInBlock')));
-    }
-    updateSubtotal();
-  }
-  function redrawInner() { drawInner(); onRedrawParent(); }
-  drawInner();
-
-  const innerControls = buildAddControls(exercises, {
-    allowBlock: false,
-    style: 'margin-top:6px;flex-wrap:wrap',
-    labels: { blank: t('setEditor.addSetInBlock'), catalog: t('setEditor.addFromCatalogBlock') },
-    onAdd: (entry) => { block.sets = block.sets || []; block.sets.push(entry); redrawInner(); },
+  block.sets = block.sets || [];
+  drawEntryList(innerHost, block.sets, exercises, state, {
+    emptyHint: t('setEditor.noSetsInBlock'),
+    addOptions: { allowBlock: false, labels: { blank: t('setEditor.addSetInBlock'), catalog: t('setEditor.addFromCatalogBlock') } },
+    buildEntry: (s, c) => buildSetRow(s, exercises, c, onRedrawParent),
   });
-  container.appendChild(innerControls);
+  updateSubtotal();
 
+  controls.bind(container, block);
   return container;
 }
 
-// Renders one section: header (heading + move/remove), its own inner
-// rows/insert points/controls (sets AND blocks, reusing buildSetRow()/
-// buildBlockRow() — a section is the one place besides the top level that
-// allows blocks), and a live subtotal. Structurally the mirror image of
-// buildBlockRow() above, one level up: `controls` moves/removes the
-// section itself within the parent (top-level) list, `onRedrawParent` is
-// that top level's `updateTotal`.
+// Renders one section: header (heading + actions), its own inner rows
+// (sets AND blocks, reusing buildSetRow()/buildBlockRow() — a section is
+// the one place besides the top level that allows blocks), and a live
+// subtotal. Structurally the mirror image of buildBlockRow() above, one
+// level up.
 //
 // `bubbleUp` (below) is what nested rows/blocks receive as THEIR
 // "something changed, refresh ancestors" callback instead of the raw
 // `onRedrawParent`: it refreshes this section's own subtotal AND forwards
 // to `onRedrawParent`, so e.g. changing a block's repeatCount two levels
-// down still updates both the section's and the top-level total. A direct
-// insert/move/remove on `section.entries` itself instead goes through
-// `redrawInner` (full local re-render, see entryControls() below).
-function buildSectionRow(section, exercises, controls, onRedrawParent) {
+// down still updates both the section's and the top-level total.
+function buildSectionRow(section, exercises, controls, onRedrawParent, state) {
   const container = el('div', { class: 'section-block' });
 
   const headingInput = el('input', {
     type: 'text', value: section.heading || '', placeholder: t('setEditor.sectionHeadingPlaceholder'),
     class: 'section-heading-input', oninput: (e) => section.heading = e.target.value,
   });
-  const removeSectionBtn = el('button', { type: 'button', class: 'btn btn-danger btn-sm', onclick: controls.onRemove }, t('setEditor.removeSection'));
 
-  container.appendChild(el('div', { class: 'section-block-head' }, [
-    headingInput,
-    el('div', { class: 'flex items-center gap-8' }, [...orderButtons(controls), removeSectionBtn]),
+  container.appendChild(el('div', { class: 'entry-head' }, [
+    el('div', { class: 'entry-head-main' }, [headingInput]),
+    entryActions(controls, t('setEditor.removeSection')),
   ]));
+  container.appendChild(insertBar(controls));
 
   const innerHost = el('div');
   container.appendChild(innerHost);
@@ -765,32 +861,17 @@ function buildSectionRow(section, exercises, controls, onRedrawParent) {
   }
   function bubbleUp() { updateSubtotal(); onRedrawParent(); }
 
-  function drawInner() {
-    clear(innerHost);
-    section.entries = section.entries || [];
-    section.entries.forEach((entry, i) => {
-      innerHost.appendChild(buildInsertPoint(section.entries, i, exercises, { allowSection: false, redraw: redrawInner }));
-      const entryControlsForRow = entryControls(section.entries, i, redrawInner);
-      if (entry.kind === 'block') {
-        innerHost.appendChild(buildBlockRow(entry, exercises, entryControlsForRow, bubbleUp));
-      } else {
-        innerHost.appendChild(buildSetRow(entry, exercises, entryControlsForRow, bubbleUp));
-      }
-    });
-    if (section.entries.length === 0) {
-      innerHost.appendChild(el('p', { class: 'hint', style: 'padding:4px 0' }, t('setEditor.emptySectionHint')));
-    }
-    updateSubtotal();
-  }
-  function redrawInner() { drawInner(); onRedrawParent(); }
-  drawInner();
-
-  const innerControls = buildAddControls(exercises, {
-    style: 'margin-top:6px;flex-wrap:wrap',
-    onAdd: (entry) => { section.entries = section.entries || []; section.entries.push(entry); redrawInner(); },
+  section.entries = section.entries || [];
+  drawEntryList(innerHost, section.entries, exercises, state, {
+    emptyHint: t('setEditor.emptySectionHint'),
+    addOptions: { allowSection: false },
+    buildEntry: (entry, c) => (entry.kind === 'block'
+      ? buildBlockRow(entry, exercises, c, bubbleUp, state)
+      : buildSetRow(entry, exercises, c, bubbleUp)),
   });
-  container.appendChild(innerControls);
+  updateSubtotal();
 
+  controls.bind(container, section);
   return container;
 }
 
@@ -804,18 +885,22 @@ function buildSectionRow(section, exercises, controls, onRedrawParent) {
 // section" button.
 export function renderSetEditor(hostNode, items, exercises = [], { allowSection = true, sectionTemplates = [] } = {}) {
   clear(hostNode);
+  const state = createEditorState();
+
+  const editor = el('div', { class: 'set-editor' });
+  hostNode.appendChild(editor);
 
   const totalEl = el('div', { class: 'hint', style: 'margin-bottom:4px;font-weight:700' });
-  hostNode.appendChild(totalEl);
+  editor.appendChild(totalEl);
   const equipmentEl = el('div', { class: 'hint', style: 'margin-bottom:8px' });
-  hostNode.appendChild(equipmentEl);
+  editor.appendChild(equipmentEl);
 
   const head = el('div', { class: 'set-row set-row-head' }, [
     el('span', {}, t('setEditor.colDistance')), el('span', {}, t('setEditor.colDuration')), el('span', {}, t('setEditor.colDescription')), el('span', {}, t('setEditor.colReps')), el('span', {}, t('setEditor.colRest')), el('span', {}, ''),
   ]);
-  hostNode.appendChild(head);
+  editor.appendChild(head);
   const rowsHost = el('div');
-  hostNode.appendChild(rowsHost);
+  editor.appendChild(rowsHost);
 
   function updateTotal() {
     const duration = totalDuration(items);
@@ -830,33 +915,18 @@ export function renderSetEditor(hostNode, items, exercises = [], { allowSection 
 
   function draw() {
     clear(rowsHost);
-    items.forEach((entry, i) => {
-      // Vor JEDEM Eintrag ein Einfügepunkt (der letzte Platz — ganz am
-      // Ende — bleibt den Steuerelementen unter der Liste vorbehalten,
-      // die genau das schon immer getan haben).
-      rowsHost.appendChild(buildInsertPoint(items, i, exercises, { allowSection, sectionTemplates, redraw: draw }));
-      const controls = entryControls(items, i, draw);
-      if (entry.kind === 'block') {
-        rowsHost.appendChild(buildBlockRow(entry, exercises, controls, updateTotal));
-      } else if (entry.kind === 'section') {
-        rowsHost.appendChild(buildSectionRow(entry, exercises, controls, updateTotal));
-      } else {
-        rowsHost.appendChild(buildSetRow(entry, exercises, controls, updateTotal));
-      }
+    state.selectedNode = null;
+    drawEntryList(rowsHost, items, exercises, state, {
+      emptyHint: t('setEditor.emptyHint'),
+      addOptions: { allowSection, sectionTemplates },
+      buildEntry: (entry, controls) => {
+        if (entry.kind === 'block') return buildBlockRow(entry, exercises, controls, updateTotal, state);
+        if (entry.kind === 'section') return buildSectionRow(entry, exercises, controls, updateTotal, state);
+        return buildSetRow(entry, exercises, controls, updateTotal);
+      },
     });
-    if (items.length === 0) {
-      rowsHost.appendChild(el('p', { class: 'hint', style: 'padding:6px 0' }, t('setEditor.emptyHint')));
-    }
     updateTotal();
   }
+  state.redrawAll = draw;
   draw();
-
-  const controls = buildAddControls(exercises, {
-    allowSection,
-    sectionTemplates,
-    style: 'margin-top:10px;flex-wrap:wrap',
-    onAdd: (entry) => { items.push(entry); draw(); },
-  });
-
-  hostNode.appendChild(controls);
 }

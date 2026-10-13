@@ -332,52 +332,67 @@ tr.live-row-done .live-set-desc{ text-decoration: line-through; color: var(--c-s
 .chart-box svg{ display:block; }
 
 /* Sets/plan editor */
-/* Die Zeit-Spalte ("mm:ss", 5 Zeichen) braucht deutlich weniger Platz als
-   die Distanz-Spalte daneben (bis zu 4-stellige Meterzahlen) — calc(5ch + …)
-   statt eines festen px-Werts, damit die Breite an der tatsächlichen
-   Zeichenzahl hängt statt an einer geschätzten Pixelbreite. */
-.set-row{ display:grid; grid-template-columns: 70px calc(5ch + 18px) 1fr 90px 90px 80px; gap:8px; align-items:center; padding: 6px 0; }
+/* Feste Spaltenbreiten — nur die Beschreibung (1fr) dehnt sich. Die
+   Zeit-Spalte ("mm:ss", 5 Zeichen) hängt per calc(5ch + …) an der
+   tatsächlichen Zeichenzahl statt an einer geschätzten Pixelbreite. Die
+   Aktionsspalte ist genau so breit wie die drei gleich großen
+   Aktionsknöpfe (.entry-actions), damit sie in jeder Zeile gleich bleibt. */
+.set-editor{ --set-action-btn: 28px; --set-actions-w: calc(3 * var(--set-action-btn) + 8px); }
+.set-row{ display:grid; grid-template-columns: 70px calc(5ch + 18px) minmax(0, 1fr) 90px 90px var(--set-actions-w); gap:8px; align-items:center; padding: 6px 0; }
 /* min-width:0 hebt die intrinsische Mindestbreite von <input> auf —
    ohne sie kann die Beschreibungsspalte (1fr) nicht unter ~180px
    schrumpfen und die Zeile sprengt auf schmalen Bildschirmen das
    Raster (waagerechtes Scrollen der ganzen Seite). */
-.set-row input, .set-row select{ padding: 6px 8px; font-size: var(--fs-sm); border:1px solid var(--c-line); border-radius: var(--radius-sm); min-width:0; }
+.set-row input, .set-row select{ padding: 6px 8px; font-size: var(--fs-sm); border:1px solid var(--c-line); border-radius: var(--radius-sm); min-width:0; width:100%; box-sizing:border-box; }
 .set-row-head{ font-size: var(--fs-xs); text-transform:uppercase; color: var(--c-slate); font-weight:700; }
 .set-row-extra{ grid-column: 1 / -1; display:flex; flex-direction:column; align-items:flex-start; gap:2px; margin-top:2px; }
 .set-row-extra select{ width:auto; min-width:160px; }
-/* Reihen-Aktionen (hoch/runter/entfernen) — eine schmale Spalte fester
-   Breite statt drei eigener Grid-Spalten: die Eingabefelder links davon
-   behalten ihre Breite, und die Kopfzeile (ein eigenes .set-row-Raster)
-   bleibt spaltengleich zu den Datenzeilen. */
-.set-row-actions{ display:flex; align-items:center; gap:4px; }
-.set-row-actions .btn{ width:24px; padding: 4px 0; line-height:1.1; text-align:center; }
 
-/* Einfügepunkt zwischen zwei Einträgen: im Ruhezustand nur eine feine
-   Linie mit "+", beim Überfahren/Fokussieren deutlich sichtbar — sonst
-   würde eine Liste mit vielen Sätzen von Einfügepunkten dominiert. */
-.insert-point{ display:flex; align-items:center; gap:6px; opacity:.35; transition: opacity .15s var(--ease); }
-.insert-point-host:hover .insert-point, .insert-point-host:focus-within .insert-point{ opacity:1; }
-.insert-point-line{ flex:1; height:1px; background: var(--c-line); }
-.insert-point-btn{ padding: 0 8px; line-height:1.4; }
+/* Auswahl: Aktionen (hoch/runter/entfernen) und "darüber/darunter
+   einfügen" erscheinen nur am ausgewählten Eintrag (setEditor.js
+   createEditorState). visibility statt display für die Aktionsgruppe,
+   damit die Aktionsspalte ihre Breite behält und nichts springt. */
+.entry-selectable{ border-radius: var(--radius-sm); }
+.set-row.is-selected{ background: var(--c-foam-2); box-shadow: 0 0 0 4px var(--c-foam-2); }
+.entry-actions{ display:flex; align-items:center; gap:4px; width: var(--set-actions-w); flex-shrink:0; visibility:hidden; }
+.entry-actions .btn{ width: var(--set-action-btn); height: var(--set-action-btn); padding:0; line-height:1; text-align:center; display:inline-flex; align-items:center; justify-content:center; }
+.is-selected > .entry-actions,
+.is-selected > .entry-head > .entry-actions{ visibility:visible; }
+.entry-insert-bar{ display:none; grid-column: 1 / -1; gap:6px; flex-wrap:wrap; margin: 2px 0 4px; }
+.is-selected > .entry-insert-bar{ display:flex; }
+.set-row:not(.is-selected) .equipment-edit{ display:none; }
+
+/* Einfügedialog an der per "darüber/darunter einfügen" gewählten Stelle. */
 .insert-panel{
-  display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+  display:flex; flex-direction:column; gap:8px;
   border:1px dashed var(--c-chlorine-d); border-radius: var(--radius-sm);
-  padding: 8px 10px; margin: 4px 0;
+  padding: 8px 10px; margin: 6px 0;
 }
+.insert-panel-head{ display:flex; justify-content:space-between; align-items:center; gap:8px; }
 .insert-panel .hint{ margin:0; }
 /* Hinzufügen-Steuerelemente (setEditor.js buildAddControls): zwei
    sinnvoll gruppierte Zeilen untereinander statt einer einzigen Reihe —
    oben Struktur (Abschnitt/Block), unten Inhalt (leerer Satz/Katalog). */
-.add-controls{ display:flex; flex-direction:column; gap:8px; }
+.add-controls{ display:flex; flex-direction:column; gap:8px; margin: 4px 0; }
 .day-block{ border: 1px solid var(--c-line); border-radius: var(--radius-md); padding: 14px 16px; margin-bottom: 12px; }
 .day-block-head{ display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
 
-/* Abschnitte: ein Block-Container mit farbigem linken Rand statt
-   gestricheltem Rahmen, damit er sich auf einen Blick von einem
-   Wiederholungsblock unterscheidet — eine Überschrift, keine Wiederholung. */
-.section-block{ border: 1px solid var(--c-line); border-left: 4px solid var(--c-petrol); border-radius: var(--radius-md); padding: 14px 16px; margin-bottom: 12px; }
-.section-block-head{ display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
-.section-heading-input{ font-size: var(--fs-md); font-weight:700; padding:6px 10px; min-width:220px; }
+/* Verschachtelte Container im Editor (Wiederholungsblock, Abschnitt):
+   Rahmen und Innenabstand ragen per negativem Außenabstand nach außen
+   (margin = −(Rahmen + Innenabstand)), sodass die Sätze darin exakt
+   dieselbe Breite und Lage haben wie Sätze auf oberster Ebene — alle
+   Spalten bleiben unter der gemeinsamen Kopfzeile ausgerichtet, egal wie
+   tief ein Satz verschachtelt ist. Die Kopfzeile mit den Aktionen endet
+   ebenfalls bündig mit der Aktionsspalte. */
+.editor-block{ border: 1px dashed var(--c-chlorine-d); border-radius: var(--radius-md); padding: 8px 7px; margin: 8px -8px; }
+.editor-block.is-selected{ background: var(--c-foam-2); }
+.section-block{ border: 1px solid var(--c-line); border-left: 4px solid var(--c-petrol); border-radius: var(--radius-md); padding: 10px 9px; margin: 12px -10px 12px -13px; }
+.section-block.is-selected{ box-shadow: 0 0 0 2px var(--c-foam-2); }
+.entry-head{ display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:6px; }
+.entry-head-main{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; flex:1; min-width:0; }
+.entry-head-main input[type="text"]{ flex:1; min-width:140px; }
+.entry-head input{ padding: 6px 8px; font-size: var(--fs-sm); border:1px solid var(--c-line); border-radius: var(--radius-sm); }
+.entry-head .section-heading-input{ font-size: var(--fs-md); font-weight:700; padding:6px 10px; min-width:220px; }
 /* Read-only Anzeige (plans.js: renderSectionBox) — derselbe farbige Rand,
    diesmal als Einrückung statt Container, weil die Sätze/Blöcke darunter
    bereits ihre eigene Kästchen-/Tabellen-Optik mitbringen. */
@@ -403,16 +418,13 @@ tr.live-row-done .live-set-desc{ text-decoration: line-through; color: var(--c-s
      unter die Eingabefelder in eine eigene, volle Rasterzeile: die
      Beschreibungsspalte behält so ihre Breite, und die Knöpfe bleiben
      mit voller Größe (statt zusammengequetscht) gut treffbar. */
-  .set-row{ grid-template-columns: 56px calc(5ch + 14px) 1fr 70px 70px; }
-  .set-row-actions{ grid-column: 1 / -1; justify-content:flex-end; }
-  .set-row-actions .btn{ width:30px; padding: 6px 0; }
-  /* Blockname darf schmaler werden, damit die Blockkopfzeile
-     (Name, Wiederholungen, Sortieren, Entfernen) auf dem Handy
-     umbricht statt überzulaufen. */
-  .day-block-head input[type="text"], .section-block-head input[type="text"]{ min-width:110px; }
-  /* Ohne Hover (Touch) bleiben die Einfügepunkte dauerhaft sichtbar —
-     sonst gäbe es dort keinen Weg, sie überhaupt zu bemerken. */
-  .insert-point{ opacity:.7; }
+  .set-editor{ --set-action-btn: 32px; }
+  .set-row{ grid-template-columns: 56px calc(5ch + 14px) minmax(0, 1fr) 52px 52px; }
+  .set-row > .entry-actions{ grid-column: 1 / -1; justify-self:end; display:none; }
+  .set-row.is-selected > .entry-actions{ display:flex; }
+  /* Die Kopfzeile hat auf dem Handy keine Aktionsspalte mehr. */
+  .set-row-head > :last-child{ display:none; }
+  .entry-head-main input[type="text"]{ min-width:110px; }
 }
 
 /* Utility */
