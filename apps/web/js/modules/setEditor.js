@@ -236,10 +236,11 @@ function caretAfterDigits(str, n) {
 // eingebbar ist. KEIN inputmode="numeric": das zeigt auf Touchgeräten eine
 // rein numerische Tastatur OHNE Doppelpunkt — "m:ss" wäre dort nicht mehr
 // eingebbar (Poolside-Tablets sind der Hauptanwendungsfall dieser App,
-// siehe sw.js-Kommentare).
-function minSecInput(sec, onValue) {
+// siehe sw.js-Kommentare). Exportiert für das Dauerfeld im Übungskatalog
+// (catalog.js), damit beide Formulare dieselbe Eingabelogik haben.
+export function minSecInput(sec, onValue, { placeholder = t('setEditor.durationPlaceholder') } = {}) {
   return el('input', {
-    type: 'text', value: durationToMinSec(sec), placeholder: t('setEditor.durationPlaceholder'),
+    type: 'text', value: durationToMinSec(sec), placeholder,
     oninput: (e) => {
       const input = e.target;
       const raw = input.value;

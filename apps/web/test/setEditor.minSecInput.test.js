@@ -4,7 +4,7 @@
 // mm:ss-Eingabemaske (maskMinSec(), eigene Tests in setEditor.test.js) und
 // schreiben Sekunden in durationSec bzw. restSec zurück.
 import { describe, it, expect } from 'vitest';
-import { renderSetEditor } from '../js/modules/setEditor.js';
+import { renderSetEditor, minSecInput } from '../js/modules/setEditor.js';
 
 function setup(s) {
   const host = document.createElement('div');
@@ -65,5 +65,22 @@ describe('Satz-Editor — mm:ss-Felder für Zeit und Pause', () => {
     type(duration, '1:5');
     duration.dispatchEvent(new FocusEvent('blur'));
     expect(duration.value).toBe('1:05');
+  });
+});
+
+// Dieselbe Maske nutzt das Dauerfeld im Übungskatalog (catalog.js) direkt
+// über minSecInput().
+describe('minSecInput()', () => {
+  it('meldet die geparsten Sekunden an den Callback und übernimmt den Platzhalter', () => {
+    let value;
+    const input = minSecInput(null, (sec) => value = sec, { placeholder: 'Dauer' });
+    expect(input.placeholder).toBe('Dauer');
+    expect(input.value).toBe('');
+    type(input, 'x05');
+    expect(input.value).toBe('05:');
+    expect(value).toBe(300);
+    type(input, '05:', 'deleteContentBackward');
+    type(input, '', 'deleteContentBackward');
+    expect(value).toBeNull();
   });
 });
