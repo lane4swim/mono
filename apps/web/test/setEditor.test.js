@@ -14,7 +14,7 @@ import { vi } from 'vitest';
 
 vi.mock('../js/demoMode.js', () => ({ IS_DEMO: false }));
 
-const { moveEntry, insertEntry, totalDistance, totalDuration, formatQuantity, formatTotalDuration, durationToMinSec, minSecToDuration, cloneItems } = await import('../js/modules/setEditor.js');
+const { moveEntry, insertEntry, totalDistance, totalDuration, formatQuantity, formatTotalDuration, durationToMinSec, minSecToDuration, maskMinSec, cloneItems } = await import('../js/modules/setEditor.js');
 
 const set = (id, distance = 100) => ({ kind: 'set', id, description: id, distance, reps: 1 });
 const ids = (list) => list.map(e => e.id);
@@ -289,5 +289,39 @@ describe('minSecToDuration()', () => {
     expect(minSecToDuration('0')).toBeNull();
     expect(minSecToDuration('0:00')).toBeNull();
     expect(minSecToDuration('-5')).toBeNull();
+  });
+});
+
+// maskMinSec() ist die Eingabemaske der mm:ss-Felder (Zeit und Pause) im
+// Satz-Editor.
+describe('maskMinSec()', () => {
+  it('fügt nach den ersten zwei Ziffern automatisch einen Doppelpunkt ein', () => {
+    expect(maskMinSec('1')).toBe('1');
+    expect(maskMinSec('12')).toBe('12:');
+    expect(maskMinSec('123')).toBe('12:3');
+    expect(maskMinSec('0130')).toBe('01:30');
+  });
+
+  it('entfernt alles außer Ziffern und Doppelpunkt', () => {
+    expect(maskMinSec('1a2b')).toBe('12:');
+    expect(maskMinSec(' 1-3.0 ')).toBe('13:0');
+    expect(maskMinSec('abc')).toBe('');
+  });
+
+  it('lässt einen selbst getippten Doppelpunkt nach einer Ziffer stehen (m:ss)', () => {
+    expect(maskMinSec('1:')).toBe('1:');
+    expect(maskMinSec('1:30')).toBe('1:30');
+  });
+
+  it('begrenzt auf einen Doppelpunkt und je zwei Stellen', () => {
+    expect(maskMinSec('12345')).toBe('12:34');
+    expect(maskMinSec('12:345')).toBe('12:34');
+    expect(maskMinSec('1:2:3')).toBe('1:23');
+    expect(maskMinSec('12::')).toBe('12:');
+  });
+
+  it('setzt den Doppelpunkt beim Löschen nicht erneut', () => {
+    expect(maskMinSec('12', true)).toBe('12');
+    expect(maskMinSec('123', true)).toBe('12:3');
   });
 });
