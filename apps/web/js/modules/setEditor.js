@@ -192,6 +192,77 @@ export function minSecToDuration(str) {
   return sec > 0 ? Math.round(sec) : null;
 }
 
+// Eingabemaske für die mm:ss-Felder (Zeit und Pause im Satz-Editor): lässt
+// nur Ziffern und EINEN Doppelpunkt zu, begrenzt Minuten und Sekunden auf
+// je zwei Stellen und setzt nach den ersten zwei Ziffern automatisch den
+// Doppelpunkt ("130" → "13:0"). Ein selbst getippter Doppelpunkt bleibt
+// stehen, damit auch "m:ss" ("1:30") eingebbar ist. Beim Löschen
+// (`deleting`) wird der Doppelpunkt NICHT neu eingefügt — sonst ließe sich
+// "12:" per Rücktaste nie auf "12" zurücksetzen.
+export function maskMinSec(raw, deleting = false) {
+  const cleaned = String(raw ?? '').replace(/[^\d:]/g, '');
+  const colon = cleaned.indexOf(':');
+  if (colon === -1) {
+    const digits = cleaned.slice(0, 4);
+    if (digits.length > 2 || (digits.length === 2 && !deleting)) return `${digits.slice(0, 2)}:${digits.slice(2)}`;
+    return digits;
+  }
+  const min = cleaned.slice(0, colon).slice(0, 2);
+  const sec = cleaned.slice(colon + 1).replace(/:/g, '').slice(0, 2);
+  return `${min}:${sec}`;
+}
+
+// Wie minSecToDuration(), liest aber einen offenen Doppelpunkt ("12:",
+// direkt nach dem automatischen Einfügen durch maskMinSec()) als volle
+// Minuten — sonst wäre der Wert bis zur ersten Sekundenziffer null.
+function maskedToDuration(str) {
+  return minSecToDuration(str.endsWith(':') ? `${str}00` : str);
+}
+
+// Position direkt hinter der n-ten Ziffer in `str` — damit die Schreibmarke
+// nach dem Umformatieren durch maskMinSec() an derselben Ziffer bleibt,
+// statt bei jeder Eingabe in der Feldmitte ans Ende zu springen.
+function caretAfterDigits(str, n) {
+  let pos = 0;
+  for (let seen = 0; pos < str.length && seen < n; pos++) {
+    if (str[pos] !== ':') seen++;
+  }
+  return pos;
+}
+
+// Ein mm:ss-Eingabefeld mit Maske (maskMinSec()). `onValue` erhält die
+// Sekunden (null bei leerer/ungültiger Eingabe). type="text" statt
+// "number", weil ein Doppelpunkt in einem <input type="number"> nicht
+// eingebbar ist. KEIN inputmode="numeric": das zeigt auf Touchgeräten eine
+// rein numerische Tastatur OHNE Doppelpunkt — "m:ss" wäre dort nicht mehr
+// eingebbar (Poolside-Tablets sind der Hauptanwendungsfall dieser App,
+// siehe sw.js-Kommentare). Exportiert für das Dauerfeld im Übungskatalog
+// (catalog.js), damit beide Formulare dieselbe Eingabelogik haben.
+export function minSecInput(sec, onValue, { placeholder = t('setEditor.durationPlaceholder') } = {}) {
+  return el('input', {
+    type: 'text', value: durationToMinSec(sec), placeholder,
+    oninput: (e) => {
+      const input = e.target;
+      const raw = input.value;
+      const deleting = (e.inputType || '').startsWith('delete');
+      const masked = maskMinSec(raw, deleting);
+      if (masked !== raw) {
+        const caret = input.selectionStart ?? raw.length;
+        const atEnd = caret >= raw.length;
+        const digitsBefore = raw.slice(0, caret).replace(/\D/g, '').length;
+        input.value = masked;
+        const pos = atEnd ? masked.length : caretAfterDigits(masked, digitsBefore);
+        input.setSelectionRange?.(pos, pos);
+      }
+      onValue(maskedToDuration(masked));
+    },
+    // Beim Verlassen in die kanonische Schreibweise bringen ("12:" →
+    // "12:00", "1:5" → "1:05"); Ungültiges wird geleert, passend zum
+    // bereits auf null gesetzten Wert.
+    onblur: (e) => { e.target.value = durationToMinSec(maskedToDuration(e.target.value)); },
+  });
+}
+
 // Eine Mengenangabe ("3×100 m", "3×45 Sek", "3×100 m · 45 Sek", "3×—") für
 // EINEN Satz — einzige Stelle, die Distanz und Dauer zu einem kompakten
 // Label zusammensetzt, damit alle Ansichten (PDF, Vorlagenkarten) dieselbe
@@ -618,21 +689,13 @@ function appendEquipmentEditor(container, s, exercises, onChange) {
 function buildSetRow(s, exercises, controls, onEquipmentChange) {
   const row = el('div', { class: 'set-row' }, [
     el('input', { type: 'number', min: '0', value: s.distance ?? '', oninput: (e) => s.distance = e.target.value ? parseInt(e.target.value) : null }),
-    el('input', {
-      // "mm:ss" statt Rohsekunden (minSecToDuration() liest auch eine reine
-      // Zahl als Sekunden, für ungültige/leere Eingaben null — analog zum
-      // Distanzfeld daneben). type="text" statt "number", weil ein
-      // Doppelpunkt in einem <input type="number"> nicht eingebbar ist.
-      // KEIN inputmode="numeric": das zeigt auf Touchgeräten eine rein
-      // numerische Tastatur OHNE Doppelpunkt — genau das würde die
-      // mm:ss-Eingabe dort unmöglich machen (Poolside-Tablets sind der
-      // Hauptanwendungsfall dieser App, siehe sw.js-Kommentare).
-      type: 'text', value: durationToMinSec(s.durationSec), placeholder: t('setEditor.durationPlaceholder'),
-      oninput: (e) => s.durationSec = minSecToDuration(e.target.value),
-    }),
+    // "mm:ss" statt Rohsekunden; leer/ungültig = keine Dauer (null), analog
+    // zum Distanzfeld daneben.
+    minSecInput(s.durationSec, (sec) => s.durationSec = sec),
     el('input', { type: 'text', value: s.description || '', placeholder: t('setEditor.descriptionPlaceholder'), oninput: (e) => s.description = e.target.value }),
     el('input', { type: 'number', min: '1', value: s.reps ?? 1, oninput: (e) => s.reps = parseInt(e.target.value) || 1 }),
-    el('input', { type: 'number', min: '0', value: s.restSec ?? 0, oninput: (e) => s.restSec = parseInt(e.target.value) || 0 }),
+    // Pause ebenfalls als "mm:ss"; restSec ist Pflichtfeld, leer = 0.
+    minSecInput(s.restSec, (sec) => s.restSec = sec ?? 0),
     entryActions(controls, t('setEditor.removeRow')),
   ]);
 

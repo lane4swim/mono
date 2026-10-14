@@ -741,7 +741,7 @@ export default {
     notificationsError: 'Could not enable push notifications: {message}',
   },
   setEditor: {
-    colDistance: 'Dist. (m)', colDuration: 'Time (mm:ss)', colDescription: 'Description', colReps: 'Reps', colRest: 'Rest (s)',
+    colDistance: 'Dist. (m)', colDuration: 'Time (mm:ss)', colDescription: 'Description', colReps: 'Reps', colRest: 'Rest (mm:ss)',
     durationPlaceholder: 'mm:ss',
     durationSecShort: '{s} sec', durationMinShort: '{m}:{s} min',
     totalDurationHours: '{h} h {m} min', totalDurationMinutes: '{m} min',

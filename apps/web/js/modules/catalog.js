@@ -8,7 +8,7 @@ import { EXERCISE_CATEGORIES, STROKES, EQUIPMENT_ITEMS } from '../refdata.js';
 import { t, trLabel, trCode, trOptions } from '../i18n.js';
 import { renderCommentThread } from './comments.js';
 import { libraryTransferButtons } from './libraryTransfer.js';
-import { compareByCategoryThenName, formatDuration, durationToMinSec, minSecToDuration } from './setEditor.js';
+import { compareByCategoryThenName, formatDuration, minSecInput } from './setEditor.js';
 
 const VIEW_STORAGE_KEY = 'lane1-catalog-view';
 function loadCatalogView() {
@@ -176,10 +176,11 @@ function openExerciseModal(exercise, onSaved) {
   const fCat = selectInput(trOptions(EXERCISE_CATEGORIES, 'exerciseCategories'), data.category);
   const fStroke = selectInput([{ value: '', label: t('catalog.noStroke') }, ...STROKES.map(s => ({ value: s, label: trCode(s, 'strokes') }))], data.stroke || '');
   const fDist = el('input', { type: 'number', min: '0', value: data.defaultDistance || '', placeholder: t('catalog.formDistancePlaceholder') });
-  // "mm:ss" statt Rohsekunden, wie das Dauer-Feld im Satz-Editor
-  // (setEditor.js) — type="text" statt "number", weil ein Doppelpunkt in
-  // einem <input type="number"> nicht eingebbar ist.
-  const fDuration = el('input', { type: 'text', value: durationToMinSec(data.defaultDurationSec), placeholder: t('catalog.formDurationPlaceholder') });
+  // "mm:ss" mit derselben Eingabemaske wie Zeit/Pause im Satz-Editor
+  // (minSecInput() in setEditor.js); der geparste Wert wird laufend
+  // mitgeführt und beim Submit übernommen.
+  let durationSec = data.defaultDurationSec || null;
+  const fDuration = minSecInput(data.defaultDurationSec, (sec) => durationSec = sec, { placeholder: t('catalog.formDurationPlaceholder') });
   const fDesc = el('textarea', {}, data.description || '');
   const fTags = textInput((data.tags || []).join(', '), { placeholder: 'e.g. warmup, technique' });
   form.appendChild(field(t('catalog.formName'), fName, { span2: true }));
@@ -229,7 +230,7 @@ function openExerciseModal(exercise, onSaved) {
     await put('exercises', {
       ...data, name: fName.value.trim(), category: fCat.value, stroke: fStroke.value || null,
       defaultDistance: fDist.value ? parseInt(fDist.value) : null,
-      defaultDurationSec: minSecToDuration(fDuration.value),
+      defaultDurationSec: durationSec,
       description: fDesc.value.trim(),
       tags: fTags.value.split(',').map(x => x.trim()).filter(Boolean),
       equipment: [...selectedEquipment],
