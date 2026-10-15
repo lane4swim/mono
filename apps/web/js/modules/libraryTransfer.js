@@ -215,7 +215,7 @@ export async function importLibrary(dump) {
   return { exercises: exerciseRows.length, templates: templateRows.length, sectionTemplates: sectionTemplateRows.length };
 }
 
-function downloadJSON(filename, data) {
+export function downloadJSON(filename, data) {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
