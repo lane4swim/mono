@@ -7,6 +7,7 @@
 import { registerModule } from './router.js';
 
 import { dashboardModule } from './modules/dashboard.js';
+import { calendarModule } from './modules/calendar.js';
 import { athletesModule } from './modules/athletes.js';
 import { competitionsModule } from './modules/competitions.js';
 import { timesModule } from './modules/times.js';
@@ -29,7 +30,7 @@ import { auditLogModule } from './modules/auditLog.js';
 import { parentViewModule } from './modules/parentView.js';
 
 const ALL_MODULES = [
-  dashboardModule, athletesModule, competitionsModule, timesModule, plansModule,
+  dashboardModule, calendarModule, athletesModule, competitionsModule, timesModule, plansModule,
   templatesModule, catalogModule, sectionTemplatesModule, sessionsModule, attendanceOverviewModule, actionItemsModule, announcementsModule, statsModule,
   syncQueueModule, profileModule, userManagementModule, infoModule, qualificationsModule,
   kampfrichterModule, auditLogModule, parentViewModule,

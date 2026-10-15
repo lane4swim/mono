@@ -35,7 +35,7 @@ const GROUP_ICON_ADMIN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentCo
 // following raw module-registration order. Groups without a `labelKey`
 // (dashboard, profile) render as plain top-level items with no header.
 export const NAV_GROUPS = [
-  { id: 'dashboard', moduleIds: ['dashboard', 'parent'] },
+  { id: 'dashboard', moduleIds: ['dashboard', 'calendar', 'parent'] },
   { id: 'training', labelKey: 'nav.groups.training', icon: GROUP_ICON_TRAINING, moduleIds: ['plans', 'sessions', 'attendance', 'actionitems'] },
   { id: 'vorlagen', labelKey: 'nav.groups.vorlagen', icon: GROUP_ICON_VORLAGEN, moduleIds: ['templates', 'catalog', 'sectionTemplates'] },
   { id: 'performance', labelKey: 'nav.groups.performance', icon: GROUP_ICON_PERFORMANCE, moduleIds: ['times', 'competitions', 'stats'] },
