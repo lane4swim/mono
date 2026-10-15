@@ -119,6 +119,16 @@ describe('CompetitionSchema', () => {
   it('lehnt eine ungültige Bahnlänge ab', () => {
     expect(CompetitionSchema.safeParse({ ...valid, course: '25m' }).success).toBe(false);
   });
+  it('akzeptiert optionale Fristen (gesetzt, null oder fehlend) und belegt sie nicht vor', () => {
+    expect(CompetitionSchema.safeParse({ ...valid, entryDeadline: now, selectionDeadline: now }).success).toBe(true);
+    expect(CompetitionSchema.safeParse({ ...valid, entryDeadline: null, selectionDeadline: null }).success).toBe(true);
+    const parsed = CompetitionSchema.parse(valid);
+    expect('entryDeadline' in parsed).toBe(false);
+    expect('selectionDeadline' in parsed).toBe(false);
+  });
+  it('lehnt eine Frist ohne gültigen Zeitstempel ab', () => {
+    expect(CompetitionSchema.safeParse({ ...valid, entryDeadline: '2026-11-01' }).success).toBe(false);
+  });
 });
 
 describe('StartlistEntrySchema', () => {

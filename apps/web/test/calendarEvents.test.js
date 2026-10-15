@@ -184,6 +184,41 @@ describe('collectEvents', () => {
     expect(byId['deadline:ai-maya'].route).toEqual(['actionitems', 'ai-maya']);
     expect(byId['deadline:ai-maya'].detail).toBe('Maya Vogel');
   });
+
+  it('zeigt gesetzte Wettkampffristen als eigene Wettkampf-Termine', () => {
+    const ctx = personalContext({ user: TRAINER, staff: true, athletes, groups });
+    const withDeadlines = {
+      ...data,
+      competitions: data.competitions.map((c) => (c.id === 'c-maya'
+        ? { ...c, entryDeadline: '2026-10-22T00:00:00.000Z', selectionDeadline: '2026-10-15T00:00:00.000Z' }
+        : { ...c, entryDeadline: null })),
+    };
+    const labels = {
+      entryDeadline: (c) => `Meldeschluss: ${c.name}`,
+      selectionDeadline: (c) => `Startauswahl: ${c.name}`,
+      competitionDate: (c) => `am ${c.date}`,
+    };
+    const events = collectEvents({ data: withDeadlines, types: ['competition'], scope: 'all', ctx, labels });
+    const byId = Object.fromEntries(events.map((e) => [e.id, e]));
+    expect(byId['competition:c-maya:entryDeadline']).toMatchObject({
+      type: 'competition', date: '2026-10-22', title: 'Meldeschluss: Bezirksmeisterschaften',
+      detail: 'am 2026-11-05', route: ['competitions', 'c-maya'],
+    });
+    expect(byId['competition:c-maya:selectionDeadline']).toMatchObject({ date: '2026-10-15', title: 'Startauswahl: Bezirksmeisterschaften' });
+    // Wettkämpfe ohne Fristen erzeugen keine zusätzlichen Termine.
+    expect(events.filter((e) => e.id.startsWith('competition:c-lukas'))).toHaveLength(1);
+    expect(events.filter((e) => e.id.startsWith('competition:c-open'))).toHaveLength(1);
+  });
+
+  it('Wettkampffristen folgen dem "Meine"-Filter des Wettkampfs', () => {
+    const ctx = personalContext({ user: MAYA_USER, staff: false, athletes, groups });
+    const withDeadlines = {
+      ...data,
+      competitions: data.competitions.map((c) => ({ ...c, entryDeadline: '2026-10-01T00:00:00.000Z' })),
+    };
+    const events = collectEvents({ data: withDeadlines, types: ['competition'], scope: 'mine', ctx });
+    expect(events.map((e) => e.id).sort()).toEqual(['competition:c-maya', 'competition:c-maya:entryDeadline']);
+  });
 });
 
 describe('eventsInRange / countByType', () => {

@@ -21,7 +21,7 @@
 // ohne einen erneuten Routenwechsel (und Datenabruf) auszulösen.
 import { getAll } from '../db.js';
 import { el, clear, beginRender, icon } from '../dom.js';
-import { todayISO, dateOnly } from '../dates.js';
+import { todayISO, dateOnly, fmtDateLong } from '../dates.js';
 import { laneWave } from '../ui.js';
 import { getCurrentUser, getRoles, getEnabledModules, hasRole, isTrainerOrAdmin } from '../state.js';
 import { navigate, getModule, isModuleVisible } from '../router.js';
@@ -229,6 +229,9 @@ function eventLabels() {
     qualificationExpires: (q) => t('calendar.qualificationExpires', { type: qualificationTypeLabel(q.type) }),
     qualificationRenewal: (q) => t('calendar.qualificationRenewal', { type: qualificationTypeLabel(q.type) }),
     refereeFunction: (a) => trLabel(REFEREE_FUNCTIONS, a.function, 'refereeFunctions') || '',
+    entryDeadline: (c) => t('calendar.entryDeadline', { name: c.name }),
+    selectionDeadline: (c) => t('calendar.selectionDeadline', { name: c.name }),
+    competitionDate: (c) => t('calendar.competitionOn', { date: fmtDateLong(c.date) }),
   };
 }
 
