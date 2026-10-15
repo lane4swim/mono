@@ -398,6 +398,16 @@ export default {
     entriesLabel: 'Sätze / Serien',
     validationName: 'Bitte einen Namen angeben.', savedEdit: 'Änderungen gespeichert', savedCreate: 'Abschnitts-Vorlage angelegt',
   },
+  planTransfer: {
+    exportButton: 'Export (JSON)', importButton: 'Import (JSON)',
+    exportStarted: 'Export gestartet',
+    importConfirmTitle: 'Trainingsplan importieren',
+    importConfirm: 'Plan „{name}" mit {days} Trainingstag(en) importieren? Er wird als neuer Plan zu deinem Verein hinzugefügt.',
+    importDone: 'Trainingsplan importiert',
+    importDoneWithExercises: 'Trainingsplan importiert ({count} neue Übung(en) im Katalog angelegt)',
+    importError: 'Die Datei konnte nicht gelesen werden — ist es ein gültiger Trainingsplan-Export?',
+    importedPlanName: 'Importierter Trainingsplan',
+  },
   libraryTransfer: {
     exportButton: 'Export (JSON)', importButton: 'Import (JSON)',
     exportStarted: 'Export gestartet',

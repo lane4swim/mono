@@ -9,6 +9,7 @@ import { EQUIPMENT_ITEMS, COURSES } from '../refdata.js';
 import { renderSetEditor, totalDistance, totalDuration, formatTotalDuration, formatDuration, cloneItems, collectEquipment, equipmentForEntry, exerciseById } from './setEditor.js';
 import { renderCommentThread, commentsButton } from './comments.js';
 import { exportPlanToPdf, exportDayToPdf } from './planPdfExport.js';
+import { exportPlanToJson, planImportButton } from './planTransfer.js';
 import { renderCyclesRoute } from './planCycles.js';
 import { renderLiveMode } from './planLive.js';
 import { navigate } from '../router.js';
@@ -77,6 +78,7 @@ function renderList(container, plans, groups, templates, exercises, sectionTempl
     el('div', {}, [el('div', { class: 'page-eyebrow' }, t('plans.eyebrow', { count: plans.length })), el('h1', { class: 'mt-0' }, t('plans.title'))]),
     el('div', { class: 'page-actions' }, [
       el('button', { class: 'btn btn-ghost', onclick: () => navigate('plans', 'cycles') }, t('plans.manageCycles')),
+      isTrainerOrAdmin() ? planImportButton() : null,
       el('button', { class: 'btn btn-primary', onclick: () => openPlanModal(null, groups, templates, exercises, sectionTemplates, refresh) }, t('plans.createPlan')),
     ]),
   ]));
@@ -118,6 +120,7 @@ async function renderDetail(container, planId) {
     el('div', {}, [el('div', { class: 'page-eyebrow' }, group?.name || t('plans.noGroup')), el('h1', { class: 'mt-0' }, plan.name)]),
     el('div', { class: 'page-actions' }, [
       el('button', { class: 'btn btn-ghost', onclick: () => exportPlanToPdf(plan, group, exercises) }, t('plans.exportPdf')),
+      isTrainerOrAdmin() ? el('button', { class: 'btn btn-ghost', onclick: () => exportPlanToJson(plan) }, t('planTransfer.exportButton')) : null,
       el('button', { class: 'btn btn-ghost', onclick: () => openPlanModal(plan, groups, templates, exercises, sectionTemplates, () => renderDetail(container, planId)) }, t('common.edit')),
       el('button', { class: 'btn btn-ghost', onclick: async () => { const copy = await put('plans', duplicatePlan(plan)); toast(t('plans.duplicated')); navigate('plans', copy.id); } }, t('common.duplicate')),
       el('button', { class: 'btn btn-danger', onclick: () => confirmAction(t('plans.deleteConfirm'), async () => { await remove('plans', planId); toast(t('plans.deleted')); navigate('plans'); }) }, t('common.delete')),

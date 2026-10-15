@@ -375,6 +375,16 @@ export default {
     entriesLabel: 'Sets / Series',
     validationName: 'Please enter a name.', savedEdit: 'Changes saved', savedCreate: 'Section template created',
   },
+  planTransfer: {
+    exportButton: 'Export (JSON)', importButton: 'Import (JSON)',
+    exportStarted: 'Export started',
+    importConfirmTitle: 'Import training plan',
+    importConfirm: 'Import plan "{name}" with {days} training day(s)? It will be added as a new plan to your club.',
+    importDone: 'Training plan imported',
+    importDoneWithExercises: 'Training plan imported ({count} new exercise(s) added to the catalog)',
+    importError: "Couldn't read this file — is it a valid training plan export?",
+    importedPlanName: 'Imported training plan',
+  },
   libraryTransfer: {
     exportButton: 'Export (JSON)', importButton: 'Import (JSON)',
     exportStarted: 'Export started',
