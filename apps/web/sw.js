@@ -58,6 +58,7 @@ const PRECACHE_URLS = [
   './js/i18n/en-US.js',
   './js/modules/dashboard.js',
   './js/modules/calendar.js',
+  './js/modules/competitionDeadlines.js',
   './js/modules/calendarEvents.js',
   './js/modules/athletes.js',
   './js/modules/competitions.js',

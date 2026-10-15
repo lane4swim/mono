@@ -18,6 +18,7 @@ import { t, trCode, trOptions, trOptionsFlat } from '../i18n.js';
 import { buildLiveGroups, renderLiveMode, buildResultIndex, findResultForEntry } from './competitionLive.js';
 import { buildStopwatchPanel } from './stopwatch.js';
 import { resultsImportButton } from './resultsImportUI.js';
+import { defaultSelectionDeadline, validateDeadlines } from './competitionDeadlines.js';
 
 export const competitionsModule = {
   id: 'competitions',
@@ -107,6 +108,11 @@ async function renderDetail(container, compId) {
   ]));
   wrap.appendChild(laneWave());
   wrap.appendChild(el('p', {}, `${comp.location || t('competitions.unknownLocation')} · ${trCode(comp.course, 'courses')}${comp.notes ? ' · ' + comp.notes : ''}`));
+  const deadlines = [
+    comp.selectionDeadline ? `${t('competitions.formSelectionDeadline')}: ${fmtDateLong(comp.selectionDeadline)}` : null,
+    comp.entryDeadline ? `${t('competitions.formEntryDeadline')}: ${fmtDateLong(comp.entryDeadline)}` : null,
+  ].filter(Boolean);
+  if (deadlines.length > 0) wrap.appendChild(el('p', { class: 'text-sm' }, deadlines.join(' · ')));
 
   const card = el('div', { class: 'card' }, [
     el('div', { class: 'flex justify-between items-center mb-16' }, [
@@ -285,16 +291,36 @@ function openCompModal(comp, onSaved) {
   const fLoc = textInput(data.location);
   const fCourse = selectInput(trOptions(COURSES, 'courses'), data.course);
   const fNotes = el('textarea', {}, data.notes || '');
+  const fEntryDeadline = dateInput(data.entryDeadline || '');
+  // Neue Wettkämpfe erhalten den Vorschlagswert für die interne Frist
+  // (competitionDeadlines.js). Solange die Frist diesem Vorschlag
+  // entspricht, folgt sie Änderungen an Datum/Meldeschluss; wer sie von
+  // Hand ändert oder leert, behält seinen Wert. Bei bestehenden
+  // Wettkämpfen ohne interne Frist bleibt das Feld leer.
+  const currentDefault = () => defaultSelectionDeadline({ date: fDate.value, entryDeadline: fEntryDeadline.value });
+  const fSelectionDeadline = dateInput(isEdit ? (data.selectionDeadline || '') : currentDefault());
+  let selectionFollowsDefault = !isEdit || (!!fSelectionDeadline.value && fSelectionDeadline.value === currentDefault());
+  const syncSelectionDefault = () => { if (selectionFollowsDefault) fSelectionDeadline.value = currentDefault(); };
+  fDate.addEventListener('change', syncSelectionDefault);
+  fEntryDeadline.addEventListener('change', syncSelectionDefault);
+  fSelectionDeadline.addEventListener('change', () => { selectionFollowsDefault = false; });
   form.appendChild(field(t('competitions.formName'), fName, { span2: true }));
   form.appendChild(field(t('competitions.formDate'), fDate));
   form.appendChild(field(t('competitions.formCourse'), fCourse));
+  form.appendChild(field(t('competitions.formEntryDeadline'), fEntryDeadline, { hint: t('competitions.formEntryDeadlineHint') }));
+  form.appendChild(field(t('competitions.formSelectionDeadline'), fSelectionDeadline, { hint: t('competitions.formSelectionDeadlineHint') }));
   form.appendChild(field(t('competitions.formLocation'), fLoc, { span2: true }));
   form.appendChild(field(t('competitions.formNotes'), fNotes, { span2: true }));
   form.appendChild(formActions({ onCancel: () => close(), submitLabel: isEdit ? t('common.save') : t('common.create') }).row);
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     if (!fName.value.trim()) { toast(t('competitions.validationName'), 'error'); return; }
-    await put('competitions', { ...data, name: fName.value.trim(), date: toIsoDateTime(fDate.value), location: fLoc.value.trim(), course: fCourse.value, notes: fNotes.value.trim() });
+    const deadlineError = validateDeadlines({ date: fDate.value, entryDeadline: fEntryDeadline.value, selectionDeadline: fSelectionDeadline.value });
+    if (deadlineError) { toast(t(`competitions.${deadlineError}`), 'error'); return; }
+    await put('competitions', {
+      ...data, name: fName.value.trim(), date: toIsoDateTime(fDate.value), location: fLoc.value.trim(), course: fCourse.value, notes: fNotes.value.trim(),
+      entryDeadline: toIsoDateTime(fEntryDeadline.value), selectionDeadline: toIsoDateTime(fSelectionDeadline.value),
+    });
     toast(isEdit ? t('competitions.savedEdit') : t('competitions.savedCreate'));
     close(); onSaved?.();
   });

@@ -409,6 +409,10 @@ model Competition {
   location  String    @default("")
   course    String    @default("LCM") // "LCM" | "SCM"
   notes     String    @default("")
+  // Externer Meldeschluss (Abgabe der Startliste) und interne Frist für die
+  // Auswahl der Starts — beide optional.
+  entryDeadline     DateTime?
+  selectionDeadline DateTime?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
