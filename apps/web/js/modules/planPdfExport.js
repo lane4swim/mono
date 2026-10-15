@@ -80,24 +80,38 @@ function printSheet(sheet) {
   const naturalHeight = sheet.scrollHeight;
   const targetHeight = (PAGE_HEIGHT_MM - PAGE_MARGIN_MM * 2) * MM_TO_PX;
   if (naturalHeight > targetHeight) {
-    const scale = (targetHeight / naturalHeight) * 0.97;
     // Breite vor dem Skalieren gegenläufig vergrößern, damit der Inhalt
     // nach dem Herunterskalieren wieder die volle Seitenbreite ausfüllt.
-    sheet.style.width = `${SHEET_WIDTH_MM / scale}mm`;
+    const applyScale = (s) => {
+      sheet.style.width = `${SHEET_WIDTH_MM / s}mm`;
+      sheet.style.transform = `scale(${s})`;
+    };
     sheet.style.transformOrigin = 'top left';
-    sheet.style.transform = `scale(${scale})`;
-    // .page bekommt die Ziel-Layout-Höhe + vertikalen Überlauf-Clip: der
-    // Browser sieht dadurch für die Seitenaufteilung nur noch diese
-    // eine-Seite-hohe Box, unabhängig von der (nur optisch verkleinerten)
-    // tatsächlichen Höhe von .sheet. Nur overflow-y wird geclippt, nicht
-    // overflow-x: .page hat selbst keine explizite Breite (füllt den
-    // Druckbereich, SHEET_WIDTH_MM), während .sheet nach dem Skalieren
-    // bewusst auf die volle Blattbreite gerendert wird — mit
-    // `overflow: hidden` auf beiden Achsen würde das die rechte Kante
-    // jedes skalierten Ausdrucks abschneiden.
+    // Durch die breitere Layout-Box brechen weniger Zeilen um, der Inhalt
+    // wird also niedriger als ungeskaliert gemessen. Ein einziger Schritt
+    // (targetHeight / naturalHeight) ließ dadurch bei langen Tagen bis zu
+    // einem Drittel der Seite leer. Darum per Bisektion zwischen diesem
+    // sicheren Startwert und 1 den größten Faktor suchen, der (mit 3%
+    // Sicherheitsabschlag) noch auf eine Seite passt.
+    const fits = (s) => { applyScale(s); return sheet.scrollHeight * s <= targetHeight * 0.97; };
+    let scale = (targetHeight / naturalHeight) * 0.97;
+    let hi = 1;
+    for (let i = 0; i < 7; i++) {
+      const mid = (scale + hi) / 2;
+      if (fits(mid)) scale = mid; else hi = mid;
+    }
+    applyScale(scale);
+    // .page bekommt die Ziel-Layout-Höhe + Überlauf-Clip: der Browser sieht
+    // dadurch für die Seitenaufteilung nur noch diese eine-Seite-hohe Box,
+    // unabhängig von der (nur optisch verkleinerten) tatsächlichen Höhe von
+    // .sheet. Bewusst `overflow: hidden` auf beiden Achsen: die frühere
+    // Kombination overflow-y:hidden + overflow-x:visible wird laut
+    // CSS-Spezifikation zu overflow-x:auto, also einem Scroll-Container,
+    // den Safari im Druck rechts abschneidet. Da .page im Druck fest
+    // SHEET_WIDTH_MM breit bleibt (siehe styles.css) und .sheet nach dem
+    // Skalieren optisch genau diese Breite hat, schneidet der Clip nichts ab.
     page.style.height = `${targetHeight}px`;
-    page.style.overflowY = 'hidden';
-    page.style.overflowX = 'visible';
+    page.style.overflow = 'hidden';
   }
 
   // Safari nimmt den Druck-Snapshot manchmal auf, bevor die obigen
