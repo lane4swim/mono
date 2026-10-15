@@ -218,6 +218,17 @@ export function collectEvents({ data = {}, types, scope = 'mine', ctx, labels = 
         title: comp.name, detail: [comp.location, comp.course].filter(Boolean).join(' · '),
         route: ['competitions', comp.id], source: comp,
       });
+      // Optionale Fristen erscheinen als eigene Termine desselben Typs —
+      // gleiche Sichtbarkeit ("Meine"-Filter) und gleicher Filter-Chip wie
+      // der Wettkampf selbst.
+      for (const key of ['entryDeadline', 'selectionDeadline']) {
+        if (!comp[key]) continue;
+        events.push({
+          id: `competition:${comp.id}:${key}`, type: 'competition', date: dateOnly(comp[key]),
+          title: label(key, comp) || comp.name, detail: label('competitionDate', comp),
+          route: ['competitions', comp.id], source: comp,
+        });
+      }
     }
   }
 

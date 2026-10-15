@@ -141,6 +141,16 @@ export const CompetitionSchema = z.object({
   location: z.string().max(300).default(''),
   course: CourseSchema,
   notes: z.string().max(5000).default(''),
+  // Beide Fristen sind optional und bewusst OHNE .default() (vgl.
+  // AthleteSchema.accountMode): ein älterer Client ohne diese Felder soll
+  // beim Sync-Push gesetzte Fristen nicht still auf null zurücksetzen.
+  // entryDeadline = externer Meldeschluss (Abgabe der Startliste beim
+  // Veranstalter), selectionDeadline = interne Frist für die Auswahl der
+  // Starts. Der Vorschlagswert für selectionDeadline (3 Wochen vor dem
+  // Wettkampf bzw. 1 Woche vor dem Meldeschluss) wird im Formular gesetzt,
+  // nicht hier — gespeichert wird nur, was tatsächlich eingetragen ist.
+  entryDeadline: nullableIsoDate.optional(),
+  selectionDeadline: nullableIsoDate.optional(),
   createdAt: isoDate,
   updatedAt: isoDate,
 }).strict();
