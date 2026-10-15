@@ -21,8 +21,10 @@ export function getModule(routeId) {
 // einen eigenen REST-Endpunkt (GET /api/parents/overview), nicht über den
 // generischen, modul-gegateten Sync-Store-Mechanismus. "auditlog" (Phase 3,
 // Abschnitt 5.2) ist ebenfalls reine Infrastruktur, ohne eigenen
-// fachlichen Sync-Store.
-export const CORE_MODULE_IDS = ['dashboard', 'parent', 'profile', 'usermgmt', 'auditlog', 'syncqueue', 'info'];
+// fachlichen Sync-Store. "calendar" liest nur die Stores anderer Pakete und
+// blendet deren Termintypen selbst nach gebuchten Paketen aus (siehe
+// modules/calendar.js: availableTypes()).
+export const CORE_MODULE_IDS = ['dashboard', 'calendar', 'parent', 'profile', 'usermgmt', 'auditlog', 'syncqueue', 'info'];
 
 // Route-ID (MODULES[*].id) -> Paket-Key. MUSS inhaltlich mit
 // packages/shared-types/src/modules.ts: MODULE_PACKAGES übereinstimmen —

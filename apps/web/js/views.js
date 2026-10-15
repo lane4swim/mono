@@ -21,8 +21,9 @@ const ICON_COMPETITION = '<svg viewBox="0 0 24 24" fill="none" stroke="currentCo
 const ICON_MEET_ORG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 21V4"/><path d="M4 4h12l-2 4 2 4H4"/><path d="M14 21h6M17 17v4"/></svg>';
 
 // Module, die in JEDER Ansicht erscheinen: Einstieg (Dashboard bzw.
-// Eltern-Übersicht), vereinsweite Kommunikation und reine Infrastruktur.
-export const COMMON_MODULE_IDS = ['dashboard', 'parent', 'announcements', 'syncqueue', 'info', 'profile'];
+// Eltern-Übersicht), der ansichtsübergreifende Kalender, vereinsweite
+// Kommunikation und reine Infrastruktur.
+export const COMMON_MODULE_IDS = ['dashboard', 'calendar', 'parent', 'announcements', 'syncqueue', 'info', 'profile'];
 
 // Reihenfolge von `moduleIds` = Priorität für die Startseite der Ansicht
 // (das erste für die Person sichtbare Modul, siehe defaultRouteOf()) und
