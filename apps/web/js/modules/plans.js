@@ -202,12 +202,7 @@ function appendEntryRows(host, items, exercises, plan) {
   let pendingRows = [];
   function flushTable() {
     if (pendingRows.length === 0) return;
-    const table = el('table');
-    table.appendChild(el('thead', {}, el('tr', {}, [el('th', {}, t('plans.colDescription')), el('th', {}, t('plans.colDistance')), el('th', {}, t('plans.colDuration')), el('th', {}, t('plans.colReps')), el('th', {}, t('plans.colRest')), el('th', {}, '')])));
-    const tbody = el('tbody');
-    pendingRows.forEach(row => tbody.appendChild(row));
-    table.appendChild(tbody);
-    host.appendChild(el('div', { class: 'table-wrap mb-8' }, table));
+    host.appendChild(el('div', { class: 'table-wrap mb-8' }, setsTable(pendingRows)));
     pendingRows = [];
   }
 
@@ -219,13 +214,35 @@ function appendEntryRows(host, items, exercises, plan) {
       flushTable();
       host.appendChild(renderSectionBox(entry, exercises, plan));
     } else {
-      pendingRows.push(el('tr', {}, [
-        el('td', {}, equipmentDescCell(entry, exercises)), el('td', {}, `${entry.distance ?? '—'} m`), el('td', {}, entry.durationSec != null ? formatDuration(entry.durationSec) : '—'), el('td', {}, entry.reps), el('td', {}, `${entry.restSec || 0}s`),
-        el('td', {}, setCommentsButton(entry, plan)),
-      ]));
+      pendingRows.push(setRow(entry, exercises, plan));
     }
   });
   flushTable();
+}
+
+// Satztabelle der Leseansicht. Ein Tag besteht aus mehreren einzelnen
+// Tabellen (unterbrochen von Blöcken/Abschnitten) — mit automatischer
+// Spaltenbreite hätte jede ihre eigenen Spalten, die untereinander nicht
+// fluchten. Daher table-layout:fixed mit festen Breiten per <colgroup>
+// (siehe .plan-sets-table in styles.css); die Beschreibung nimmt den Rest.
+function setsTable(rows) {
+  const table = el('table', { class: 'plan-sets-table' });
+  table.appendChild(el('colgroup', {}, [
+    el('col'), el('col', { class: 'col-distance' }), el('col', { class: 'col-duration' }),
+    el('col', { class: 'col-reps' }), el('col', { class: 'col-rest' }), el('col', { class: 'col-comments' }),
+  ]));
+  table.appendChild(el('thead', {}, el('tr', {}, [el('th', {}, t('plans.colDescription')), el('th', {}, t('plans.colDistance')), el('th', {}, t('plans.colDuration')), el('th', {}, t('plans.colReps')), el('th', {}, t('plans.colRest')), el('th', {}, '')])));
+  const tbody = el('tbody');
+  rows.forEach(row => tbody.appendChild(row));
+  table.appendChild(tbody);
+  return table;
+}
+
+function setRow(entry, exercises, plan) {
+  return el('tr', {}, [
+    el('td', {}, equipmentDescCell(entry, exercises)), el('td', {}, `${entry.distance ?? '—'} m`), el('td', {}, entry.durationSec != null ? formatDuration(entry.durationSec) : '—'), el('td', {}, entry.reps), el('td', {}, `${entry.restSec || 0}s`),
+    el('td', {}, setCommentsButton(entry, plan)),
+  ]);
 }
 
 function renderSectionBox(section, exercises, plan) {
@@ -312,7 +329,7 @@ function renderBlockBox(block, exercises, plan) {
   const innerDuration = totalDuration(block.sets || []);
   const repeatCount = block.repeatCount || 1;
   const blockEquipment = collectEquipment(block.sets || [], exercises);
-  const box = el('div', { class: 'day-block', style: 'margin:4px 0 12px;border-style:dashed;border-color:var(--c-chlorine-d);background:var(--c-foam-2)' });
+  const box = el('div', { class: 'day-block block-view' });
   const blockDuration = innerDuration * repeatCount;
   box.appendChild(el('div', { class: 'day-block-head' }, [
     el('div', { class: 'flex items-center gap-8' }, [badge(t('plans.repeatBlockLabel', { n: repeatCount }), 'progress'), el('strong', {}, block.label || t('templates.defaultBlockLabel'))]),
@@ -327,12 +344,7 @@ function renderBlockBox(block, exercises, plan) {
   if (!block.sets || block.sets.length === 0) {
     box.appendChild(el('p', { class: 'hint mt-0' }, t('plans.blockNoSets')));
   } else {
-    const table = el('table');
-    table.appendChild(el('thead', {}, el('tr', {}, [el('th', {}, t('plans.colDescription')), el('th', {}, t('plans.colDistance')), el('th', {}, t('plans.colDuration')), el('th', {}, t('plans.colReps')), el('th', {}, t('plans.colRest')), el('th', {}, '')])));
-    const tbody = el('tbody');
-    block.sets.forEach(s => tbody.appendChild(el('tr', {}, [el('td', {}, equipmentDescCell(s, exercises)), el('td', {}, `${s.distance ?? '—'} m`), el('td', {}, s.durationSec != null ? formatDuration(s.durationSec) : '—'), el('td', {}, s.reps), el('td', {}, `${s.restSec || 0}s`), el('td', {}, setCommentsButton(s, plan))])));
-    table.appendChild(tbody);
-    box.appendChild(el('div', { class: 'table-wrap' }, table));
+    box.appendChild(el('div', { class: 'table-wrap' }, setsTable(block.sets.map(s => setRow(s, exercises, plan)))));
   }
   box.appendChild(el('div', { class: 'hint', style: 'margin-top:8px;margin-bottom:0' }, t('plans.blockSummary', { inner: innerDist, n: repeatCount, total: innerDist * repeatCount })));
   return box;
