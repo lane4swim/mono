@@ -553,27 +553,44 @@ tr.live-row-done .live-set-desc{ text-decoration: line-through; color: var(--c-s
    Schriftmetriken/Druckränder auf dem jeweiligen Gerät), soll er zumindest
    zwischen zwei Sätzen/Blöcken fallen statt mitten in einem — siehe
    Issue #76. */
+/* Rasterzeile statt flex-wrap: Mit flex-wrap begann der Übungsname in
+   jeder Zeile an einer anderen Stelle (je nach Breite von Menge und
+   Intensität), und sobald eine Zeile nicht passte (Safari mit seinen
+   breiteren Systemschriften), rutschten Name oder Pause einzeln in die
+   nächste Zeile. Die Spaltenbreiten für Menge/Intensität misst
+   alignEntryColumns() in planPdfExport.js einmal für das ganze Blatt und
+   setzt sie als --print-qty-w/--print-int-w; ohne diese
+   Variablen (z. B. in jsdom) greift max-content.
+   Einzeltag (.print-days-solo): Menge | Intensität | Name | Pause.
+   Mehrspaltige Woche (.print-days, ~82mm je Tag): Intensität als eigene
+   Zeile unter dem Namen, damit dem Namen genug Breite bleibt. */
 .print-entry{
-  display: flex; flex-wrap: wrap; align-items: baseline; gap: 2mm;
+  display: grid; align-items: baseline; column-gap: 2mm; row-gap: 0.6mm;
+  grid-template-columns: var(--print-qty-w, max-content) minmax(0, 1fr) auto;
   padding: 1.6mm 0; border-bottom: 0.25mm solid #000;
   break-inside: avoid;
 }
 .print-entry-qty{
+  grid-column: 1; grid-row: 1; justify-self: start;
   font-family: var(--f-mono); font-weight: 800; font-size: 4.4mm; white-space: nowrap; color: #000;
 }
 .print-entry-intensity{
+  grid-column: 2 / -1; grid-row: 2; justify-self: start;
   font-weight: 600; font-size: 3.2mm; text-transform: uppercase; letter-spacing: 0.1mm;
   white-space: nowrap; color: #000;
 }
-.print-entry-name{ font-weight: 600; font-size: 4mm; color: #000; }
-.print-entry-rest{
-  font-family: var(--f-mono); font-weight: 700; font-size: 3.6mm; color: #000;
-  white-space: nowrap; margin-left: auto;
+.print-entry-name{
+  grid-column: 2; grid-row: 1; min-width: 0; overflow-wrap: break-word;
+  font-weight: 600; font-size: 4mm; color: #000;
 }
-/* flex-basis:100% erzwingt den Umbruch auf eine eigene Zeile innerhalb des
-   sonst einzeiligen (flex-wrap) .print-entry — siehe buildSetRow() in
-   planPdfExport.js. */
-.print-entry-equipment{ flex-basis: 100%; font-size: 3.2mm; font-style: italic; color: #000; }
+.print-entry-rest{
+  grid-column: 3; grid-row: 1; justify-self: end;
+  font-family: var(--f-mono); font-weight: 700; font-size: 3.6mm; color: #000;
+  white-space: nowrap;
+}
+/* Material unter dem Namen, über Namens- und Pausenspalte — siehe
+   buildSetRow() in planPdfExport.js. */
+.print-entry-equipment{ grid-column: 2 / -1; grid-row: 3; font-size: 3.2mm; font-style: italic; color: #000; }
 .print-block{
   border: 0.7mm solid #000; border-radius: 1.5mm; padding: 2mm 3mm; margin: 1.5mm 0 3mm;
   break-inside: avoid;
@@ -600,12 +617,15 @@ tr.live-row-done .live-set-desc{ text-decoration: line-through; color: var(--c-s
 .print-days-solo .print-day-head{ border-bottom-width: 1mm; padding-bottom: 2.5mm; margin-bottom: 4mm; }
 .print-days-solo .print-day-date{ font-size: 7mm; }
 .print-days-solo .print-day-total{ font-size: 5.5mm; }
-.print-days-solo .print-entry{ padding: 3mm 0; gap: 4mm; }
-.print-days-solo .print-entry-qty{ font-size: 7mm; min-width: 38mm; }
-.print-days-solo .print-entry-intensity{ font-size: 4.6mm; }
-.print-days-solo .print-entry-name{ font-size: 6.4mm; }
-.print-days-solo .print-entry-rest{ font-size: 5mm; }
-.print-days-solo .print-entry-equipment{ font-size: 4.4mm; }
+.print-days-solo .print-entry{
+  padding: 3mm 0; column-gap: 4mm;
+  grid-template-columns: var(--print-qty-w, max-content) var(--print-int-w, max-content) minmax(0, 1fr) auto;
+}
+.print-days-solo .print-entry-qty{ font-size: 7mm; }
+.print-days-solo .print-entry-intensity{ grid-column: 2; grid-row: 1; font-size: 4.6mm; }
+.print-days-solo .print-entry-name{ grid-column: 3; font-size: 6.4mm; }
+.print-days-solo .print-entry-rest{ grid-column: 4; font-size: 5mm; }
+.print-days-solo .print-entry-equipment{ grid-column: 3 / -1; grid-row: 2; font-size: 4.4mm; }
 .print-days-solo .print-block{ padding: 4mm 5mm; margin: 3mm 0 5mm; }
 .print-days-solo .print-block-head{ font-size: 6mm; margin-bottom: 2mm; }
 .print-days-solo .print-section-head{ padding-bottom: 2mm; margin-bottom: 2.5mm; }
