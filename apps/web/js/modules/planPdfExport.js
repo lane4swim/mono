@@ -77,6 +77,7 @@ function printSheet(sheet) {
   // sehr umfangreicher Plan mit kleinerer Schrift ist besser als eine
   // zweite Seite. Der 3%-Sicherheitsabschlag fängt verbleibende
   // Rundungsungenauigkeiten zwischen CSS-mm und Druck-px ab.
+  alignEntryColumns(sheet);
   const naturalHeight = sheet.scrollHeight;
   const targetHeight = (PAGE_HEIGHT_MM - PAGE_MARGIN_MM * 2) * MM_TO_PX;
   if (naturalHeight > targetHeight) {
@@ -121,6 +122,26 @@ function printSheet(sheet) {
   // eine zweite Seite über. Chrome/Firefox layouten vor dem Druck synchron
   // neu, Safari braucht dafür einen Tick Verzögerung.
   setTimeout(() => window.print(), 50);
+}
+
+// Jede .print-entry ist ein eigenes Grid, deren Spalten ohne Hilfe nur
+// so breit wären wie Menge/Intensität der jeweiligen Zeile — der
+// Übungsname begänne dann in jeder Zeile an einer anderen Stelle. Darum
+// einmal die breiteste Menge und Intensität des Blatts messen (beide
+// Spans sind per justify-self:start nur so breit wie ihr Text) und als
+// gemeinsame Spaltenbreiten setzen (siehe .print-entry in styles.css).
+// Läuft vor der Höhenmessung in printSheet(), damit die Ein-Seiten-
+// Skalierung das endgültige Layout misst. Schriftgrößen sind in mm
+// angegeben und hängen nicht von der Blattbreite ab, die Messung bleibt
+// also auch nach dem Verbreitern beim Skalieren gültig.
+function alignEntryColumns(sheet) {
+  const maxWidth = (selector) => Math.max(0,
+    ...Array.from(sheet.querySelectorAll(selector), node => node.getBoundingClientRect().width));
+  const qty = maxWidth('.print-entry-qty');
+  const intensity = maxWidth('.print-entry-intensity');
+  if (qty === 0 && intensity === 0) return;
+  sheet.style.setProperty('--print-qty-w', `${Math.ceil(qty)}px`);
+  sheet.style.setProperty('--print-int-w', `${Math.ceil(intensity)}px`);
 }
 
 function buildSheet(plan, group, exercises) {
@@ -237,11 +258,10 @@ function buildSetRow(entrySet, exercises) {
   if (entrySet.restSec > 0) {
     row.appendChild(el('span', { class: 'print-entry-rest' }, `${t('plans.colRest')}: ${entrySet.restSec}s`));
   }
-  // Material nur anzeigen, wenn tatsächlich welches gebraucht wird — eigener,
-  // volle Zeilenbreite beanspruchender Eintrag (siehe .print-entry-equipment
-  // in styles.css: flex-basis 100% erzwingt den Zeilenumbruch innerhalb des
-  // sonst einzeiligen .print-entry), damit eine womöglich lange Materialliste
-  // die kompakte erste Zeile (Menge/Intensität/Name/Pause) nicht sprengt.
+  // Material nur anzeigen, wenn tatsächlich welches gebraucht wird — eigene
+  // Rasterzeile unter dem Namen (siehe .print-entry-equipment in
+  // styles.css), damit eine womöglich lange Materialliste die kompakte
+  // erste Zeile (Menge/Intensität/Name/Pause) nicht sprengt.
   const equipment = equipmentForEntry(entrySet, exercises);
   if (equipment.length > 0) {
     row.appendChild(el('span', { class: 'print-entry-equipment' },
