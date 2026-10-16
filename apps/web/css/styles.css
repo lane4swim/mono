@@ -525,29 +525,41 @@ tr.live-row-done .live-set-desc{ text-decoration: line-through; color: var(--c-s
   height: 0; overflow: hidden;
   -webkit-text-size-adjust: 100%; text-size-adjust: 100%;
 }
-/* 186mm = A4 (210mm) minus den 12mm @page-Rand weiter unten — muss zu
-   SHEET_WIDTH_MM in js/modules/planPdfExport.js passen, sonst wird die
-   Vorab-Messung auf einer anderen Breite gemacht als später gedruckt wird
-   (siehe Kommentar dort, Issue #76). */
+/* 186mm = A4 (210mm) minus den 12mm @page-Rand weiter unten (PAGE_MARGIN_MM
+   in js/modules/planPdfExport.js) — sonst wird die Vorab-Messung auf einer
+   anderen Breite gemacht als später gedruckt wird (Issue #76). */
 .plan-print-page{ width: 186mm; }
+/* Alle Maße der Druckansicht sind Vielfache von --pu (1mm × --print-scale).
+   printSheet() in planPdfExport.js verkleinert einen zu langen Plan, indem
+   es --print-scale senkt: Schrift und Abstände werden tatsächlich kleiner
+   gelayoutet, die Blattbreite bleibt 186mm. Früher geschah das per
+   transform: scale() auf einer breiteren Layout-Box. iOS-Safari
+   paginiert beim Druck aber die unskalierte Layout-Box, hielt die
+   Übungsliste deshalb für zu hoch und schob sie komplett auf eine zweite
+   "Seite" — im Ausdruck folgte auf den Tageskopf eine große Lücke, der
+   Rest wurde unten abgeschnitten. */
 .plan-print-sheet{
+  --pu: calc(1mm * var(--print-scale, 1));
   width: 186mm; background: #fff; color: #000; font-family: var(--f-body);
 }
-.print-head{ border-bottom: 1mm solid #000; padding-bottom: 3mm; margin-bottom: 5mm; }
+.print-head{ border-bottom: calc(1 * var(--pu)) solid #000; padding-bottom: calc(3 * var(--pu)); margin-bottom: calc(5 * var(--pu)); }
 .print-title{
-  font-family: var(--f-display); font-weight: 700; font-size: 9mm; line-height: 1.1;
-  color: #000; margin: 0 0 2mm;
+  font-family: var(--f-display); font-weight: 700; font-size: calc(9 * var(--pu)); line-height: 1.1;
+  color: #000; margin: 0 0 calc(2 * var(--pu));
 }
-.print-sub{ font-size: 4mm; font-weight: 600; color: #000; }
-.print-days{ display: grid; grid-template-columns: repeat(auto-fill, minmax(82mm, 1fr)); gap: 6mm; }
+.print-sub{ font-size: calc(4 * var(--pu)); font-weight: 600; color: #000; }
+.print-days{ display: grid; grid-template-columns: repeat(auto-fill, minmax(calc(82 * var(--pu)), 1fr)); gap: calc(6 * var(--pu)); }
 .print-day{ break-inside: avoid; min-width: 0; }
 .print-day-head{
-  display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 1mm 2mm;
-  border-bottom: 0.6mm solid #000; padding-bottom: 1.5mm; margin-bottom: 2mm; min-width: 0;
+  display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: calc(1 * var(--pu)) calc(2 * var(--pu));
+  border-bottom: calc(0.6 * var(--pu)) solid #000; padding-bottom: calc(1.5 * var(--pu)); margin-bottom: calc(2 * var(--pu)); min-width: 0;
 }
-.print-day-date{ font-weight: 700; font-size: 4.6mm; text-transform: capitalize; }
-.print-day-total{ font-weight: 700; font-size: 3.8mm; font-family: var(--f-mono); }
-.print-entry-list{ display: flex; flex-direction: column; }
+.print-day-date{ font-weight: 700; font-size: calc(4.6 * var(--pu)); text-transform: capitalize; }
+.print-day-total{ font-weight: 700; font-size: calc(3.8 * var(--pu)); font-family: var(--f-mono); }
+/* Bewusst kein Flex-Container: WebKit behandelt Flex-Container beim
+   Seitenumbruch als unteilbar und schiebt sie als Ganzes auf die nächste
+   Seite, sobald sie nicht mehr auf die aktuelle passen. */
+.print-entry-list{ display: block; }
 /* Falls trotz der Ein-Seiten-Erzwingung in planPdfExport.js (Skalierung +
    Höhen-Clip) doch noch ein Seitenumbruch nötig wird (z. B. abweichende
    Schriftmetriken/Druckränder auf dem jeweiligen Gerät), soll er zumindest
@@ -565,72 +577,72 @@ tr.live-row-done .live-set-desc{ text-decoration: line-through; color: var(--c-s
    Mehrspaltige Woche (.print-days, ~82mm je Tag): Intensität als eigene
    Zeile unter dem Namen, damit dem Namen genug Breite bleibt. */
 .print-entry{
-  display: grid; align-items: baseline; column-gap: 2mm; row-gap: 0.6mm;
+  display: grid; align-items: baseline; column-gap: calc(2 * var(--pu)); row-gap: calc(0.6 * var(--pu));
   grid-template-columns: var(--print-qty-w, max-content) minmax(0, 1fr) auto;
-  padding: 1.6mm 0; border-bottom: 0.25mm solid #000;
+  padding: calc(1.6 * var(--pu)) 0; border-bottom: calc(0.25 * var(--pu)) solid #000;
   break-inside: avoid;
 }
 .print-entry-qty{
   grid-column: 1; grid-row: 1; justify-self: start;
-  font-family: var(--f-mono); font-weight: 800; font-size: 4.4mm; white-space: nowrap; color: #000;
+  font-family: var(--f-mono); font-weight: 800; font-size: calc(4.4 * var(--pu)); white-space: nowrap; color: #000;
 }
 .print-entry-intensity{
   grid-column: 2 / -1; grid-row: 2; justify-self: start;
-  font-weight: 600; font-size: 3.2mm; text-transform: uppercase; letter-spacing: 0.1mm;
+  font-weight: 600; font-size: calc(3.2 * var(--pu)); text-transform: uppercase; letter-spacing: calc(0.1 * var(--pu));
   white-space: nowrap; color: #000;
 }
 .print-entry-name{
   grid-column: 2; grid-row: 1; min-width: 0; overflow-wrap: break-word;
-  font-weight: 600; font-size: 4mm; color: #000;
+  font-weight: 600; font-size: calc(4 * var(--pu)); color: #000;
 }
 .print-entry-rest{
   grid-column: 3; grid-row: 1; justify-self: end;
-  font-family: var(--f-mono); font-weight: 700; font-size: 3.6mm; color: #000;
+  font-family: var(--f-mono); font-weight: 700; font-size: calc(3.6 * var(--pu)); color: #000;
   white-space: nowrap;
 }
 /* Material unter dem Namen, über Namens- und Pausenspalte — siehe
    buildSetRow() in planPdfExport.js. */
-.print-entry-equipment{ grid-column: 2 / -1; grid-row: 3; font-size: 3.2mm; font-style: italic; color: #000; }
+.print-entry-equipment{ grid-column: 2 / -1; grid-row: 3; font-size: calc(3.2 * var(--pu)); font-style: italic; color: #000; }
 .print-block{
-  border: 0.7mm solid #000; border-radius: 1.5mm; padding: 2mm 3mm; margin: 1.5mm 0 3mm;
+  border: calc(0.7 * var(--pu)) solid #000; border-radius: calc(1.5 * var(--pu)); padding: calc(2 * var(--pu)) calc(3 * var(--pu)); margin: calc(1.5 * var(--pu)) 0 calc(3 * var(--pu));
   break-inside: avoid;
 }
 .print-block-head{
-  font-weight: 800; font-size: 3.8mm; text-transform: uppercase; letter-spacing: 0.2mm; margin-bottom: 1mm;
+  font-weight: 800; font-size: calc(3.8 * var(--pu)); text-transform: uppercase; letter-spacing: calc(0.2 * var(--pu)); margin-bottom: calc(1 * var(--pu));
 }
 .print-block-list .print-entry:last-child{ border-bottom: none; }
-.print-empty{ font-size: 4mm; color: #000; }
-.print-section{ margin: 1mm 0 3mm; }
+.print-empty{ font-size: calc(4 * var(--pu)); color: #000; }
+.print-section{ margin: calc(1 * var(--pu)) 0 calc(3 * var(--pu)); }
 .print-section-head{
-  display: flex; justify-content: space-between; align-items: baseline; gap: 2mm;
-  border-bottom: 0.5mm solid #000; padding-bottom: 1mm; margin-bottom: 1.5mm;
+  display: flex; justify-content: space-between; align-items: baseline; gap: calc(2 * var(--pu));
+  border-bottom: calc(0.5 * var(--pu)) solid #000; padding-bottom: calc(1 * var(--pu)); margin-bottom: calc(1.5 * var(--pu));
 }
 .print-section-heading{
-  font-family: var(--f-display); font-weight: 700; font-size: 4.6mm;
-  text-transform: uppercase; letter-spacing: 0.2mm; color: #000;
+  font-family: var(--f-display); font-weight: 700; font-size: calc(4.6 * var(--pu));
+  text-transform: uppercase; letter-spacing: calc(0.2 * var(--pu)); color: #000;
 }
-.print-section-total{ font-weight: 700; font-size: 3.6mm; font-family: var(--f-mono); color: #000; white-space: nowrap; }
+.print-section-total{ font-weight: 700; font-size: calc(3.6 * var(--pu)); font-family: var(--f-mono); color: #000; white-space: nowrap; }
 
 /* Einzeltag-Druck (exportDayToPdf): volle Seitenbreite statt Raster,
    dadurch bekommt jeder Eintrag deutlich mehr Platz — Schrift entsprechend
    größer skaliert als in der Mehrtage-Übersicht. */
-.print-days-solo .print-day-head{ border-bottom-width: 1mm; padding-bottom: 2.5mm; margin-bottom: 4mm; }
-.print-days-solo .print-day-date{ font-size: 7mm; }
-.print-days-solo .print-day-total{ font-size: 5.5mm; }
+.print-days-solo .print-day-head{ border-bottom-width: calc(1 * var(--pu)); padding-bottom: calc(2.5 * var(--pu)); margin-bottom: calc(4 * var(--pu)); }
+.print-days-solo .print-day-date{ font-size: calc(7 * var(--pu)); }
+.print-days-solo .print-day-total{ font-size: calc(5.5 * var(--pu)); }
 .print-days-solo .print-entry{
-  padding: 3mm 0; column-gap: 4mm;
+  padding: calc(3 * var(--pu)) 0; column-gap: calc(4 * var(--pu));
   grid-template-columns: var(--print-qty-w, max-content) var(--print-int-w, max-content) minmax(0, 1fr) auto;
 }
-.print-days-solo .print-entry-qty{ font-size: 7mm; }
-.print-days-solo .print-entry-intensity{ grid-column: 2; grid-row: 1; font-size: 4.6mm; }
-.print-days-solo .print-entry-name{ grid-column: 3; font-size: 6.4mm; }
-.print-days-solo .print-entry-rest{ grid-column: 4; font-size: 5mm; }
-.print-days-solo .print-entry-equipment{ grid-column: 3 / -1; grid-row: 2; font-size: 4.4mm; }
-.print-days-solo .print-block{ padding: 4mm 5mm; margin: 3mm 0 5mm; }
-.print-days-solo .print-block-head{ font-size: 6mm; margin-bottom: 2mm; }
-.print-days-solo .print-section-head{ padding-bottom: 2mm; margin-bottom: 2.5mm; }
-.print-days-solo .print-section-heading{ font-size: 6.6mm; }
-.print-days-solo .print-section-total{ font-size: 5mm; }
+.print-days-solo .print-entry-qty{ font-size: calc(7 * var(--pu)); }
+.print-days-solo .print-entry-intensity{ grid-column: 2; grid-row: 1; font-size: calc(4.6 * var(--pu)); }
+.print-days-solo .print-entry-name{ grid-column: 3; font-size: calc(6.4 * var(--pu)); }
+.print-days-solo .print-entry-rest{ grid-column: 4; font-size: calc(5 * var(--pu)); }
+.print-days-solo .print-entry-equipment{ grid-column: 3 / -1; grid-row: 2; font-size: calc(4.4 * var(--pu)); }
+.print-days-solo .print-block{ padding: calc(4 * var(--pu)) calc(5 * var(--pu)); margin: calc(3 * var(--pu)) 0 calc(5 * var(--pu)); }
+.print-days-solo .print-block-head{ font-size: calc(6 * var(--pu)); margin-bottom: calc(2 * var(--pu)); }
+.print-days-solo .print-section-head{ padding-bottom: calc(2 * var(--pu)); margin-bottom: calc(2.5 * var(--pu)); }
+.print-days-solo .print-section-heading{ font-size: calc(6.6 * var(--pu)); }
+.print-days-solo .print-section-total{ font-size: calc(5 * var(--pu)); }
 
 @media print{
   /* html/body normally carry height:100% + the app's foam background
