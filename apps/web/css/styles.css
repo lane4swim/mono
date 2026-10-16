@@ -395,8 +395,19 @@ tr.live-row-done .live-set-desc{ text-decoration: line-through; color: var(--c-s
 .entry-head .section-heading-input{ font-size: var(--fs-md); font-weight:700; padding:6px 10px; min-width:220px; }
 /* Read-only Anzeige (plans.js: renderSectionBox) — derselbe farbige Rand,
    diesmal als Einrückung statt Container, weil die Sätze/Blöcke darunter
-   bereits ihre eigene Kästchen-/Tabellen-Optik mitbringen. */
-.section-block-view{ border-left: 3px solid var(--c-petrol); padding-left: 12px; margin: 4px 0 12px; }
+   bereits ihre eigene Kästchen-/Tabellen-Optik mitbringen.
+   Wie im Editor ragen Rahmen und Innenabstand per negativem Außenabstand
+   nach außen, damit die Tabellen darin exakt so breit sind wie die auf
+   oberster Ebene und alle Spalten (siehe .plan-sets-table) fluchten. */
+.section-block-view{ border-left: 3px solid var(--c-petrol); padding-left: 12px; margin: 4px 0 12px -15px; }
+.block-view{ border-style: dashed; border-color: var(--c-chlorine-d); background: var(--c-foam-2); margin: 4px -17px 12px; }
+.plan-sets-table{ table-layout: fixed; min-width: 560px; }
+.plan-sets-table td{ overflow-wrap: anywhere; }
+.plan-sets-table .col-distance{ width: 90px; }
+.plan-sets-table .col-duration{ width: 80px; }
+.plan-sets-table .col-reps{ width: 70px; }
+.plan-sets-table .col-rest{ width: 80px; }
+.plan-sets-table .col-comments{ width: 150px; }
 .section-heading-view{ font-size: var(--fs-md); margin: 0 0 8px; }
 
 /* Responsive */
