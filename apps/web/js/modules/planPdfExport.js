@@ -8,8 +8,9 @@
 //
 // "Einseitig" wird durch Messen + notfalls Herunterskalieren erzwungen:
 // der Inhalt wird zunächst in natürlicher Größe aufgebaut, dann gegen
-// die verfügbare A4-Druckhöhe geprüft; passt er nicht, wird er per
-// CSS-transform so weit verkleinert, dass er auf eine Seite passt.
+// die verfügbare A4-Druckhöhe geprüft; passt er nicht, werden Schrift und
+// Abstände über --print-scale so weit verkleinert, dass er auf eine Seite
+// passt.
 //
 // Neben dem ganzen Wochenplan (exportPlanToPdf) lässt sich auch ein
 // einzelner Trainingstag drucken (exportDayToPdf) — z. B. um nur den
@@ -23,18 +24,11 @@ import { EQUIPMENT_ITEMS, SET_INTENSITIES, COURSES } from '../refdata.js';
 import { t, trLabel } from '../i18n.js';
 
 const MM_TO_PX = 96 / 25.4;
-const PAGE_WIDTH_MM = 210;
 const PAGE_HEIGHT_MM = 297;
+// @page-Rand aus css/styles.css. Die Blattbreite (A4 minus diesen Rand,
+// 186mm) steht fest in .plan-print-page/.plan-print-sheet dort, damit die
+// Vorab-Messung auf derselben Breite läuft wie der Druck (Issue #76).
 const PAGE_MARGIN_MM = 12;
-// Tatsächliche Druckbreite (A4 minus @page-Rand, siehe css/styles.css) — muss
-// zur Breite von .plan-print-sheet dort passen. Vorher war hier 190mm fest
-// hinterlegt, während @page (styles.css) einen 12mm-Rand vorgibt, also
-// tatsächlich nur 186mm Druckbreite zur Verfügung stehen: Die Vorab-Messung
-// auf dem Bildschirm lief dadurch 4mm breiter als der spätere Ausdruck, ein
-// Trainingstag knapp unterhalb der Ein-Seiten-Grenze konnte beim echten
-// (schmaleren) Druck durch zusätzliche Zeilenumbrüche doch noch auf eine
-// zweite Seite rutschen (Issue #76).
-const SHEET_WIDTH_MM = PAGE_WIDTH_MM - PAGE_MARGIN_MM * 2;
 
 let printRoot = null;
 function getPrintRoot() {
@@ -56,17 +50,6 @@ export function exportDayToPdf(plan, day, group, exercises) {
 function printSheet(sheet) {
   const root = getPrintRoot();
   clear(root);
-  // .plan-print-page ist der eigentliche Seiten-Container: seine (ggf.
-  // explizit gesetzte) Layout-Höhe bestimmt die Druck-Paginierung. .sheet
-  // selbst wird bei Bedarf per `transform: scale()` verkleinert — transform
-  // ist reines Paint-Scaling und ändert die Layout-Box von .sheet nicht,
-  // aber .page bekommt in dem Fall unten eine explizite Pixelhöhe, wodurch
-  // die Paginierung ausschließlich mit dieser (dann bereits verkleinerten)
-  // Höhe rechnet, unabhängig davon, ob der Browser Paint-Scaling während
-  // des Drucks überhaupt berücksichtigt. Frühere Versuche mit CSS `zoom`
-  // scheiterten daran, dass Safari `zoom` beim tatsächlichen Druck (im
-  // Gegensatz zur Bildschirmdarstellung) nicht zuverlässig anwendet, wodurch
-  // einzelne Trainingstage trotz Skalierung auf zwei Seiten liefen.
   const page = el('div', { class: 'plan-print-page' });
   page.appendChild(sheet);
   root.appendChild(page);
@@ -77,43 +60,41 @@ function printSheet(sheet) {
   // sehr umfangreicher Plan mit kleinerer Schrift ist besser als eine
   // zweite Seite. Der 3%-Sicherheitsabschlag fängt verbleibende
   // Rundungsungenauigkeiten zwischen CSS-mm und Druck-px ab.
+  //
+  // Verkleinert wird über --print-scale (siehe .plan-print-sheet in
+  // styles.css), also echtes Layout statt transform: scale(). Mit transform
+  // paginierte iOS-Safari die unskalierte Layout-Box, hielt den Inhalt für
+  // höher als eine Seite und schob die Übungsliste auf eine zweite Seite.
+  // CSS `zoom` scheidet ebenfalls aus, Safari wendet es beim Druck nicht
+  // zuverlässig an.
   alignEntryColumns(sheet);
   const naturalHeight = sheet.scrollHeight;
   const targetHeight = (PAGE_HEIGHT_MM - PAGE_MARGIN_MM * 2) * MM_TO_PX;
-  if (naturalHeight > targetHeight) {
-    // Breite vor dem Skalieren gegenläufig vergrößern, damit der Inhalt
-    // nach dem Herunterskalieren wieder die volle Seitenbreite ausfüllt.
-    const applyScale = (s) => {
-      sheet.style.width = `${SHEET_WIDTH_MM / s}mm`;
-      sheet.style.transform = `scale(${s})`;
+  const maxHeight = targetHeight * 0.97;
+  if (naturalHeight > maxHeight) {
+    // Bei gleicher Blattbreite bricht kleinere Schrift seltener um, die
+    // Höhe sinkt also mindestens proportional zum Faktor: maxHeight /
+    // naturalHeight passt sicher. Per Bisektion zwischen diesem Startwert
+    // und 1 den größten Faktor suchen, der noch auf eine Seite passt.
+    const fits = (s) => {
+      sheet.style.setProperty('--print-scale', String(s));
+      return sheet.scrollHeight <= maxHeight;
     };
-    sheet.style.transformOrigin = 'top left';
-    // Durch die breitere Layout-Box brechen weniger Zeilen um, der Inhalt
-    // wird also niedriger als ungeskaliert gemessen. Ein einziger Schritt
-    // (targetHeight / naturalHeight) ließ dadurch bei langen Tagen bis zu
-    // einem Drittel der Seite leer. Darum per Bisektion zwischen diesem
-    // sicheren Startwert und 1 den größten Faktor suchen, der (mit 3%
-    // Sicherheitsabschlag) noch auf eine Seite passt.
-    const fits = (s) => { applyScale(s); return sheet.scrollHeight * s <= targetHeight * 0.97; };
-    let scale = (targetHeight / naturalHeight) * 0.97;
+    let scale = maxHeight / naturalHeight;
     let hi = 1;
     for (let i = 0; i < 7; i++) {
       const mid = (scale + hi) / 2;
       if (fits(mid)) scale = mid; else hi = mid;
     }
-    applyScale(scale);
-    // .page bekommt die Ziel-Layout-Höhe + Überlauf-Clip: der Browser sieht
-    // dadurch für die Seitenaufteilung nur noch diese eine-Seite-hohe Box,
-    // unabhängig von der (nur optisch verkleinerten) tatsächlichen Höhe von
-    // .sheet. Bewusst `overflow: hidden` auf beiden Achsen: die frühere
-    // Kombination overflow-y:hidden + overflow-x:visible wird laut
-    // CSS-Spezifikation zu overflow-x:auto, also einem Scroll-Container,
-    // den Safari im Druck rechts abschneidet. Da .page im Druck fest
-    // SHEET_WIDTH_MM breit bleibt (siehe styles.css) und .sheet nach dem
-    // Skalieren optisch genau diese Breite hat, schneidet der Clip nichts ab.
-    page.style.height = `${targetHeight}px`;
-    page.style.overflow = 'hidden';
+    sheet.style.setProperty('--print-scale', String(scale));
   }
+  // Letzte Absicherung, falls ein Browser im Druck doch anders umbricht
+  // als hier gemessen: lieber unten abschneiden als eine zweite Seite. Nur
+  // max-height statt fester Höhe, damit die Box nicht höher als der Inhalt
+  // ist — iOS-Safari verkleinert die Seite für Kopf-/Fußzeile und schob
+  // eine volle 273mm-Box sonst knapp auf eine leere zweite Seite.
+  page.style.maxHeight = `${targetHeight}px`;
+  page.style.overflow = 'hidden';
 
   // Safari nimmt den Druck-Snapshot manchmal auf, bevor die obigen
   // Style-Änderungen tatsächlich in ein neues Layout eingeflossen sind, und
@@ -130,18 +111,17 @@ function printSheet(sheet) {
 // einmal die breiteste Menge und Intensität des Blatts messen (beide
 // Spans sind per justify-self:start nur so breit wie ihr Text) und als
 // gemeinsame Spaltenbreiten setzen (siehe .print-entry in styles.css).
-// Läuft vor der Höhenmessung in printSheet(), damit die Ein-Seiten-
-// Skalierung das endgültige Layout misst. Schriftgrößen sind in mm
-// angegeben und hängen nicht von der Blattbreite ab, die Messung bleibt
-// also auch nach dem Verbreitern beim Skalieren gültig.
+// Läuft vor der Höhenmessung in printSheet() bei --print-scale 1; die
+// Breiten werden mit --print-scale multipliziert und skalieren so mit der
+// Schrift mit.
 function alignEntryColumns(sheet) {
   const maxWidth = (selector) => Math.max(0,
     ...Array.from(sheet.querySelectorAll(selector), node => node.getBoundingClientRect().width));
   const qty = maxWidth('.print-entry-qty');
   const intensity = maxWidth('.print-entry-intensity');
   if (qty === 0 && intensity === 0) return;
-  sheet.style.setProperty('--print-qty-w', `${Math.ceil(qty)}px`);
-  sheet.style.setProperty('--print-int-w', `${Math.ceil(intensity)}px`);
+  sheet.style.setProperty('--print-qty-w', `calc(${Math.ceil(qty)}px * var(--print-scale, 1))`);
+  sheet.style.setProperty('--print-int-w', `calc(${Math.ceil(intensity)}px * var(--print-scale, 1))`);
 }
 
 function buildSheet(plan, group, exercises) {
