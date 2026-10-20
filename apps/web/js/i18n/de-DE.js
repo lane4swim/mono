@@ -957,7 +957,8 @@ export default {
       trainingCamp: 'Trainingslager', trainingSlot: 'Trainingszeit',
     },
     refereeOpenRequests: 'Du hast {count} offene Kampfrichter-Anfrage(n).', refereeAnswerNext: 'Jetzt beantworten',
-    slotUnplanned: 'noch kein Plan — antippen zum Anlegen',
+    srNoPlan: 'noch kein Plan',
+    slotUnplanned: 'noch kein Plan — auswählen, um einen anzulegen',
     entry: {
       manage: 'Saisonplanung', add: 'Eintrag hinzufügen',
       modalCreate: 'Neuer Kalendereintrag', modalEdit: 'Kalendereintrag bearbeiten',

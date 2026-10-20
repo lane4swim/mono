@@ -424,6 +424,12 @@ function clickHandler(event, actions) {
   return null;
 }
 
+function srState(event) {
+  if (event.type === 'trainingSlot' && !event.planId) return t('calendar.srNoPlan');
+  if (event.type === 'referee' && event.status && event.status !== 'confirmed') return t(`kampfrichter.status.${event.status}`);
+  return '';
+}
+
 function spanLabel(event) {
   if (!event.endDate) return '';
   return `${fmt(event.date, { day: '2-digit', month: '2-digit' })} – ${fmt(event.endDate, { day: '2-digit', month: '2-digit' })}`;
@@ -442,7 +448,9 @@ function eventChip(event, actions = {}, { compact = false } = {}) {
       el('span', { class: 'cal-chip-title' }, event.title),
       !compact && detail ? el('span', { class: 'cal-chip-detail' }, detail) : null,
     ]),
-    el('span', { class: 'sr-only' }, ` (${t(`calendar.types.${event.type}`)})`),
+    // Zustände, die sonst nur optisch erkennbar sind (gestrichelt/durch-
+    // gestrichen) — in der kompakten Monatsansicht fehlt zudem die Detailzeile.
+    el('span', { class: 'sr-only' }, ` (${[t(`calendar.types.${event.type}`), srState(event)].filter(Boolean).join(', ')})`),
   ];
   const declined = event.type === 'referee' && event.status === 'declined';
   const attrs = { class: `cal-chip cal-type-${event.type} ${compact ? 'compact' : ''} ${unplanned ? 'unplanned' : ''} ${declined ? 'declined' : ''}`, title: tooltip };

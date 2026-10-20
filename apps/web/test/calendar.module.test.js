@@ -290,6 +290,54 @@ describe('calendarModule', () => {
     expect(document.getElementById('modal-root').textContent).toContain(t('kampfrichter.confirm'));
   });
 
+  describe('Rollen-Matrix', () => {
+    const day = (d) => `${d}T00:00:00.000Z`;
+    const SEASON = ['publicHoliday', 'schoolHoliday', 'poolClosure', 'trainingCamp'];
+    // Erwartung je Rollenkombination: Termintypen, Saisonplanung pflegen,
+    // Team-Filter, Klick auf unverplante Trainingszeit (plan | edit | none).
+    const MATRIX = [
+      { roles: ['trainer'], types: [...SEASON, 'competition', 'deadline', 'qualification', 'trainingSlot', 'training', 'session'], edit: true, teams: true, slot: 'plan' },
+      // Vereinsverwaltung ohne Trainingsplanung: pflegt die Saison, legt aber keine Pläne an.
+      { roles: ['admin'], types: [...SEASON, 'competition', 'deadline', 'qualification', 'trainingSlot', 'session'], edit: true, teams: true, slot: 'edit' },
+      // Wettkämpfe ohne eigenen Menüpunkt, aber mit eigenen Meldungen im Kalender.
+      { roles: ['athlete'], types: [...SEASON, 'competition', 'deadline', 'qualification', 'trainingSlot', 'training', 'session'], edit: false, teams: false, slot: 'none' },
+      { roles: ['trainer', 'athlete'], types: [...SEASON, 'competition', 'deadline', 'qualification', 'trainingSlot', 'training', 'session'], edit: true, teams: true, slot: 'plan' },
+      { roles: ['admin', 'referee'], types: [...SEASON, 'competition', 'deadline', 'qualification', 'referee', 'trainingSlot', 'session'], edit: true, teams: true, slot: 'edit' },
+      // Reine Kampfrichter:innen synchronisieren nicht — nur eigene Einsätze.
+      { roles: ['referee'], types: ['referee'], edit: false, teams: false, slot: null },
+    ];
+
+    for (const row of MATRIX) {
+      it(`${row.roles.join('+')}: Typen, Pflege, Team-Filter, Klick auf unverplante Trainingszeit`, async () => {
+        session.user = { id: 'u-trainer', athleteId: row.roles.includes('athlete') ? 'a-maya' : null };
+        session.roles = row.roles;
+        session.enabledModules = [...MODULE_KEYS];
+        stores.calendarEntries = [
+          { id: 'sl', kind: 'trainingSlot', title: 'Slot', groupId: 'g-a', startDate: day('2026-10-01'), endDate: day('2026-10-31'), weekdays: [3], startTime: '17:00', endTime: '18:00', pauseDuring: [], poolLength: null, location: '' },
+          { id: 'h', kind: 'publicHoliday', title: 'Feiertag', groupId: null, startDate: day('2026-10-03'), endDate: day('2026-10-03'), location: '', note: '' },
+        ];
+        expect(availableTypes()).toEqual(row.types);
+        const c = await render(['week', '2026-10-19']);
+        expect(!!c.querySelector('.page-actions')).toBe(row.edit);
+        const scopeAll = segButton(c, t('calendar.scopeAll'));
+        if (scopeAll) scopeAll.click();
+        expect(c.querySelectorAll('.team-chip').length > 0).toBe(row.teams);
+        if (row.slot === null) return;
+        const slot = c.querySelector('.cal-week .cal-chip.cal-type-trainingSlot');
+        expect(slot.tagName).toBe(row.slot === 'none' ? 'DIV' : 'BUTTON');
+        if (row.slot === 'none') return;
+        slot.click();
+        expect(planMocks.openNewPlanModal).toHaveBeenCalledTimes(row.slot === 'plan' ? 1 : 0);
+        expect(entryMocks.openEntryModal).toHaveBeenCalledTimes(row.slot === 'edit' ? 1 : 0);
+      });
+    }
+
+    it('Eltern- und Superadmin-Konten haben keinen Kalender', () => {
+      expect(isModuleVisible(calendarModule, ['parent'], MODULE_KEYS)).toBe(false);
+      expect(isModuleVisible(calendarModule, ['superadmin'], MODULE_KEYS)).toBe(false);
+    });
+  });
+
   describe('Saisonplanung', () => {
     const day = (d) => `${d}T00:00:00.000Z`;
     beforeEach(() => {

@@ -933,7 +933,8 @@ export default {
       trainingCamp: 'Training camp', trainingSlot: 'Training slot',
     },
     refereeOpenRequests: 'You have {count} open referee request(s).', refereeAnswerNext: 'Answer now',
-    slotUnplanned: 'no plan yet — tap to create one',
+    srNoPlan: 'no plan yet',
+    slotUnplanned: 'no plan yet — select to create one',
     entry: {
       manage: 'Season planning', add: 'Add entry',
       modalCreate: 'New calendar entry', modalEdit: 'Edit calendar entry',

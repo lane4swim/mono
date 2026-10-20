@@ -60,6 +60,25 @@ describe('canRead()/canWrite() — Modul-Gating', () => {
     expect(canRead('calendarEntries', ['referee'], [])).toBe(false); // kein Sync-Zugriff
   });
 
+  it('"calendarEntries": vollständige Rollen-Matrix (auch Mehrfachrollen)', () => {
+    const cases: Array<[string[], boolean, boolean]> = [
+      // Rollen, lesen, schreiben
+      [['trainer'], true, true],
+      [['admin'], true, true],
+      [['athlete'], true, false],
+      [['referee'], false, false],
+      [['parent'], false, false],
+      [['superadmin'], false, false],
+      [['athlete', 'referee'], true, false],
+      [['admin', 'referee'], true, true],
+      [['trainer', 'athlete'], true, true],
+    ];
+    for (const [roles, read, write] of cases) {
+      expect(canRead('calendarEntries', roles as never, []), `read ${roles.join('+')}`).toBe(read);
+      expect(canWrite('calendarEntries', roles as never, []), `write ${roles.join('+')}`).toBe(write);
+    }
+  });
+
   it('"announcements" ist ein eigenes, zubuchbares Paket (Phase 2, Abschnitt 4.1)', () => {
     expect(canRead('announcements', ['athlete'], ['announcements'])).toBe(true);
     expect(canWrite('announcements', ['trainer'], ['announcements'])).toBe(true);

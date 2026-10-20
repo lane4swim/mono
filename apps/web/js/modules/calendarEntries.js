@@ -21,6 +21,17 @@ function weekdayName(i) {
   return new Date(Date.UTC(2024, 0, 1 + i)).toLocaleDateString(getLocale(), { timeZone: 'UTC', weekday: 'short' });
 }
 
+// Checkbox-Gruppe als <fieldset> mit <legend> — field() verknüpfte das
+// Label nur mit dem ersten Kästchen, ein Screenreader hätte "Wochentage"
+// dann nur bei "Montag" vorgelesen.
+let fieldsetCounter = 0;
+function fieldsetField(legend, node, hint) {
+  const hintNode = hint ? el('div', { class: 'hint', id: `cal-entry-fieldset-${++fieldsetCounter}-hint` }, hint) : null;
+  return el('fieldset', { class: 'field span-2 cal-entry-fieldset', ...(hintNode ? { 'aria-describedby': hintNode.id } : {}) }, [
+    el('legend', {}, legend), node, hintNode,
+  ]);
+}
+
 function checkboxGroup(options, selected) {
   const chosen = new Set(selected);
   const inputs = options.map(({ value, label }) => {
@@ -66,10 +77,10 @@ export function openEntryModal(entry, groups, onSaved) {
   const endLabel = el('span');
   const groupField = field(t('calendar.entry.group'), fGroup);
   const slotFields = [
-    field(t('calendar.entry.weekdays'), weekdays.node, { span2: true }),
+    fieldsetField(t('calendar.entry.weekdays'), weekdays.node),
     field(t('calendar.entry.startTime'), fStartTime),
     field(t('calendar.entry.endTime'), fEndTime),
-    field(t('calendar.entry.pauseDuring'), pauses.node, { span2: true, hint: t('calendar.entry.pauseHint') }),
+    fieldsetField(t('calendar.entry.pauseDuring'), pauses.node, t('calendar.entry.pauseHint')),
     field(t('plans.formPoolLength'), fPool),
   ];
 
