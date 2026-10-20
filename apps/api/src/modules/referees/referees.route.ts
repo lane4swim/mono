@@ -7,7 +7,7 @@
 // analog qualifications.route.ts (direktes Vorbild für den
 // Modul-Gate-Cache unten).
 import type { FastifyInstance } from 'fastify';
-import { CreateRefereeAssignmentRequestSchema, UpdateRefereeAssignmentRequestSchema } from '@lane1/shared-types';
+import { CreateRefereeAssignmentRequestSchema, UpdateRefereeAssignmentRequestSchema, RespondRefereeAssignmentRequestSchema } from '@lane1/shared-types';
 import type { RefereesService, RequesterContext } from './referees.service.js';
 import { requireAnyRole } from '../../plugins/authorize.js';
 import { parseInput } from '../../plugins/parseInput.js';
@@ -148,6 +148,17 @@ export async function refereesRoutes(app: FastifyInstance, opts: RefereesRoutesO
     },
   );
 
+  app.post<{ Params: { id: string } }>(
+    '/api/me/referee-assignments/:id/response',
+    { preHandler: selfGuard },
+    async (request, reply) => {
+      const body = parseInput(RespondRefereeAssignmentRequestSchema, request.body, reply);
+      if (!body) return;
+      const assignment = await refereesService.respondOwn(request.params.id, body, requesterFrom(request));
+      return reply.code(200).send(assignment);
+    },
+  );
+
   app.delete<{ Params: { id: string } }>(
     '/api/me/referee-assignments/:id',
     { preHandler: selfGuard },
@@ -156,6 +167,11 @@ export async function refereesRoutes(app: FastifyInstance, opts: RefereesRoutesO
       return reply.code(204).send();
     },
   );
+
+  app.get('/api/referee-assignments/upcoming', { preHandler: adminGuard }, async (request, reply) => {
+    const assignments = await refereesService.listUpcomingForClub(requesterFrom(request));
+    return reply.code(200).send({ assignments });
+  });
 
   app.get<{ Params: { userId: string } }>(
     '/api/users/:userId/referee-assignments',

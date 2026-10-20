@@ -22,6 +22,7 @@ import { parentsRoutes } from './modules/parents/parents.route.js';
 import { createParentsService, type ParentsService } from './modules/parents/parents.service.js';
 import { PrismaParentLinkRepository, PrismaParentsAthleteLookup } from './modules/parents/parents.repository.js';
 import { PrismaParentOverviewGateway } from './modules/parents/parents.overview.repository.js';
+import { PrismaParentCalendarGateway } from './modules/parents/parents.calendar.repository.js';
 import { invitationsRoutes } from './modules/invitations/invitations.route.js';
 import { createAuthService, type AuthService } from './modules/auth/auth.service.js';
 import { PrismaUserRepository, PrismaRefreshTokenRepository, PrismaPasswordResetTokenRepository, PrismaMfaRecoveryCodeRepository } from './modules/auth/auth.repository.js';
@@ -35,6 +36,7 @@ import { createQualificationsService, type QualificationsService } from './modul
 import { PrismaUserQualificationRepository, PrismaQualificationReminderSettingRepository } from './modules/qualifications/qualifications.repository.js';
 import { refereesRoutes } from './modules/referees/referees.route.js';
 import { createRefereesService, type RefereesService } from './modules/referees/referees.service.js';
+import { createRefereeNotifier } from './modules/referees/referees.notify.js';
 import { PrismaRefereeAssignmentRepository, PrismaCompetitionRepository } from './modules/referees/referees.repository.js';
 import { auditLogRoutes } from './modules/auditLog/auditLog.route.js';
 import { createAuditLogService, type AuditLogService } from './modules/auditLog/auditLog.service.js';
@@ -297,14 +299,6 @@ export async function buildApp(env: Env, overrides: BuildAppOverrides = {}): Pro
       auditLog: auditLogService,
     });
 
-  const refereesService =
-    overrides.refereesService ??
-    createRefereesService({
-      assignments: new PrismaRefereeAssignmentRepository(getPrisma()),
-      users: new PrismaUserRepository(getPrisma()),
-      competitions: new PrismaCompetitionRepository(getPrisma()),
-      auditLog: auditLogService,
-    });
 
   const clubLegalInfoService =
     overrides.clubLegalInfoService ??
@@ -316,11 +310,23 @@ export async function buildApp(env: Env, overrides: BuildAppOverrides = {}): Pro
   const pushSubscriptions = overrides.pushSubscriptions ?? new PrismaPushSubscriptionRepository(getPrisma());
   const pusher = overrides.pusher ?? resolvePushSender(env);
 
+  const refereesService =
+    overrides.refereesService ??
+    createRefereesService({
+      assignments: new PrismaRefereeAssignmentRepository(getPrisma()),
+      users: new PrismaUserRepository(getPrisma()),
+      competitions: new PrismaCompetitionRepository(getPrisma()),
+      auditLog: auditLogService,
+      notify: createRefereeNotifier({ pusher, pushSubscriptions }),
+      onNotifyError: (error) => app.log.warn({ err: error }, 'Push-Benachrichtigung zu Kampfrichtereinsatz fehlgeschlagen'),
+    });
+
   const parentsService =
     overrides.parentsService ??
     createParentsService({
       parentLinks: new PrismaParentLinkRepository(getPrisma()),
       overview: new PrismaParentOverviewGateway(getPrisma()),
+      calendar: new PrismaParentCalendarGateway(getPrisma()),
       users: new PrismaUserRepository(getPrisma()),
       athletes: new PrismaParentsAthleteLookup(getPrisma()),
       auditLog: auditLogService,

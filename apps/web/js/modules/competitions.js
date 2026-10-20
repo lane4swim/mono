@@ -19,6 +19,10 @@ import { buildLiveGroups, renderLiveMode, buildResultIndex, findResultForEntry }
 import { buildStopwatchPanel } from './stopwatch.js';
 import { resultsImportButton } from './resultsImportUI.js';
 import { defaultSelectionDeadline, validateDeadlines } from './competitionDeadlines.js';
+import { getCurrentUser } from '../state.js';
+import { teamFilterChips, loadTeamSelection, saveTeamSelection, matchesTeams, competitionGroupIds, athleteGroupMap } from '../teamFilter.js';
+
+const LIST_STORES = ['competitions', 'groups', 'entries', 'athletes'];
 
 export const competitionsModule = {
   id: 'competitions',
@@ -33,13 +37,13 @@ export const competitionsModule = {
     // Detailansicht lädt ihre Daten selbst (siehe renderDetail()) — vor dem
     // Listenabruf verzweigen, sonst würde jeder Store doppelt gelesen.
     if (params[0]) return renderDetail(container, params[0]);
-    const competitions = await getAll('competitions');
+    const lists = await Promise.all(LIST_STORES.map(getAll));
     if (!isCurrent()) return;
-    renderList(container, competitions);
+    renderList(container, ...lists);
   }
 };
 
-function renderList(container, competitions) {
+function renderList(container, competitions, groups, entries, athletes) {
   const today = todayISO();
   const wrap = el('div');
   wrap.appendChild(el('div', { class: 'page-head' }, [
@@ -48,18 +52,35 @@ function renderList(container, competitions) {
   ]));
   wrap.appendChild(laneWave());
 
-  const upcoming = competitions.filter(c => c.date >= today).sort((a, b) => a.date.localeCompare(b.date));
-  const past = competitions.filter(c => c.date < today).sort((a, b) => b.date.localeCompare(a.date));
-
-  wrap.appendChild(el('h3', {}, t('competitions.upcoming')));
-  wrap.appendChild(renderCompTable(upcoming, t('competitions.noUpcoming')));
-  wrap.appendChild(el('h3', { style: 'margin-top:26px' }, t('competitions.past')));
-  wrap.appendChild(renderCompTable(past, t('competitions.noPast')));
-
+  // Team-Filter: ein Wettkampf gehört zu den Teams seiner gemeldeten
+  // Athlet:innen; ohne Meldungen bleibt er bei jeder Auswahl sichtbar.
+  const user = getCurrentUser();
+  let teams = loadTeamSelection('competitions', user, groups);
+  const athleteGroup = athleteGroupMap(athletes);
+  const entriesByComp = new Map();
+  for (const e of entries) {
+    if (!entriesByComp.has(e.competitionId)) entriesByComp.set(e.competitionId, []);
+    entriesByComp.get(e.competitionId).push(e);
+  }
+  wrap.appendChild(teamFilterChips(groups, teams, (next) => { teams = next; saveTeamSelection('competitions', user, next); drawTables(); }));
+  const host = el('div');
+  wrap.appendChild(host);
   container.appendChild(wrap);
+  drawTables();
+
+  function drawTables() {
+    clear(host);
+    const shown = competitions.filter(c => matchesTeams(competitionGroupIds(entriesByComp.get(c.id) || [], athleteGroup), teams));
+    const upcoming = shown.filter(c => c.date >= today).sort((a, b) => a.date.localeCompare(b.date));
+    const past = shown.filter(c => c.date < today).sort((a, b) => b.date.localeCompare(a.date));
+    host.appendChild(el('h3', {}, t('competitions.upcoming')));
+    host.appendChild(renderCompTable(upcoming, t('competitions.noUpcoming')));
+    host.appendChild(el('h3', { style: 'margin-top:26px' }, t('competitions.past')));
+    host.appendChild(renderCompTable(past, t('competitions.noPast')));
+  }
 
   function refresh() {
-    return redraw(container, () => getAll('competitions'), (c2) => renderList(container, c2));
+    return redraw(container, () => Promise.all(LIST_STORES.map(getAll)), (lists) => renderList(container, ...lists));
   }
 }
 

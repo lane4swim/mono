@@ -29,8 +29,15 @@ vi.mock('../js/db.js', () => ({ getAll: vi.fn(async (name) => stores[name] || []
 const apiMocks = vi.hoisted(() => ({
   listMyQualifications: vi.fn(),
   listMyRefereeAssignments: vi.fn(),
+  respondToRefereeAssignment: vi.fn(),
+  getParentCalendar: vi.fn(),
 }));
 vi.mock('../js/apiClient.js', () => ({ ...apiMocks, describeError: (e) => String(e) }));
+
+const planMocks = vi.hoisted(() => ({ openNewPlanModal: vi.fn() }));
+vi.mock('../js/modules/plans.js', () => planMocks);
+const entryMocks = vi.hoisted(() => ({ openEntryModal: vi.fn(), openEntryList: vi.fn() }));
+vi.mock('../js/modules/calendarEntries.js', () => entryMocks);
 
 const { calendarModule, availableTypes, periodLabel } = await import('../js/modules/calendar.js');
 const { registerModule, MODULES, MODULE_KEYS, isModuleVisible } = await import('../js/router.js');
@@ -95,6 +102,9 @@ beforeEach(() => {
   localStorage.clear();
   apiMocks.listMyQualifications.mockReset().mockResolvedValue({ qualifications: [] });
   apiMocks.listMyRefereeAssignments.mockReset().mockResolvedValue({ assignments: [] });
+  planMocks.openNewPlanModal.mockReset();
+  entryMocks.openEntryModal.mockReset();
+  entryMocks.openEntryList.mockReset();
   document.body.innerHTML = '';
   history.replaceState(null, '', '#/calendar');
 });
@@ -104,17 +114,18 @@ afterEach(() => {
 });
 
 describe('calendarModule', () => {
-  it('ist Kernmodul für trainer/admin/athlete/referee, nicht für parent/superadmin', () => {
-    for (const role of ['trainer', 'admin', 'athlete', 'referee']) expect(isModuleVisible(calendarModule, role, [])).toBe(true);
-    expect(isModuleVisible(calendarModule, 'parent', MODULE_KEYS)).toBe(false);
+  it('ist Kernmodul für trainer/admin/athlete/referee/parent, nicht für superadmin', () => {
+    for (const role of ['trainer', 'admin', 'athlete', 'referee', 'parent']) expect(isModuleVisible(calendarModule, role, [])).toBe(true);
     expect(isModuleVisible(calendarModule, 'superadmin', MODULE_KEYS)).toBe(false);
   });
 
   it('Termintypen folgen Rollen und gebuchten Paketen', () => {
     loginAs('trainer');
-    expect(availableTypes()).toEqual(['competition', 'deadline', 'qualification', 'training', 'session']);
+    const SEASON = ['publicHoliday', 'schoolHoliday', 'poolClosure', 'trainingCamp'];
+    expect(availableTypes()).toEqual([...SEASON, 'competition', 'deadline', 'qualification', 'trainingSlot', 'training', 'session']);
+    // Die Saisonplanung hängt an keinem Paket.
     session.enabledModules = MODULE_KEYS.filter((k) => k !== 'competitions' && k !== 'plans');
-    expect(availableTypes()).toEqual(['deadline', 'qualification', 'session']);
+    expect(availableTypes()).toEqual([...SEASON, 'deadline', 'qualification', 'trainingSlot', 'session']);
     loginAs('referee');
     expect(availableTypes()).toEqual(['referee']);
     session.demo = true;
@@ -230,5 +241,232 @@ describe('calendarModule', () => {
     const c = await render(['bogus', 'not-a-date']);
     expect(location.hash).toBe('#/calendar/month/2026-10-15');
     expect(c.querySelector('.cal-month')).not.toBeNull();
+  });
+
+  it('Team-Filter: Chips je Team im Scope, Auswahl filtert und wird gemerkt', async () => {
+    loginAs('trainer');
+    let c = await render();
+    // "Meine Termine": nur das betreute Team -> nichts zu filtern
+    expect(c.querySelectorAll('.team-chip')).toHaveLength(0);
+    segButton(c, t('calendar.scopeAll')).click();
+    const chip = (name) => [...c.querySelectorAll('.team-chip')].find((b) => b.textContent === name);
+    expect(chip('Nachwuchs')).toBeDefined();
+    chip('Nachwuchs').click();
+    let titles = chipTitles(c.querySelector('.cal-month'));
+    expect(titles).toContain('Plan Nachwuchs');
+    expect(titles).not.toContain('Plan Leistung');
+    expect(titles).not.toContain('Bezirksmeisterschaften'); // Meldung nur aus Leistungsgruppe
+    expect(chip('Nachwuchs').getAttribute('aria-pressed')).toBe('true');
+
+    c.remove();
+    c = await render();
+    titles = chipTitles(c.querySelector('.cal-month'));
+    expect(titles).not.toContain('Plan Leistung');
+    chip(t('teamFilter.all')).click();
+    expect(chipTitles(c.querySelector('.cal-month'))).toContain('Plan Leistung');
+  });
+
+  it('Athletin bekommt keinen Team-Filter', async () => {
+    loginAs('athlete');
+    const c = await render();
+    expect(c.querySelector('.team-chip')).toBeNull();
+  });
+
+  it('Kampfrichter:in: offene Anfrage mit Hinweis, Klick öffnet die Rückmeldung; Absagen durchgestrichen', async () => {
+    loginAs('referee');
+    document.body.insertAdjacentHTML('beforeend', '<div id="modal-root" hidden></div>');
+    const base = { competitionPlace: 'Halle', function: 'zeitnehmer', note: '', createdByAdminId: 'u-admin', responseNote: '', respondedAt: null };
+    apiMocks.listMyRefereeAssignments.mockResolvedValue({ assignments: [
+      { ...base, id: 'r1', competitionName: 'Landesmeisterschaften', date: '2026-10-25T00:00:00.000Z', status: 'requested' },
+      { ...base, id: 'r2', competitionName: 'Kreismeisterschaften', date: '2026-10-26T00:00:00.000Z', status: 'declined' },
+      { ...base, id: 'r3', competitionName: 'Vereinsmeisterschaften', date: '2026-10-27T00:00:00.000Z', status: 'confirmed', createdByAdminId: null },
+    ] });
+    const c = await render();
+    expect(c.querySelector('.referee-open-banner').textContent).toContain(t('calendar.refereeOpenRequests', { count: 1 }));
+    const chips = [...c.querySelectorAll('.cal-month .cal-chip.cal-type-referee')];
+    expect(chips.map((x) => [x.classList.contains('unplanned'), x.classList.contains('declined')])).toEqual([[true, false], [false, true], [false, false]]);
+    chips[0].click();
+    expect(document.getElementById('modal-root').textContent).toContain('Landesmeisterschaften');
+    expect(document.getElementById('modal-root').textContent).toContain(t('kampfrichter.confirm'));
+  });
+
+  describe('Rollen-Matrix', () => {
+    const day = (d) => `${d}T00:00:00.000Z`;
+    const SEASON = ['publicHoliday', 'schoolHoliday', 'poolClosure', 'trainingCamp'];
+    // Erwartung je Rollenkombination: Termintypen, Saisonplanung pflegen,
+    // Team-Filter, Klick auf unverplante Trainingszeit (plan | edit | none).
+    const MATRIX = [
+      { roles: ['trainer'], types: [...SEASON, 'competition', 'deadline', 'qualification', 'trainingSlot', 'training', 'session'], edit: true, teams: true, slot: 'plan' },
+      // Vereinsverwaltung ohne Trainingsplanung: pflegt die Saison, legt aber keine Pläne an.
+      { roles: ['admin'], types: [...SEASON, 'competition', 'deadline', 'qualification', 'trainingSlot', 'session'], edit: true, teams: true, slot: 'edit' },
+      // Wettkämpfe ohne eigenen Menüpunkt, aber mit eigenen Meldungen im Kalender.
+      { roles: ['athlete'], types: [...SEASON, 'competition', 'deadline', 'qualification', 'trainingSlot', 'training', 'session'], edit: false, teams: false, slot: 'none' },
+      { roles: ['trainer', 'athlete'], types: [...SEASON, 'competition', 'deadline', 'qualification', 'trainingSlot', 'training', 'session'], edit: true, teams: true, slot: 'plan' },
+      { roles: ['admin', 'referee'], types: [...SEASON, 'competition', 'deadline', 'qualification', 'referee', 'trainingSlot', 'session'], edit: true, teams: true, slot: 'edit' },
+      // Reine Kampfrichter:innen synchronisieren nicht — nur eigene Einsätze.
+      { roles: ['referee'], types: ['referee'], edit: false, teams: false, slot: null },
+    ];
+
+    for (const row of MATRIX) {
+      it(`${row.roles.join('+')}: Typen, Pflege, Team-Filter, Klick auf unverplante Trainingszeit`, async () => {
+        session.user = { id: 'u-trainer', athleteId: row.roles.includes('athlete') ? 'a-maya' : null };
+        session.roles = row.roles;
+        session.enabledModules = [...MODULE_KEYS];
+        stores.calendarEntries = [
+          { id: 'sl', kind: 'trainingSlot', title: 'Slot', groupId: 'g-a', startDate: day('2026-10-01'), endDate: day('2026-10-31'), weekdays: [3], startTime: '17:00', endTime: '18:00', pauseDuring: [], poolLength: null, location: '' },
+          { id: 'h', kind: 'publicHoliday', title: 'Feiertag', groupId: null, startDate: day('2026-10-03'), endDate: day('2026-10-03'), location: '', note: '' },
+        ];
+        expect(availableTypes()).toEqual(row.types);
+        const c = await render(['week', '2026-10-19']);
+        expect(!!c.querySelector('.page-actions')).toBe(row.edit);
+        const scopeAll = segButton(c, t('calendar.scopeAll'));
+        if (scopeAll) scopeAll.click();
+        expect(c.querySelectorAll('.team-chip').length > 0).toBe(row.teams);
+        if (row.slot === null) return;
+        const slot = c.querySelector('.cal-week .cal-chip.cal-type-trainingSlot');
+        expect(slot.tagName).toBe(row.slot === 'none' ? 'DIV' : 'BUTTON');
+        if (row.slot === 'none') return;
+        slot.click();
+        expect(planMocks.openNewPlanModal).toHaveBeenCalledTimes(row.slot === 'plan' ? 1 : 0);
+        expect(entryMocks.openEntryModal).toHaveBeenCalledTimes(row.slot === 'edit' ? 1 : 0);
+      });
+    }
+
+    it('Superadmin-Konten haben keinen Kalender', () => {
+      expect(isModuleVisible(calendarModule, ['superadmin'], MODULE_KEYS)).toBe(false);
+    });
+  });
+
+  describe('Eltern-Modus', () => {
+    const day = (d) => `${d}T00:00:00.000Z`;
+    const childData = (id, firstName, groupId, planName) => ({
+      athlete: { id, firstName, lastName: 'Vogel', groupId },
+      groups: [{ id: groupId, name: `Gruppe ${firstName}` }],
+      calendarEntries: [
+        { id: `h-${id}`, kind: 'schoolHoliday', title: 'Herbstferien', startDate: day('2026-10-26'), endDate: day('2026-10-30'), groupId: null, weekdays: [], startTime: null, endTime: null, pauseDuring: [], location: '' },
+        { id: `s-${id}`, kind: 'trainingSlot', title: `Training ${firstName}`, startDate: day('2026-09-01'), endDate: day('2027-06-30'), groupId, weekdays: [2], startTime: '17:00', endTime: '18:00', pauseDuring: [], location: '' },
+      ],
+      plans: [{ id: `p-${id}`, name: planName, groupId, days: [{ date: day('2026-10-14') }] }],
+      sessions: [{ id: `se-${id}`, date: day('2026-10-12'), groupId, attendance: [{ athleteId: id, present: true }] }],
+      competitions: [{ id: `c-${id}`, name: `Cup ${firstName}`, date: day('2026-10-24'), location: 'Nord', course: 'SCM', entryDeadline: null, selectionDeadline: null }],
+      entries: [{ id: `e-${id}`, competitionId: `c-${id}`, athleteId: id }],
+    });
+    const loginParent = (roles = ['parent']) => {
+      session.user = { id: 'u-parent', athleteId: null };
+      session.roles = roles;
+      session.enabledModules = [...MODULE_KEYS];
+    };
+    beforeEach(() => {
+      apiMocks.getParentCalendar.mockReset().mockResolvedValue({ children: [childData('k1', 'Mara', 'g-a', 'Plan Mara'), childData('k2', 'Tim', 'g-b', 'Plan Tim')] });
+    });
+
+    it('zeigt die Termine des Kindes nur lesend, ohne Staff-Bedienelemente', async () => {
+      loginParent();
+      expect(availableTypes()).toEqual(['publicHoliday', 'schoolHoliday', 'poolClosure', 'trainingCamp', 'competition', 'trainingSlot', 'training', 'session']);
+      const c = await render();
+      expect(apiMocks.getParentCalendar).toHaveBeenCalledWith({ from: '2025-12-25', to: '2027-01-07' });
+      expect(c.querySelector('.page-eyebrow').textContent).toBe(t('calendar.parentEyebrow', { name: 'Mara Vogel' }));
+      const titles = chipTitles(c.querySelector('.cal-month'));
+      expect(titles).toEqual(expect.arrayContaining(['Herbstferien', 'Training Mara', 'Cup Mara', 'Gruppe Mara']));
+      expect(titles).not.toContain('Training Tim');
+      // Plantag geht in der Trainingszeit auf
+      expect(titles).not.toContain('Plan Mara');
+      expect(c.querySelectorAll('.cal-month button.cal-chip')).toHaveLength(0);
+      expect(c.querySelector('.page-actions')).toBeNull();
+      expect(segButton(c, t('calendar.scopeAll'))).toBeUndefined();
+      expect(c.querySelector('.team-chip')).toBeNull();
+      expect(apiMocks.listMyQualifications).not.toHaveBeenCalled();
+    });
+
+    it('mehrere Kinder: Umschalter wechselt den Kalender und merkt die Wahl', async () => {
+      loginParent();
+      let c = await render();
+      const tim = segButton(c, 'Tim');
+      expect(tim.getAttribute('aria-pressed')).toBe('false');
+      tim.click();
+      await vi.waitFor(() => expect(chipTitles(document.querySelector('.cal-month'))).toContain('Training Tim'));
+      document.body.innerHTML = '';
+      c = await render();
+      expect(segButton(c, 'Tim').getAttribute('aria-pressed')).toBe('true');
+      expect(chipTitles(c.querySelector('.cal-month'))).not.toContain('Training Mara');
+    });
+
+    it('lädt beim Blättern über den geladenen Zeitraum hinaus neu', async () => {
+      loginParent();
+      const c = await render(['year', '2026-10-15']);
+      expect(apiMocks.getParentCalendar).toHaveBeenCalledTimes(1);
+      c.querySelector(`[aria-label="${t('calendar.next')}"]`).click();
+      await vi.waitFor(() => expect(apiMocks.getParentCalendar).toHaveBeenCalledTimes(2));
+      expect(apiMocks.getParentCalendar).toHaveBeenLastCalledWith({ from: '2026-12-25', to: '2028-01-07' });
+    });
+
+    it('ohne verknüpfte Kinder bzw. bei Fehler ein Hinweis statt Kalender', async () => {
+      loginParent();
+      apiMocks.getParentCalendar.mockResolvedValueOnce({ children: [] });
+      let c = await render();
+      expect(c.textContent).toContain(t('parentView.noneLinkedTitle'));
+      apiMocks.getParentCalendar.mockRejectedValueOnce(new Error('offline'));
+      c = await render();
+      expect(c.textContent).toContain(t('common.somethingWentWrong'));
+    });
+
+    it('Trainer:in, die zugleich Elternteil ist, behält ihren eigenen Kalender', async () => {
+      loginParent(['trainer', 'parent']);
+      const c = await render();
+      expect(apiMocks.getParentCalendar).not.toHaveBeenCalled();
+      expect(chipTitles(c.querySelector('.cal-month'))).toContain('Plan Leistung');
+    });
+  });
+
+  describe('Saisonplanung', () => {
+    const day = (d) => `${d}T00:00:00.000Z`;
+    beforeEach(() => {
+      stores.calendarEntries = [
+        // Mittwochs; p-a plant den 14.10.
+        { id: 'sl-a', kind: 'trainingSlot', title: 'Mittwochstraining', groupId: 'g-a', startDate: day('2026-10-01'), endDate: day('2026-10-31'), weekdays: [2], startTime: '17:00', endTime: '18:30', pauseDuring: [], poolLength: 'SCM', location: '' },
+        { id: 'h1', kind: 'schoolHoliday', title: 'Herbstferien', groupId: null, startDate: day('2026-10-26'), endDate: day('2026-11-06'), location: '', note: '' },
+      ];
+    });
+
+    it('verplante Trainingszeit öffnet den Plan, unverplante legt einen neuen an', async () => {
+      loginAs('trainer');
+      const c = await render(['week', '2026-10-12']);
+      const planned = c.querySelector('.cal-week .cal-chip.cal-type-trainingSlot');
+      expect(planned.classList.contains('unplanned')).toBe(false);
+      // Der Plantag geht in der Trainingszeit auf.
+      expect(c.querySelector('.cal-week .cal-chip.cal-type-training')).toBeNull();
+      planned.click();
+      expect(location.hash).toBe('#/plans/p-a');
+
+      const c2 = await render(['week', '2026-10-19']);
+      const open = c2.querySelector('.cal-week .cal-chip.cal-type-trainingSlot.unplanned');
+      expect(open.tagName).toBe('BUTTON');
+      open.click();
+      expect(planMocks.openNewPlanModal).toHaveBeenCalledTimes(1);
+      const [prefill] = planMocks.openNewPlanModal.mock.calls[0];
+      expect(prefill).toMatchObject({ weekStart: '2026-10-19', groupId: 'g-a', days: [{ date: '2026-10-21', poolLength: 'SCM', sets: [] }] });
+      expect(prefill.name).toContain('Mittwochstraining');
+    });
+
+    it('Ferien erscheinen an jedem Tag, in der Terminliste einmal; Staff kann sie bearbeiten', async () => {
+      loginAs('trainer');
+      const c = await render();
+      const cells = c.querySelectorAll('.cal-month-cell.mark-schoolHoliday');
+      // 26.10.–01.11. sind im Oktober-Raster sichtbar
+      expect(cells).toHaveLength(7);
+      expect(chipTitles(c.querySelector('.cal-agenda')).filter((x) => x === 'Herbstferien')).toHaveLength(1);
+      c.querySelector('.cal-month .cal-chip.cal-type-schoolHoliday').click();
+      expect(entryMocks.openEntryModal).toHaveBeenCalledWith(expect.objectContaining({ id: 'h1' }), expect.any(Array), expect.any(Function));
+      expect(c.querySelector('.page-actions')).not.toBeNull();
+    });
+
+    it('Athletin sieht Ferien und Trainingszeiten, kann aber nichts anlegen oder bearbeiten', async () => {
+      loginAs('athlete');
+      const c = await render(['week', '2026-10-19']);
+      expect(c.querySelector('.page-actions')).toBeNull();
+      const slot = c.querySelector('.cal-week .cal-chip.cal-type-trainingSlot');
+      expect(slot.tagName).toBe('DIV');
+      expect(slot.classList.contains('unplanned')).toBe(true);
+    });
   });
 });

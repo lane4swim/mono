@@ -9,6 +9,7 @@ import { isAthleteScoped, getCurrentUser } from '../state.js';
 import { fetchAssignableTrainers } from './actionItems.js';
 import { navigate } from '../router.js';
 import { t } from '../i18n.js';
+import { teamFilterChips, loadTeamSelection, saveTeamSelection, matchesTeams } from '../teamFilter.js';
 
 export const sessionsModule = {
   id: 'sessions',
@@ -37,27 +38,41 @@ function renderList(container, sessions, groups, athletes) {
   ]));
   wrap.appendChild(laneWave());
 
+  const user = getCurrentUser();
+  let teams = loadTeamSelection('sessions', user, groups);
+  wrap.appendChild(teamFilterChips(groups, teams, (next) => { teams = next; saveTeamSelection('sessions', user, next); drawTable(); }));
   const host = el('div');
   wrap.appendChild(host);
   container.appendChild(wrap);
 
   if (sessions.length === 0) { host.appendChild(emptyState(t('sessions.noSessionsTitle'), t('sessions.noSessionsMsg'), null)); return; }
-  const table = el('table');
-  table.appendChild(el('thead', {}, el('tr', {}, [el('th', {}, t('sessions.colDate')), el('th', {}, t('sessions.colGroup')), el('th', {}, t('sessions.colPresent')), el('th', {}, t('sessions.colAvgRpe')), el('th', {}, '')])));
-  const tbody = el('tbody');
-  sessions.slice().sort((a, b) => b.date.localeCompare(a.date)).forEach(s => {
-    const group = groups.find(g => g.id === s.groupId);
-    const present = s.attendance?.filter(a => a.present).length || 0;
-    const total = s.attendance?.length || 0;
-    const rpe = average(s.attendance?.filter(a => a.present && a.rpe).map(a => a.rpe) || []);
-    tbody.appendChild(el('tr', { class: 'row-click', onclick: () => navigate('sessions', s.id) }, [
-      el('td', {}, fmtDateLong(s.date)), el('td', {}, group?.name || '—'),
-      el('td', {}, `${present} / ${total}`), el('td', {}, rpe ? rpe.toFixed(1) : '—'),
-      el('td', {}, el('button', { class: 'btn btn-ghost btn-sm', onclick: (e) => { e.stopPropagation(); navigate('sessions', s.id); } }, t('common.open'))),
-    ]));
-  });
-  table.appendChild(tbody);
-  host.appendChild(el('div', { class: 'table-wrap card' }, table));
+  drawTable();
+
+  function drawTable() {
+    clear(host);
+    const shown = sessions.filter(s => matchesTeams(s.groupId ? [s.groupId] : null, teams));
+    if (shown.length === 0) { host.appendChild(emptyState(t('teamFilter.noMatchTitle'), t('teamFilter.noMatchMsg'), null)); return; }
+    host.appendChild(sessionsTable(shown));
+  }
+
+  function sessionsTable(list) {
+    const table = el('table');
+    table.appendChild(el('thead', {}, el('tr', {}, [el('th', {}, t('sessions.colDate')), el('th', {}, t('sessions.colGroup')), el('th', {}, t('sessions.colPresent')), el('th', {}, t('sessions.colAvgRpe')), el('th', {}, '')])));
+    const tbody = el('tbody');
+    list.slice().sort((a, b) => b.date.localeCompare(a.date)).forEach(s => {
+      const group = groups.find(g => g.id === s.groupId);
+      const present = s.attendance?.filter(a => a.present).length || 0;
+      const total = s.attendance?.length || 0;
+      const rpe = average(s.attendance?.filter(a => a.present && a.rpe).map(a => a.rpe) || []);
+      tbody.appendChild(el('tr', { class: 'row-click', onclick: () => navigate('sessions', s.id) }, [
+        el('td', {}, fmtDateLong(s.date)), el('td', {}, group?.name || '—'),
+        el('td', {}, `${present} / ${total}`), el('td', {}, rpe ? rpe.toFixed(1) : '—'),
+        el('td', {}, el('button', { class: 'btn btn-ghost btn-sm', onclick: (e) => { e.stopPropagation(); navigate('sessions', s.id); } }, t('common.open'))),
+      ]));
+    });
+    table.appendChild(tbody);
+    return el('div', { class: 'table-wrap card' }, table);
+  }
 
   function refresh() {
     return redraw(container, () => Promise.all(['sessions', 'groups', 'athletes'].map(getAll)), ([s2, g2, a2]) => renderList(container, s2, g2, a2));

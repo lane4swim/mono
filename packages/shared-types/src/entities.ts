@@ -465,6 +465,55 @@ export const AnnouncementSchema = z.object({
 }).strict();
 export type Announcement = z.infer<typeof AnnouncementSchema>;
 
+// Saisonplanung im Kalender: vereinsweite Ferien/Feiertage und
+// Hallenbadschließungen sowie je Gruppe regelmäßige Trainingszeiten und
+// Trainingslager. Ein gemeinsamer Store statt fünf — alle Arten sind
+// datierte Zeiträume mit Titel, nur `trainingSlot` trägt zusätzlich eine
+// wöchentliche Wiederholung (weekdays + Uhrzeit). Die einzelnen Termine
+// einer Trainingszeit werden erst im Kalender aus der Regel berechnet
+// (apps/web/js/modules/calendarEvents.js), nicht gespeichert.
+export const CalendarEntryKindSchema = z.enum(['publicHoliday', 'schoolHoliday', 'poolClosure', 'trainingCamp', 'trainingSlot']);
+export type CalendarEntryKind = z.infer<typeof CalendarEntryKindSchema>;
+
+const timeOfDay = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
+
+export const CalendarEntrySchema = z.object({
+  id: z.string().uuid(),
+  clubId: z.string().uuid(),
+  kind: CalendarEntryKindSchema,
+  title: z.string().min(1).max(200),
+  // Beide inklusive; bei trainingSlot der Gültigkeitszeitraum der Regel.
+  startDate: isoDate,
+  endDate: isoDate,
+  // null = ganzer Verein. Ferien/Feiertage/Schließungen gelten immer
+  // vereinsweit (siehe superRefine unten).
+  groupId: z.string().uuid().nullable().default(null),
+  // Nur trainingSlot: Wochentage (0 = Montag … 6 = Sonntag, wie
+  // CycleDaySchema) und Uhrzeit.
+  weekdays: z.array(z.number().int().min(0).max(6)).max(7).default([]),
+  startTime: timeOfDay.nullable().default(null),
+  endTime: timeOfDay.nullable().default(null),
+  // Nur trainingSlot: an Tagen dieser Arten fällt das Training aus.
+  pauseDuring: z.array(CalendarEntryKindSchema.exclude(['trainingSlot'])).max(4).default([]),
+  // Nur trainingSlot: Vorbelegung für neu angelegte Trainingspläne.
+  poolLength: CourseSchema.nullable().default(null),
+  location: z.string().max(200).default(''),
+  note: z.string().max(2000).default(''),
+  createdAt: isoDate,
+  updatedAt: isoDate,
+}).strict().superRefine((entry, ctx) => {
+  if (entry.endDate.slice(0, 10) < entry.startDate.slice(0, 10)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['endDate'], message: 'endDate liegt vor startDate' });
+  }
+  if (['publicHoliday', 'schoolHoliday', 'poolClosure'].includes(entry.kind) && entry.groupId !== null) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['groupId'], message: 'gilt immer vereinsweit' });
+  }
+  if (entry.kind === 'trainingSlot' && entry.weekdays.length === 0) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['weekdays'], message: 'mindestens ein Wochentag' });
+  }
+});
+export type CalendarEntry = z.infer<typeof CalendarEntrySchema>;
+
 // ---- Registry: SyncStore -> Zod-Schema -------------------------------
 // Zentrale Zuordnung, welches Schema zu welchem Store-Namen gehört. Wird
 // in Phase 3 direkt von der generischen Sync-API (`POST /api/sync/push`)
@@ -486,6 +535,7 @@ export const ENTITY_SCHEMAS = {
   sessions: TrainingSessionSchema,
   actionItems: ActionItemSchema,
   announcements: AnnouncementSchema,
+  calendarEntries: CalendarEntrySchema,
 } satisfies Partial<Record<z.infer<typeof SyncStoreSchema>, z.ZodTypeAny>>;
 
 export type EntityStoreName = keyof typeof ENTITY_SCHEMAS;

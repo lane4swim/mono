@@ -10,6 +10,7 @@ import { badge, laneWave, emptyState } from '../ui.js';
 import * as api from '../apiClient.js';
 import { describeError } from '../apiClient.js';
 import { t, trCode } from '../i18n.js';
+import { openChildCalendar } from './calendar.js';
 
 export const parentViewModule = {
   id: 'parent',
@@ -51,7 +52,10 @@ function renderOverview(container, children) {
 
   children.forEach((child) => {
     wrap.appendChild(el('div', { class: 'card mb-16' }, [
-      el('h2', { class: 'mt-0' }, `${child.athlete.firstName} ${child.athlete.lastName}`),
+      el('div', { class: 'flex justify-between items-center' }, [
+        el('h2', { class: 'mt-0' }, `${child.athlete.firstName} ${child.athlete.lastName}`),
+        el('button', { type: 'button', class: 'btn btn-ghost btn-sm', onclick: () => openChildCalendar(child.athlete.id) }, t('parentView.openCalendar')),
+      ]),
       child.athlete.groupName ? el('div', { class: 'pill-group mb-16' }, [badge(child.athlete.groupName, 'neutral')]) : null,
       buildSection(t('parentView.upcomingSessionsTitle'), child.upcomingSessions, t('parentView.noneUpcomingSessions'), (s) => el('div', { class: 'list-row' }, [
         el('div', { style: 'flex:1' }, [el('div', {}, fmtDateLong(s.date)), s.groupName ? el('div', { class: 'text-slate text-sm' }, s.groupName) : null].filter(Boolean)),

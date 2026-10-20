@@ -4,7 +4,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   periodRange, shiftAnchor, monthGridDays, isoWeek, quarterOf, personalContext, collectEvents,
-  eventsInRange, countByType, EVENT_TYPES,
+  eventsInRange, countByType, EVENT_TYPES, slotDates, groupByDate, groupByFirstDay, eventsForTeams,
 } from '../js/modules/calendarEvents.js';
 
 describe('Zeiträume', () => {
@@ -237,5 +237,126 @@ describe('eventsInRange / countByType', () => {
   it('zählt je Typ, auch Typen ohne Termine', () => {
     const counts = countByType(eventsInRange(events, '2026-10-12', '2026-10-18'));
     expect(counts).toMatchObject({ training: 4, session: 3, competition: 0, qualification: 0 });
+  });
+});
+
+// ---- Saisonplanung (Store "calendarEntries") -------------------------------
+const day = (d) => `${d}T00:00:00.000Z`;
+// Mo + Mi, 17:30–19:00, Oktober 2026 (12.10. = Montag)
+const slotA = {
+  id: 'sl-a', kind: 'trainingSlot', title: 'Abendtraining', groupId: 'g-a', startDate: day('2026-10-12'), endDate: day('2026-10-28'),
+  weekdays: [0, 2], startTime: '17:30', endTime: '19:00', pauseDuring: ['publicHoliday', 'poolClosure'], location: 'Hallenbad Nord', poolLength: 'SCM',
+};
+const slotB = { ...slotA, id: 'sl-b', title: 'Nachwuchs', groupId: 'g-b', weekdays: [1], pauseDuring: ['schoolHoliday', 'trainingCamp'], location: '' };
+const holidays = [
+  { id: 'h-pub', kind: 'publicHoliday', title: 'Tag X', groupId: null, startDate: day('2026-10-14'), endDate: day('2026-10-14') },
+  { id: 'h-school', kind: 'schoolHoliday', title: 'Herbstferien', groupId: null, startDate: day('2026-10-19'), endDate: day('2026-10-30') },
+  { id: 'h-closed', kind: 'poolClosure', title: 'Revision', groupId: null, startDate: day('2026-10-26'), endDate: day('2026-10-26'), location: 'Hallenbad Süd' },
+  { id: 'camp-b', kind: 'trainingCamp', title: 'Lager Nachwuchs', groupId: 'g-b', startDate: day('2026-10-13'), endDate: day('2026-10-14') },
+];
+
+describe('slotDates', () => {
+  it('liefert jeden gewählten Wochentag im Gültigkeitszeitraum (inklusive)', () => {
+    expect(slotDates({ ...slotA, pauseDuring: [] })).toEqual(['2026-10-12', '2026-10-14', '2026-10-19', '2026-10-21', '2026-10-26', '2026-10-28']);
+  });
+
+  it('lässt Tage mit Feiertag aus, Schließungen nur am selben (oder ohne) Ort', () => {
+    expect(slotDates(slotA, holidays)).toEqual(['2026-10-12', '2026-10-19', '2026-10-21', '2026-10-26', '2026-10-28']);
+    const closedEverywhere = holidays.map((h) => (h.id === 'h-closed' ? { ...h, location: '' } : h));
+    expect(slotDates(slotA, closedEverywhere)).not.toContain('2026-10-26');
+  });
+
+  it('Schulferien und Trainingslager nur, wenn gewählt — Lager nur der eigenen Gruppe', () => {
+    // Di 13.10. Lager der eigenen Gruppe, 20./27.10. Herbstferien
+    expect(slotDates(slotB, holidays)).toEqual([]);
+    expect(slotDates({ ...slotB, pauseDuring: ['trainingCamp'] }, holidays)).toEqual(['2026-10-20', '2026-10-27']);
+    expect(slotDates({ ...slotB, groupId: 'g-a', pauseDuring: ['trainingCamp'] }, holidays)).toEqual(['2026-10-13', '2026-10-20', '2026-10-27']);
+  });
+});
+
+describe('collectEvents — Saisonplanung', () => {
+  const season = { ...data, calendarEntries: [slotA, slotB, ...holidays] };
+
+  it('mehrtägige Einträge tragen endDate, eintägige nicht', () => {
+    const ctx = personalContext({ user: TRAINER, staff: true, athletes, groups });
+    const events = collectEvents({ data: season, types: ALL, scope: 'all', ctx });
+    const byId = Object.fromEntries(events.map((e) => [e.id, e]));
+    expect(byId['entry:h-school']).toMatchObject({ type: 'schoolHoliday', date: '2026-10-19', endDate: '2026-10-30', route: null });
+    expect(byId['entry:h-pub'].endDate).toBeUndefined();
+    expect(byId['entry:h-closed'].detail).toBe('Hallenbad Süd');
+  });
+
+  it('eine Trainingszeit übernimmt den Plantag derselben Gruppe — dieser erscheint nicht doppelt', () => {
+    const ctx = personalContext({ user: TRAINER, staff: true, athletes, groups });
+    const events = collectEvents({ data: season, types: ALL, scope: 'all', ctx, labels: { trainingDetail: () => '0 m' } });
+    const byId = Object.fromEntries(events.map((e) => [e.id, e]));
+    // p-a plant 12.10. und 14.10.; 14.10. ist Feiertag -> kein Slot-Termin
+    expect(byId['slot:sl-a:2026-10-12']).toMatchObject({ planId: 'p-a', route: ['plans', 'p-a'], time: '17:30', groupId: 'g-a' });
+    expect(byId['slot:sl-a:2026-10-12'].detail).toBe('17:30–19:00 · Leistungsgruppe · Hallenbad Nord · Woche A · 0 m');
+    expect(byId['training:p-a:0']).toBeUndefined();
+    expect(byId['training:p-a:1']).toBeDefined();
+    // unverplant
+    expect(byId['slot:sl-a:2026-10-19']).toMatchObject({ planId: null, route: null, date: '2026-10-19' });
+    expect(byId['slot:sl-a:2026-10-19'].slot).toBe(slotA);
+    // fremde Gruppe übernimmt keinen Plantag von g-a (p-b am 13.10. ist Lagertag -> kein Slot)
+    expect(byId['training:p-b:0']).toBeDefined();
+  });
+
+  it('ohne Plan-Typ (Paket nicht gebucht) bleiben Trainingszeiten unverplant', () => {
+    const ctx = personalContext({ user: TRAINER, staff: true, athletes, groups });
+    const events = collectEvents({ data: season, types: ['trainingSlot'], scope: 'all', ctx });
+    expect(events.every((e) => e.type === 'trainingSlot' && e.planId === null)).toBe(true);
+  });
+
+  it('"Meine Termine": Trainingszeiten/Lager der eigenen Gruppe, Ferien für alle', () => {
+    const athleteCtx = personalContext({ user: MAYA_USER, staff: false, athletes, groups });
+    const mine = collectEvents({ data: season, types: ALL, scope: 'mine', ctx: athleteCtx });
+    expect(new Set(mine.filter((e) => e.type === 'trainingSlot').map((e) => e.source.id))).toEqual(new Set(['sl-a']));
+    expect(ids(mine, 'trainingCamp')).toEqual([]);
+    expect(ids(mine, 'schoolHoliday')).toEqual(['entry:h-school']);
+    const trainerCtx = personalContext({ user: TRAINER, staff: true, athletes, groups });
+    expect(ids(collectEvents({ data: season, types: ALL, scope: 'mine', ctx: trainerCtx }), 'trainingCamp')).toEqual([]);
+    expect(ids(collectEvents({ data: season, types: ALL, scope: 'all', ctx: trainerCtx }), 'trainingCamp')).toEqual(['entry:camp-b']);
+  });
+
+  it('mehrtägige Termine zählen in jedem berührten Zeitraum und erscheinen an jedem Tag', () => {
+    const ctx = personalContext({ user: TRAINER, staff: true, athletes, groups });
+    const events = collectEvents({ data: season, types: ['schoolHoliday'], scope: 'all', ctx });
+    expect(eventsInRange(events, '2026-10-26', '2026-11-01')).toHaveLength(1);
+    expect(eventsInRange(events, '2026-10-31', '2026-11-30')).toHaveLength(0);
+    const byDate = groupByDate(events, { from: '2026-10-26', to: '2026-11-01' });
+    expect([...byDate.keys()]).toEqual(['2026-10-26', '2026-10-27', '2026-10-28', '2026-10-29', '2026-10-30']);
+    // Terminliste: genau einmal, am ersten Tag im Zeitraum
+    expect([...groupByFirstDay(events, '2026-10-26').keys()]).toEqual(['2026-10-26']);
+  });
+});
+
+describe('eventsForTeams', () => {
+  const season = { ...data, calendarEntries: [slotA, slotB, ...holidays] };
+  const ctx = personalContext({ user: TRAINER, staff: true, athletes, groups });
+  const events = collectEvents({ data: season, types: ALL, scope: 'all', ctx });
+  const byId = Object.fromEntries(events.map((e) => [e.id, e]));
+
+  it('ordnet Termine ihren Teams zu (Wettkampf: Teams der Meldungen)', () => {
+    expect(byId['training:p-b:0'].groupIds).toEqual(['g-b']);
+    expect(byId['training:p-all:0'].groupIds).toBe(null);
+    expect(byId['session:s-a'].groupIds).toEqual(['g-a']);
+    expect(byId['competition:c-maya'].groupIds).toEqual(['g-a']);
+    expect(byId['competition:c-open'].groupIds).toBe(null); // noch ohne Meldungen
+    expect(byId['deadline:ai-lukas'].groupIds).toEqual(['g-b']);
+    expect(byId['entry:camp-b'].groupIds).toEqual(['g-b']);
+    expect(byId['entry:h-school'].groupIds).toBe(null);
+    expect(byId['slot:sl-a:2026-10-12'].groupIds).toEqual(['g-a']);
+  });
+
+  it('leere Auswahl = alle; sonst gewählte Teams plus teamlose Termine', () => {
+    expect(eventsForTeams(events, new Set())).toBe(events);
+    const onlyB = eventsForTeams(events, new Set(['g-b']));
+    expect(onlyB.some((e) => e.groupIds?.includes('g-a') && !e.groupIds.includes('g-b'))).toBe(false);
+    for (const id of ['training:p-b:0', 'competition:c-lukas', 'competition:c-open', 'training:p-all:0', 'entry:h-school', 'entry:camp-b']) {
+      expect(onlyB.map((e) => e.id)).toContain(id);
+    }
+    expect(onlyB.map((e) => e.id)).not.toContain('competition:c-maya');
+    expect(onlyB.map((e) => e.id)).not.toContain('session:s-a');
   });
 });

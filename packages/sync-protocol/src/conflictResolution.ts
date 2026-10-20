@@ -27,6 +27,9 @@ const STRATEGY_BY_STORE: Record<SyncStore, ConflictStrategy> = {
   // flaches Dokument ohne eingebettete Kommentar-/Sets-Struktur — wie
   // "sessions"/"actionItems" genügt einfaches last-write-wins.
   announcements: 'last-write-wins',
+  // Saisonplanung im Kalender (Ferien, Trainingszeiten, Trainingslager,
+  // Schließungen): flache Einträge ohne eingebettete Struktur.
+  calendarEntries: 'last-write-wins',
 };
 
 export function strategyForStore(store: SyncStore): ConflictStrategy {

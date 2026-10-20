@@ -691,6 +691,16 @@ tr.live-row-done .live-set-desc{ text-decoration: line-through; color: var(--c-s
 .mfa-recovery-codes{ columns: 2; list-style: none; padding: 0; margin: 12px 0 16px; }
 .mfa-recovery-codes li{ margin-bottom: 6px; font-family: monospace; }
 
+/* ---------- Team-Filter (js/teamFilter.js) ----------
+   Kalender, Einheiten- und Wettkampfliste. Ausgewählt = gefüllt und
+   durchgezogener statt gestrichelter Rahmen, nicht allein über Farbe. */
+.team-filter{ display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-bottom:16px; }
+.team-filter:empty{ display:none; }
+.team-filter-label{ font-size: var(--fs-xs); font-weight:700; text-transform:uppercase; letter-spacing:.04em; color: #4A6670; margin-right:4px; }
+.team-chip{ padding:4px 12px; border-radius:999px; border:1.5px dashed var(--c-line); background:transparent; color: #4A6670; font-size: var(--fs-sm); cursor:pointer; }
+.team-chip:hover{ color: var(--c-ink); background: var(--c-foam-2); }
+.team-chip.on{ border-style:solid; border-color: var(--c-deep); background: var(--c-deep); color: var(--c-white); font-weight:600; }
+
 /* ---------- Kalender (js/modules/calendar.js) ----------
    Jeder Termintyp hat eine Akzentfarbe (--cal-accent) und eine helle
    Tönung (--cal-tint); zusätzlich trägt jeder Termin ein eigenes Symbol,
@@ -701,7 +711,40 @@ tr.live-row-done .live-set-desc{ text-decoration: line-through; color: var(--c-s
 .cal-type-referee      { --cal-accent: #2F5FA8;             --cal-tint: #E3ECF8; }
 .cal-type-training     { --cal-accent: var(--c-chlorine-d); --cal-tint: #E3F5EF; }
 .cal-type-session      { --cal-accent: var(--c-petrol);     --cal-tint: #DCEEF2; }
+.cal-type-publicHoliday{ --cal-accent: #B23A5B;             --cal-tint: #FBE6EC; }
+.cal-type-schoolHoliday{ --cal-accent: #8A5E12;             --cal-tint: #FFF6D9; }
+.cal-type-poolClosure  { --cal-accent: #4A5560;             --cal-tint: #E8EBEE; }
+.cal-type-trainingCamp { --cal-accent: #2F7D4F;             --cal-tint: #E2F2E7; }
+.cal-type-trainingSlot { --cal-accent: #1F7A8C;             --cal-tint: #E0F1F4; }
 
+/* Noch unverplante Trainingszeit: gestrichelt, damit sie sich vom
+   bereits verplanten Training abhebt (nicht nur über Farbe). */
+.cal-chip.unplanned{ border-left-style: dashed; background: repeating-linear-gradient(135deg, var(--cal-tint) 0 6px, var(--c-white) 6px 12px); }
+
+/* Abgesagter Kampfrichtereinsatz: durchgestrichen und abgeblendet. */
+.cal-chip.declined{ opacity:.6; }
+.cal-chip.declined .cal-chip-title{ text-decoration: line-through; }
+
+/* Hinweis auf offene Kampfrichter-Anfragen (Kalender, Kampfrichter-Seite). */
+.referee-open-banner{ display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px 12px; padding:10px 14px; margin:0 0 16px; border-radius: var(--radius-md); background:#FDF3DF; border-left:4px solid #B9801F; color: var(--c-ink); font-weight:600; }
+
+/* Tage mit Feiertag/Ferien/Schließung flächig markieren. */
+.cal-month-cell.mark-schoolHoliday, .cal-week-day.mark-schoolHoliday, .cal-mini-cell.mark-schoolHoliday{ background: #FFF9E6; }
+.cal-month-cell.mark-poolClosure, .cal-week-day.mark-poolClosure, .cal-mini-cell.mark-poolClosure{ background: #F0F2F4; }
+.cal-month-cell.mark-publicHoliday, .cal-week-day.mark-publicHoliday, .cal-mini-cell.mark-publicHoliday{ background: #FDEEF2; }
+.cal-month-cell.mark-publicHoliday .cal-daynum, .cal-mini-cell.mark-publicHoliday .cal-mini-num{ color: #B23A5B; font-weight:700; }
+/* Getönte Tage: Datumsangaben dunkler, damit sie 4,5:1 halten. */
+[class*="mark-"] .cal-week-date, [class*="mark-"] .cal-mini-num{ color: #4A6670; }
+
+/* Saisonplanung (js/modules/calendarEntries.js) */
+.cal-entry-checks{ display:flex; flex-wrap:wrap; gap:6px 14px; }
+.cal-entry-fieldset{ border:0; padding:0; margin:0; min-width:0; }
+.cal-entry-fieldset > legend{ padding:0; margin-bottom:6px; font-size: var(--fs-xs); font-weight:700; color: var(--c-slate); text-transform:uppercase; letter-spacing:.04em; }
+.cal-entry-list{ display:flex; flex-direction:column; gap:6px; }
+.cal-entry-list-head{ margin:12px 0 2px; color: var(--c-ink); border-left:4px solid var(--cal-accent); padding-left:8px; }
+.cal-entry-row{ padding:7px 10px; }
+
+.cal-child-switch{ margin-bottom:12px; }
 .cal-toolbar{ display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; }
 .cal-nav{ display:flex; align-items:center; gap:6px; min-width:0; }
 .cal-period{ font-size: var(--fs-lg); margin:0 0 0 8px; white-space:nowrap; }
@@ -730,7 +773,8 @@ button.cal-chip:hover{ filter: brightness(0.96); }
 .cal-chip-ic svg{ width:14px; height:14px; }
 .cal-chip-text{ display:flex; flex-direction:column; min-width:0; }
 .cal-chip-title{ font-weight:600; overflow-wrap:break-word; hyphens:auto; min-width:0; }
-.cal-chip-detail{ color: var(--c-slate); font-size: var(--fs-xs); }
+/* Dunkler als --c-slate: muss auf allen Typ-Tönungen 4,5:1 erreichen (WCAG AA). */
+.cal-chip-detail{ color: #4A6670; font-size: var(--fs-xs); }
 .cal-chip.compact{ padding:2px 5px; font-size: var(--fs-xs); }
 .cal-chip.compact .cal-chip-title{ font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .cal-chip.compact .cal-chip-ic svg{ width:12px; height:12px; }
@@ -780,7 +824,10 @@ button.cal-mini-cell:hover{ background: var(--c-foam-2); }
 /* Terminliste */
 .cal-agenda-day{ display:grid; grid-template-columns: 130px 1fr; gap:12px; padding:8px 0; border-top:1px solid var(--c-line); }
 .cal-agenda-day:first-of-type{ border-top:0; }
-.cal-agenda-day.past{ opacity:.65; }
+/* Vergangene Tage: entsättigt statt per opacity abgeblendet — opacity
+   drückte Datum und Detailtext unter 4,5:1 (WCAG AA). */
+.cal-agenda-day.past .cal-agenda-events{ filter: grayscale(.85); }
+.cal-agenda-day.past .cal-agenda-date{ font-style: italic; }
 .cal-agenda-date{ font-family: var(--f-mono); font-size: var(--fs-sm); color: var(--c-slate); padding-top:5px; }
 .cal-agenda-events{ display:flex; flex-direction:column; gap:5px; }
 

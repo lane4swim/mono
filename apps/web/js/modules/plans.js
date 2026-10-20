@@ -350,7 +350,15 @@ function renderBlockBox(block, exercises, plan) {
   return box;
 }
 
-function openPlanModal(plan, groups, templates, exercises, sectionTemplates, onSaved) {
+// Neuer Plan mit Vorbelegung (z. B. aus einer noch unverplanten
+// Trainingszeit im Kalender, siehe calendar.js) — lädt die Auswahllisten
+// selbst. `onSaved` erhält den gespeicherten Plan.
+export async function openNewPlanModal(prefill, onSaved) {
+  const [groups, templates, exercises, sectionTemplates] = await Promise.all([getAll('groups'), getAll('templates'), getAll('exercises'), getAll('sectionTemplates')]);
+  openPlanModal(null, groups, templates, exercises, sectionTemplates, onSaved, prefill);
+}
+
+function openPlanModal(plan, groups, templates, exercises, sectionTemplates, onSaved, prefill = {}) {
   const isEdit = !!plan;
   // data.days[].date wird intern durchgehend als reines "YYYY-MM-DD"
   // geführt (siehe dateOnly() in dates.js) — sowohl für die Anzeige im
@@ -359,6 +367,7 @@ function openPlanModal(plan, groups, templates, exercises, sectionTemplates, onS
   // das vom Backend erwartete vollständige ISO-Datum.
   const data = plan ? { ...plan, days: (plan.days || []).map(d => ({ ...d, date: dateOnly(d.date), sets: cloneItems(d.sets) })) } : {
     name: `${t('nav.plans')} ${startOfWeek(todayISO())}`, weekStart: startOfWeek(todayISO()), groupId: groups[0]?.id || '', status: 'aktiv', days: [],
+    ...prefill,
   };
   const form = el('form', { class: 'form-grid single' });
   const fName = textInput(data.name, { required: true });
@@ -412,9 +421,9 @@ function openPlanModal(plan, groups, templates, exercises, sectionTemplates, onS
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     if (!fName.value.trim()) { toast(t('plans.validationName'), 'error'); return; }
-    await put('plans', { ...data, name: fName.value.trim(), weekStart: toIsoDateTime(fWeek.value), groupId: fGroup.value, status: fStatus.value, days: data.days.map(d => ({ ...d, date: toIsoDateTime(d.date) })) });
+    const saved = await put('plans', { ...data, name: fName.value.trim(), weekStart: toIsoDateTime(fWeek.value), groupId: fGroup.value, status: fStatus.value, days: data.days.map(d => ({ ...d, date: toIsoDateTime(d.date) })) });
     toast(isEdit ? t('plans.savedEdit') : t('plans.savedCreate'));
-    close(); onSaved?.();
+    close(); onSaved?.(saved);
   });
   const { close } = openModal({ title: isEdit ? t('plans.modalEdit') : t('plans.modalCreate'), bodyNode: form, wide: true });
 }

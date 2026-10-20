@@ -226,4 +226,55 @@ describe('Verwaltung im Namen einer Kampfrichter:in (admin) — /api/users/:user
     expect(response.statusCode).toBe(403);
     await app.close();
   });
+
+  it('referee kann eine admin-Anfrage über /response zu- oder absagen; ungültiger Status 400', async () => {
+    const { app, keyPair, admin, referee } = await buildTestApp();
+    const adminToken = await tokenFor(keyPair, admin.id, 'admin', admin.clubId);
+    const refereeToken = await tokenFor(keyPair, referee.id, 'referee', referee.clubId);
+    const created = await app.inject({ method: 'POST', url: `/api/users/${referee.id}/referee-assignments`, headers: { authorization: `Bearer ${adminToken}` }, payload: validPayload() });
+    expect(created.json().status).toBe('requested');
+    const id = created.json().id;
+
+    const bad = await app.inject({ method: 'POST', url: `/api/me/referee-assignments/${id}/response`, headers: { authorization: `Bearer ${refereeToken}` }, payload: { status: 'requested' } });
+    expect(bad.statusCode).toBe(400);
+    const ok = await app.inject({ method: 'POST', url: `/api/me/referee-assignments/${id}/response`, headers: { authorization: `Bearer ${refereeToken}` }, payload: { status: 'confirmed', responseNote: 'Bin dabei' } });
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json()).toMatchObject({ status: 'confirmed', responseNote: 'Bin dabei' });
+    const list = await app.inject({ method: 'GET', url: `/api/users/${referee.id}/referee-assignments`, headers: { authorization: `Bearer ${adminToken}` } });
+    expect(list.json().assignments[0].status).toBe('confirmed');
+    const asAdmin = await app.inject({ method: 'POST', url: `/api/me/referee-assignments/${id}/response`, headers: { authorization: `Bearer ${adminToken}` }, payload: { status: 'declined' } });
+    expect(asAdmin.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it('Rollen-Matrix der Rückmelde-Endpunkte: /response nur referee, /upcoming nur admin (je eigener Verein)', async () => {
+    const { app, keyPair, club, otherClub, admin, referee } = await buildTestApp();
+    const adminToken = await tokenFor(keyPair, admin.id, 'admin', admin.clubId);
+    const created = await app.inject({ method: 'POST', url: `/api/users/${referee.id}/referee-assignments`, headers: { authorization: `Bearer ${adminToken}` }, payload: validPayload({ date: '2099-03-01T00:00:00.000Z' }) });
+    const id = created.json().id;
+    const someone = '00000000-0000-0000-0000-0000000000bb';
+    const cases: Array<[string, string, string | null, number, number]> = [
+      // Rolle, sub, clubId, Status /response, Status /upcoming
+      ['referee', referee.id, club.id, 200, 403],
+      ['admin', admin.id, club.id, 403, 200],
+      ['trainer', someone, club.id, 403, 403],
+      ['athlete', someone, club.id, 403, 403],
+      ['parent', someone, club.id, 403, 403],
+      ['superadmin', someone, null, 403, 403],
+    ];
+    for (const [role, sub, clubId, respondStatus, upcomingStatus] of cases) {
+      const token = await tokenFor(keyPair, sub, role, clubId);
+      const respond = await app.inject({ method: 'POST', url: `/api/me/referee-assignments/${id}/response`, headers: { authorization: `Bearer ${token}` }, payload: { status: 'confirmed' } });
+      expect(respond.statusCode, `/response als ${role}`).toBe(respondStatus);
+      const upcoming = await app.inject({ method: 'GET', url: '/api/referee-assignments/upcoming', headers: { authorization: `Bearer ${token}` } });
+      expect(upcoming.statusCode, `/upcoming als ${role}`).toBe(upcomingStatus);
+      if (upcomingStatus === 200) expect(upcoming.json().assignments.map((a: { id: string }) => a.id)).toEqual([id]);
+    }
+    // admin eines fremden Vereins sieht die Einsätze dieses Vereins nicht.
+    const foreignAdmin = await tokenFor(keyPair, someone, 'admin', otherClub.id);
+    const foreign = await app.inject({ method: 'GET', url: '/api/referee-assignments/upcoming', headers: { authorization: `Bearer ${foreignAdmin}` } });
+    expect(foreign.statusCode).toBe(200);
+    expect(foreign.json().assignments).toEqual([]);
+    await app.close();
+  });
 });

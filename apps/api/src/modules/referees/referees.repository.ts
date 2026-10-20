@@ -15,6 +15,9 @@ export interface RefereeAssignmentRecord {
   function: string;
   note: string;
   createdByAdminId: string | null;
+  status: string; // RefereeAssignmentStatusSchema
+  responseNote: string;
+  respondedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
   deletedAt: Date | null;
@@ -32,6 +35,7 @@ export interface CreateRefereeAssignmentInput {
   // null bei Selbsterfassung, sonst die id der erfassenden admin-Person
   // (docs/Plans/kampfrichter-modul-plan.md, Abschnitt 5.5).
   createdByAdminId: string | null;
+  status: string;
 }
 
 export interface UpdateRefereeAssignmentInput {
@@ -46,6 +50,9 @@ export interface UpdateRefereeAssignmentInput {
   // lässt dieses Feld unverändert stehen (reines Herkunfts-Audit, siehe
   // Plan Abschnitt 5.5).
   createdByAdminId?: string | null;
+  status?: string;
+  responseNote?: string;
+  respondedAt?: Date | null;
 }
 
 export interface RefereeAssignmentRepository {
@@ -54,6 +61,9 @@ export interface RefereeAssignmentRepository {
   // Liefert bewusst nur aktive (nicht per Soft-Delete entfernte) Zeilen —
   // analog UserQualification.
   listByUser(userId: string): Promise<RefereeAssignmentRecord[]>;
+  // Aktive Einsätze eines Vereins ab `from` (inklusive), nach Datum
+  // aufsteigend — Rückmeldungs-Übersicht für admins.
+  listUpcomingByClub(clubId: string, from: Date): Promise<RefereeAssignmentRecord[]>;
   update(id: string, input: UpdateRefereeAssignmentInput): Promise<RefereeAssignmentRecord>;
   softDelete(id: string): Promise<void>;
 }
@@ -71,6 +81,12 @@ export class PrismaRefereeAssignmentRepository implements RefereeAssignmentRepos
     return this.prisma.refereeAssignment.findMany({
       where: { userId, deletedAt: null },
       orderBy: { date: 'desc' },
+    });
+  }
+  async listUpcomingByClub(clubId: string, from: Date): Promise<RefereeAssignmentRecord[]> {
+    return this.prisma.refereeAssignment.findMany({
+      where: { clubId, deletedAt: null, date: { gte: from } },
+      orderBy: { date: 'asc' },
     });
   }
   async update(id: string, input: UpdateRefereeAssignmentInput): Promise<RefereeAssignmentRecord> {

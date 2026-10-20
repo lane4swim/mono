@@ -16,7 +16,7 @@ export class InMemoryRefereeAssignmentRepository implements RefereeAssignmentRep
 
   async create(input: CreateRefereeAssignmentInput): Promise<RefereeAssignmentRecord> {
     const now = new Date();
-    const row: RefereeAssignmentRecord = { id: randomUUID(), ...input, createdAt: now, updatedAt: now, deletedAt: null };
+    const row: RefereeAssignmentRecord = { id: randomUUID(), responseNote: '', respondedAt: null, ...input, createdAt: now, updatedAt: now, deletedAt: null };
     this.rows.push(row);
     return row;
   }
@@ -27,6 +27,11 @@ export class InMemoryRefereeAssignmentRepository implements RefereeAssignmentRep
     return this.rows
       .filter((r) => r.userId === userId && !r.deletedAt)
       .sort((a, b) => b.date.getTime() - a.date.getTime());
+  }
+  async listUpcomingByClub(clubId: string, from: Date): Promise<RefereeAssignmentRecord[]> {
+    return this.rows
+      .filter((r) => r.clubId === clubId && !r.deletedAt && r.date.getTime() >= from.getTime())
+      .sort((a, b) => a.date.getTime() - b.date.getTime());
   }
   async update(id: string, input: UpdateRefereeAssignmentInput): Promise<RefereeAssignmentRecord> {
     const row = this.rows.find((r) => r.id === id);

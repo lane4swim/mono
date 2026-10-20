@@ -11,6 +11,9 @@ import { InMemoryUserRepository } from '../../src/modules/auth/auth.repository.m
 import { UserNotFoundError } from '../../src/modules/auth/auth.service.js';
 import { createAuditLogService } from '../../src/modules/auditLog/auditLog.service.js';
 import { InMemoryAuditLogRepository } from '../../src/modules/auditLog/auditLog.repository.memory.js';
+import { createRefereeNotifier } from '../../src/modules/referees/referees.notify.js';
+import { InMemoryPushSender } from '../../src/push/pusher.memory.js';
+import { InMemoryPushSubscriptionRepository } from '../../src/modules/push/push.repository.memory.js';
 
 const CLUB_A = '11111111-1111-1111-1111-111111111111';
 const CLUB_B = '22222222-2222-2222-2222-222222222222';
@@ -196,5 +199,100 @@ describe('Audit-Log (Issue #96)', () => {
     const { referee, auditLogEntries } = fixture;
     await service.createOwn(baseInput(), { id: referee.id, roles: ['referee'], clubId: referee.clubId });
     expect(await auditLogEntries.list({ limit: 10 })).toEqual([]);
+  });
+});
+
+describe('Rückmeldung (Zu-/Absage) und Benachrichtigungen', () => {
+  async function withNotify() {
+    const { users, assignments, admin, referee } = fixture;
+    const pusher = new InMemoryPushSender();
+    const pushSubscriptions = new InMemoryPushSubscriptionRepository();
+    await pushSubscriptions.upsert(referee.id, 'https://push.example/referee', { p256dh: 'k', auth: 'a' });
+    await pushSubscriptions.upsert(admin.id, 'https://push.example/admin', { p256dh: 'k', auth: 'a' });
+    const svc = createRefereesService({
+      assignments, users, competitions: new InMemoryCompetitionRepository([]),
+      auditLog: createAuditLogService({ entries: new InMemoryAuditLogRepository(), users }),
+      notify: createRefereeNotifier({ pusher, pushSubscriptions }),
+    });
+    const adminCtx = { id: admin.id, roles: ['admin'], clubId: admin.clubId };
+    const refereeCtx = { id: referee.id, roles: ['referee'], clubId: referee.clubId };
+    return { svc, pusher, adminCtx, refereeCtx };
+  }
+
+  it('Selbsterfassung ist sofort bestätigt, admin-Anfrage startet als "requested" und benachrichtigt', async () => {
+    const { svc, pusher, adminCtx, refereeCtx } = await withNotify();
+    expect((await svc.createOwn(baseInput(), refereeCtx)).status).toBe('confirmed');
+    expect(pusher.sent).toHaveLength(0);
+    const requested = await svc.createForMember(fixture.referee.id, baseInput(), adminCtx);
+    expect(requested).toMatchObject({ status: 'requested', respondedAt: null });
+    expect(pusher.sent).toHaveLength(1);
+    expect(pusher.sent[0]!.subscriptions[0]!.endpoint).toBe('https://push.example/referee');
+    expect(pusher.sent[0]!.payload.url).toBe('#/calendar/week/2026-03-01');
+  });
+
+  it('Zu-/Absage setzt Status, Kommentar und Zeitpunkt und benachrichtigt die anfragende admin-Person', async () => {
+    const { svc, pusher, adminCtx, refereeCtx } = await withNotify();
+    const requested = await svc.createForMember(fixture.referee.id, baseInput(), adminCtx);
+    const declined = await svc.respondOwn(requested.id, { status: 'declined', responseNote: 'Urlaub' }, refereeCtx);
+    expect(declined).toMatchObject({ status: 'declined', responseNote: 'Urlaub' });
+    expect(declined.respondedAt).toBeInstanceOf(Date);
+    const toAdmin = pusher.sent.at(-1)!;
+    expect(toAdmin.subscriptions[0]!.endpoint).toBe('https://push.example/admin');
+    expect(toAdmin.payload.title).toContain('abgesagt');
+    expect(toAdmin.payload.body).toContain('Ronja Kampfrichter');
+    // Antwort ändern ist erlaubt; dieselbe Antwort erneut löst nichts aus.
+    await svc.respondOwn(requested.id, { status: 'confirmed', responseNote: '' }, refereeCtx);
+    const count = pusher.sent.length;
+    await svc.respondOwn(requested.id, { status: 'confirmed', responseNote: '' }, refereeCtx);
+    expect(pusher.sent).toHaveLength(count);
+  });
+
+  it('nur eigene Einsätze lassen sich beantworten', async () => {
+    const { svc, adminCtx } = await withNotify();
+    const requested = await svc.createForMember(fixture.referee.id, baseInput(), adminCtx);
+    const other = { id: fixture.otherClubReferee.id, roles: ['referee'], clubId: fixture.otherClubReferee.clubId };
+    await expect(svc.respondOwn(requested.id, { status: 'confirmed', responseNote: '' }, other)).rejects.toThrow(RefereeAssignmentNotFoundError);
+  });
+
+  it('ändert ein admin Eckdaten, wird erneut angefragt — eine reine Notiz-Änderung nicht', async () => {
+    const { svc, pusher, adminCtx, refereeCtx } = await withNotify();
+    const requested = await svc.createForMember(fixture.referee.id, baseInput(), adminCtx);
+    await svc.respondOwn(requested.id, { status: 'confirmed', responseNote: 'gern' }, refereeCtx);
+    const noteOnly = await svc.updateForMember(fixture.referee.id, requested.id, { note: 'Treffpunkt 8 Uhr' }, adminCtx);
+    expect(noteOnly.status).toBe('confirmed');
+    const sameDate = await svc.updateForMember(fixture.referee.id, requested.id, { date: new Date('2026-03-01') }, adminCtx);
+    expect(sameDate.status).toBe('confirmed');
+    const before = pusher.sent.length;
+    const moved = await svc.updateForMember(fixture.referee.id, requested.id, { date: new Date('2026-03-08') }, adminCtx);
+    expect(moved).toMatchObject({ status: 'requested', responseNote: '', respondedAt: null });
+    expect(pusher.sent).toHaveLength(before + 1);
+  });
+
+  it('ein Versandfehler lässt die Anfrage nicht scheitern', async () => {
+    const { users, assignments, admin, referee } = fixture;
+    const errors: unknown[] = [];
+    const svc = createRefereesService({
+      assignments, users, competitions: new InMemoryCompetitionRepository([]),
+      auditLog: createAuditLogService({ entries: new InMemoryAuditLogRepository(), users }),
+      notify: { assignmentRequested: async () => { throw new Error('push down'); }, assignmentAnswered: async () => {} },
+      onNotifyError: (e) => errors.push(e),
+    });
+    const created = await svc.createForMember(referee.id, baseInput(), { id: admin.id, roles: ['admin'], clubId: admin.clubId });
+    expect(created.status).toBe('requested');
+    expect(errors).toHaveLength(1);
+  });
+});
+
+describe('listUpcomingForClub()', () => {
+  it('liefert nur kommende Einsätze des eigenen Vereins, aufsteigend; nur für admin', async () => {
+    const { admin, referee, otherClubReferee } = fixture;
+    const adminCtx = { id: admin.id, roles: ['admin'], clubId: admin.clubId };
+    await service.createForMember(referee.id, baseInput({ date: new Date('2026-05-10'), competitionName: 'Später' }), adminCtx);
+    await service.createForMember(referee.id, baseInput({ date: new Date('2026-04-01'), competitionName: 'Früher' }), adminCtx);
+    await service.createForMember(referee.id, baseInput({ date: new Date('2026-01-01'), competitionName: 'Vorbei' }), adminCtx);
+    await service.createOwn(baseInput({ date: new Date('2026-05-01') }), { id: otherClubReferee.id, roles: ['referee'], clubId: otherClubReferee.clubId });
+    const list = await service.listUpcomingForClub(adminCtx, new Date('2026-03-15T10:00:00Z'));
+    expect(list.map((a) => a.competitionName)).toEqual(['Früher', 'Später']);
+    await expect(service.listUpcomingForClub({ id: referee.id, roles: ['referee'], clubId: referee.clubId })).rejects.toThrow(RefereeAssignmentForbiddenError);
   });
 });

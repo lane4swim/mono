@@ -1,8 +1,9 @@
 // Business-Logik für den Eltern-/Erziehungsberechtigten-Zugang (Phase 2,
 // Abschnitt 4.2 — docs/Plans/phase2-plan.md).
-import type { ParentOverviewResponse, ParentLink } from '@lane1/shared-types';
+import type { ParentOverviewResponse, ParentLink, ParentCalendarResponse } from '@lane1/shared-types';
 import type { ParentLinkRepository } from './parents.repository.js';
 import type { ParentOverviewGateway } from './parents.overview.repository.js';
+import type { ParentCalendarGateway, DateRange } from './parents.calendar.repository.js';
 import type { AuditLogWriter } from '../auditLog/auditLog.service.js';
 
 // Minimale, für dieses Modul ausreichende Nachschlagemöglichkeiten —
@@ -18,6 +19,8 @@ export interface ParentsAthleteLookup {
 export interface ParentsServiceDeps {
   parentLinks: ParentLinkRepository;
   overview: ParentOverviewGateway;
+  // Optional, damit bestehende Tests ohne Kalender-Gateway weiterlaufen.
+  calendar?: ParentCalendarGateway;
   users: ParentsUserLookup;
   athletes: ParentsAthleteLookup;
   auditLog: AuditLogWriter;
@@ -44,6 +47,15 @@ export function createParentsService(deps: ParentsServiceDeps) {
       // Verwaiste Verknüpfungen (Athletenprofil zwischenzeitlich gelöscht)
       // werden stillschweigend herausgefiltert statt einen Fehler zu
       // werfen — die übrigen Kinder sollen weiterhin sichtbar bleiben.
+      return { children: children.filter((c): c is NonNullable<typeof c> => c !== null) };
+    },
+
+    // Kalender der eigenen verknüpften Kinder — wie getOverview() kommt
+    // die Person aus dem Access Token, nie aus der Anfrage.
+    async getCalendar(requester: RequesterContext, range: DateRange): Promise<ParentCalendarResponse> {
+      if (!deps.calendar) return { children: [] };
+      const links = await deps.parentLinks.listByUser(requester.userId);
+      const children = await Promise.all(links.map((link) => deps.calendar!.buildChildCalendar(link.athleteId, range)));
       return { children: children.filter((c): c is NonNullable<typeof c> => c !== null) };
     },
 
