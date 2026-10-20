@@ -2085,8 +2085,9 @@ describe('syncService.pull — Store-Vorauswahl nach gebuchten Modulen (Review 3
       { userId: TRAINER_USER_ID, clubId: CLUB_A, roles: ['trainer'], athleteId: null, enabledModules: ONLY_ATHLETES },
     );
 
-    // Paket "athletes" trägt genau die Stores "athletes" und "groups".
-    expect(result.changes.map((c) => c.store).sort()).toEqual(['athletes', 'groups']);
+    // Paket "athletes" trägt genau die Stores "athletes" und "groups";
+    // "calendarEntries" gehört zum Kernmodul Kalender und ist immer lesbar.
+    expect(result.changes.map((c) => c.store).sort()).toEqual(['athletes', 'calendarEntries', 'groups']);
   });
 
   it('liefert bei vollem Modul-Set JEDEN Store aus — die Vorauswahl darf keinen stillschweigend auslassen', async () => {

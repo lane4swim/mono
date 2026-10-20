@@ -32,6 +32,11 @@ const apiMocks = vi.hoisted(() => ({
 }));
 vi.mock('../js/apiClient.js', () => ({ ...apiMocks, describeError: (e) => String(e) }));
 
+const planMocks = vi.hoisted(() => ({ openNewPlanModal: vi.fn() }));
+vi.mock('../js/modules/plans.js', () => planMocks);
+const entryMocks = vi.hoisted(() => ({ openEntryModal: vi.fn(), openEntryList: vi.fn() }));
+vi.mock('../js/modules/calendarEntries.js', () => entryMocks);
+
 const { calendarModule, availableTypes, periodLabel } = await import('../js/modules/calendar.js');
 const { registerModule, MODULES, MODULE_KEYS, isModuleVisible } = await import('../js/router.js');
 const { t } = await import('../js/i18n.js');
@@ -95,6 +100,9 @@ beforeEach(() => {
   localStorage.clear();
   apiMocks.listMyQualifications.mockReset().mockResolvedValue({ qualifications: [] });
   apiMocks.listMyRefereeAssignments.mockReset().mockResolvedValue({ assignments: [] });
+  planMocks.openNewPlanModal.mockReset();
+  entryMocks.openEntryModal.mockReset();
+  entryMocks.openEntryList.mockReset();
   document.body.innerHTML = '';
   history.replaceState(null, '', '#/calendar');
 });
@@ -112,9 +120,11 @@ describe('calendarModule', () => {
 
   it('Termintypen folgen Rollen und gebuchten Paketen', () => {
     loginAs('trainer');
-    expect(availableTypes()).toEqual(['competition', 'deadline', 'qualification', 'training', 'session']);
+    const SEASON = ['publicHoliday', 'schoolHoliday', 'poolClosure', 'trainingCamp'];
+    expect(availableTypes()).toEqual([...SEASON, 'competition', 'deadline', 'qualification', 'trainingSlot', 'training', 'session']);
+    // Die Saisonplanung hängt an keinem Paket.
     session.enabledModules = MODULE_KEYS.filter((k) => k !== 'competitions' && k !== 'plans');
-    expect(availableTypes()).toEqual(['deadline', 'qualification', 'session']);
+    expect(availableTypes()).toEqual([...SEASON, 'deadline', 'qualification', 'trainingSlot', 'session']);
     loginAs('referee');
     expect(availableTypes()).toEqual(['referee']);
     session.demo = true;
@@ -230,5 +240,57 @@ describe('calendarModule', () => {
     const c = await render(['bogus', 'not-a-date']);
     expect(location.hash).toBe('#/calendar/month/2026-10-15');
     expect(c.querySelector('.cal-month')).not.toBeNull();
+  });
+
+  describe('Saisonplanung', () => {
+    const day = (d) => `${d}T00:00:00.000Z`;
+    beforeEach(() => {
+      stores.calendarEntries = [
+        // Mittwochs; p-a plant den 14.10.
+        { id: 'sl-a', kind: 'trainingSlot', title: 'Mittwochstraining', groupId: 'g-a', startDate: day('2026-10-01'), endDate: day('2026-10-31'), weekdays: [2], startTime: '17:00', endTime: '18:30', pauseDuring: [], poolLength: 'SCM', location: '' },
+        { id: 'h1', kind: 'schoolHoliday', title: 'Herbstferien', groupId: null, startDate: day('2026-10-26'), endDate: day('2026-11-06'), location: '', note: '' },
+      ];
+    });
+
+    it('verplante Trainingszeit öffnet den Plan, unverplante legt einen neuen an', async () => {
+      loginAs('trainer');
+      const c = await render(['week', '2026-10-12']);
+      const planned = c.querySelector('.cal-week .cal-chip.cal-type-trainingSlot');
+      expect(planned.classList.contains('unplanned')).toBe(false);
+      // Der Plantag geht in der Trainingszeit auf.
+      expect(c.querySelector('.cal-week .cal-chip.cal-type-training')).toBeNull();
+      planned.click();
+      expect(location.hash).toBe('#/plans/p-a');
+
+      const c2 = await render(['week', '2026-10-19']);
+      const open = c2.querySelector('.cal-week .cal-chip.cal-type-trainingSlot.unplanned');
+      expect(open.tagName).toBe('BUTTON');
+      open.click();
+      expect(planMocks.openNewPlanModal).toHaveBeenCalledTimes(1);
+      const [prefill] = planMocks.openNewPlanModal.mock.calls[0];
+      expect(prefill).toMatchObject({ weekStart: '2026-10-19', groupId: 'g-a', days: [{ date: '2026-10-21', poolLength: 'SCM', sets: [] }] });
+      expect(prefill.name).toContain('Mittwochstraining');
+    });
+
+    it('Ferien erscheinen an jedem Tag, in der Terminliste einmal; Staff kann sie bearbeiten', async () => {
+      loginAs('trainer');
+      const c = await render();
+      const cells = c.querySelectorAll('.cal-month-cell.mark-schoolHoliday');
+      // 26.10.–01.11. sind im Oktober-Raster sichtbar
+      expect(cells).toHaveLength(7);
+      expect(chipTitles(c.querySelector('.cal-agenda')).filter((x) => x === 'Herbstferien')).toHaveLength(1);
+      c.querySelector('.cal-month .cal-chip.cal-type-schoolHoliday').click();
+      expect(entryMocks.openEntryModal).toHaveBeenCalledWith(expect.objectContaining({ id: 'h1' }), expect.any(Array), expect.any(Function));
+      expect(c.querySelector('.page-actions')).not.toBeNull();
+    });
+
+    it('Athletin sieht Ferien und Trainingszeiten, kann aber nichts anlegen oder bearbeiten', async () => {
+      loginAs('athlete');
+      const c = await render(['week', '2026-10-19']);
+      expect(c.querySelector('.page-actions')).toBeNull();
+      const slot = c.querySelector('.cal-week .cal-chip.cal-type-trainingSlot');
+      expect(slot.tagName).toBe('DIV');
+      expect(slot.classList.contains('unplanned')).toBe(true);
+    });
   });
 });

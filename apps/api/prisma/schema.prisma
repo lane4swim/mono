@@ -100,6 +100,7 @@ model Club {
   sectionTemplates              SectionTemplate[]
   plans                         Plan[]
   planCycles                    PlanCycle[]
+  calendarEntries               CalendarEntry[]
   sessions                      TrainingSession[]
   actionItems                   ActionItem[]
   qualificationReminderSettings ClubQualificationReminderSetting[]
@@ -335,10 +336,11 @@ model Group {
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
 
-  athletes      Athlete[]
-  plans         Plan[]
-  sessions      TrainingSession[]
-  announcements Announcement[]
+  athletes        Athlete[]
+  plans           Plan[]
+  sessions        TrainingSession[]
+  announcements   Announcement[]
+  calendarEntries CalendarEntry[]
 
   // [clubId, updatedAt] statt nur [clubId]: bedient GENAU das Zugriffsmuster
   // von sync.gateway.ts: listChangedSince() — `WHERE clubId = ? [AND
@@ -993,6 +995,41 @@ model Announcement {
   @@index([clubId, updatedAt])
   @@index([groupId])
   @@map("announcements")
+}
+
+// Saisonplanung im Kalender (siehe CalendarEntrySchema in
+// packages/shared-types/src/entities.ts): Ferien, Feiertage und
+// Hallenbadschließungen (immer vereinsweit, groupId null) sowie je Gruppe
+// regelmäßige Trainingszeiten (wöchentliche Regel, Termine werden erst im
+// Kalender berechnet) und Trainingslager.
+model CalendarEntry {
+  id          String    @id @default(uuid())
+  clubId      String
+  club        Club      @relation(fields: [clubId], references: [id])
+  // "publicHoliday" | "schoolHoliday" | "poolClosure" | "trainingCamp" | "trainingSlot"
+  kind        String
+  title       String
+  startDate   DateTime
+  endDate     DateTime
+  groupId     String?
+  group       Group?    @relation(fields: [groupId], references: [id])
+  // Nur trainingSlot: 0 = Montag … 6 = Sonntag.
+  weekdays    Int[]     @default([])
+  startTime   String?
+  endTime     String?
+  pauseDuring String[]  @default([])
+  poolLength  String?
+  location    String    @default("")
+  note        String    @default("")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  // [clubId, updatedAt] statt [clubId] — siehe Begründung bei Group oben
+  // (Sync-Pull-Zugriffsmuster).
+  @@index([clubId, updatedAt])
+  @@index([groupId])
+  @@map("calendar_entries")
 }
 
 // ============================================================

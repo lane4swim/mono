@@ -9,11 +9,29 @@
 import { dateOnly, isoAddDays, startOfWeek } from '../dates.js';
 
 // Reihenfolge = Reihenfolge der Filter-Chips und Sortierung am selben Tag.
-export const EVENT_TYPES = ['competition', 'deadline', 'qualification', 'referee', 'training', 'session'];
+export const EVENT_TYPES = [
+  'publicHoliday', 'schoolHoliday', 'poolClosure', 'trainingCamp',
+  'competition', 'deadline', 'qualification', 'referee', 'trainingSlot', 'training', 'session',
+];
 
 // Wiederkehrende Typen: in Quartals-/Jahresansicht nur als Punkte in den
 // Mini-Monaten, nicht in der Liste "Wichtige Termine".
-export const RECURRING_TYPES = ['training', 'session'];
+export const RECURRING_TYPES = ['trainingSlot', 'training', 'session'];
+
+// Arten der Saisonplanungs-Einträge (Store "calendarEntries", siehe
+// CalendarEntrySchema in packages/shared-types/src/entities.ts). Jede Art
+// ist zugleich ein eigener Termintyp mit gleichem Namen.
+export const ENTRY_KINDS = ['publicHoliday', 'schoolHoliday', 'poolClosure', 'trainingCamp', 'trainingSlot'];
+// Immer vereinsweit — alle übrigen Arten gehören zu einer Gruppe (oder,
+// ohne Gruppe, ebenfalls zum ganzen Verein).
+export const CLUB_WIDE_KINDS = ['publicHoliday', 'schoolHoliday', 'poolClosure'];
+// Mögliche Ausfallgründe einer Trainingszeit und die Vorbelegung.
+export const PAUSE_KINDS = ['publicHoliday', 'schoolHoliday', 'poolClosure', 'trainingCamp'];
+export const DEFAULT_PAUSE_DURING = ['publicHoliday', 'poolClosure'];
+
+// Obergrenze für das Aufzählen von Tagen eines Eintrags — schützt vor
+// versehentlich jahrzehntelangen Zeiträumen (Tippfehler im Jahr).
+const MAX_SPAN_DAYS = 3 * 366;
 
 export const CALENDAR_VIEWS = ['week', 'month', 'quarter', 'year'];
 
@@ -133,6 +151,14 @@ function coachesGroup(ctx, groupId) {
   return ctx.coachGroupIds.has(groupId);
 }
 
+// Gruppenbezogene Saisonplanung (Trainingszeiten, Trainingslager): ohne
+// Gruppe betrifft sie alle, sonst die eigene bzw. betreute Gruppe.
+function groupEntryIsMine(ctx, { entry }) {
+  if (entry.groupId == null) return !!(ctx.me || ctx.staff);
+  if (ctx.me && entry.groupId === ctx.me.groupId) return true;
+  return coachesGroup(ctx, entry.groupId);
+}
+
 const MINE = {
   training(ctx, { plan }) {
     if (ctx.me && plan.groupId === ctx.me.groupId) return true;
@@ -148,6 +174,8 @@ const MINE = {
     if (!ctx.staff) return false;
     return ctx.coachAllGroups || entries.length === 0 || entries.some((e) => ctx.coachAthleteIds.has(e.athleteId));
   },
+  trainingCamp: groupEntryIsMine,
+  trainingSlot: groupEntryIsMine,
   deadline(ctx, { item }) {
     if (ctx.me && item.athleteId === ctx.me.id) return true;
     if (!ctx.staff) return false;
@@ -161,10 +189,20 @@ const MINE = {
 // (Rollen + gebuchte Pakete, entscheidet calendar.js); Quellen anderer
 // Typen werden gar nicht erst ausgewertet.
 //
-// Jeder Termin: { id, type, date, title, detail, route, source }
+// Jeder Termin: { id, type, date, endDate?, time?, title, detail, route, source }
+//   - endDate: letzter Tag (inklusive) bei mehrtägigen Einträgen (Ferien,
+//     Trainingslager, Schließungen); fehlt bei eintägigen Terminen
+//   - time: Beginn "HH:MM" (Trainingszeiten), sortiert innerhalb des Tages
 //   - title/detail: Anzeigetexte (detail darf leer sein)
 //   - route: [routeId, param] zum Öffnen im Fachmodul (oder null)
 //   - source: der zugrunde liegende Datensatz (für Tests/Details)
+//
+// Ein Termin einer Trainingszeit (type 'trainingSlot') trägt zusätzlich
+// `slot` (die Regel), `groupId` und — wenn ein Trainingsplan derselben
+// Gruppe für diesen Tag existiert — `planId`. Dieser Plantag erscheint dann
+// nicht zusätzlich als eigener 'training'-Termin, sondern geht in der
+// Trainingszeit auf. Ohne `planId` ist die Trainingszeit noch unverplant
+// (calendar.js bietet dann das Anlegen eines Plans an).
 //
 // `labels` liefert die übersetzten Texte, die nicht direkt aus den Daten
 // stammen (siehe calendar.js) — so bleibt diese Datei frei von i18n.
@@ -177,19 +215,63 @@ export function collectEvents({ data = {}, types, scope = 'mine', ctx, labels = 
   const label = (key, ...args) => (labels[key] ? labels[key](...args) : '');
   const events = [];
 
+  const trainingEvents = [];
   if (want.has('training')) {
     for (const plan of data.plans || []) {
       if (!keep('training', { plan })) continue;
       (plan.days || []).forEach((day, i) => {
         if (!day?.date) return;
-        events.push({
+        trainingEvents.push({
           id: `training:${plan.id}:${i}`, type: 'training', date: dateOnly(day.date),
           title: plan.name, detail: [groupName.get(plan.groupId), label('trainingDetail', day)].filter(Boolean).join(' · '),
-          route: ['plans', plan.id], source: plan,
+          route: ['plans', plan.id], source: plan, groupId: plan.groupId ?? null, day,
         });
       });
     }
   }
+
+  const entries = (data.calendarEntries || []).filter((entry) => entry?.startDate && ENTRY_KINDS.includes(entry.kind));
+  for (const entry of entries) {
+    if (entry.kind === 'trainingSlot' || !want.has(entry.kind) || !keep(entry.kind, { entry })) continue;
+    const date = dateOnly(entry.startDate);
+    const end = entry.endDate ? dateOnly(entry.endDate) : date;
+    events.push({
+      id: `entry:${entry.id}`, type: entry.kind, date, ...(end > date ? { endDate: end } : {}),
+      title: entry.title,
+      detail: [groupName.get(entry.groupId), entry.location, entry.note].filter(Boolean).join(' · '),
+      route: null, source: entry,
+    });
+  }
+
+  if (want.has('trainingSlot')) {
+    // Plantage je Gruppe+Datum, damit jede Trainingszeit "ihren" Plantag
+    // findet; jeder Plantag wird höchstens einmal zugeordnet (zwei
+    // Einheiten am selben Tag brauchen zwei Plantage).
+    const planDays = new Map();
+    for (const ev of trainingEvents) {
+      const key = `${ev.groupId}|${ev.date}`;
+      if (!planDays.has(key)) planDays.set(key, []);
+      planDays.get(key).push(ev);
+    }
+    const consumed = new Set();
+    const slots = entries.filter((e) => e.kind === 'trainingSlot' && keep('trainingSlot', { entry: e }))
+      .sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''));
+    for (const slot of slots) {
+      for (const date of slotDates(slot, entries)) {
+        const match = (planDays.get(`${slot.groupId ?? null}|${date}`) || []).find((ev) => !consumed.has(ev.id));
+        if (match) consumed.add(match.id);
+        const time = [slot.startTime, slot.endTime].filter(Boolean).join('–');
+        events.push({
+          id: `slot:${slot.id}:${date}`, type: 'trainingSlot', date, time: slot.startTime || '',
+          title: slot.title,
+          detail: [time, groupName.get(slot.groupId), slot.location, match ? match.title : null, match ? label('trainingDetail', match.day) : null].filter(Boolean).join(' · '),
+          route: match ? match.route : null, source: slot, slot, groupId: slot.groupId ?? null, planId: match ? match.source.id : null,
+        });
+      }
+    }
+    trainingEvents.splice(0, trainingEvents.length, ...trainingEvents.filter((ev) => !consumed.has(ev.id)));
+  }
+  for (const { groupId: _g, day: _d, ...ev } of trainingEvents) events.push(ev);
 
   if (want.has('session')) {
     for (const session of data.sessions || []) {
@@ -276,21 +358,94 @@ export function collectEvents({ data = {}, types, scope = 'mine', ctx, labels = 
   }
 
   const order = (type) => EVENT_TYPES.indexOf(type);
-  return events.sort((a, b) => a.date.localeCompare(b.date) || order(a.type) - order(b.type) || a.title.localeCompare(b.title));
+  return events.sort((a, b) => a.date.localeCompare(b.date) || order(a.type) - order(b.type)
+    || (a.time || '').localeCompare(b.time || '') || a.title.localeCompare(b.title));
 }
 
+// ---- Trainingszeiten -------------------------------------------------------
+
+function weekdayOf(iso) {
+  return (new Date(dateOnly(iso) + 'T00:00:00Z').getUTCDay() + 6) % 7; // Montag = 0
+}
+
+function covers(entry, date) {
+  const start = dateOnly(entry.startDate);
+  const end = entry.endDate ? dateOnly(entry.endDate) : start;
+  return date >= start && date <= end;
+}
+
+// Fällt die Trainingszeit an diesem Tag wegen eines anderen Eintrags aus?
+// Trainingslager zählen nur für die eigene Gruppe (oder vereinsweite
+// Lager), Schließungen nur, wenn beide denselben (oder keinen) Ort nennen —
+// ein Verein mit zwei Bädern verliert sonst bei jeder Schließung alle
+// Trainingszeiten.
+function pausedBy(slot, other, date) {
+  if (!covers(other, date)) return false;
+  if (other.kind === 'trainingCamp') return other.groupId == null || other.groupId === slot.groupId;
+  if (other.kind === 'poolClosure') {
+    const a = (slot.location || '').trim().toLowerCase();
+    const b = (other.location || '').trim().toLowerCase();
+    return !a || !b || a === b;
+  }
+  return true;
+}
+
+// Alle Tage, an denen eine Trainingszeit stattfindet: jeder gewählte
+// Wochentag zwischen startDate und endDate (inklusive), ohne die Tage, an
+// denen ein Eintrag der Arten aus `pauseDuring` gilt.
+export function slotDates(slot, entries = []) {
+  const weekdays = new Set(slot.weekdays || []);
+  if (!slot.startDate || weekdays.size === 0) return [];
+  const start = dateOnly(slot.startDate);
+  const end = slot.endDate ? dateOnly(slot.endDate) : start;
+  const pauseKinds = new Set(slot.pauseDuring || []);
+  const blockers = entries.filter((e) => e !== slot && e.id !== slot.id && pauseKinds.has(e.kind));
+  const dates = [];
+  let n = 0;
+  for (let d = start; d <= end && n < MAX_SPAN_DAYS; d = isoAddDays(d, 1), n++) {
+    if (!weekdays.has(weekdayOf(d))) continue;
+    if (blockers.some((b) => pausedBy(slot, b, d))) continue;
+    dates.push(d);
+  }
+  return dates;
+}
+
+// ---- Auswerten -------------------------------------------------------------
+
+// Mehrtägige Termine zählen in jedem Zeitraum, den sie berühren.
 export function eventsInRange(events, start, end, activeTypes) {
   const active = activeTypes ? new Set(activeTypes) : null;
-  return events.filter((e) => e.date >= start && e.date <= end && (!active || active.has(e.type)));
+  return events.filter((e) => e.date <= end && (e.endDate || e.date) >= start && (!active || active.has(e.type)));
 }
 
-export function groupByDate(events) {
+// Datum -> Termine. Mehrtägige Termine erscheinen an jedem ihrer Tage,
+// begrenzt auf [from, to], falls angegeben.
+export function groupByDate(events, { from, to } = {}) {
+  const map = new Map();
+  const add = (day, e) => {
+    if (!map.has(day)) map.set(day, []);
+    map.get(day).push(e);
+  };
+  for (const e of events) {
+    if (!e.endDate) { add(e.date, e); continue; }
+    const first = from && from > e.date ? from : e.date;
+    const last = to && to < e.endDate ? to : e.endDate;
+    let n = 0;
+    for (let d = first; d <= last && n < MAX_SPAN_DAYS; d = isoAddDays(d, 1), n++) add(d, e);
+  }
+  return new Map([...map.entries()].sort(([a], [b]) => a.localeCompare(b)));
+}
+
+// Datum -> Termine, jeder Termin genau einmal: an seinem ersten Tag bzw.
+// — ragt er von vorn in den Zeitraum — an dessen erstem Tag `from`.
+export function groupByFirstDay(events, from) {
   const map = new Map();
   for (const e of events) {
-    if (!map.has(e.date)) map.set(e.date, []);
-    map.get(e.date).push(e);
+    const day = from && from > e.date ? from : e.date;
+    if (!map.has(day)) map.set(day, []);
+    map.get(day).push(e);
   }
-  return map;
+  return new Map([...map.entries()].sort(([a], [b]) => a.localeCompare(b)));
 }
 
 export function countByType(events) {

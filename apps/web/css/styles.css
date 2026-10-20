@@ -701,6 +701,27 @@ tr.live-row-done .live-set-desc{ text-decoration: line-through; color: var(--c-s
 .cal-type-referee      { --cal-accent: #2F5FA8;             --cal-tint: #E3ECF8; }
 .cal-type-training     { --cal-accent: var(--c-chlorine-d); --cal-tint: #E3F5EF; }
 .cal-type-session      { --cal-accent: var(--c-petrol);     --cal-tint: #DCEEF2; }
+.cal-type-publicHoliday{ --cal-accent: #B23A5B;             --cal-tint: #FBE6EC; }
+.cal-type-schoolHoliday{ --cal-accent: #A8741A;             --cal-tint: #FFF6D9; }
+.cal-type-poolClosure  { --cal-accent: #4A5560;             --cal-tint: #E8EBEE; }
+.cal-type-trainingCamp { --cal-accent: #2F7D4F;             --cal-tint: #E2F2E7; }
+.cal-type-trainingSlot { --cal-accent: #1F7A8C;             --cal-tint: #E0F1F4; }
+
+/* Noch unverplante Trainingszeit: gestrichelt, damit sie sich vom
+   bereits verplanten Training abhebt (nicht nur über Farbe). */
+.cal-chip.unplanned{ border-left-style: dashed; background: repeating-linear-gradient(135deg, var(--cal-tint) 0 6px, var(--c-white) 6px 12px); }
+
+/* Tage mit Feiertag/Ferien/Schließung flächig markieren. */
+.cal-month-cell.mark-schoolHoliday, .cal-week-day.mark-schoolHoliday, .cal-mini-cell.mark-schoolHoliday{ background: #FFF9E6; }
+.cal-month-cell.mark-poolClosure, .cal-week-day.mark-poolClosure, .cal-mini-cell.mark-poolClosure{ background: #F0F2F4; }
+.cal-month-cell.mark-publicHoliday, .cal-week-day.mark-publicHoliday, .cal-mini-cell.mark-publicHoliday{ background: #FDEEF2; }
+.cal-month-cell.mark-publicHoliday .cal-daynum, .cal-mini-cell.mark-publicHoliday .cal-mini-num{ color: #B23A5B; font-weight:700; }
+
+/* Saisonplanung (js/modules/calendarEntries.js) */
+.cal-entry-checks{ display:flex; flex-wrap:wrap; gap:6px 14px; }
+.cal-entry-list{ display:flex; flex-direction:column; gap:6px; }
+.cal-entry-list-head{ margin:12px 0 2px; color: var(--cal-accent); }
+.cal-entry-row{ padding:7px 10px; }
 
 .cal-toolbar{ display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; }
 .cal-nav{ display:flex; align-items:center; gap:6px; min-width:0; }

@@ -52,6 +52,14 @@ describe('canRead()/canWrite() — Modul-Gating', () => {
     expect(canRead('sectionTemplates', ['athlete'], ['templates'])).toBe(false); // eigenes Paket, nicht in "templates" gebündelt
   });
 
+  it('"calendarEntries" gehört zum Kernmodul Kalender — ohne gebuchtes Paket freigeschaltet', () => {
+    expect(canRead('calendarEntries', ['athlete'], [])).toBe(true);
+    expect(canWrite('calendarEntries', ['trainer'], [])).toBe(true);
+    expect(canWrite('calendarEntries', ['admin'], [])).toBe(true);
+    expect(canWrite('calendarEntries', ['athlete'], [])).toBe(false); // nur trainer/admin
+    expect(canRead('calendarEntries', ['referee'], [])).toBe(false); // kein Sync-Zugriff
+  });
+
   it('"announcements" ist ein eigenes, zubuchbares Paket (Phase 2, Abschnitt 4.1)', () => {
     expect(canRead('announcements', ['athlete'], ['announcements'])).toBe(true);
     expect(canWrite('announcements', ['trainer'], ['announcements'])).toBe(true);

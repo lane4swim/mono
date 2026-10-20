@@ -14,6 +14,7 @@ import {
   TrainingSessionSchema,
   ActionItemSchema,
   AnnouncementSchema,
+  CalendarEntrySchema,
   CommentSchema,
   ENTITY_SCHEMAS,
 } from '../src/entities.js';
@@ -595,6 +596,42 @@ describe('AnnouncementSchema', () => {
   });
   it('lehnt zusätzliche, nicht im Schema vorgesehene Felder ab (.strict())', () => {
     expect(AnnouncementSchema.safeParse({ ...valid, extra: 'x' }).success).toBe(false);
+  });
+});
+
+describe('CalendarEntrySchema', () => {
+  const day = (d: string) => `${d}T00:00:00.000Z`;
+  const holiday = { id: ATHLETE_ID, clubId: CLUB_ID, kind: 'schoolHoliday', title: 'Herbstferien', startDate: day('2026-10-26'), endDate: day('2026-11-06'), createdAt: now, updatedAt: now };
+  const slot = {
+    id: ATHLETE_ID, clubId: CLUB_ID, kind: 'trainingSlot', title: 'Abendtraining', startDate: day('2026-09-01'), endDate: day('2027-06-30'),
+    groupId: TRAINER_ID, weekdays: [0, 2], startTime: '17:30', endTime: '19:00', pauseDuring: ['publicHoliday', 'poolClosure'], poolLength: 'SCM',
+    createdAt: now, updatedAt: now,
+  };
+  it('akzeptiert vereinsweite Ferien mit Standardwerten für die übrigen Felder', () => {
+    const parsed = CalendarEntrySchema.safeParse(holiday);
+    expect(parsed.success).toBe(true);
+    expect(parsed.success && parsed.data.groupId).toBe(null);
+  });
+  it('akzeptiert eine wöchentliche Trainingszeit einer Gruppe', () => {
+    expect(CalendarEntrySchema.safeParse(slot).success).toBe(true);
+  });
+  it('lehnt eine Trainingszeit ohne Wochentag ab', () => {
+    expect(CalendarEntrySchema.safeParse({ ...slot, weekdays: [] }).success).toBe(false);
+  });
+  it('lehnt ungültige Uhrzeiten und Wochentage ab', () => {
+    expect(CalendarEntrySchema.safeParse({ ...slot, startTime: '24:00' }).success).toBe(false);
+    expect(CalendarEntrySchema.safeParse({ ...slot, weekdays: [7] }).success).toBe(false);
+  });
+  it('lehnt ein Ende vor dem Beginn ab', () => {
+    expect(CalendarEntrySchema.safeParse({ ...holiday, endDate: day('2026-10-25') }).success).toBe(false);
+  });
+  it('lehnt gruppenbezogene Ferien/Feiertage/Schließungen ab (gelten immer vereinsweit)', () => {
+    expect(CalendarEntrySchema.safeParse({ ...holiday, groupId: TRAINER_ID }).success).toBe(false);
+    expect(CalendarEntrySchema.safeParse({ ...holiday, kind: 'trainingCamp', groupId: TRAINER_ID }).success).toBe(true);
+  });
+  it('lehnt "trainingSlot" als Pausengrund und unbekannte Felder ab', () => {
+    expect(CalendarEntrySchema.safeParse({ ...slot, pauseDuring: ['trainingSlot'] }).success).toBe(false);
+    expect(CalendarEntrySchema.safeParse({ ...holiday, extra: 'x' }).success).toBe(false);
   });
 });
 

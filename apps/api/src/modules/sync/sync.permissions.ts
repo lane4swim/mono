@@ -58,7 +58,16 @@ export const STORE_PERMISSIONS: Record<EntityStoreName, StoreAccess> = {
   // wie "templates"/"planCycles" — alle drei Team-Rollen lesen,
   // anlegen/bearbeiten bleibt trainer/admin vorbehalten.
   announcements: coachManaged,
+  // Saisonplanung im Kalender (Ferien, Feiertage, Trainingszeiten,
+  // Trainingslager, Schließungen): alle lesen, trainer/admin pflegen.
+  calendarEntries: coachManaged,
 };
+
+// Stores der Kernmodule (apps/web/js/router.js: CORE_MODULE_IDS) — an kein
+// zubuchbares Paket gebunden, für jeden Verein freigeschaltet. Der Kalender
+// selbst ist ein Kernmodul; seine eigenen Einträge dürfen daher nicht von
+// einem Paket abhängen.
+const CORE_STORES: ReadonlySet<EntityStoreName> = new Set(['calendarEntries']);
 
 // Nimmt den weiteren Wire-Typ `SyncStore` entgegen, nicht nur
 // `EntityStoreName`: `SyncStore` führt zusätzlich "users", das die
@@ -84,6 +93,10 @@ const STORE_MODULE_MAP: Record<EntityStoreName, readonly ModuleKey[]> = (() => {
   return map;
 })();
 
+function moduleEnabled(store: EntityStoreName, enabledModules: readonly string[]): boolean {
+  return CORE_STORES.has(store) || STORE_MODULE_MAP[store].some((m) => enabledModules.includes(m));
+}
+
 // Ein Konto kann mehrere Rollen tragen (docs/Plans/kampfrichter-modul-plan.md,
 // Abschnitt 1.4/1.5): es genügt, wenn EINE davon berechtigt ist
 // (Vereinigung, nicht Gleichheit).
@@ -91,7 +104,7 @@ export function canRead(store: SyncStore, roles: readonly Role[], enabledModules
   return (
     isKnownStore(store) &&
     roles.some((role) => STORE_PERMISSIONS[store].read.has(role)) &&
-    STORE_MODULE_MAP[store].some((m) => enabledModules.includes(m))
+    moduleEnabled(store, enabledModules)
   );
 }
 
@@ -99,7 +112,7 @@ export function canWrite(store: SyncStore, roles: readonly Role[], enabledModule
   return (
     isKnownStore(store) &&
     roles.some((role) => STORE_PERMISSIONS[store].write.has(role)) &&
-    STORE_MODULE_MAP[store].some((m) => enabledModules.includes(m))
+    moduleEnabled(store, enabledModules)
   );
 }
 

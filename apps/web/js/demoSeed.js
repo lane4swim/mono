@@ -145,6 +145,20 @@ async function seedDemoClubData() {
     { groupId: groupA.id, authorId: null, title: 'Meldeschluss Bezirksmeisterschaften', body: 'Bitte bis Freitag Rückmeldung, wer an den Bezirksmeisterschaften teilnimmt.' },
   ].map(a => ({ id: id(), clubId: DEMO_CLUB_ID, ...a, createdAt: toIsoDateTime(todayISO()), updatedAt: toIsoDateTime(todayISO()) }));
   await bulkPut('announcements', announcements);
+
+  // Saisonplanung: die Trainingszeit der Leistungsgruppe (Mo/Mi/Fr) trifft
+  // die Tage von plan1 — im Kalender als verplant sichtbar, die übrigen
+  // Wochen als "noch kein Plan".
+  const span = (from, to) => ({ startDate: toIsoDateTime(isoAddDays(wkStart, from)), endDate: toIsoDateTime(isoAddDays(wkStart, to)) });
+  const calendarEntries = [
+    { kind: 'trainingSlot', title: 'Leistungsgruppe Abendtraining', groupId: groupA.id, ...span(-28, 180), weekdays: [0, 2, 4], startTime: '17:30', endTime: '19:00', pauseDuring: ['publicHoliday', 'poolClosure', 'trainingCamp'], poolLength: 'SCM', location: 'Hallenbad' },
+    { kind: 'trainingSlot', title: 'Nachwuchs', groupId: groupB.id, ...span(-28, 180), weekdays: [1, 3], startTime: '16:30', endTime: '17:30', pauseDuring: ['publicHoliday', 'schoolHoliday', 'poolClosure'], poolLength: 'SCM', location: 'Hallenbad' },
+    { kind: 'publicHoliday', title: 'Feiertag', groupId: null, ...span(10, 10) },
+    { kind: 'schoolHoliday', title: 'Schulferien', groupId: null, ...span(19, 30) },
+    { kind: 'poolClosure', title: 'Hallenbad: Revision', groupId: null, ...span(15, 16), location: 'Hallenbad' },
+    { kind: 'trainingCamp', title: 'Trainingslager', groupId: groupA.id, ...span(40, 45), location: 'Sportschule' },
+  ].map(e => ({ weekdays: [], startTime: null, endTime: null, pauseDuring: [], poolLength: null, location: '', note: '', ...e, id: id(), clubId: DEMO_CLUB_ID }));
+  await bulkPut('calendarEntries', calendarEntries);
 }
 
 // Nur beim allerersten Aufruf der Demo (leere Datenbank) automatisch
