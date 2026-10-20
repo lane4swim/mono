@@ -23,13 +23,20 @@
 // Wettkampfpaket blendet auch die Wettkämpfe hier aus. Die Saisonplanung
 // hängt an keinem Paket (sync.permissions.ts: CORE_STORES).
 //
+// Eltern (reine "parent"-Konten) sehen den Kalender ihrer verknüpften
+// Kinder — ohne Sync und ohne IndexedDB über GET /api/parents/calendar
+// (serverseitig auf das Nötigste reduziert, siehe
+// parents.calendar.repository.ts), je Kind ausgewertet wie der Kalender
+// einer Athlet:in. Geladen wird ein Jahr um das angezeigte Datum; wer
+// darüber hinaus blättert, löst einen neuen Abruf aus.
+//
 // Daten werden einmal je render() geladen; Ansichts-, Zeitraum-, Filter-
 // und Scope-Wechsel zeichnen danach nur den Kalender neu und halten den
 // Zustand per history.replaceState im Hash (#/calendar/<ansicht>/<datum>),
 // ohne einen erneuten Routenwechsel (und Datenabruf) auszulösen.
 import { getAll } from '../db.js';
 import { el, clear, beginRender, icon } from '../dom.js';
-import { todayISO, dateOnly, fmtDateLong, fmtDateShort, startOfWeek } from '../dates.js';
+import { todayISO, dateOnly, fmtDateLong, fmtDateShort, startOfWeek, isoAddDays } from '../dates.js';
 import { laneWave } from '../ui.js';
 import { getCurrentUser, getRoles, getEnabledModules, hasRole, isTrainerOrAdmin } from '../state.js';
 import { navigate, getModule, isModuleVisible } from '../router.js';
@@ -68,16 +75,16 @@ const MAX_CHIPS_PER_MONTH_CELL = 3;
 
 export const calendarModule = {
   id: 'calendar',
-  // Superadmin (vereinslos) und reine Eltern-Konten (eigene Übersicht ohne
-  // Sync, siehe parentView.js) haben keine Termine, die sich hier
-  // zusammenführen ließen. Reine Kampfrichter:innen sehen ihre Einsätze.
-  roles: ['trainer', 'admin', 'athlete', 'referee'],
+  // Superadmin (vereinslos) hat keine Termine. Reine Kampfrichter:innen
+  // sehen ihre Einsätze, Eltern die Termine ihrer Kinder.
+  roles: ['trainer', 'admin', 'athlete', 'referee', 'parent'],
   icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/><path d="M7.5 14h2M11 14h2M14.5 14h2M7.5 17.5h2M11 17.5h2"/></svg>`,
   async render(container, params = []) {
     const isCurrent = beginRender(container);
     clear(container);
     const user = getCurrentUser();
     const types = availableTypes();
+    if (isParentMode()) return renderParent(container, isCurrent, user, types, params);
     const [data, remote] = await Promise.all([loadLocal(types), loadRemote(types)]);
     if (!isCurrent()) return;
     const staff = isTrainerOrAdmin();
@@ -95,9 +102,21 @@ function routeVisible(routeId) {
   return !!mod && isModuleVisible(mod, getRoles(), getEnabledModules());
 }
 
+// Eltern-Modus nur für Konten ohne eigene Vereinsrolle mit Sync-Zugriff —
+// eine Trainerin, die zugleich Elternteil ist, behält ihren eigenen Kalender.
+export function isParentMode() {
+  const roles = getRoles();
+  return roles.includes('parent') && !roles.some((r) => ['trainer', 'admin', 'athlete'].includes(r));
+}
+
+// Was der Eltern-Endpunkt liefert (keine Handlungsfelder, Qualifikationen
+// oder Kampfrichtereinsätze).
+const PARENT_TYPES = [...ENTRY_KINDS, 'competition', 'training', 'session'];
+
 export function availableTypes() {
   const roles = getRoles();
   const has = (...r) => r.some((x) => roles.includes(x));
+  if (isParentMode()) return EVENT_TYPES.filter((type) => PARENT_TYPES.includes(type));
   const out = [];
   // Wettkämpfe sind für Athlet:innen kein eigener Menüpunkt, ihre
   // Meldungen gehören aber in den Kalender — daher Paket statt Route
@@ -170,6 +189,56 @@ async function loadRemote(types) {
   return { data, failed: results.some((r) => r.status === 'rejected') };
 }
 
+// ---- Eltern-Modus ------------------------------------------------------------
+
+// Abrufzeitraum: das Jahr des Ankers plus eine Woche Rand (Monatsraster
+// reichen in Vor-/Folgemonat), deutlich unter PARENT_CALENDAR_MAX_DAYS.
+export function parentFetchRange(anchor) {
+  const year = anchor.slice(0, 4);
+  return { from: isoAddDays(`${year}-01-01`, -7), to: isoAddDays(`${year}-12-31`, 7) };
+}
+
+// Vom Eltern-Überblick aus (parentView.js) direkt den Kalender eines
+// bestimmten Kindes öffnen.
+export function openChildCalendar(athleteId) {
+  writePref(getCurrentUser(), 'child', athleteId);
+  navigate('calendar');
+}
+
+async function renderParent(container, isCurrent, user, types, params) {
+  const state = initialState(user, types, params, false);
+  const loaded = parentFetchRange(state.anchor);
+  let children;
+  try {
+    ({ children } = await api.getParentCalendar(loaded));
+  } catch (err) {
+    if (!isCurrent()) return;
+    container.appendChild(el('div', { class: 'empty-state' }, [el('h3', {}, t('common.somethingWentWrong')), el('p', {}, api.describeError(err))]));
+    return;
+  }
+  if (!isCurrent()) return;
+  if (children.length === 0) {
+    container.appendChild(el('div', { class: 'empty-state' }, [el('h3', {}, t('parentView.noneLinkedTitle')), el('p', {}, t('parentView.noneLinkedMsg'))]));
+    return;
+  }
+  const storedChild = readPref(user, 'child');
+  const child = children.find((c) => c.athlete.id === storedChild) || children[0];
+  const data = {
+    athletes: [child.athlete], groups: child.groups, calendarEntries: child.calendarEntries, plans: child.plans,
+    sessions: child.sessions, competitions: child.competitions, entries: child.entries,
+  };
+  // Ausgewertet wie der Kalender der Athlet:in selbst ("Meine Termine").
+  const ctx = personalContext({ user: { id: user?.id, athleteId: child.athlete.id }, staff: false, athletes: data.athletes, groups: data.groups });
+  const reload = () => calendarModule.render(container, [state.view, state.anchor]);
+  renderPage(container, {
+    data, remoteFailed: false, types, ctx, state, staff: false, reload,
+    parent: {
+      children, child, loaded,
+      selectChild: (id) => { writePref(user, 'child', id); reload(); },
+    },
+  });
+}
+
 // ---- Zustand (Ansicht, Datum, Filter, Scope) -------------------------------
 
 const STORAGE_PREFIX = 'lane1.calendar.';
@@ -207,27 +276,40 @@ function syncHash(state) {
 // ---- Rendering -------------------------------------------------------------
 
 function renderPage(container, model) {
-  const { types, state, staff, remoteFailed, reload } = model;
+  const { types, state, staff, remoteFailed, reload, parent } = model;
   const labels = eventLabels();
   // Klickverhalten der Termine (siehe eventChip()).
   const actions = {
-    editEntry: canEditEntries() ? (entry) => openEntryModal(entry, model.data.groups || [], reload) : null,
-    createPlan: canCreatePlan() ? createPlanFor : null,
+    editEntry: !parent && canEditEntries() ? (entry) => openEntryModal(entry, model.data.groups || [], reload) : null,
+    createPlan: !parent && canCreatePlan() ? createPlanFor : null,
     // Kampfrichter-Anfragen direkt im Kalender zu-/absagen.
     respondReferee: (assignment) => openResponseModal(assignment, reload),
   };
   let events = collectEvents({ data: model.data, types, scope: state.scope, ctx: model.ctx, labels });
 
   const wrap = el('div', { class: 'calendar' });
-  const editable = canEditEntries() && types.some((type) => ENTRY_KINDS.includes(type));
+  const editable = !parent && canEditEntries() && types.some((type) => ENTRY_KINDS.includes(type));
+  const childName = parent ? `${parent.child.athlete.firstName} ${parent.child.athlete.lastName}`.trim() : '';
   wrap.appendChild(el('div', { class: 'page-head' }, [
-    el('div', {}, [el('div', { class: 'page-eyebrow' }, t('calendar.eyebrow')), el('h1', { class: 'mt-0' }, t('calendar.title'))]),
+    el('div', {}, [el('div', { class: 'page-eyebrow' }, parent ? t('calendar.parentEyebrow', { name: childName }) : t('calendar.eyebrow')), el('h1', { class: 'mt-0' }, t('calendar.title'))]),
     editable ? el('div', { class: 'page-actions' }, [
       el('button', { type: 'button', class: 'btn btn-ghost', onclick: () => openEntryList(reload) }, t('calendar.entry.manage')),
       el('button', { type: 'button', class: 'btn btn-primary', onclick: () => openEntryModal({ startDate: state.anchor, endDate: state.anchor }, model.data.groups || [], reload) }, t('calendar.entry.add')),
     ]) : null,
   ]));
   wrap.appendChild(laneWave());
+
+  // Mehrere Kinder: Auswahl, wessen Kalender angezeigt wird.
+  if (parent && parent.children.length > 1) {
+    wrap.appendChild(el('div', { class: 'cal-segmented cal-child-switch', role: 'group', 'aria-label': t('calendar.childLabel') },
+      parent.children.map((c) => {
+        const on = c.athlete.id === parent.child.athlete.id;
+        return el('button', {
+          type: 'button', class: `cal-seg ${on ? 'active' : ''}`, 'aria-pressed': String(on),
+          onclick: () => { if (!on) parent.selectChild(c.athlete.id); },
+        }, c.athlete.firstName);
+      })));
+  }
 
   const toolbar = el('div', { class: 'cal-toolbar' });
   const filters = el('div', { class: 'cal-filters', role: 'group', 'aria-label': t('calendar.filterLabel') });
@@ -276,6 +358,8 @@ function renderPage(container, model) {
   function update() {
     syncHash(state);
     const range = periodRange(state.view, state.anchor);
+    // Eltern-Modus: außerhalb des geladenen Zeitraums neu abrufen.
+    if (parent && (range.start < parent.loaded.from || range.end > parent.loaded.to)) { reload(); return; }
     const teamEvents = eventsForTeams(events, activeTeams());
     const inPeriod = eventsInRange(teamEvents, range.start, range.end);
     drawToolbar(toolbar, state, range, staff, {

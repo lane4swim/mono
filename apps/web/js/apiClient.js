@@ -567,6 +567,10 @@ export function unsubscribePush(endpoint) {
 export function getParentOverview() {
   return request('/api/parents/overview');
 }
+// Kalender der verknüpften Kinder; from/to als "YYYY-MM-DD" (inklusive).
+export function getParentCalendar({ from, to }) {
+  return request(`/api/parents/calendar?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+}
 // Admin-Verwaltung der Eltern-Kind-Verknüpfungen.
 export function listParentLinks(userId) {
   return request(`/api/parents/${encodeURIComponent(userId)}/links`);

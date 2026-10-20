@@ -489,6 +489,7 @@ export default {
     savedEdit: 'Changes saved', savedCreate: 'Announcement created',
   },
   parentView: {
+    openCalendar: 'Show calendar',
     eyebrow: 'My Child', title: 'Overview',
     noneLinkedTitle: 'No child linked yet', noneLinkedMsg: 'No athlete profile is linked to this account yet. Please contact the club.',
     upcomingSessionsTitle: 'Upcoming Training Sessions', noneUpcomingSessions: 'No upcoming sessions scheduled.',
@@ -934,6 +935,7 @@ export default {
     },
     refereeOpenRequests: 'You have {count} open referee request(s).', refereeAnswerNext: 'Answer now',
     srNoPlan: 'no plan yet',
+    parentEyebrow: 'Events for {name}', childLabel: 'Calendar of',
     slotUnplanned: 'no plan yet — select to create one',
     entry: {
       manage: 'Season planning', add: 'Add entry',

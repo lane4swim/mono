@@ -4,7 +4,7 @@
 // Plan, Abschnitt 5.2): sync.route.ts' requireAnyRole('trainer', 'admin',
 // 'athlete') lässt diese Rolle strukturell nicht hinein.
 import type { FastifyInstance } from 'fastify';
-import { CreateParentLinkRequestSchema } from '@lane1/shared-types';
+import { CreateParentLinkRequestSchema, ParentCalendarQuerySchema } from '@lane1/shared-types';
 import type { ParentsService, RequesterContext } from './parents.service.js';
 import { requireAnyRole } from '../../plugins/authorize.js';
 import { parseInput } from '../../plugins/parseInput.js';
@@ -25,6 +25,14 @@ export async function parentsRoutes(app: FastifyInstance, opts: ParentsRoutesOpt
   app.get('/api/parents/overview', { preHandler: [app.authenticate, requireAnyRole('parent')] }, async (request, reply) => {
     const overview = await parentsService.getOverview(requesterFrom(request));
     return reply.code(200).send(overview);
+  });
+
+  // Kalender der verknüpften Kinder — ausschließlich Rolle "parent".
+  app.get('/api/parents/calendar', { preHandler: [app.authenticate, requireAnyRole('parent')] }, async (request, reply) => {
+    const query = parseInput(ParentCalendarQuerySchema, request.query, reply);
+    if (!query) return;
+    const range = { from: new Date(`${query.from}T00:00:00.000Z`), to: new Date(`${query.to}T00:00:00.000Z`) };
+    return reply.code(200).send(await parentsService.getCalendar(requesterFrom(request), range));
   });
 
   // Admin-Verwaltung der Verknüpfungen (Plan Abschnitt 3.5) — analog

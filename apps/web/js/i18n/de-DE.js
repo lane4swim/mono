@@ -513,6 +513,7 @@ export default {
   },
   parentView: {
     eyebrow: 'Mein Kind', title: 'Übersicht',
+    openCalendar: 'Kalender anzeigen',
     noneLinkedTitle: 'Noch keine Verknüpfung', noneLinkedMsg: 'Es ist noch kein Athletenprofil mit diesem Konto verknüpft. Bitte an den Verein wenden.',
     upcomingSessionsTitle: 'Bevorstehende Trainingseinheiten', noneUpcomingSessions: 'Keine bevorstehenden Einheiten geplant.',
     upcomingCompetitionsTitle: 'Bevorstehende Wettkämpfe', noneUpcomingCompetitions: 'Keine bevorstehenden Wettkämpfe.',
@@ -958,6 +959,7 @@ export default {
     },
     refereeOpenRequests: 'Du hast {count} offene Kampfrichter-Anfrage(n).', refereeAnswerNext: 'Jetzt beantworten',
     srNoPlan: 'noch kein Plan',
+    parentEyebrow: 'Termine von {name}', childLabel: 'Kalender von',
     slotUnplanned: 'noch kein Plan — auswählen, um einen anzulegen',
     entry: {
       manage: 'Saisonplanung', add: 'Eintrag hinzufügen',

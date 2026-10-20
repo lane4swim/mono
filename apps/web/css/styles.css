@@ -744,6 +744,7 @@ tr.live-row-done .live-set-desc{ text-decoration: line-through; color: var(--c-s
 .cal-entry-list-head{ margin:12px 0 2px; color: var(--c-ink); border-left:4px solid var(--cal-accent); padding-left:8px; }
 .cal-entry-row{ padding:7px 10px; }
 
+.cal-child-switch{ margin-bottom:12px; }
 .cal-toolbar{ display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; }
 .cal-nav{ display:flex; align-items:center; gap:6px; min-width:0; }
 .cal-period{ font-size: var(--fs-lg); margin:0 0 0 8px; white-space:nowrap; }

@@ -22,6 +22,7 @@ import { parentsRoutes } from './modules/parents/parents.route.js';
 import { createParentsService, type ParentsService } from './modules/parents/parents.service.js';
 import { PrismaParentLinkRepository, PrismaParentsAthleteLookup } from './modules/parents/parents.repository.js';
 import { PrismaParentOverviewGateway } from './modules/parents/parents.overview.repository.js';
+import { PrismaParentCalendarGateway } from './modules/parents/parents.calendar.repository.js';
 import { invitationsRoutes } from './modules/invitations/invitations.route.js';
 import { createAuthService, type AuthService } from './modules/auth/auth.service.js';
 import { PrismaUserRepository, PrismaRefreshTokenRepository, PrismaPasswordResetTokenRepository, PrismaMfaRecoveryCodeRepository } from './modules/auth/auth.repository.js';
@@ -325,6 +326,7 @@ export async function buildApp(env: Env, overrides: BuildAppOverrides = {}): Pro
     createParentsService({
       parentLinks: new PrismaParentLinkRepository(getPrisma()),
       overview: new PrismaParentOverviewGateway(getPrisma()),
+      calendar: new PrismaParentCalendarGateway(getPrisma()),
       users: new PrismaUserRepository(getPrisma()),
       athletes: new PrismaParentsAthleteLookup(getPrisma()),
       auditLog: auditLogService,

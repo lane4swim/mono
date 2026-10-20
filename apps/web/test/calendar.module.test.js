@@ -30,6 +30,7 @@ const apiMocks = vi.hoisted(() => ({
   listMyQualifications: vi.fn(),
   listMyRefereeAssignments: vi.fn(),
   respondToRefereeAssignment: vi.fn(),
+  getParentCalendar: vi.fn(),
 }));
 vi.mock('../js/apiClient.js', () => ({ ...apiMocks, describeError: (e) => String(e) }));
 
@@ -113,9 +114,8 @@ afterEach(() => {
 });
 
 describe('calendarModule', () => {
-  it('ist Kernmodul für trainer/admin/athlete/referee, nicht für parent/superadmin', () => {
-    for (const role of ['trainer', 'admin', 'athlete', 'referee']) expect(isModuleVisible(calendarModule, role, [])).toBe(true);
-    expect(isModuleVisible(calendarModule, 'parent', MODULE_KEYS)).toBe(false);
+  it('ist Kernmodul für trainer/admin/athlete/referee/parent, nicht für superadmin', () => {
+    for (const role of ['trainer', 'admin', 'athlete', 'referee', 'parent']) expect(isModuleVisible(calendarModule, role, [])).toBe(true);
     expect(isModuleVisible(calendarModule, 'superadmin', MODULE_KEYS)).toBe(false);
   });
 
@@ -332,9 +332,89 @@ describe('calendarModule', () => {
       });
     }
 
-    it('Eltern- und Superadmin-Konten haben keinen Kalender', () => {
-      expect(isModuleVisible(calendarModule, ['parent'], MODULE_KEYS)).toBe(false);
+    it('Superadmin-Konten haben keinen Kalender', () => {
       expect(isModuleVisible(calendarModule, ['superadmin'], MODULE_KEYS)).toBe(false);
+    });
+  });
+
+  describe('Eltern-Modus', () => {
+    const day = (d) => `${d}T00:00:00.000Z`;
+    const childData = (id, firstName, groupId, planName) => ({
+      athlete: { id, firstName, lastName: 'Vogel', groupId },
+      groups: [{ id: groupId, name: `Gruppe ${firstName}` }],
+      calendarEntries: [
+        { id: `h-${id}`, kind: 'schoolHoliday', title: 'Herbstferien', startDate: day('2026-10-26'), endDate: day('2026-10-30'), groupId: null, weekdays: [], startTime: null, endTime: null, pauseDuring: [], location: '' },
+        { id: `s-${id}`, kind: 'trainingSlot', title: `Training ${firstName}`, startDate: day('2026-09-01'), endDate: day('2027-06-30'), groupId, weekdays: [2], startTime: '17:00', endTime: '18:00', pauseDuring: [], location: '' },
+      ],
+      plans: [{ id: `p-${id}`, name: planName, groupId, days: [{ date: day('2026-10-14') }] }],
+      sessions: [{ id: `se-${id}`, date: day('2026-10-12'), groupId, attendance: [{ athleteId: id, present: true }] }],
+      competitions: [{ id: `c-${id}`, name: `Cup ${firstName}`, date: day('2026-10-24'), location: 'Nord', course: 'SCM', entryDeadline: null, selectionDeadline: null }],
+      entries: [{ id: `e-${id}`, competitionId: `c-${id}`, athleteId: id }],
+    });
+    const loginParent = (roles = ['parent']) => {
+      session.user = { id: 'u-parent', athleteId: null };
+      session.roles = roles;
+      session.enabledModules = [...MODULE_KEYS];
+    };
+    beforeEach(() => {
+      apiMocks.getParentCalendar.mockReset().mockResolvedValue({ children: [childData('k1', 'Mara', 'g-a', 'Plan Mara'), childData('k2', 'Tim', 'g-b', 'Plan Tim')] });
+    });
+
+    it('zeigt die Termine des Kindes nur lesend, ohne Staff-Bedienelemente', async () => {
+      loginParent();
+      expect(availableTypes()).toEqual(['publicHoliday', 'schoolHoliday', 'poolClosure', 'trainingCamp', 'competition', 'trainingSlot', 'training', 'session']);
+      const c = await render();
+      expect(apiMocks.getParentCalendar).toHaveBeenCalledWith({ from: '2025-12-25', to: '2027-01-07' });
+      expect(c.querySelector('.page-eyebrow').textContent).toBe(t('calendar.parentEyebrow', { name: 'Mara Vogel' }));
+      const titles = chipTitles(c.querySelector('.cal-month'));
+      expect(titles).toEqual(expect.arrayContaining(['Herbstferien', 'Training Mara', 'Cup Mara', 'Gruppe Mara']));
+      expect(titles).not.toContain('Training Tim');
+      // Plantag geht in der Trainingszeit auf
+      expect(titles).not.toContain('Plan Mara');
+      expect(c.querySelectorAll('.cal-month button.cal-chip')).toHaveLength(0);
+      expect(c.querySelector('.page-actions')).toBeNull();
+      expect(segButton(c, t('calendar.scopeAll'))).toBeUndefined();
+      expect(c.querySelector('.team-chip')).toBeNull();
+      expect(apiMocks.listMyQualifications).not.toHaveBeenCalled();
+    });
+
+    it('mehrere Kinder: Umschalter wechselt den Kalender und merkt die Wahl', async () => {
+      loginParent();
+      let c = await render();
+      const tim = segButton(c, 'Tim');
+      expect(tim.getAttribute('aria-pressed')).toBe('false');
+      tim.click();
+      await vi.waitFor(() => expect(chipTitles(document.querySelector('.cal-month'))).toContain('Training Tim'));
+      document.body.innerHTML = '';
+      c = await render();
+      expect(segButton(c, 'Tim').getAttribute('aria-pressed')).toBe('true');
+      expect(chipTitles(c.querySelector('.cal-month'))).not.toContain('Training Mara');
+    });
+
+    it('lädt beim Blättern über den geladenen Zeitraum hinaus neu', async () => {
+      loginParent();
+      const c = await render(['year', '2026-10-15']);
+      expect(apiMocks.getParentCalendar).toHaveBeenCalledTimes(1);
+      c.querySelector(`[aria-label="${t('calendar.next')}"]`).click();
+      await vi.waitFor(() => expect(apiMocks.getParentCalendar).toHaveBeenCalledTimes(2));
+      expect(apiMocks.getParentCalendar).toHaveBeenLastCalledWith({ from: '2026-12-25', to: '2028-01-07' });
+    });
+
+    it('ohne verknüpfte Kinder bzw. bei Fehler ein Hinweis statt Kalender', async () => {
+      loginParent();
+      apiMocks.getParentCalendar.mockResolvedValueOnce({ children: [] });
+      let c = await render();
+      expect(c.textContent).toContain(t('parentView.noneLinkedTitle'));
+      apiMocks.getParentCalendar.mockRejectedValueOnce(new Error('offline'));
+      c = await render();
+      expect(c.textContent).toContain(t('common.somethingWentWrong'));
+    });
+
+    it('Trainer:in, die zugleich Elternteil ist, behält ihren eigenen Kalender', async () => {
+      loginParent(['trainer', 'parent']);
+      const c = await render();
+      expect(apiMocks.getParentCalendar).not.toHaveBeenCalled();
+      expect(chipTitles(c.querySelector('.cal-month'))).toContain('Plan Leistung');
     });
   });
 
