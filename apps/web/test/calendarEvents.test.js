@@ -4,7 +4,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   periodRange, shiftAnchor, monthGridDays, isoWeek, quarterOf, personalContext, collectEvents,
-  eventsInRange, countByType, EVENT_TYPES, slotDates, groupByDate, groupByFirstDay,
+  eventsInRange, countByType, EVENT_TYPES, slotDates, groupByDate, groupByFirstDay, eventsForTeams,
 } from '../js/modules/calendarEvents.js';
 
 describe('Zeiträume', () => {
@@ -328,5 +328,35 @@ describe('collectEvents — Saisonplanung', () => {
     expect([...byDate.keys()]).toEqual(['2026-10-26', '2026-10-27', '2026-10-28', '2026-10-29', '2026-10-30']);
     // Terminliste: genau einmal, am ersten Tag im Zeitraum
     expect([...groupByFirstDay(events, '2026-10-26').keys()]).toEqual(['2026-10-26']);
+  });
+});
+
+describe('eventsForTeams', () => {
+  const season = { ...data, calendarEntries: [slotA, slotB, ...holidays] };
+  const ctx = personalContext({ user: TRAINER, staff: true, athletes, groups });
+  const events = collectEvents({ data: season, types: ALL, scope: 'all', ctx });
+  const byId = Object.fromEntries(events.map((e) => [e.id, e]));
+
+  it('ordnet Termine ihren Teams zu (Wettkampf: Teams der Meldungen)', () => {
+    expect(byId['training:p-b:0'].groupIds).toEqual(['g-b']);
+    expect(byId['training:p-all:0'].groupIds).toBe(null);
+    expect(byId['session:s-a'].groupIds).toEqual(['g-a']);
+    expect(byId['competition:c-maya'].groupIds).toEqual(['g-a']);
+    expect(byId['competition:c-open'].groupIds).toBe(null); // noch ohne Meldungen
+    expect(byId['deadline:ai-lukas'].groupIds).toEqual(['g-b']);
+    expect(byId['entry:camp-b'].groupIds).toEqual(['g-b']);
+    expect(byId['entry:h-school'].groupIds).toBe(null);
+    expect(byId['slot:sl-a:2026-10-12'].groupIds).toEqual(['g-a']);
+  });
+
+  it('leere Auswahl = alle; sonst gewählte Teams plus teamlose Termine', () => {
+    expect(eventsForTeams(events, new Set())).toBe(events);
+    const onlyB = eventsForTeams(events, new Set(['g-b']));
+    expect(onlyB.some((e) => e.groupIds?.includes('g-a') && !e.groupIds.includes('g-b'))).toBe(false);
+    for (const id of ['training:p-b:0', 'competition:c-lukas', 'competition:c-open', 'training:p-all:0', 'entry:h-school', 'entry:camp-b']) {
+      expect(onlyB.map((e) => e.id)).toContain(id);
+    }
+    expect(onlyB.map((e) => e.id)).not.toContain('competition:c-maya');
+    expect(onlyB.map((e) => e.id)).not.toContain('session:s-a');
   });
 });

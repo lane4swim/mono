@@ -43,8 +43,9 @@ import { openNewPlanModal } from './plans.js';
 import { openEntryModal, openEntryList } from './calendarEntries.js';
 import {
   EVENT_TYPES, RECURRING_TYPES, CALENDAR_VIEWS, ENTRY_KINDS, periodRange, shiftAnchor, monthGridDays, daysOf,
-  addMonths, quarterOf, isoWeek, personalContext, collectEvents, eventsInRange, groupByDate, groupByFirstDay, countByType,
+  addMonths, quarterOf, isoWeek, personalContext, collectEvents, eventsInRange, eventsForTeams, groupByDate, groupByFirstDay, countByType,
 } from './calendarEvents.js';
+import { teamFilterChips, loadTeamSelection, saveTeamSelection } from '../teamFilter.js';
 
 const TYPE_ICONS = {
   publicHoliday: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.4 6.8 19.1l1-5.8-4.3-4.1 5.9-.9z"/></svg>',
@@ -227,17 +228,43 @@ function renderPage(container, model) {
 
   const toolbar = el('div', { class: 'cal-toolbar' });
   const filters = el('div', { class: 'cal-filters', role: 'group', 'aria-label': t('calendar.filterLabel') });
+  const teamsHost = el('div');
   const body = el('div', { class: 'cal-body' });
   wrap.appendChild(toolbar);
   wrap.appendChild(filters);
+  wrap.appendChild(teamsHost);
   if (remoteFailed) wrap.appendChild(el('p', { class: 'text-sm text-slate' }, t('calendar.remoteUnavailable')));
   wrap.appendChild(body);
   container.appendChild(wrap);
 
+  // Team-Filter (nur Staff — Athlet:innen sehen ohnehin nur ihr Team):
+  // angeboten werden die Teams, die im gewählten Scope vorkommen können.
+  const groups = model.data.groups || [];
+  let teams = staff ? loadTeamSelection('calendar', state.user, groups) : new Set();
+  const offeredTeams = () => (state.scope === 'all' || model.ctx.coachAllGroups ? groups : groups.filter((g) => model.ctx.coachGroupIds.has(g.id)));
+  const activeTeams = () => {
+    const offered = new Set(offeredTeams().map((g) => g.id));
+    return new Set([...teams].filter((id) => offered.has(id)));
+  };
+  function drawTeams() {
+    clear(teamsHost);
+    if (!staff) return;
+    teamsHost.appendChild(teamFilterChips(offeredTeams(), activeTeams(), (next) => {
+      // Im Scope gerade nicht angebotene, früher gewählte Teams bleiben
+      // gemerkt (Wechsel "Ganzer Verein" -> "Meine Termine" und zurück).
+      const offered = new Set(offeredTeams().map((g) => g.id));
+      teams = new Set([...[...teams].filter((id) => !offered.has(id)), ...next]);
+      saveTeamSelection('calendar', state.user, teams);
+      update();
+    }));
+  }
+  drawTeams();
+
   function update() {
     syncHash(state);
     const range = periodRange(state.view, state.anchor);
-    const inPeriod = eventsInRange(events, range.start, range.end);
+    const teamEvents = eventsForTeams(events, activeTeams());
+    const inPeriod = eventsInRange(teamEvents, range.start, range.end);
     drawToolbar(toolbar, state, range, staff, {
       setView: (view) => { state.view = view; writePref(state.user, 'view', view); update(); },
       shift: (dir) => { state.anchor = shiftAnchor(state.view, state.anchor, dir); update(); },
@@ -246,6 +273,7 @@ function renderPage(container, model) {
         state.scope = scope;
         writePref(state.user, 'scope', scope);
         events = collectEvents({ data: model.data, types, scope, ctx: model.ctx, labels });
+        drawTeams();
         update();
       },
     });
@@ -255,7 +283,7 @@ function renderPage(container, model) {
       update();
     });
     clear(body);
-    const visible = eventsInRange(events, range.start, range.end, [...state.active]);
+    const visible = eventsInRange(teamEvents, range.start, range.end, [...state.active]);
     const goTo = (view, anchor) => { state.view = view; state.anchor = anchor; writePref(state.user, 'view', view); update(); };
     if (types.length === 0) body.appendChild(el('p', {}, t('calendar.noTypes')));
     else if (state.view === 'week') body.appendChild(weekView(range, visible, actions));

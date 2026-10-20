@@ -906,6 +906,10 @@ export default {
     refereesSection: 'Club referees', noRefereesYet: 'No referees are on record for this club yet.',
     manageButton: 'Manage', membersModalTitle: 'Referee — {name}',
   },
+  teamFilter: {
+    label: 'Teams', all: 'All teams',
+    noMatchTitle: 'Nothing for these teams', noMatchMsg: 'There are no entries here for the selected teams — change the selection above or choose “All teams”.',
+  },
   calendar: {
     eyebrow: 'Overview', title: 'Calendar',
     viewLabel: 'View', views: { week: 'Week', month: 'Month', quarter: 'Quarter', year: 'Year' },

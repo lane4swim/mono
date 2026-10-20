@@ -242,6 +242,35 @@ describe('calendarModule', () => {
     expect(c.querySelector('.cal-month')).not.toBeNull();
   });
 
+  it('Team-Filter: Chips je Team im Scope, Auswahl filtert und wird gemerkt', async () => {
+    loginAs('trainer');
+    let c = await render();
+    // "Meine Termine": nur das betreute Team -> nichts zu filtern
+    expect(c.querySelectorAll('.team-chip')).toHaveLength(0);
+    segButton(c, t('calendar.scopeAll')).click();
+    const chip = (name) => [...c.querySelectorAll('.team-chip')].find((b) => b.textContent === name);
+    expect(chip('Nachwuchs')).toBeDefined();
+    chip('Nachwuchs').click();
+    let titles = chipTitles(c.querySelector('.cal-month'));
+    expect(titles).toContain('Plan Nachwuchs');
+    expect(titles).not.toContain('Plan Leistung');
+    expect(titles).not.toContain('Bezirksmeisterschaften'); // Meldung nur aus Leistungsgruppe
+    expect(chip('Nachwuchs').getAttribute('aria-pressed')).toBe('true');
+
+    c.remove();
+    c = await render();
+    titles = chipTitles(c.querySelector('.cal-month'));
+    expect(titles).not.toContain('Plan Leistung');
+    chip(t('teamFilter.all')).click();
+    expect(chipTitles(c.querySelector('.cal-month'))).toContain('Plan Leistung');
+  });
+
+  it('Athletin bekommt keinen Team-Filter', async () => {
+    loginAs('athlete');
+    const c = await render();
+    expect(c.querySelector('.team-chip')).toBeNull();
+  });
+
   describe('Saisonplanung', () => {
     const day = (d) => `${d}T00:00:00.000Z`;
     beforeEach(() => {

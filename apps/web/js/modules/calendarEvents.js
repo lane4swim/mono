@@ -7,6 +7,7 @@
 // dateOnly()); gerechnet wird wie in dates.js durchgehend in UTC, damit
 // kein Termin östlich von UTC auf den Vortag rutscht.
 import { dateOnly, isoAddDays, startOfWeek } from '../dates.js';
+import { matchesTeams, competitionGroupIds, athleteGroupMap } from '../teamFilter.js';
 
 // Reihenfolge = Reihenfolge der Filter-Chips und Sortierung am selben Tag.
 export const EVENT_TYPES = [
@@ -189,13 +190,15 @@ const MINE = {
 // (Rollen + gebuchte Pakete, entscheidet calendar.js); Quellen anderer
 // Typen werden gar nicht erst ausgewertet.
 //
-// Jeder Termin: { id, type, date, endDate?, time?, title, detail, route, source }
+// Jeder Termin: { id, type, date, endDate?, time?, title, detail, route, source, groupIds }
 //   - endDate: letzter Tag (inklusive) bei mehrtägigen Einträgen (Ferien,
 //     Trainingslager, Schließungen); fehlt bei eintägigen Terminen
 //   - time: Beginn "HH:MM" (Trainingszeiten), sortiert innerhalb des Tages
 //   - title/detail: Anzeigetexte (detail darf leer sein)
 //   - route: [routeId, param] zum Öffnen im Fachmodul (oder null)
 //   - source: der zugrunde liegende Datensatz (für Tests/Details)
+//   - groupIds: Teams, zu denen der Termin gehört (Team-Filter, siehe
+//     eventsForTeams()), oder null, wenn er an kein Team gebunden ist
 //
 // Ein Termin einer Trainingszeit (type 'trainingSlot') trägt zusätzlich
 // `slot` (die Regel), `groupId` und — wenn ein Trainingsplan derselben
@@ -213,6 +216,8 @@ export function collectEvents({ data = {}, types, scope = 'mine', ctx, labels = 
   const groupName = new Map((data.groups || []).map((g) => [g.id, g.name]));
   const athleteName = new Map((data.athletes || []).map((a) => [a.id, `${a.firstName || ''} ${a.lastName || ''}`.trim()]));
   const label = (key, ...args) => (labels[key] ? labels[key](...args) : '');
+  const athleteGroup = athleteGroupMap(data.athletes);
+  const teams = (groupId) => (groupId ? [groupId] : null);
   const events = [];
 
   const trainingEvents = [];
@@ -224,7 +229,7 @@ export function collectEvents({ data = {}, types, scope = 'mine', ctx, labels = 
         trainingEvents.push({
           id: `training:${plan.id}:${i}`, type: 'training', date: dateOnly(day.date),
           title: plan.name, detail: [groupName.get(plan.groupId), label('trainingDetail', day)].filter(Boolean).join(' · '),
-          route: ['plans', plan.id], source: plan, groupId: plan.groupId ?? null, day,
+          route: ['plans', plan.id], source: plan, groupIds: teams(plan.groupId), groupId: plan.groupId ?? null, day,
         });
       });
     }
@@ -239,7 +244,7 @@ export function collectEvents({ data = {}, types, scope = 'mine', ctx, labels = 
       id: `entry:${entry.id}`, type: entry.kind, date, ...(end > date ? { endDate: end } : {}),
       title: entry.title,
       detail: [groupName.get(entry.groupId), entry.location, entry.note].filter(Boolean).join(' · '),
-      route: null, source: entry,
+      route: null, source: entry, groupIds: teams(entry.groupId),
     });
   }
 
@@ -265,7 +270,7 @@ export function collectEvents({ data = {}, types, scope = 'mine', ctx, labels = 
           id: `slot:${slot.id}:${date}`, type: 'trainingSlot', date, time: slot.startTime || '',
           title: slot.title,
           detail: [time, groupName.get(slot.groupId), slot.location, match ? match.title : null, match ? label('trainingDetail', match.day) : null].filter(Boolean).join(' · '),
-          route: match ? match.route : null, source: slot, slot, groupId: slot.groupId ?? null, planId: match ? match.source.id : null,
+          route: match ? match.route : null, source: slot, slot, groupId: slot.groupId ?? null, groupIds: teams(slot.groupId), planId: match ? match.source.id : null,
         });
       }
     }
@@ -280,7 +285,7 @@ export function collectEvents({ data = {}, types, scope = 'mine', ctx, labels = 
         id: `session:${session.id}`, type: 'session', date: dateOnly(session.date),
         title: groupName.get(session.groupId) || label('sessionTitle', session),
         detail: label('sessionDetail', session),
-        route: ['sessions', session.id], source: session,
+        route: ['sessions', session.id], source: session, groupIds: teams(session.groupId),
       });
     }
   }
@@ -295,10 +300,11 @@ export function collectEvents({ data = {}, types, scope = 'mine', ctx, labels = 
       if (!comp?.date) continue;
       const entries = entriesByComp.get(comp.id) || [];
       if (!keep('competition', { comp, entries })) continue;
+      const groupIds = competitionGroupIds(entries, athleteGroup);
       events.push({
         id: `competition:${comp.id}`, type: 'competition', date: dateOnly(comp.date),
         title: comp.name, detail: [comp.location, comp.course].filter(Boolean).join(' · '),
-        route: ['competitions', comp.id], source: comp,
+        route: ['competitions', comp.id], source: comp, groupIds,
       });
       // Optionale Fristen erscheinen als eigene Termine desselben Typs —
       // gleiche Sichtbarkeit ("Meine"-Filter) und gleicher Filter-Chip wie
@@ -308,7 +314,7 @@ export function collectEvents({ data = {}, types, scope = 'mine', ctx, labels = 
         events.push({
           id: `competition:${comp.id}:${key}`, type: 'competition', date: dateOnly(comp[key]),
           title: label(key, comp) || comp.name, detail: label('competitionDate', comp),
-          route: ['competitions', comp.id], source: comp,
+          route: ['competitions', comp.id], source: comp, groupIds,
         });
       }
     }
@@ -320,7 +326,7 @@ export function collectEvents({ data = {}, types, scope = 'mine', ctx, labels = 
       events.push({
         id: `deadline:${item.id}`, type: 'deadline', date: dateOnly(item.dueDate),
         title: item.title, detail: athleteName.get(item.athleteId) || '',
-        route: ['actionitems', item.id], source: item,
+        route: ['actionitems', item.id], source: item, groupIds: teams(athleteGroup.get(item.athleteId)),
       });
     }
   }
@@ -333,14 +339,14 @@ export function collectEvents({ data = {}, types, scope = 'mine', ctx, labels = 
         events.push({
           id: `qualification:${q.id}:expires`, type: 'qualification', date: dateOnly(q.expiresOn),
           title: label('qualificationExpires', q), detail: q.note || '',
-          route: ['qualifications'], source: q,
+          route: ['qualifications'], source: q, groupIds: null,
         });
       }
       if (q.renewalCourseOrganizedOn) {
         events.push({
           id: `qualification:${q.id}:renewal`, type: 'qualification', date: dateOnly(q.renewalCourseOrganizedOn),
           title: label('qualificationRenewal', q), detail: q.note || '',
-          route: ['qualifications'], source: q,
+          route: ['qualifications'], source: q, groupIds: null,
         });
       }
     }
@@ -352,7 +358,7 @@ export function collectEvents({ data = {}, types, scope = 'mine', ctx, labels = 
       events.push({
         id: `referee:${a.id}`, type: 'referee', date: dateOnly(a.date),
         title: a.competitionName, detail: [label('refereeFunction', a), a.competitionPlace].filter(Boolean).join(' · '),
-        route: ['kampfrichter'], source: a,
+        route: ['kampfrichter'], source: a, groupIds: null,
       });
     }
   }
@@ -416,6 +422,14 @@ export function slotDates(slot, entries = []) {
 export function eventsInRange(events, start, end, activeTypes) {
   const active = activeTypes ? new Set(activeTypes) : null;
   return events.filter((e) => e.date <= end && (e.endDate || e.date) >= start && (!active || active.has(e.type)));
+}
+
+// Team-Filter: `selected` = Set gewählter Gruppen-IDs, leer = alle Teams.
+// Termine ohne Team (Ferien, Qualifikationen, vereinsweite Pläne …)
+// bleiben immer sichtbar.
+export function eventsForTeams(events, selected) {
+  if (!selected || selected.size === 0) return events;
+  return events.filter((e) => matchesTeams(e.groupIds, selected));
 }
 
 // Datum -> Termine. Mehrtägige Termine erscheinen an jedem ihrer Tage,

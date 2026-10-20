@@ -691,6 +691,16 @@ tr.live-row-done .live-set-desc{ text-decoration: line-through; color: var(--c-s
 .mfa-recovery-codes{ columns: 2; list-style: none; padding: 0; margin: 12px 0 16px; }
 .mfa-recovery-codes li{ margin-bottom: 6px; font-family: monospace; }
 
+/* ---------- Team-Filter (js/teamFilter.js) ----------
+   Kalender, Einheiten- und Wettkampfliste. Ausgewählt = gefüllt und
+   durchgezogener statt gestrichelter Rahmen, nicht allein über Farbe. */
+.team-filter{ display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-bottom:16px; }
+.team-filter:empty{ display:none; }
+.team-filter-label{ font-size: var(--fs-xs); font-weight:700; text-transform:uppercase; letter-spacing:.04em; color: var(--c-slate); margin-right:4px; }
+.team-chip{ padding:4px 12px; border-radius:999px; border:1.5px dashed var(--c-line); background:transparent; color: var(--c-slate); font-size: var(--fs-sm); cursor:pointer; }
+.team-chip:hover{ color: var(--c-ink); background: var(--c-foam-2); }
+.team-chip.on{ border-style:solid; border-color: var(--c-deep); background: var(--c-deep); color: var(--c-white); font-weight:600; }
+
 /* ---------- Kalender (js/modules/calendar.js) ----------
    Jeder Termintyp hat eine Akzentfarbe (--cal-accent) und eine helle
    Tönung (--cal-tint); zusätzlich trägt jeder Termin ein eigenes Symbol,

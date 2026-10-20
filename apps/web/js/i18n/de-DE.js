@@ -930,6 +930,10 @@ export default {
     refereesSection: 'Kampfrichter:innen des Vereins', noRefereesYet: 'Im Verein sind noch keine Kampfrichter:innen hinterlegt.',
     manageButton: 'Verwalten', membersModalTitle: 'Kampfrichter:in — {name}',
   },
+  teamFilter: {
+    label: 'Teams', all: 'Alle Teams',
+    noMatchTitle: 'Nichts für diese Teams', noMatchMsg: 'Für die gewählten Teams gibt es hier keine Einträge — Auswahl oben ändern oder „Alle Teams“ wählen.',
+  },
   calendar: {
     eyebrow: 'Übersicht', title: 'Kalender',
     viewLabel: 'Ansicht', views: { week: 'Woche', month: 'Monat', quarter: 'Quartal', year: 'Jahr' },
