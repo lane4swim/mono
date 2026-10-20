@@ -35,6 +35,7 @@ import { createQualificationsService, type QualificationsService } from './modul
 import { PrismaUserQualificationRepository, PrismaQualificationReminderSettingRepository } from './modules/qualifications/qualifications.repository.js';
 import { refereesRoutes } from './modules/referees/referees.route.js';
 import { createRefereesService, type RefereesService } from './modules/referees/referees.service.js';
+import { createRefereeNotifier } from './modules/referees/referees.notify.js';
 import { PrismaRefereeAssignmentRepository, PrismaCompetitionRepository } from './modules/referees/referees.repository.js';
 import { auditLogRoutes } from './modules/auditLog/auditLog.route.js';
 import { createAuditLogService, type AuditLogService } from './modules/auditLog/auditLog.service.js';
@@ -297,14 +298,6 @@ export async function buildApp(env: Env, overrides: BuildAppOverrides = {}): Pro
       auditLog: auditLogService,
     });
 
-  const refereesService =
-    overrides.refereesService ??
-    createRefereesService({
-      assignments: new PrismaRefereeAssignmentRepository(getPrisma()),
-      users: new PrismaUserRepository(getPrisma()),
-      competitions: new PrismaCompetitionRepository(getPrisma()),
-      auditLog: auditLogService,
-    });
 
   const clubLegalInfoService =
     overrides.clubLegalInfoService ??
@@ -315,6 +308,17 @@ export async function buildApp(env: Env, overrides: BuildAppOverrides = {}): Pro
 
   const pushSubscriptions = overrides.pushSubscriptions ?? new PrismaPushSubscriptionRepository(getPrisma());
   const pusher = overrides.pusher ?? resolvePushSender(env);
+
+  const refereesService =
+    overrides.refereesService ??
+    createRefereesService({
+      assignments: new PrismaRefereeAssignmentRepository(getPrisma()),
+      users: new PrismaUserRepository(getPrisma()),
+      competitions: new PrismaCompetitionRepository(getPrisma()),
+      auditLog: auditLogService,
+      notify: createRefereeNotifier({ pusher, pushSubscriptions }),
+      onNotifyError: (error) => app.log.warn({ err: error }, 'Push-Benachrichtigung zu Kampfrichtereinsatz fehlgeschlagen'),
+    });
 
   const parentsService =
     overrides.parentsService ??

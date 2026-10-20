@@ -29,6 +29,7 @@ vi.mock('../js/db.js', () => ({ getAll: vi.fn(async (name) => stores[name] || []
 const apiMocks = vi.hoisted(() => ({
   listMyQualifications: vi.fn(),
   listMyRefereeAssignments: vi.fn(),
+  respondToRefereeAssignment: vi.fn(),
 }));
 vi.mock('../js/apiClient.js', () => ({ ...apiMocks, describeError: (e) => String(e) }));
 
@@ -269,6 +270,24 @@ describe('calendarModule', () => {
     loginAs('athlete');
     const c = await render();
     expect(c.querySelector('.team-chip')).toBeNull();
+  });
+
+  it('Kampfrichter:in: offene Anfrage mit Hinweis, Klick öffnet die Rückmeldung; Absagen durchgestrichen', async () => {
+    loginAs('referee');
+    document.body.insertAdjacentHTML('beforeend', '<div id="modal-root" hidden></div>');
+    const base = { competitionPlace: 'Halle', function: 'zeitnehmer', note: '', createdByAdminId: 'u-admin', responseNote: '', respondedAt: null };
+    apiMocks.listMyRefereeAssignments.mockResolvedValue({ assignments: [
+      { ...base, id: 'r1', competitionName: 'Landesmeisterschaften', date: '2026-10-25T00:00:00.000Z', status: 'requested' },
+      { ...base, id: 'r2', competitionName: 'Kreismeisterschaften', date: '2026-10-26T00:00:00.000Z', status: 'declined' },
+      { ...base, id: 'r3', competitionName: 'Vereinsmeisterschaften', date: '2026-10-27T00:00:00.000Z', status: 'confirmed', createdByAdminId: null },
+    ] });
+    const c = await render();
+    expect(c.querySelector('.referee-open-banner').textContent).toContain(t('calendar.refereeOpenRequests', { count: 1 }));
+    const chips = [...c.querySelectorAll('.cal-month .cal-chip.cal-type-referee')];
+    expect(chips.map((x) => [x.classList.contains('unplanned'), x.classList.contains('declined')])).toEqual([[true, false], [false, true], [false, false]]);
+    chips[0].click();
+    expect(document.getElementById('modal-root').textContent).toContain('Landesmeisterschaften');
+    expect(document.getElementById('modal-root').textContent).toContain(t('kampfrichter.confirm'));
   });
 
   describe('Saisonplanung', () => {

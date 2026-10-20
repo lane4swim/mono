@@ -41,6 +41,7 @@ import { totalDistance } from './setEditor.js';
 import { typeLabel as qualificationTypeLabel } from './qualifications.js';
 import { openNewPlanModal } from './plans.js';
 import { openEntryModal, openEntryList } from './calendarEntries.js';
+import { openResponseModal, canRespond } from './kampfrichter.js';
 import {
   EVENT_TYPES, RECURRING_TYPES, CALENDAR_VIEWS, ENTRY_KINDS, periodRange, shiftAnchor, monthGridDays, daysOf,
   addMonths, quarterOf, isoWeek, personalContext, collectEvents, eventsInRange, eventsForTeams, groupByDate, groupByFirstDay, countByType,
@@ -212,6 +213,8 @@ function renderPage(container, model) {
   const actions = {
     editEntry: canEditEntries() ? (entry) => openEntryModal(entry, model.data.groups || [], reload) : null,
     createPlan: canCreatePlan() ? createPlanFor : null,
+    // Kampfrichter-Anfragen direkt im Kalender zu-/absagen.
+    respondReferee: (assignment) => openResponseModal(assignment, reload),
   };
   let events = collectEvents({ data: model.data, types, scope: state.scope, ctx: model.ctx, labels });
 
@@ -234,6 +237,16 @@ function renderPage(container, model) {
   wrap.appendChild(filters);
   wrap.appendChild(teamsHost);
   if (remoteFailed) wrap.appendChild(el('p', { class: 'text-sm text-slate' }, t('calendar.remoteUnavailable')));
+  // Offene Kampfrichter-Anfragen unabhängig vom angezeigten Zeitraum
+  // ankündigen — sonst blieben sie in einem anderen Monat unbemerkt.
+  const openRequests = (model.data.refereeAssignments || []).filter((a) => a.status === 'requested' && dateOnly(a.date) >= todayISO())
+    .sort((a, b) => a.date.localeCompare(b.date));
+  if (types.includes('referee') && openRequests.length) {
+    wrap.appendChild(el('div', { class: 'referee-open-banner' }, [
+      el('span', {}, t('calendar.refereeOpenRequests', { count: openRequests.length })),
+      el('button', { type: 'button', class: 'btn btn-primary btn-sm', onclick: () => actions.respondReferee(openRequests[0]) }, t('calendar.refereeAnswerNext')),
+    ]));
+  }
   wrap.appendChild(body);
   container.appendChild(wrap);
 
@@ -308,6 +321,7 @@ function eventLabels() {
     qualificationExpires: (q) => t('calendar.qualificationExpires', { type: qualificationTypeLabel(q.type) }),
     qualificationRenewal: (q) => t('calendar.qualificationRenewal', { type: qualificationTypeLabel(q.type) }),
     refereeFunction: (a) => trLabel(REFEREE_FUNCTIONS, a.function, 'refereeFunctions') || '',
+    refereeStatus: (status) => t(`kampfrichter.status.${status}`),
     entryDeadline: (c) => t('calendar.entryDeadline', { name: c.name }),
     selectionDeadline: (c) => t('calendar.selectionDeadline', { name: c.name }),
     competitionDate: (c) => t('calendar.competitionOn', { date: fmtDateLong(c.date) }),
@@ -399,6 +413,7 @@ function weekdayNames() {
 // Saisonplanung bearbeiten (nur Staff); eine noch unverplante
 // Trainingszeit legt einen neuen Plan an.
 function clickHandler(event, actions) {
+  if (event.type === 'referee' && actions.respondReferee && canRespond(event.source)) return () => actions.respondReferee(event.source);
   const target = openRouteFor(event);
   if (target) return () => navigate(...target);
   if (event.type === 'trainingSlot') {
@@ -416,8 +431,10 @@ function spanLabel(event) {
 
 function eventChip(event, actions = {}, { compact = false } = {}) {
   const onClick = clickHandler(event, actions);
-  const unplanned = event.type === 'trainingSlot' && !event.planId;
-  const detail = [spanLabel(event), event.detail, unplanned && actions.createPlan ? t('calendar.slotUnplanned') : null].filter(Boolean).join(' · ');
+  // Hervorhebung "offen": unverplante Trainingszeit bzw. unbeantwortete
+  // Kampfrichter-Anfrage (gleiche, gestrichelte Darstellung).
+  const unplanned = (event.type === 'trainingSlot' && !event.planId) || (event.type === 'referee' && event.status === 'requested');
+  const detail = [spanLabel(event), event.detail, unplanned && event.type === 'trainingSlot' && actions.createPlan ? t('calendar.slotUnplanned') : null].filter(Boolean).join(' · ');
   const tooltip = [event.title, detail].filter(Boolean).join(' — ');
   const content = [
     icon(TYPE_ICONS[event.type], { class: 'ic cal-chip-ic', 'aria-hidden': 'true' }),
@@ -427,7 +444,8 @@ function eventChip(event, actions = {}, { compact = false } = {}) {
     ]),
     el('span', { class: 'sr-only' }, ` (${t(`calendar.types.${event.type}`)})`),
   ];
-  const attrs = { class: `cal-chip cal-type-${event.type} ${compact ? 'compact' : ''} ${unplanned ? 'unplanned' : ''}`, title: tooltip };
+  const declined = event.type === 'referee' && event.status === 'declined';
+  const attrs = { class: `cal-chip cal-type-${event.type} ${compact ? 'compact' : ''} ${unplanned ? 'unplanned' : ''} ${declined ? 'declined' : ''}`, title: tooltip };
   if (!onClick) return el('div', attrs, content);
   return el('button', { ...attrs, type: 'button', onclick: onClick }, content);
 }

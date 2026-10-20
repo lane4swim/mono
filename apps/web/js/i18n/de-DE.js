@@ -904,6 +904,15 @@ export default {
     },
   },
   kampfrichter: {
+    status: { requested: 'Angefragt', confirmed: 'Zugesagt', declined: 'Abgesagt' },
+    colStatus: 'Rückmeldung', colUpcoming: 'Kommende Einsätze',
+    respond: 'Zu-/Absagen', changeResponse: 'Antwort ändern', confirm: 'Zusagen', decline: 'Absagen',
+    responseModalTitle: 'Kampfrichtereinsatz: Rückmeldung', currentStatus: 'Aktueller Stand:',
+    responseNote: 'Kommentar (optional)', responseNotePlaceholder: 'z. B. Grund einer Absage',
+    confirmedToast: 'Zusage gesendet', declinedToast: 'Absage gesendet',
+    openRequests: 'Du hast {count} offene Anfrage(n) — bitte zu- oder absagen.',
+    responsesSection: 'Offene Anfragen und Absagen', responsesNone: 'Alle kommenden Einsätze sind zugesagt.',
+    countConfirmed: '{count} zugesagt', countRequested: '{count} offen', countDeclined: '{count} abgesagt',
     tabOwnAssignments: 'Meine Einsätze', tabOwnQualifications: 'Meine Qualifikationen', tabReferees: 'Kampfrichter:innen',
     eyebrow: 'Kampfrichter-Modul', title: 'Kampfrichter',
     demoDisabled: 'Das Kampfrichter-Modul ist in dieser Demo nicht verfügbar — es läuft über echte Vereinsdaten, für die diese Demo kein Backend hat.',
@@ -947,6 +956,7 @@ export default {
       publicHoliday: 'Feiertag', schoolHoliday: 'Schulferien', poolClosure: 'Badschließung',
       trainingCamp: 'Trainingslager', trainingSlot: 'Trainingszeit',
     },
+    refereeOpenRequests: 'Du hast {count} offene Kampfrichter-Anfrage(n).', refereeAnswerNext: 'Jetzt beantworten',
     slotUnplanned: 'noch kein Plan — antippen zum Anlegen',
     entry: {
       manage: 'Saisonplanung', add: 'Eintrag hinzufügen',

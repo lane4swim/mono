@@ -890,6 +890,12 @@ model RefereeAssignment {
   // geht verloren — analog Invitation.invitedById).
   createdByAdminId String?
   createdByAdmin   User?        @relation("RefereeAssignmentCreatedByAdmin", fields: [createdByAdminId], references: [id], onDelete: SetNull)
+  // Rückmeldung der Kampfrichter:in: "requested" (von admin angefragt,
+  // noch offen) | "confirmed" | "declined". Selbst erfasste Einsätze
+  // gelten als bestätigt; Bestandsdaten ebenfalls (Migration-Default).
+  status           String       @default("confirmed")
+  responseNote     String       @default("")
+  respondedAt      DateTime?
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
   deletedAt        DateTime?

@@ -721,6 +721,13 @@ tr.live-row-done .live-set-desc{ text-decoration: line-through; color: var(--c-s
    bereits verplanten Training abhebt (nicht nur über Farbe). */
 .cal-chip.unplanned{ border-left-style: dashed; background: repeating-linear-gradient(135deg, var(--cal-tint) 0 6px, var(--c-white) 6px 12px); }
 
+/* Abgesagter Kampfrichtereinsatz: durchgestrichen und abgeblendet. */
+.cal-chip.declined{ opacity:.6; }
+.cal-chip.declined .cal-chip-title{ text-decoration: line-through; }
+
+/* Hinweis auf offene Kampfrichter-Anfragen (Kalender, Kampfrichter-Seite). */
+.referee-open-banner{ display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px 12px; padding:10px 14px; margin:0 0 16px; border-radius: var(--radius-md); background:#FDF3DF; border-left:4px solid #B9801F; color: var(--c-ink); font-weight:600; }
+
 /* Tage mit Feiertag/Ferien/Schließung flächig markieren. */
 .cal-month-cell.mark-schoolHoliday, .cal-week-day.mark-schoolHoliday, .cal-mini-cell.mark-schoolHoliday{ background: #FFF9E6; }
 .cal-month-cell.mark-poolClosure, .cal-week-day.mark-poolClosure, .cal-mini-cell.mark-poolClosure{ background: #F0F2F4; }

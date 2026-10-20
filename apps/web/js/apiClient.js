@@ -507,6 +507,18 @@ export function updateMyRefereeAssignment(id, patch) {
 export function deleteMyRefereeAssignment(id) {
   return request(`/api/me/referee-assignments/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
+// Zu-/Absage einer (admin-seitigen) Einsatzanfrage: status 'confirmed' |
+// 'declined', optional mit Kommentar. Antwort: der aktualisierte Einsatz.
+export function respondToRefereeAssignment(id, { status, responseNote = '' }) {
+  return request(`/api/me/referee-assignments/${encodeURIComponent(id)}/response`, {
+    method: 'POST',
+    body: JSON.stringify({ status, responseNote }),
+  });
+}
+// admin: alle kommenden Einsätze des Vereins (Rückmeldungs-Übersicht).
+export function listUpcomingClubRefereeAssignments() {
+  return request('/api/referee-assignments/upcoming');
+}
 // admin: Verwaltung "im Namen von" einer Kampfrichter:in (Plan Abschnitt 5.5).
 export function listMemberRefereeAssignments(userId) {
   return request(`/api/users/${encodeURIComponent(userId)}/referee-assignments`);

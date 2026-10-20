@@ -880,6 +880,15 @@ export default {
     },
   },
   kampfrichter: {
+    status: { requested: 'Requested', confirmed: 'Confirmed', declined: 'Declined' },
+    colStatus: 'Response', colUpcoming: 'Upcoming duties',
+    respond: 'Confirm/decline', changeResponse: 'Change response', confirm: 'Confirm', decline: 'Decline',
+    responseModalTitle: 'Referee duty: response', currentStatus: 'Current status:',
+    responseNote: 'Comment (optional)', responseNotePlaceholder: 'e.g. reason for declining',
+    confirmedToast: 'Confirmation sent', declinedToast: 'Decline sent',
+    openRequests: 'You have {count} open request(s) — please confirm or decline.',
+    responsesSection: 'Open requests and declines', responsesNone: 'All upcoming duties are confirmed.',
+    countConfirmed: '{count} confirmed', countRequested: '{count} open', countDeclined: '{count} declined',
     tabOwnAssignments: 'My assignments', tabOwnQualifications: 'My qualifications', tabReferees: 'Referees',
     eyebrow: 'Officiating', title: 'Officiating',
     demoDisabled: 'Officiating is not available in this demo — it runs on real club data that this demo has no backend for.',
@@ -923,6 +932,7 @@ export default {
       publicHoliday: 'Public holiday', schoolHoliday: 'School holidays', poolClosure: 'Pool closure',
       trainingCamp: 'Training camp', trainingSlot: 'Training slot',
     },
+    refereeOpenRequests: 'You have {count} open referee request(s).', refereeAnswerNext: 'Answer now',
     slotUnplanned: 'no plan yet — tap to create one',
     entry: {
       manage: 'Season planning', add: 'Add entry',

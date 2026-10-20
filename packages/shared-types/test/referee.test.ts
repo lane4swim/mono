@@ -6,6 +6,8 @@ import {
   CreateRefereeAssignmentRequestSchema,
   UpdateRefereeAssignmentRequestSchema,
   RefereeAssignmentListResponseSchema,
+  RefereeAssignmentStatusSchema,
+  RespondRefereeAssignmentRequestSchema,
 } from '../src/referee.js';
 
 const validAssignment = {
@@ -18,6 +20,9 @@ const validAssignment = {
   function: 'kampfrichter',
   note: '',
   createdByAdminId: null,
+  status: 'confirmed',
+  responseNote: '',
+  respondedAt: null,
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
 };
@@ -98,5 +103,19 @@ describe('RefereeAssignmentListResponseSchema', () => {
   });
   it('akzeptiert eine Liste gültiger Einsätze', () => {
     expect(RefereeAssignmentListResponseSchema.safeParse({ assignments: [validAssignment] }).success).toBe(true);
+  });
+});
+
+describe('Rückmeldung (Zu-/Absage)', () => {
+  it('kennt genau die drei Status', () => {
+    expect(RefereeAssignmentStatusSchema.options).toEqual(['requested', 'confirmed', 'declined']);
+    expect(RefereeAssignmentSchema.safeParse({ ...validAssignment, status: 'maybe' }).success).toBe(false);
+    expect(RefereeAssignmentSchema.safeParse({ ...validAssignment, status: 'declined', responseNote: 'Urlaub', respondedAt: '2026-02-01T00:00:00.000Z' }).success).toBe(true);
+  });
+  it('Antwort: nur confirmed/declined, Kommentar optional und begrenzt', () => {
+    expect(RespondRefereeAssignmentRequestSchema.parse({ status: 'confirmed' })).toEqual({ status: 'confirmed', responseNote: '' });
+    expect(RespondRefereeAssignmentRequestSchema.safeParse({ status: 'requested' }).success).toBe(false);
+    expect(RespondRefereeAssignmentRequestSchema.safeParse({ status: 'declined', responseNote: 'x'.repeat(501) }).success).toBe(false);
+    expect(RespondRefereeAssignmentRequestSchema.safeParse({ status: 'declined', extra: 1 }).success).toBe(false);
   });
 });

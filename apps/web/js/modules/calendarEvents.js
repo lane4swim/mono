@@ -355,9 +355,13 @@ export function collectEvents({ data = {}, types, scope = 'mine', ctx, labels = 
   if (want.has('referee')) {
     for (const a of data.refereeAssignments || []) {
       if (!a?.date) continue;
+      // Rückmeldestatus (requested/confirmed/declined); ältere Antworten
+      // ohne Feld gelten als bestätigt, wie auf dem Server.
+      const status = a.status || 'confirmed';
       events.push({
-        id: `referee:${a.id}`, type: 'referee', date: dateOnly(a.date),
-        title: a.competitionName, detail: [label('refereeFunction', a), a.competitionPlace].filter(Boolean).join(' · '),
+        id: `referee:${a.id}`, type: 'referee', date: dateOnly(a.date), status,
+        title: a.competitionName,
+        detail: [status !== 'confirmed' ? label('refereeStatus', status) : null, label('refereeFunction', a), a.competitionPlace].filter(Boolean).join(' · '),
         route: ['kampfrichter'], source: a, groupIds: null,
       });
     }
