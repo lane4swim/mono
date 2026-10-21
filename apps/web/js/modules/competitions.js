@@ -18,6 +18,7 @@ import { t, trCode, trOptions, trOptionsFlat } from '../i18n.js';
 import { buildLiveGroups, renderLiveMode, buildResultIndex, findResultForEntry } from './competitionLive.js';
 import { buildStopwatchPanel } from './stopwatch.js';
 import { resultsImportButton } from './resultsImportUI.js';
+import { disciplinesLoadButton, disciplinesSummary, disciplineSelect } from './competitionDisciplines.js';
 import { defaultSelectionDeadline, validateDeadlines } from './competitionDeadlines.js';
 import { getCurrentUser } from '../state.js';
 import { teamFilterChips, loadTeamSelection, saveTeamSelection, matchesTeams, competitionGroupIds, athleteGroupMap } from '../teamFilter.js';
@@ -165,9 +166,14 @@ async function renderDetail(container, compId) {
   const startListCard = el('div', { class: 'card' }, [
     el('div', { class: 'flex justify-between items-center mb-16' }, [
       el('h3', { class: 'mt-0' }, t('competitions.startListTitle')),
-      el('button', { class: 'btn btn-accent btn-sm', onclick: () => openEntryModal(null, comp, athletes, refreshDetail) }, t('competitions.addEntry')),
+      el('div', { class: 'flex gap-8' }, [
+        disciplinesLoadButton(comp, refreshDetail),
+        el('button', { class: 'btn btn-accent btn-sm', onclick: () => openEntryModal(null, comp, athletes, refreshDetail) }, t('competitions.addEntry')),
+      ]),
     ]),
   ]);
+  const disciplinesInfo = disciplinesSummary(comp, refreshDetail);
+  if (disciplinesInfo) startListCard.appendChild(disciplinesInfo);
   if (compEntries.length === 0) {
     startListCard.appendChild(el('p', {}, t('competitions.noEntries')));
   } else {
@@ -353,12 +359,23 @@ function openEntryModal(entry, comp, athletes, onSaved) {
   const data = entry ? { ...entry } : { competitionId: comp.id, athleteId: athletes[0]?.id || '', event: EVENTS[0], eventNumber: '', heat: '', lane: '', seedTime: null };
   const form = el('form', { class: 'form-grid' });
   const fAthlete = selectInput(athletes.map(a => ({ value: a.id, label: fullName(a) })), data.athleteId);
-  const fEvent = selectInput(trOptionsFlat(EVENTS, 'events'), data.event);
+  // Ein Eintrag mit einer Disziplin außerhalb von EVENTS (z. B. aus einer
+  // Wettkampfdefinition übernommen) behält sie als eigene Option.
+  const eventCodes = data.event && !EVENTS.includes(data.event) ? [...EVENTS, data.event] : EVENTS;
+  const fEvent = selectInput(trOptionsFlat(eventCodes, 'events'), data.event);
   const fNr = textInput(data.eventNumber || '', { placeholder: 'e.g. 12' });
   const fHeat = el('input', { type: 'number', min: '1', value: data.heat ?? '', placeholder: 'e.g. 3' });
   const fLane = el('input', { type: 'number', min: '1', max: '10', value: data.lane ?? '', placeholder: 'e.g. 4' });
   const fSeed = textInput(data.seedTime ? secToTime(data.seedTime) : '', { placeholder: 'mm:ss.cc' });
   form.appendChild(field(t('competitions.colAthlete'), fAthlete, { span2: true }));
+  if (comp.disciplines?.length) {
+    const picker = disciplineSelect(comp.disciplines, {
+      entry, eventSelect: fEvent, numberInput: fNr,
+      getAthlete: () => athletes.find(a => a.id === fAthlete.value),
+    });
+    fAthlete.addEventListener('change', picker.refresh);
+    form.appendChild(field(t('competitions.formDiscipline'), picker.select, { span2: true, hint: t('competitions.formDisciplineHint') }));
+  }
   form.appendChild(field(t('competitions.colEvent'), fEvent));
   form.appendChild(field(t('competitions.formEventNumber'), fNr, { hint: t('competitions.formEventNumberHint') }));
   form.appendChild(field(t('competitions.formHeat'), fHeat));

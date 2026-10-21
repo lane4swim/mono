@@ -130,6 +130,13 @@ describe('CompetitionSchema', () => {
   it('lehnt eine Frist ohne gültigen Zeitstempel ab', () => {
     expect(CompetitionSchema.safeParse({ ...valid, entryDeadline: '2026-11-01' }).success).toBe(false);
   });
+  it('akzeptiert Disziplinen aus einer Wettkampfdefinition und belegt sie nicht vor', () => {
+    const discipline = { number: '1', round: 'V', session: 1, distanceM: 100, stroke: 'F', style: 'GL', relaySize: 1, gender: 'W', event: '100 Freistil' };
+    expect(CompetitionSchema.safeParse({ ...valid, disciplines: [discipline, { ...discipline, number: '2', stroke: 'X', event: null }] }).success).toBe(true);
+    expect('disciplines' in CompetitionSchema.parse(valid)).toBe(false);
+    expect(CompetitionSchema.safeParse({ ...valid, disciplines: [{ ...discipline, distanceM: 0 }] }).success).toBe(false);
+    expect(CompetitionSchema.safeParse({ ...valid, disciplines: [{ ...discipline, extra: 1 }] }).success).toBe(false);
+  });
 });
 
 describe('StartlistEntrySchema', () => {

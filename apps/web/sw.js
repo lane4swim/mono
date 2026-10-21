@@ -15,7 +15,7 @@
 // bliebe beliebig lange auf dem alten Stand, ohne jeden Hinweis. app.js
 // meldet stattdessen, dass eine neue Fassung bereitsteht, und lässt die
 // Person entscheiden, wann neu geladen wird.
-const CACHE_VERSION = 'lane1-v93';
+const CACHE_VERSION = 'lane1-v94';
 const PRECACHE_URLS = [
   './',
   './index.html',
@@ -98,7 +98,9 @@ const PRECACHE_URLS = [
   './js/modules/info.js',
   './js/modules/mfa.js',
   './js/modules/resultsImportUI.js',
+  './js/modules/competitionDisciplines.js',
   './js/resultsImport/dsv7Parser.js',
+  './js/resultsImport/dsv7DefinitionParser.js',
   './js/resultsImport/matching.js',
   './js/resultsImport/importRunner.js',
   './icons/icon.svg',
