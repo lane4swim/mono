@@ -280,6 +280,8 @@ export default {
     disciplinesLoad: 'Wettkampfdefinition laden (DSV7)', disciplinesReplace: 'Wettkampfdefinition ersetzen',
     disciplinesLoaded: '{count} Disziplinen aus „{veranstaltung}" geladen',
     disciplinesEmpty: 'In dieser Datei wurden keine Wettkämpfe gefunden.',
+    disciplinesSkipped: '{count} ungültige Wettkampf-Zeile(n) wurden übersprungen.',
+    disciplinesFileTooLarge: 'Diese Datei ist zu groß für eine Wettkampfdefinitionsliste (höchstens 1 MB).',
     disciplinesParseError: 'Diese Datei konnte nicht als DSV7-Wettkampfdefinitionsliste gelesen werden.',
     disciplinesReplaceConfirm: 'Die bisher geladenen {count} Disziplinen durch die Disziplinen aus dieser Datei ersetzen? Bestehende Startlisteneinträge bleiben unverändert.',
     disciplinesSummary: '{count} Disziplinen aus der Wettkampfdefinition',

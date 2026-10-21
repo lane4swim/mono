@@ -257,6 +257,8 @@ export default {
     disciplinesLoad: 'Load meet definition (DSV7)', disciplinesReplace: 'Replace meet definition',
     disciplinesLoaded: 'Loaded {count} events from "{veranstaltung}"',
     disciplinesEmpty: 'No events were found in this file.',
+    disciplinesSkipped: '{count} invalid event line(s) were skipped.',
+    disciplinesFileTooLarge: 'This file is too large for a meet definition list (1 MB max).',
     disciplinesParseError: 'This file could not be read as a DSV7 meet definition list (Wettkampfdefinitionsliste).',
     disciplinesReplaceConfirm: 'Replace the {count} previously loaded events with the events from this file? Existing start-list entries stay unchanged.',
     disciplinesSummary: '{count} events from the meet definition',

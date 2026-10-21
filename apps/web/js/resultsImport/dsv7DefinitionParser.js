@@ -13,27 +13,52 @@
 import { parseDsv7Line, Dsv7ParseError } from './dsv7Parser.js';
 import { dsv7DisciplineEventLabel } from '../refdata.js';
 
+// Grenzen von CompetitionDisciplineSchema/CompetitionSchema.disciplines
+// (packages/shared-types/src/entities.ts) — apps/web kann das Paket ohne
+// Build-Schritt nicht importieren, daher hier gespiegelt und MUSS damit
+// übereinstimmen. Eine Disziplin, die das Schema verletzt, würde lokal
+// gespeichert, beim Sync-Push aber abgelehnt — und mit ihr der gesamte
+// Wettkampf-Datensatz samt aller späteren Änderungen (vgl. Code-Review
+// 2026-09-02, Befund K1). Ungültige WETTKAMPF-Zeilen werden daher hier
+// verworfen statt durchgereicht.
+export const MAX_DISCIPLINES = 500;
+const MAX_NUMBER_LENGTH = 50;
+// Längste Wettkampfstrecke im Schwimmen ist 25 km Freiwasser.
+const MAX_DISTANCE_M = 25000;
+const MAX_SESSION = 99;
+// Zulässige Codes laut "DSV Standard", Element WETTKAMPF. Ausübung und
+// Geschlecht dürfen zusätzlich leer sein.
+const ROUNDS = new Set(['V', 'Z', 'F', 'E', 'A', 'N']);
+const STROKES = new Set(['F', 'R', 'B', 'S', 'L', 'X']);
+const STYLES = new Set(['', 'GL', 'BE', 'AR', 'ST', 'WE', 'GB', 'X']);
+const GENDERS = new Set(['', 'M', 'W', 'X', 'D']);
+
 function toInt(value) {
-  if (!value) return undefined;
-  const n = parseInt(value, 10);
-  return Number.isNaN(n) ? undefined : n;
+  if (!value || !/^\d+$/.test(value)) return undefined;
+  const n = Number(value);
+  return Number.isSafeInteger(n) ? n : undefined;
 }
 
 // Parst den Text einer DSV7-Wettkampfdefinitionsliste in
-// { meta, disciplines }:
+// { meta, disciplines, skipped }:
 //
 //   meta        — { veranstaltung, ort } zur Anzeige ("ist das die
 //                  richtige Datei?").
 //   disciplines — CompetitionDiscipline[] (siehe CompetitionDisciplineSchema
 //                  in packages/shared-types/src/entities.ts), in
-//                  Datei-Reihenfolge; Wettkämpfe ohne Nummer oder gültige
-//                  Distanz werden übersprungen, doppelte Nummer+Wettkampfart
-//                  nur einmal übernommen.
+//                  Datei-Reihenfolge; doppelte Nummer+Wettkampfart nur
+//                  einmal übernommen.
+//   skipped     — Anzahl verworfener WETTKAMPF-Zeilen (fehlende/zu lange
+//                  Nummer, ungültige Distanz, unbekannter Code).
+//
+// Mehr als MAX_DISCIPLINES gültige Wettkämpfe sind ein Fehler statt einer
+// stillen Kürzung — eine abgeschnittene Liste sähe vollständig aus.
 export function parseDsv7Wettkampfdefinitionsliste(text) {
   let listArt = null;
   let meta = { veranstaltung: '', ort: '' };
   const disciplines = [];
   const seen = new Set();
+  let skipped = 0;
 
   for (const rawLine of text.split(/\r?\n/)) {
     const parsed = parseDsv7Line(rawLine);
@@ -50,30 +75,36 @@ export function parseDsv7Wettkampfdefinitionsliste(text) {
         break;
       }
       case 'VERANSTALTUNG': {
-        meta = { veranstaltung: fields[0] || '', ort: fields[1] || '' };
+        meta = { veranstaltung: (fields[0] || '').slice(0, 200), ort: (fields[1] || '').slice(0, 200) };
         break;
       }
       case 'WETTKAMPF': {
         const [nr, art, abschnittRaw, anzahlStarterRaw, distanzRaw, technik, ausuebung, geschlecht] = fields;
         const distanceM = toInt(distanzRaw);
-        if (!nr || !distanceM || distanceM <= 0) break;
         const round = (art || '').toUpperCase();
+        const stroke = (technik || '').toUpperCase();
+        const style = (ausuebung || '').toUpperCase();
+        const gender = (geschlecht || '').toUpperCase();
+        const starters = anzahlStarterRaw ? toInt(anzahlStarterRaw) : 1;
+        const valid = nr && nr.length <= MAX_NUMBER_LENGTH
+          && distanceM > 0 && distanceM <= MAX_DISTANCE_M
+          && starters !== undefined
+          && ROUNDS.has(round) && STROKES.has(stroke) && STYLES.has(style) && GENDERS.has(gender);
+        if (!valid) { skipped++; break; }
         const key = `${nr}|${round}`;
         if (seen.has(key)) break;
         seen.add(key);
-        const relaySize = toInt(anzahlStarterRaw) > 1 ? toInt(anzahlStarterRaw) : 1;
-        const stroke = (technik || '').toUpperCase();
-        const style = (ausuebung || '').toUpperCase();
+        const relaySize = starters > 1 ? starters : 1;
         const session = toInt(abschnittRaw);
         disciplines.push({
           number: nr,
           round,
-          ...(session > 0 ? { session } : {}),
+          ...(session > 0 && session <= MAX_SESSION ? { session } : {}),
           distanceM,
           stroke,
           style,
           relaySize,
-          gender: (geschlecht || '').toUpperCase(),
+          gender,
           event: dsv7DisciplineEventLabel({ technik: stroke, distanzM: distanceM, relaySize, style }),
         });
         break;
@@ -89,5 +120,8 @@ export function parseDsv7Wettkampfdefinitionsliste(text) {
   if (listArt === null) {
     throw new Dsv7ParseError('Keine gültige DSV7-Datei: Das FORMAT-Element (erste Zeile) fehlt.');
   }
-  return { meta, disciplines };
+  if (disciplines.length > MAX_DISCIPLINES) {
+    throw new Dsv7ParseError(`Diese Datei enthält ${disciplines.length} Wettkämpfe — unterstützt werden höchstens ${MAX_DISCIPLINES} je Wettkampf.`);
+  }
+  return { meta, disciplines, skipped };
 }

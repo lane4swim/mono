@@ -14,6 +14,10 @@ import { DSV7_STROKE_TO_NAME } from '../refdata.js';
 import { parseDsv7Wettkampfdefinitionsliste } from '../resultsImport/dsv7DefinitionParser.js';
 import { Dsv7ParseError } from '../resultsImport/dsv7Parser.js';
 
+// Reale Wettkampfdefinitionslisten sind wenige KB groß; größere Dateien
+// werden gar nicht erst eingelesen.
+const MAX_FILE_BYTES = 1024 * 1024;
+
 const ROUND_KEYS = { V: 'roundV', Z: 'roundZ', F: 'roundF', A: 'roundA', N: 'roundN' };
 const GENDER_KEYS = { M: 'genderM', W: 'genderW', X: 'genderX', D: 'genderD' };
 
@@ -67,6 +71,7 @@ export function disciplinesLoadButton(comp, onLoaded) {
 }
 
 async function loadDefinitionFile(file, comp, onLoaded) {
+  if (file.size > MAX_FILE_BYTES) { toast(t('competitions.disciplinesFileTooLarge'), 'error'); return; }
   let parsed;
   try {
     parsed = parseDsv7Wettkampfdefinitionsliste(await file.text());
@@ -77,7 +82,8 @@ async function loadDefinitionFile(file, comp, onLoaded) {
   if (parsed.disciplines.length === 0) { toast(t('competitions.disciplinesEmpty'), 'error'); return; }
   const save = async () => {
     await put('competitions', { ...comp, disciplines: parsed.disciplines });
-    toast(t('competitions.disciplinesLoaded', { count: parsed.disciplines.length, veranstaltung: parsed.meta.veranstaltung || file.name }));
+    toast(t('competitions.disciplinesLoaded', { count: parsed.disciplines.length, veranstaltung: parsed.meta.veranstaltung || file.name })
+      + (parsed.skipped > 0 ? ' ' + t('competitions.disciplinesSkipped', { count: parsed.skipped }) : ''));
     onLoaded?.();
   };
   if (comp.disciplines?.length) {
