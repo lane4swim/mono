@@ -291,7 +291,7 @@ function renderPage(container, model) {
   const editable = !parent && canEditEntries() && types.some((type) => ENTRY_KINDS.includes(type));
   const childName = parent ? `${parent.child.athlete.firstName} ${parent.child.athlete.lastName}`.trim() : '';
   wrap.appendChild(el('div', { class: 'page-head' }, [
-    el('div', {}, [el('div', { class: 'page-eyebrow' }, parent ? t('calendar.parentEyebrow', { name: childName }) : t('calendar.eyebrow')), el('h1', { class: 'mt-0' }, t('calendar.title'))]),
+    el('div', {}, [parent ? el('div', { class: 'page-eyebrow' }, t('calendar.parentEyebrow', { name: childName })) : null, el('h1', { class: 'mt-0' }, t('calendar.title'))]),
     editable ? el('div', { class: 'page-actions' }, [
       el('button', { type: 'button', class: 'btn btn-ghost', onclick: () => openEntryList(reload) }, t('calendar.entry.manage')),
       el('button', { type: 'button', class: 'btn btn-primary', onclick: () => openEntryModal({ startDate: state.anchor, endDate: state.anchor }, model.data.groups || [], reload) }, t('calendar.entry.add')),

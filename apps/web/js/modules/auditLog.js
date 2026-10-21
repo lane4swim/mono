@@ -34,7 +34,7 @@ export const auditLogModule = {
 
 function renderDemoDisabled(container) {
   container.appendChild(el('div', { class: 'page-head' }, [
-    el('div', {}, [el('div', { class: 'page-eyebrow' }, t('auditLog.eyebrow')), el('h1', { class: 'mt-0' }, t('auditLog.title'))]),
+    el('div', {}, [el('h1', { class: 'mt-0' }, t('auditLog.title'))]),
   ]));
   container.appendChild(emptyState(t('auditLog.title'), t('auditLog.demoDisabled'), null));
 }
@@ -140,7 +140,7 @@ function renderView(container, initialEntries) {
   let hasMore = initialEntries.length === PAGE_SIZE;
   const wrap = el('div');
   wrap.appendChild(el('div', { class: 'page-head' }, [
-    el('div', {}, [el('div', { class: 'page-eyebrow' }, t('auditLog.eyebrow')), el('h1', { class: 'mt-0' }, t('auditLog.title'))]),
+    el('div', {}, [el('h1', { class: 'mt-0' }, t('auditLog.title'))]),
   ]));
   wrap.appendChild(el('p', { class: 'hint' }, t('auditLog.intro')));
 

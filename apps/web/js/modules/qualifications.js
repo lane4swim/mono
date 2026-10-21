@@ -63,7 +63,7 @@ function renderError(container, err) {
 
 function renderDemoDisabled(container) {
   container.appendChild(el('div', { class: 'page-head' }, [
-    el('div', {}, [el('div', { class: 'page-eyebrow' }, t('qualifications.eyebrow')), el('h1', { class: 'mt-0' }, t('qualifications.title'))]),
+    el('div', {}, [el('h1', { class: 'mt-0' }, t('qualifications.title'))]),
   ]));
   container.appendChild(emptyState(t('qualifications.title'), t('qualifications.demoDisabled'), null));
 }
@@ -116,7 +116,7 @@ export function typeLabel(type) {
 function renderView(container, admin, own, members, settings) {
   const wrap = el('div');
   wrap.appendChild(el('div', { class: 'page-head' }, [
-    el('div', {}, [el('div', { class: 'page-eyebrow' }, t('qualifications.eyebrow')), el('h1', { class: 'mt-0' }, t('qualifications.title'))]),
+    el('div', {}, [el('h1', { class: 'mt-0' }, t('qualifications.title'))]),
   ]));
   wrap.appendChild(laneWave());
   wrap.appendChild(el('p', {}, admin ? t('qualifications.introAdmin') : t('qualifications.introSelf')));

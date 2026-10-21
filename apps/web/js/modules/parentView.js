@@ -40,7 +40,7 @@ export const parentViewModule = {
 function renderOverview(container, children) {
   const wrap = el('div');
   wrap.appendChild(el('div', { class: 'page-head' }, [
-    el('div', {}, [el('div', { class: 'page-eyebrow' }, t('parentView.eyebrow')), el('h1', { class: 'mt-0' }, t('parentView.title'))]),
+    el('div', {}, [el('h1', { class: 'mt-0' }, t('parentView.title'))]),
   ]));
   wrap.appendChild(laneWave());
 

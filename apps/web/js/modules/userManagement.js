@@ -62,7 +62,7 @@ function renderError(container, err) {
 
 function renderDemoDisabled(container) {
   container.appendChild(el('div', { class: 'page-head' }, [
-    el('div', {}, [el('div', { class: 'page-eyebrow' }, t('usermgmt.eyebrow')), el('h1', { class: 'mt-0' }, t('usermgmt.title'))]),
+    el('div', {}, [el('h1', { class: 'mt-0' }, t('usermgmt.title'))]),
   ]));
   container.appendChild(emptyState(t('usermgmt.title'), t('usermgmt.demoDisabled'), null));
 }
@@ -82,7 +82,7 @@ function statusBadge(status) {
 function renderView(container, clubs, invitations, members, legalInfo) {
   const wrap = el('div');
   wrap.appendChild(el('div', { class: 'page-head' }, [
-    el('div', {}, [el('div', { class: 'page-eyebrow' }, t('usermgmt.eyebrow')), el('h1', { class: 'mt-0' }, t('usermgmt.title'))]),
+    el('div', {}, [el('h1', { class: 'mt-0' }, t('usermgmt.title'))]),
   ]));
   wrap.appendChild(laneWave());
   wrap.appendChild(el('p', {}, isSuperAdmin() ? t('usermgmt.superadminIntro') : t('usermgmt.adminIntro')));

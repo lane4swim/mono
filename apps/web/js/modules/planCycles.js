@@ -55,7 +55,7 @@ function renderCyclesList(container, cycles, templates) {
   const wrap = el('div');
   wrap.appendChild(el('button', { class: 'btn btn-ghost btn-sm mb-16', onclick: () => navigate('plans') }, t('planCycles.backToPlans')));
   wrap.appendChild(el('div', { class: 'page-head' }, [
-    el('div', {}, [el('div', { class: 'page-eyebrow' }, t('planCycles.eyebrow', { count: cycles.length })), el('h1', { class: 'mt-0' }, t('planCycles.title'))]),
+    el('div', {}, [el('h1', { class: 'mt-0' }, t('planCycles.title'))]),
     el('div', { class: 'page-actions' }, canManage ? [el('button', { class: 'btn btn-primary', onclick: () => openCycleModal(null, templates, refresh) }, t('planCycles.createCycle'))] : []),
   ]));
   wrap.appendChild(laneWave());

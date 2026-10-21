@@ -38,7 +38,7 @@ export const attendanceOverviewModule = {
 function renderView(container, sessions, athletes, groups, trainers) {
   const wrap = el('div');
   wrap.appendChild(el('div', { class: 'page-head' }, [
-    el('div', {}, [el('div', { class: 'page-eyebrow' }, t('attendance.eyebrow')), el('h1', { class: 'mt-0' }, t('attendance.title'))]),
+    el('div', {}, [el('h1', { class: 'mt-0' }, t('attendance.title'))]),
   ]));
   wrap.appendChild(laneWave());
   container.appendChild(wrap);

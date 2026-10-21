@@ -32,7 +32,7 @@ function renderView(container, athletes, results) {
   const athleteById = new Map(athletes.map(a => [a.id, a]));
   const wrap = el('div');
   wrap.appendChild(el('div', { class: 'page-head' }, [
-    el('div', {}, [el('div', { class: 'page-eyebrow' }, t('times.eyebrow', { count: results.length })), el('h1', { class: 'mt-0' }, t('times.title'))]),
+    el('div', {}, [el('h1', { class: 'mt-0' }, t('times.title'))]),
     el('div', { class: 'page-actions' }, [el('button', { class: 'btn btn-primary', onclick: () => openTimeModal(null, athletes, refresh) }, t('times.addTime'))]),
   ]));
   wrap.appendChild(laneWave());

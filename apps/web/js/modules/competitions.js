@@ -47,7 +47,7 @@ function renderList(container, competitions, groups, entries, athletes) {
   const today = todayISO();
   const wrap = el('div');
   wrap.appendChild(el('div', { class: 'page-head' }, [
-    el('div', {}, [el('div', { class: 'page-eyebrow' }, t('competitions.eyebrow', { count: competitions.length })), el('h1', { class: 'mt-0' }, t('competitions.title'))]),
+    el('div', {}, [el('h1', { class: 'mt-0' }, t('competitions.title'))]),
     el('div', { class: 'page-actions' }, [el('button', { class: 'btn btn-primary', onclick: () => openCompModal(null, () => refresh()) }, t('competitions.addComp'))]),
   ]));
   wrap.appendChild(laneWave());

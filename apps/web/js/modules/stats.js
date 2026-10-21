@@ -27,7 +27,7 @@ export const statsModule = {
 
 function renderView(container, athletes, results, sessions, groups, plans) {
   const wrap = el('div');
-  wrap.appendChild(el('div', { class: 'page-head' }, [el('div', {}, [el('div', { class: 'page-eyebrow' }, t('stats.eyebrow')), el('h1', { class: 'mt-0' }, t('stats.title'))])]));
+  wrap.appendChild(el('div', { class: 'page-head' }, [el('div', {}, [el('h1', { class: 'mt-0' }, t('stats.title'))])]));
   wrap.appendChild(laneWave());
 
   // Drei Reiter nach Fragestellung: Wer kommt zum Training (Anwesenheit),
