@@ -18,9 +18,8 @@ import { dsv7DisciplineEventLabel } from '../refdata.js';
 // Build-Schritt nicht importieren, daher hier gespiegelt und MUSS damit
 // übereinstimmen. Eine Disziplin, die das Schema verletzt, würde lokal
 // gespeichert, beim Sync-Push aber abgelehnt — und mit ihr der gesamte
-// Wettkampf-Datensatz samt aller späteren Änderungen (vgl. Code-Review
-// 2026-09-02, Befund K1). Ungültige WETTKAMPF-Zeilen werden daher hier
-// verworfen statt durchgereicht.
+// Wettkampf-Datensatz samt aller späteren Änderungen. Ungültige
+// WETTKAMPF-Zeilen werden daher hier verworfen statt durchgereicht.
 export const MAX_DISCIPLINES = 500;
 const MAX_NUMBER_LENGTH = 50;
 // Längste Wettkampfstrecke im Schwimmen ist 25 km Freiwasser.
