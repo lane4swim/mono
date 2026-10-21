@@ -241,7 +241,7 @@ function renderView(container, athletes, results, entries, actionItems, sessions
   const user = getCurrentUser();
   const wrap = el('div');
   wrap.appendChild(el('div', { class: 'page-head' }, [
-    el('div', {}, [el('div', { class: 'page-eyebrow' }, t('profile.eyebrow')), el('h1', { class: 'mt-0' }, t('profile.title'))]),
+    el('div', {}, [el('h1', { class: 'mt-0' }, t('profile.title'))]),
   ]));
   wrap.appendChild(laneWave());
 

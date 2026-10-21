@@ -53,18 +53,18 @@ function renderList(container, sectionTemplates, exercises) {
 
   const gridBtn = el('button', {
     type: 'button', class: `view-toggle-btn ${viewMode === 'grid' ? 'active' : ''}`,
-    title: t('sectionTemplates.viewGrid'), 'aria-label': t('sectionTemplates.viewGrid'), 'aria-pressed': viewMode === 'grid',
+    title: t('sectionTemplates.viewGrid'), 'aria-label': t('sectionTemplates.viewGrid'), 'aria-pressed': String(viewMode === 'grid'),
     onclick: () => setView('grid'),
   }, icon(ICON_VIEW_GRID));
   const listBtn = el('button', {
     type: 'button', class: `view-toggle-btn ${viewMode === 'list' ? 'active' : ''}`,
-    title: t('sectionTemplates.viewList'), 'aria-label': t('sectionTemplates.viewList'), 'aria-pressed': viewMode === 'list',
+    title: t('sectionTemplates.viewList'), 'aria-label': t('sectionTemplates.viewList'), 'aria-pressed': String(viewMode === 'list'),
     onclick: () => setView('list'),
   }, icon(ICON_VIEW_LIST));
   const viewToggle = el('div', { class: 'view-toggle' }, [gridBtn, listBtn]);
 
   wrap.appendChild(el('div', { class: 'page-head' }, [
-    el('div', {}, [el('div', { class: 'page-eyebrow' }, t('sectionTemplates.eyebrow', { count: sectionTemplates.length })), el('h1', { class: 'mt-0' }, t('sectionTemplates.title'))]),
+    el('div', {}, [el('h1', { class: 'mt-0' }, t('sectionTemplates.title'))]),
     el('div', { class: 'page-actions' }, [
       viewToggle,
       libraryTransferButtons({ onImported: refresh }),

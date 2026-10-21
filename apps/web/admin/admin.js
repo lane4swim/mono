@@ -208,7 +208,7 @@ function showInviteLinkModal(invitation) {
 async function renderClubsView() {
   clear(viewEl);
   viewEl.appendChild(el('div', { class: 'page-head' }, [
-    el('div', {}, [el('div', { class: 'page-eyebrow' }, t('admin.eyebrow')), el('h1', { class: 'mt-0' }, t('admin.title'))]),
+    el('div', {}, [el('h1', { class: 'mt-0' }, t('admin.title'))]),
     el('button', { class: 'btn btn-primary', onclick: () => openCreateClubModal({
       onSuccess: async (result) => {
         toast(t('admin.clubCreatedMailSent', { email: result.invitation.email }));

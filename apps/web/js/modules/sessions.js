@@ -33,7 +33,7 @@ export const sessionsModule = {
 function renderList(container, sessions, groups, athletes) {
   const wrap = el('div');
   wrap.appendChild(el('div', { class: 'page-head' }, [
-    el('div', {}, [el('div', { class: 'page-eyebrow' }, t('sessions.eyebrow', { count: sessions.length })), el('h1', { class: 'mt-0' }, t('sessions.title'))]),
+    el('div', {}, [el('h1', { class: 'mt-0' }, t('sessions.title'))]),
     el('div', { class: 'page-actions' }, [el('button', { class: 'btn btn-primary', onclick: () => openSessionModal(null, groups, athletes, fetchAssignableTrainers(), refresh) }, t('sessions.addSession'))]),
   ]));
   wrap.appendChild(laneWave());
@@ -131,7 +131,7 @@ async function renderAthleteView(container, isCurrent) {
   if (!isCurrent()) return;
   const me = athletes.find(a => a.id === user?.athleteId);
   const wrap = el('div');
-  wrap.appendChild(el('div', { class: 'page-head' }, [el('div', {}, [el('div', { class: 'page-eyebrow' }, t('sessions.myTrainingEyebrow')), el('h1', { class: 'mt-0' }, t('sessions.myTitle'))])]));
+  wrap.appendChild(el('div', { class: 'page-head' }, [el('div', {}, [el('h1', { class: 'mt-0' }, t('sessions.myTitle'))])]));
   wrap.appendChild(laneWave());
   if (!me) { wrap.appendChild(el('p', {}, t('sessions.noAthleteProfile'))); container.appendChild(wrap); return; }
   const mySessions = sessions.filter(s => s.attendance?.some(a => a.athleteId === me.id)).sort((a, b) => b.date.localeCompare(a.date));

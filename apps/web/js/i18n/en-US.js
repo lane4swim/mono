@@ -152,8 +152,8 @@ export default {
     language: 'Display language', languageHint: 'Applies to the selected account and is saved.',
   },
   dashboard: {
-    eyebrow: 'Overview', welcome: 'Welcome back',
-    athleteEyebrow: 'My Training', helloAthlete: 'Hi, {name}!', welcomeAthlete: 'Welcome',
+    welcome: 'Welcome back',
+    helloAthlete: 'Hi, {name}!', welcomeAthlete: 'Welcome',
     statActiveAthletes: 'Active Athletes', statGroups: '{count} groups',
     statNextComp: 'Next Competition', statNoComp: 'None scheduled',
     statOpenActions: 'Open Focus Areas', statActionsTotal: '{count} total',
@@ -177,7 +177,7 @@ export default {
   },
   athletes: {
     tabAthletes: 'Athletes ({count})', tabGroups: 'Groups ({count})',
-    eyebrow: '{count} athletes', title: 'Athletes & Team',
+    title: 'Athletes & Team',
     addAthlete: '+ Add athlete',
     allWithCount: 'All ({count})', noAthletesTitle: 'No athletes',
     noAthletesInGroup: 'No athletes recorded in this group yet.',
@@ -218,7 +218,7 @@ export default {
     inviteAthleteHint: 'The person receives an invitation link. When they register, their account is linked to this athlete profile.',
   },
   competitions: {
-    eyebrow: '{count} competitions', title: 'Competition Management', addComp: '+ Add competition',
+    title: 'Competition Management', addComp: '+ Add competition',
     upcoming: 'Upcoming', past: 'Past', noUpcoming: 'No upcoming competitions.',
     noPast: 'No past competitions recorded yet.',
     colName: 'Name', colDate: 'Date', colLocation: 'Location', colCourse: 'Course',
@@ -272,7 +272,7 @@ export default {
     liveModeSeed: 'Seed time {time}', liveModeNoSeed: 'No seed time',
   },
   times: {
-    eyebrow: '{count} times recorded', title: 'Times & Performance', addTime: '+ Record time',
+    title: 'Times & Performance', addTime: '+ Record time',
     allAthletes: 'All athletes', allEvents: 'All events',
     filterAthlete: 'Athlete', filterEvent: 'Event',
     progressTitle: 'Progress: {event}', progressHint: 'Lower values = faster time. Progression from left (earlier) to right (most recent).',
@@ -286,7 +286,7 @@ export default {
     validationTime: 'Please enter a valid time.', saved: 'Time saved',
   },
   plans: {
-    eyebrow: '{count} training plans', title: 'Training Plans', createPlan: '+ Create plan',
+    title: 'Training Plans', createPlan: '+ Create plan',
     manageCycles: 'Manage cycles',
     noPlansTitle: 'No plans yet', noPlansMsg: 'Create a weekly plan, optionally based on a template.',
     noGroup: 'No group', sessionsCount: '{count} sessions', totalMeters: '{m} m total',
@@ -319,7 +319,7 @@ export default {
   },
   planCycles: {
     backToPlans: '← To training plans', backToList: '← All cycles',
-    eyebrow: '{count} cycles', title: 'Recurring Plan Cycles',
+    title: 'Recurring Plan Cycles',
     createCycle: '+ New cycle', noCyclesTitle: 'No cycles yet',
     noCyclesMsg: 'A cycle bundles several weeks of templates, e.g. for competition preparation.',
     weeksCount: '{count} weeks', notFoundMsg: 'This cycle no longer exists.',
@@ -337,7 +337,9 @@ export default {
     applied: '{count} training plans created',
   },
   templates: {
-    eyebrow: '{count} templates', title: 'Training Plan Templates', createTemplate: '+ Create template',
+    title: 'Training Plan Templates', createTemplate: '+ Create template',
+    viewGrid: 'Grid view', viewList: 'List view',
+    colName: 'Name', colPoolLength: 'Pool length', colEntries: 'Entries', colDistance: 'Distance',
     intro: 'Templates can be applied to a day when creating a training plan, then freely adjusted.',
     noTemplatesTitle: 'No templates yet', noTemplatesMsg: 'Create a reusable session, e.g. "Aerobic Base".',
     repeatBlockLine: '{n}× {label}', setsCountSuffix: ' ({count} sets)',
@@ -350,7 +352,7 @@ export default {
     validationName: 'Please enter a name.', savedEdit: 'Changes saved', savedCreate: 'Template created',
   },
   catalog: {
-    eyebrow: '{count} exercises', title: 'Exercise Catalog', createExercise: '+ Add exercise',
+    title: 'Exercise Catalog', createExercise: '+ Add exercise',
     viewGrid: 'Grid view', viewList: 'List view',
     colName: 'Name', colCategory: 'Category', colStroke: 'Stroke', colDistance: 'Distance', colDuration: 'Duration', colEquipment: 'Equipment',
     searchLabel: 'Search', searchPlaceholder: 'Name or description…',
@@ -368,7 +370,7 @@ export default {
     validationName: 'Please enter a name.', savedEdit: 'Changes saved', savedCreate: 'Exercise added',
   },
   sectionTemplates: {
-    eyebrow: '{count} section templates', title: 'Section Templates', createSectionTemplate: '+ Create section template',
+    title: 'Section Templates', createSectionTemplate: '+ Create section template',
     viewGrid: 'Grid view', viewList: 'List view',
     intro: 'Section templates can be inserted as a section while editing a training plan or a training plan template.',
     searchLabel: 'Search', searchPlaceholder: 'Name or description…',
@@ -439,7 +441,7 @@ export default {
     deletedAuthor: 'Deleted account',
   },
   sessions: {
-    eyebrow: '{count} sessions', title: 'Training Sessions & Feedback', addSession: '+ Record session',
+    title: 'Training Sessions & Feedback', addSession: '+ Record session',
     noSessionsTitle: 'No sessions yet', noSessionsMsg: 'Record attendance and RPE feedback after every training.',
     colDate: 'Date', colGroup: 'Group', colPresent: 'Present', colAvgRpe: 'Avg. RPE',
     backToList: '← All sessions', notFoundMsg: 'This session no longer exists.',
@@ -450,7 +452,7 @@ export default {
     deleteConfirm: 'Delete this training session?', deleted: 'Session deleted',
     attendanceTitle: 'Attendance & Feedback', noReasonGiven: 'No reason given',
     statusPresent: 'present', statusAbsent: 'absent',
-    myTrainingEyebrow: 'My Training', myTitle: 'My Training Sessions',
+    myTitle: 'My Training Sessions',
     noAthleteProfile: 'No athlete profile linked.', noSessionsForMe: 'No training sessions have been recorded for you yet.',
     colAttendance: 'Attendance', colRpe: 'RPE', colNote: 'Note',
     modalEdit: 'Edit session', modalCreate: 'Record training session',
@@ -460,7 +462,7 @@ export default {
     savedEdit: 'Changes saved', savedCreate: 'Session recorded',
   },
   actionitems: {
-    eyebrow: '{count} focus areas', title: 'Focus Areas', addItem: '+ Add focus area',
+    title: 'Focus Areas', addItem: '+ Add focus area',
     intro: 'Documented observations and development goals per athlete with status tracking.',
     all: 'All', noneForFilter: 'No focus areas for this filter.',
     colAthlete: 'Athlete', colTitle: 'Title', colCategory: 'Category', colStatus: 'Status', colDue: 'Due',
@@ -469,7 +471,7 @@ export default {
     deleteConfirm: 'Delete this focus area?', deleted: 'Deleted',
     descriptionTitle: 'Description', noDescription: 'No further description.', createdOn: 'Created on {date}',
     dueLabel: 'Due: {date}', assignedToLabel: 'Responsible: {name}',
-    myGoalsEyebrow: 'My Development', myGoalsTitle: 'My Focus Areas',
+    myGoalsTitle: 'My Focus Areas',
     allGoodTitle: 'All clear', allGoodMsg: 'Your coach has not documented any special items right now.',
     modalEdit: 'Edit focus area', modalCreate: 'Add focus area',
     formAthlete: 'Athlete', formTitle: 'Title', formCategory: 'Category', formStatus: 'Status',
@@ -478,7 +480,7 @@ export default {
     validationTitle: 'Please enter a title.', savedEdit: 'Changes saved', savedCreate: 'Focus area added',
   },
   announcements: {
-    eyebrow: '{count} announcements', title: 'Announcements', addAnnouncement: '+ Create announcement',
+    title: 'Announcements', addAnnouncement: '+ Create announcement',
     intro: 'Organizational messages from coaches/admins to a group or the whole club.',
     noneYet: 'No announcements yet.',
     wholeClub: 'Whole club',
@@ -490,7 +492,7 @@ export default {
   },
   parentView: {
     openCalendar: 'Show calendar',
-    eyebrow: 'My Child', title: 'Overview',
+    title: 'Overview',
     noneLinkedTitle: 'No child linked yet', noneLinkedMsg: 'No athlete profile is linked to this account yet. Please contact the club.',
     upcomingSessionsTitle: 'Upcoming Training Sessions', noneUpcomingSessions: 'No upcoming sessions scheduled.',
     upcomingCompetitionsTitle: 'Upcoming Competitions', noneUpcomingCompetitions: 'No upcoming competitions.',
@@ -499,7 +501,7 @@ export default {
   },
   stats: {
     tabAttendance: 'Attendance', tabLoad: 'Training load', tabPerformance: 'Performance',
-    eyebrow: 'Analytics', title: 'Statistics',
+    title: 'Statistics',
     attendanceTitle: 'Attendance Rate by Group (recent sessions)', noSessions: 'No training sessions recorded yet.',
     attendanceTrendTitle: 'Attendance Trend Over Time', filterGroup: 'Group',
     noAttendanceTrend: 'Not enough data yet for an attendance trend in this group.',
@@ -519,7 +521,7 @@ export default {
   },
   // Two-factor sign-in (issue #97, js/modules/mfa.js).
   attendance: {
-    eyebrow: 'Analysis', title: 'Attendance Statistics',
+    title: 'Attendance Statistics',
     noSessionsTitle: 'No sessions yet', noSessionsMsg: 'Once coaches record training sessions, attendance shows up here.',
     filterGroup: 'Group', allGroups: 'All groups', filterPeriod: 'Period',
     period4w: 'Last 4 weeks', period12w: 'Last 12 weeks', period12m: 'Last 12 months', periodAll: 'All time',
@@ -601,7 +603,7 @@ export default {
   },
   usermgmt: {
     tabJobs: 'Background jobs', tabClubs: 'Clubs', tabMembers: 'Members', tabClub: 'Club details', tabInvitations: 'Invitations',
-    eyebrow: 'Administration', title: 'User Management',
+    title: 'User Management',
     demoDisabled: 'User management is not available in this demo — it runs on real club/invitation data that this demo has no backend for.',
     superadminIntro: 'As a super administrator, you create new clubs and invite their first admin via a time-limited link.',
     adminIntro: "Invite your club's coaches and athletes via a time-limited link.",
@@ -669,7 +671,7 @@ export default {
   admin: {
     loginTitle: 'Super Admin Sign In', loginIntro: 'Super administrators only. This interface is available online only.',
     loginButton: 'Sign in', notSuperadmin: 'This account is not a super administrator. Access denied.',
-    eyebrow: 'Super Admin', title: 'Clubs',
+    title: 'Clubs',
     createClub: '+ Create club',
     noClubsYet: 'No clubs created yet.',
     colClubName: 'Club', colAdmins: 'Admins', colTrainers: 'Coaches', colAthletes: 'Athletes', colReferees: 'Referees', colCreatedAt: 'Created on',
@@ -701,7 +703,7 @@ export default {
     errorUnknown: 'An unexpected error occurred.',
   },
   syncqueue: {
-    eyebrow: '{count} events total', title: 'Sync Queue',
+    title: 'Sync Queue',
     cleanupButton: 'Clean up synced', cleanupConfirm: 'Remove all already-synced entries from the queue?',
     cleanupDone: '{count} entries cleaned up', syncButton: '↻ Sync now (demo)',
     introP1: 'Every change to athletes, plans, times, etc. is recorded locally as an event in this queue — the "outbox pattern". The button above sends pending events to the backend and fetches changes from other devices/users.',
@@ -727,7 +729,7 @@ export default {
   },
   profile: {
     tabAccount: 'Account', tabSecurity: 'Sign-in & security', tabNotifications: 'Notifications', tabData: 'My data',
-    eyebrow: 'My Account', title: 'My Profile',
+    title: 'My Profile',
     formName: 'Name', formEmail: 'Email address',
     roleLabel: 'Role', accountSection: 'Account details',
     linkedAthlete: 'Linked athlete profile', noLinkedAthlete: 'No athlete profile linked.',
@@ -782,7 +784,7 @@ export default {
   },
   qualifications: {
     tabOwn: 'My qualifications', tabMembers: 'Members', tabSettings: 'Settings',
-    eyebrow: 'Qualification management', title: 'Qualifications',
+    title: 'Qualifications',
     demoDisabled: 'Qualification management is not available in this demo — it runs on real club data that this demo has no backend for.',
     introAdmin: 'Track coaching licenses, lifeguard certificates and other credentials with acquired/expiry dates for all club members.',
     introSelf: 'Here you can see your recorded qualifications. Only admins can add or change qualifications.',
@@ -839,7 +841,7 @@ export default {
     },
   },
   auditLog: {
-    eyebrow: 'Security log', title: 'Audit Log',
+    title: 'Audit Log',
     intro: 'Log of security-relevant actions: invitations, role and account changes, failed sign-ins, club settings, parent links, qualifications and referee assignments. Entries are deleted after one year.',
     demoDisabled: 'The audit log is not available in this demo — it runs on real club data, for which this demo has no backend.',
     emptyTitle: 'No entries yet', emptyMsg: 'No security-relevant actions have been logged for this club yet.',
@@ -891,7 +893,7 @@ export default {
     responsesSection: 'Open requests and declines', responsesNone: 'All upcoming duties are confirmed.',
     countConfirmed: '{count} confirmed', countRequested: '{count} open', countDeclined: '{count} declined',
     tabOwnAssignments: 'My assignments', tabOwnQualifications: 'My qualifications', tabReferees: 'Referees',
-    eyebrow: 'Officiating', title: 'Officiating',
+    title: 'Officiating',
     demoDisabled: 'Officiating is not available in this demo — it runs on real club data that this demo has no backend for.',
     introAdmin: 'Overview of all club referees with their qualification status and competition assignments.',
     introSelf: 'Here you can see your referee qualification status and manage your competition assignments.',
@@ -921,7 +923,7 @@ export default {
     noMatchTitle: 'Nothing for these teams', noMatchMsg: 'There are no entries here for the selected teams — change the selection above or choose “All teams”.',
   },
   calendar: {
-    eyebrow: 'Overview', title: 'Calendar',
+    title: 'Calendar',
     viewLabel: 'View', views: { week: 'Week', month: 'Month', quarter: 'Quarter', year: 'Year' },
     prev: 'Previous period', next: 'Next period', today: 'Today',
     weekLabel: 'Week {week} · {range}', quarterLabel: 'Q{quarter} {year}',
@@ -1014,7 +1016,7 @@ export default {
     },
   },
   legal: {
-    pageEyebrow: 'Legal', pageTitle: 'Legal & Privacy',
+    pageTitle: 'Legal & Privacy',
     pageIntro: 'Imprint, privacy and cookie notices, and the terms of use for Lane 1.',
     authFooterLink: 'Imprint & Legal',
 

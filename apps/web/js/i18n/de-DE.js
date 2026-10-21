@@ -175,8 +175,8 @@ export default {
     language: 'Anzeigesprache', languageHint: 'Gilt für das ausgewählte Konto und wird gespeichert.',
   },
   dashboard: {
-    eyebrow: 'Übersicht', welcome: 'Willkommen zurück',
-    athleteEyebrow: 'Mein Training', helloAthlete: 'Hallo, {name}!', welcomeAthlete: 'Willkommen',
+    welcome: 'Willkommen zurück',
+    helloAthlete: 'Hallo, {name}!', welcomeAthlete: 'Willkommen',
     statActiveAthletes: 'Aktive Athleten', statGroups: '{count} Gruppen',
     statNextComp: 'Nächster Wettkampf', statNoComp: 'Keiner geplant',
     statOpenActions: 'Offene Handlungsfelder', statActionsTotal: '{count} gesamt',
@@ -200,7 +200,7 @@ export default {
   },
   athletes: {
     tabAthletes: 'Athlet:innen ({count})', tabGroups: 'Gruppen ({count})',
-    eyebrow: '{count} Athlet:innen', title: 'Athleten & Team',
+    title: 'Athleten & Team',
     addAthlete: '+ Athlet:in anlegen',
     allWithCount: 'Alle ({count})', noAthletesTitle: 'Keine Athlet:innen',
     noAthletesInGroup: 'In dieser Gruppe sind noch keine Athlet:innen erfasst.',
@@ -241,7 +241,7 @@ export default {
     inviteAthleteHint: 'Die Person erhält einen Einladungslink. Beim Registrieren wird ihr Konto mit diesem Athletenprofil verknüpft.',
   },
   competitions: {
-    eyebrow: '{count} Wettkämpfe', title: 'Wettkampfmanagement', addComp: '+ Wettkampf anlegen',
+    title: 'Wettkampfmanagement', addComp: '+ Wettkampf anlegen',
     upcoming: 'Anstehend', past: 'Vergangen', noUpcoming: 'Keine anstehenden Wettkämpfe.',
     noPast: 'Noch keine vergangenen Wettkämpfe erfasst.',
     colName: 'Name', colDate: 'Datum', colLocation: 'Ort', colCourse: 'Bahn',
@@ -295,7 +295,7 @@ export default {
     liveModeSeed: 'Meldezeit {time}', liveModeNoSeed: 'Keine Meldezeit',
   },
   times: {
-    eyebrow: '{count} erfasste Zeiten', title: 'Zeiten & Leistung', addTime: '+ Zeit erfassen',
+    title: 'Zeiten & Leistung', addTime: '+ Zeit erfassen',
     allAthletes: 'Alle Athlet:innen', allEvents: 'Alle Disziplinen',
     filterAthlete: 'Athlet:in', filterEvent: 'Disziplin',
     progressTitle: 'Verlauf: {event}', progressHint: 'Niedrigere Werte = schnellere Zeit. Verlauf von links (früher) nach rechts (aktuell).',
@@ -309,7 +309,7 @@ export default {
     validationTime: 'Bitte eine gültige Zeit angeben.', saved: 'Zeit gespeichert',
   },
   plans: {
-    eyebrow: '{count} Trainingspläne', title: 'Trainingspläne', createPlan: '+ Plan erstellen',
+    title: 'Trainingspläne', createPlan: '+ Plan erstellen',
     manageCycles: 'Zyklen verwalten',
     noPlansTitle: 'Noch keine Pläne', noPlansMsg: 'Erstelle einen Wochenplan, optional auf Basis einer Vorlage.',
     noGroup: 'Ohne Gruppe', sessionsCount: '{count} Einheiten', totalMeters: '{m} m gesamt',
@@ -342,7 +342,7 @@ export default {
   },
   planCycles: {
     backToPlans: '← Zu den Trainingsplänen', backToList: '← Alle Zyklen',
-    eyebrow: '{count} Zyklen', title: 'Vorlagen-Zyklen',
+    title: 'Vorlagen-Zyklen',
     createCycle: '+ Neuer Zyklus', noCyclesTitle: 'Noch keine Zyklen',
     noCyclesMsg: 'Ein Zyklus bündelt mehrere Wochen aus Vorlagen, z. B. für die Wettkampfvorbereitung.',
     weeksCount: '{count} Wochen', notFoundMsg: 'Dieser Zyklus existiert nicht mehr.',
@@ -360,7 +360,9 @@ export default {
     applied: '{count} Trainingspläne erstellt',
   },
   templates: {
-    eyebrow: '{count} Vorlagen', title: 'Trainingsplan-Vorlagen', createTemplate: '+ Vorlage erstellen',
+    title: 'Trainingsplan-Vorlagen', createTemplate: '+ Vorlage erstellen',
+    viewGrid: 'Kartenansicht', viewList: 'Listenansicht',
+    colName: 'Name', colPoolLength: 'Beckenlänge', colEntries: 'Einträge', colDistance: 'Distanz',
     intro: 'Vorlagen lassen sich beim Erstellen eines Trainingsplans für einen Tag übernehmen und danach frei anpassen.',
     noTemplatesTitle: 'Noch keine Vorlagen', noTemplatesMsg: 'Lege eine wiederverwendbare Trainingseinheit an, z. B. "Grundlagenausdauer".',
     repeatBlockLine: '{n}× {label}', setsCountSuffix: ' ({count} Sätze)',
@@ -373,7 +375,7 @@ export default {
     validationName: 'Bitte einen Namen angeben.', savedEdit: 'Änderungen gespeichert', savedCreate: 'Vorlage angelegt',
   },
   catalog: {
-    eyebrow: '{count} Übungen', title: 'Übungskatalog', createExercise: '+ Übung anlegen',
+    title: 'Übungskatalog', createExercise: '+ Übung anlegen',
     viewGrid: 'Kartenansicht', viewList: 'Listenansicht',
     colName: 'Name', colCategory: 'Kategorie', colStroke: 'Schwimmlage', colDistance: 'Distanz', colDuration: 'Dauer', colEquipment: 'Ausrüstung',
     searchLabel: 'Suche', searchPlaceholder: 'Name oder Beschreibung…',
@@ -391,7 +393,7 @@ export default {
     validationName: 'Bitte einen Namen angeben.', savedEdit: 'Änderungen gespeichert', savedCreate: 'Übung angelegt',
   },
   sectionTemplates: {
-    eyebrow: '{count} Abschnitts-Vorlagen', title: 'Abschnitts-Vorlagen', createSectionTemplate: '+ Abschnitts-Vorlage erstellen',
+    title: 'Abschnitts-Vorlagen', createSectionTemplate: '+ Abschnitts-Vorlage erstellen',
     viewGrid: 'Kartenansicht', viewList: 'Listenansicht',
     intro: 'Abschnitts-Vorlagen lassen sich beim Bearbeiten eines Trainingsplans oder einer Trainingsplan-Vorlage als Abschnitt einfügen.',
     searchLabel: 'Suche', searchPlaceholder: 'Name oder Beschreibung…',
@@ -462,7 +464,7 @@ export default {
     deletedAuthor: 'Gelöschtes Konto',
   },
   sessions: {
-    eyebrow: '{count} Einheiten', title: 'Trainingseinheiten & Feedback', addSession: '+ Einheit erfassen',
+    title: 'Trainingseinheiten & Feedback', addSession: '+ Einheit erfassen',
     noSessionsTitle: 'Noch keine Einheiten', noSessionsMsg: 'Erfasse Anwesenheit und RPE-Feedback nach jedem Training.',
     colDate: 'Datum', colGroup: 'Gruppe', colPresent: 'Anwesend', colAvgRpe: 'Ø RPE',
     backToList: '← Alle Einheiten', notFoundMsg: 'Diese Einheit existiert nicht mehr.',
@@ -473,7 +475,7 @@ export default {
     deleteConfirm: 'Diese Trainingseinheit löschen?', deleted: 'Einheit gelöscht',
     attendanceTitle: 'Anwesenheit & Feedback', noReasonGiven: 'Fehlgrund nicht angegeben',
     statusPresent: 'anwesend', statusAbsent: 'abwesend',
-    myTrainingEyebrow: 'Mein Training', myTitle: 'Meine Trainingseinheiten',
+    myTitle: 'Meine Trainingseinheiten',
     noAthleteProfile: 'Kein Athletenprofil verknüpft.', noSessionsForMe: 'Für dich wurden noch keine Trainingseinheiten erfasst.',
     colAttendance: 'Anwesenheit', colRpe: 'RPE', colNote: 'Notiz',
     modalEdit: 'Einheit bearbeiten', modalCreate: 'Trainingseinheit erfassen',
@@ -483,7 +485,7 @@ export default {
     savedEdit: 'Änderungen gespeichert', savedCreate: 'Einheit erfasst',
   },
   actionitems: {
-    eyebrow: '{count} Handlungsfelder', title: 'Handlungsfelder', addItem: '+ Handlungsfeld anlegen',
+    title: 'Handlungsfelder', addItem: '+ Handlungsfeld anlegen',
     intro: 'Dokumentierte Beobachtungen und Entwicklungsziele je Athlet:in mit Status-Nachverfolgung.',
     all: 'Alle', noneForFilter: 'Für diesen Filter liegen keine Handlungsfelder vor.',
     colAthlete: 'Athlet:in', colTitle: 'Titel', colCategory: 'Kategorie', colStatus: 'Status', colDue: 'Fällig',
@@ -492,7 +494,7 @@ export default {
     deleteConfirm: 'Dieses Handlungsfeld löschen?', deleted: 'Gelöscht',
     descriptionTitle: 'Beschreibung', noDescription: 'Keine weitere Beschreibung.', createdOn: 'Angelegt am {date}',
     dueLabel: 'Fällig: {date}', assignedToLabel: 'Zuständig: {name}',
-    myGoalsEyebrow: 'Meine Entwicklung', myGoalsTitle: 'Meine Handlungsfelder',
+    myGoalsTitle: 'Meine Handlungsfelder',
     allGoodTitle: 'Alles im grünen Bereich', allGoodMsg: 'Dein Trainer hat aktuell keine besonderen Punkte dokumentiert.',
     modalEdit: 'Handlungsfeld bearbeiten', modalCreate: 'Handlungsfeld anlegen',
     formAthlete: 'Athlet:in', formTitle: 'Titel', formCategory: 'Kategorie', formStatus: 'Status',
@@ -501,7 +503,7 @@ export default {
     validationTitle: 'Bitte einen Titel angeben.', savedEdit: 'Änderungen gespeichert', savedCreate: 'Handlungsfeld angelegt',
   },
   announcements: {
-    eyebrow: '{count} Ankündigungen', title: 'Ankündigungen', addAnnouncement: '+ Ankündigung erstellen',
+    title: 'Ankündigungen', addAnnouncement: '+ Ankündigung erstellen',
     intro: 'Organisatorische Mitteilungen von Trainer:innen/Admins an die Gruppe oder den gesamten Verein.',
     noneYet: 'Noch keine Ankündigungen vorhanden.',
     wholeClub: 'Ganzer Verein',
@@ -512,7 +514,7 @@ export default {
     savedEdit: 'Änderungen gespeichert', savedCreate: 'Ankündigung erstellt',
   },
   parentView: {
-    eyebrow: 'Mein Kind', title: 'Übersicht',
+    title: 'Übersicht',
     openCalendar: 'Kalender anzeigen',
     noneLinkedTitle: 'Noch keine Verknüpfung', noneLinkedMsg: 'Es ist noch kein Athletenprofil mit diesem Konto verknüpft. Bitte an den Verein wenden.',
     upcomingSessionsTitle: 'Bevorstehende Trainingseinheiten', noneUpcomingSessions: 'Keine bevorstehenden Einheiten geplant.',
@@ -522,7 +524,7 @@ export default {
   },
   stats: {
     tabAttendance: 'Anwesenheit', tabLoad: 'Belastung', tabPerformance: 'Leistung',
-    eyebrow: 'Auswertungen', title: 'Statistiken',
+    title: 'Statistiken',
     attendanceTitle: 'Anwesenheitsquote pro Gruppe (letzte Einheiten)', noSessions: 'Noch keine Trainingseinheiten erfasst.',
     attendanceTrendTitle: 'Anwesenheitstrend über Zeit', filterGroup: 'Gruppe',
     noAttendanceTrend: 'Noch nicht genug Daten für einen Anwesenheitstrend dieser Gruppe.',
@@ -542,7 +544,7 @@ export default {
   },
   // Anwesenheitsstatistik der Vereinsverwaltung (js/modules/attendanceOverview.js).
   attendance: {
-    eyebrow: 'Auswertung', title: 'Anwesenheitsstatistik',
+    title: 'Anwesenheitsstatistik',
     noSessionsTitle: 'Noch keine Einheiten', noSessionsMsg: 'Sobald Trainer:innen Trainingseinheiten erfassen, erscheint hier die Anwesenheit.',
     filterGroup: 'Gruppe', allGroups: 'Alle Gruppen', filterPeriod: 'Zeitraum',
     period4w: 'Letzte 4 Wochen', period12w: 'Letzte 12 Wochen', period12m: 'Letzte 12 Monate', periodAll: 'Gesamter Zeitraum',
@@ -625,7 +627,7 @@ export default {
   },
   usermgmt: {
     tabJobs: 'Hintergrundjobs', tabClubs: 'Vereine', tabMembers: 'Mitglieder', tabClub: 'Vereinsangaben', tabInvitations: 'Einladungen',
-    eyebrow: 'Verwaltung', title: 'Nutzerverwaltung',
+    title: 'Nutzerverwaltung',
     demoDisabled: 'Die Nutzerverwaltung ist in dieser Demo nicht verfügbar — sie läuft über echte Vereins-/Einladungsdaten, für die diese Demo kein Backend hat.',
     superadminIntro: 'Als Superadministrator:in legen Sie neue Vereine an und laden deren ersten Admin per zeitlich befristetem Link ein.',
     adminIntro: 'Laden Sie Trainer:innen und Athlet:innen Ihres Vereins per zeitlich befristetem Link ein.',
@@ -693,7 +695,7 @@ export default {
   admin: {
     loginTitle: 'Superadmin-Anmeldung', loginIntro: 'Nur für Superadministrator:innen. Diese Oberfläche ist ausschließlich online verfügbar.',
     loginButton: 'Anmelden', notSuperadmin: 'Dieses Konto ist keine Superadministrator:in. Zugriff verweigert.',
-    eyebrow: 'Superadmin', title: 'Vereine',
+    title: 'Vereine',
     createClub: '+ Verein anlegen',
     noClubsYet: 'Noch keine Vereine angelegt.',
     colClubName: 'Verein', colAdmins: 'Admins', colTrainers: 'Trainer:innen', colAthletes: 'Athlet:innen', colReferees: 'Kampfrichter:innen', colCreatedAt: 'Angelegt am',
@@ -725,7 +727,7 @@ export default {
     errorUnknown: 'Ein unerwarteter Fehler ist aufgetreten.',
   },
   syncqueue: {
-    eyebrow: '{count} Events insgesamt', title: 'Sync-Warteschlange',
+    title: 'Sync-Warteschlange',
     cleanupButton: 'Synchronisierte aufräumen', cleanupConfirm: 'Alle bereits synchronisierten Einträge aus der Warteschlange entfernen?',
     cleanupDone: '{count} Einträge aufgeräumt', syncButton: '↻ Jetzt synchronisieren (Demo)',
     introP1: 'Jede Änderung an Athlet:innen, Plänen, Zeiten usw. wird lokal als Event in dieser Warteschlange abgelegt — dem sogenannten „Outbox-Pattern". Über den Button oben werden ausstehende Events an das Backend gesendet und Änderungen anderer Geräte/Nutzer:innen abgeholt.',
@@ -751,7 +753,7 @@ export default {
   },
   profile: {
     tabAccount: 'Konto', tabSecurity: 'Anmeldung & Sicherheit', tabNotifications: 'Benachrichtigungen', tabData: 'Meine Daten',
-    eyebrow: 'Mein Konto', title: 'Mein Profil',
+    title: 'Mein Profil',
     formName: 'Name', formEmail: 'E-Mail-Adresse',
     roleLabel: 'Rolle', accountSection: 'Kontodaten',
     linkedAthlete: 'Verknüpftes Athletenprofil', noLinkedAthlete: 'Kein Athletenprofil verknüpft.',
@@ -806,7 +808,7 @@ export default {
   },
   qualifications: {
     tabOwn: 'Meine Qualifikationen', tabMembers: 'Mitglieder', tabSettings: 'Einstellungen',
-    eyebrow: 'Qualifikationsmanagement', title: 'Qualifikationen',
+    title: 'Qualifikationen',
     demoDisabled: 'Das Qualifikationsmanagement ist in dieser Demo nicht verfügbar — es läuft über echte Vereinsdaten, für die diese Demo kein Backend hat.',
     introAdmin: 'Erfasse Trainerlizenzen, Rettungsschwimmscheine und weitere Nachweise mit Erwerbs- und Ablaufdatum für alle Vereinsmitglieder.',
     introSelf: 'Hier sehen Sie Ihre erfassten Qualifikationen. Nur Admins können neue Qualifikationen erfassen oder ändern.',
@@ -863,7 +865,7 @@ export default {
     },
   },
   auditLog: {
-    eyebrow: 'Sicherheitsprotokoll', title: 'Audit-Log',
+    title: 'Audit-Log',
     intro: 'Protokoll sicherheitsrelevanter Aktionen: Einladungen, Rollen- und Kontoänderungen, fehlgeschlagene Anmeldungen, Vereinseinstellungen, Elternverknüpfungen sowie Qualifikationen und Kampfrichtereinsätze. Einträge werden nach einem Jahr gelöscht.',
     demoDisabled: 'Das Audit-Log ist in dieser Demo nicht verfügbar — es läuft über echte Vereinsdaten, für die diese Demo kein Backend hat.',
     emptyTitle: 'Noch keine Einträge', emptyMsg: 'Für diesen Verein wurden noch keine sicherheitsrelevanten Aktionen protokolliert.',
@@ -915,7 +917,7 @@ export default {
     responsesSection: 'Offene Anfragen und Absagen', responsesNone: 'Alle kommenden Einsätze sind zugesagt.',
     countConfirmed: '{count} zugesagt', countRequested: '{count} offen', countDeclined: '{count} abgesagt',
     tabOwnAssignments: 'Meine Einsätze', tabOwnQualifications: 'Meine Qualifikationen', tabReferees: 'Kampfrichter:innen',
-    eyebrow: 'Kampfrichter-Modul', title: 'Kampfrichter',
+    title: 'Kampfrichter',
     demoDisabled: 'Das Kampfrichter-Modul ist in dieser Demo nicht verfügbar — es läuft über echte Vereinsdaten, für die diese Demo kein Backend hat.',
     introAdmin: 'Übersicht aller Kampfrichter:innen des Vereins mit ihrem Qualifikationsstatus und ihren Wettkampfeinsätzen.',
     introSelf: 'Hier siehst du deinen Kampfrichter-Qualifikationsstatus und kannst deine Wettkampfeinsätze verwalten.',
@@ -945,7 +947,7 @@ export default {
     noMatchTitle: 'Nichts für diese Teams', noMatchMsg: 'Für die gewählten Teams gibt es hier keine Einträge — Auswahl oben ändern oder „Alle Teams“ wählen.',
   },
   calendar: {
-    eyebrow: 'Übersicht', title: 'Kalender',
+    title: 'Kalender',
     viewLabel: 'Ansicht', views: { week: 'Woche', month: 'Monat', quarter: 'Quartal', year: 'Jahr' },
     prev: 'Vorheriger Zeitraum', next: 'Nächster Zeitraum', today: 'Heute',
     weekLabel: 'KW {week} · {range}', quarterLabel: 'Q{quarter} {year}',
@@ -1038,7 +1040,7 @@ export default {
     },
   },
   legal: {
-    pageEyebrow: 'Rechtliches', pageTitle: 'Rechtliches & Datenschutz',
+    pageTitle: 'Rechtliches & Datenschutz',
     pageIntro: 'Impressum, Datenschutz- und Cookie-Hinweise sowie die Nutzungsbedingungen von Lane 1.',
     authFooterLink: 'Impressum & Rechtliches',
 

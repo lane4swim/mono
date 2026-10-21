@@ -75,7 +75,7 @@ export const plansModule = {
 function renderList(container, plans, groups, templates, exercises, sectionTemplates) {
   const wrap = el('div');
   wrap.appendChild(el('div', { class: 'page-head' }, [
-    el('div', {}, [el('div', { class: 'page-eyebrow' }, t('plans.eyebrow', { count: plans.length })), el('h1', { class: 'mt-0' }, t('plans.title'))]),
+    el('div', {}, [el('h1', { class: 'mt-0' }, t('plans.title'))]),
     el('div', { class: 'page-actions' }, [
       el('button', { class: 'btn btn-ghost', onclick: () => navigate('plans', 'cycles') }, t('plans.manageCycles')),
       isTrainerOrAdmin() ? planImportButton() : null,

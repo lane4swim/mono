@@ -33,7 +33,7 @@ function renderList(container, announcements, groups) {
   const wrap = el('div');
   const canManage = isTrainerOrAdmin();
   wrap.appendChild(el('div', { class: 'page-head' }, [
-    el('div', {}, [el('div', { class: 'page-eyebrow' }, t('announcements.eyebrow', { count: announcements.length })), el('h1', { class: 'mt-0' }, t('announcements.title'))]),
+    el('div', {}, [el('h1', { class: 'mt-0' }, t('announcements.title'))]),
     canManage ? el('div', { class: 'page-actions' }, [el('button', { class: 'btn btn-primary', onclick: () => openAnnouncementModal(null, groups, refresh) }, t('announcements.addAnnouncement'))]) : null,
   ].filter(Boolean)));
   wrap.appendChild(laneWave());

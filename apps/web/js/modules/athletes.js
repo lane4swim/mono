@@ -32,7 +32,7 @@ export const athletesModule = {
 function renderList(container, athletes, groups) {
   const wrap = el('div');
   wrap.appendChild(el('div', { class: 'page-head' }, [
-    el('div', {}, [el('div', { class: 'page-eyebrow' }, t('athletes.eyebrow', { count: athletes.length })), el('h1', { class: 'mt-0' }, t('athletes.title'))]),
+    el('div', {}, [el('h1', { class: 'mt-0' }, t('athletes.title'))]),
     el('div', { class: 'page-actions' }, [
       isAdminOrSuperAdmin() ? el('button', { class: 'btn btn-primary', onclick: () => openAthleteModal(null, groups, refresh, accountIndex) }, t('athletes.addAthlete')) : null,
     ].filter(Boolean)),

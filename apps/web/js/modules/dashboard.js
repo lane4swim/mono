@@ -53,7 +53,7 @@ async function renderTrainerDashboard(container, isCurrent) {
 
   const wrap = el('div');
   wrap.appendChild(el('div', { class: 'page-head' }, [
-    el('div', {}, [el('div', { class: 'page-eyebrow' }, t('dashboard.eyebrow')), el('h1', { class: 'mt-0' }, t('dashboard.welcome'))]),
+    el('div', {}, [el('h1', { class: 'mt-0' }, t('dashboard.welcome'))]),
   ]));
   wrap.appendChild(laneWave());
 
@@ -175,7 +175,7 @@ async function renderAthleteDashboard(container, isCurrent) {
   const me = athletes.find(a => a.id === user?.athleteId);
   const wrap = el('div');
   wrap.appendChild(el('div', { class: 'page-head' }, [
-    el('div', {}, [el('div', { class: 'page-eyebrow' }, t('dashboard.athleteEyebrow')), el('h1', { class: 'mt-0' }, me ? t('dashboard.helloAthlete', { name: me.firstName }) : t('dashboard.welcomeAthlete'))]),
+    el('div', {}, [el('h1', { class: 'mt-0' }, me ? t('dashboard.helloAthlete', { name: me.firstName }) : t('dashboard.welcomeAthlete'))]),
   ]));
   wrap.appendChild(laneWave());
 

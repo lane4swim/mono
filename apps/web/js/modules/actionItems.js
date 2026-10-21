@@ -67,7 +67,7 @@ function statusBadge(status) {
 function renderList(container, items, athletes, trainers) {
   const wrap = el('div');
   wrap.appendChild(el('div', { class: 'page-head' }, [
-    el('div', {}, [el('div', { class: 'page-eyebrow' }, t('actionitems.eyebrow', { count: items.length })), el('h1', { class: 'mt-0' }, t('actionitems.title'))]),
+    el('div', {}, [el('h1', { class: 'mt-0' }, t('actionitems.title'))]),
     el('div', { class: 'page-actions' }, [el('button', { class: 'btn btn-primary', onclick: () => openItemModal(null, athletes, trainers, refresh) }, t('actionitems.addItem'))]),
   ]));
   wrap.appendChild(laneWave());
@@ -149,7 +149,7 @@ async function renderDetail(container, itemId, trainersOrPromise) {
 
 function renderAthleteList(container, items) {
   const wrap = el('div');
-  wrap.appendChild(el('div', { class: 'page-head' }, [el('div', {}, [el('div', { class: 'page-eyebrow' }, t('actionitems.myGoalsEyebrow')), el('h1', { class: 'mt-0' }, t('actionitems.myGoalsTitle'))])]));
+  wrap.appendChild(el('div', { class: 'page-head' }, [el('div', {}, [el('h1', { class: 'mt-0' }, t('actionitems.myGoalsTitle'))])]));
   wrap.appendChild(laneWave());
   if (items.length === 0) { wrap.appendChild(emptyState(t('actionitems.allGoodTitle'), t('actionitems.allGoodMsg'), null)); container.appendChild(wrap); return; }
   items.forEach(i => {

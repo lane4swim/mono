@@ -86,7 +86,7 @@ function renderError(container, err) {
 
 function renderDemoDisabled(container) {
   container.appendChild(el('div', { class: 'page-head' }, [
-    el('div', {}, [el('div', { class: 'page-eyebrow' }, t('kampfrichter.eyebrow')), el('h1', { class: 'mt-0' }, t('kampfrichter.title'))]),
+    el('div', {}, [el('h1', { class: 'mt-0' }, t('kampfrichter.title'))]),
   ]));
   container.appendChild(emptyState(t('kampfrichter.title'), t('kampfrichter.demoDisabled'), null));
 }
@@ -100,7 +100,7 @@ function renderView(container, ctx) {
   const { admin, isReferee, settings, ownQualifications, ownAssignments, referees, upcoming } = ctx;
   const wrap = el('div');
   wrap.appendChild(el('div', { class: 'page-head' }, [
-    el('div', {}, [el('div', { class: 'page-eyebrow' }, t('kampfrichter.eyebrow')), el('h1', { class: 'mt-0' }, t('kampfrichter.title'))]),
+    el('div', {}, [el('h1', { class: 'mt-0' }, t('kampfrichter.title'))]),
   ]));
   wrap.appendChild(laneWave());
   wrap.appendChild(el('p', {}, admin && !isReferee ? t('kampfrichter.introAdmin') : t('kampfrichter.introSelf')));

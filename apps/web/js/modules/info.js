@@ -37,7 +37,7 @@ export const infoModule = {
 
     const wrap = el('div');
     wrap.appendChild(el('div', { class: 'page-head' }, [
-      el('div', {}, [el('div', { class: 'page-eyebrow' }, t('legal.pageEyebrow')), el('h1', { class: 'mt-0' }, t('legal.pageTitle'))]),
+      el('div', {}, [el('h1', { class: 'mt-0' }, t('legal.pageTitle'))]),
     ]));
     wrap.appendChild(laneWave());
     wrap.appendChild(el('p', {}, t('legal.pageIntro')));

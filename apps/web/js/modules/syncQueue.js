@@ -65,7 +65,7 @@ function renderView(container, queue) {
   const synced = queue.filter(e => e.status === 'synced').length;
 
   wrap.appendChild(el('div', { class: 'page-head' }, [
-    el('div', {}, [el('div', { class: 'page-eyebrow' }, t('syncqueue.eyebrow', { count: queue.length })), el('h1', { class: 'mt-0' }, t('syncqueue.title'))]),
+    el('div', {}, [el('h1', { class: 'mt-0' }, t('syncqueue.title'))]),
     el('div', { class: 'page-actions' }, [
       el('button', { class: 'btn btn-ghost', disabled: synced === 0, onclick: () => confirmAction(t('syncqueue.cleanupConfirm'), async () => { const n = await clearSyncedEvents(); toast(t('syncqueue.cleanupDone', { count: n })); refresh(); }) }, t('syncqueue.cleanupButton')),
       el('button', { class: 'btn btn-primary', disabled: pending + errored === 0, onclick: () => runRealSync(refresh) }, t('syncqueue.syncButton')),
