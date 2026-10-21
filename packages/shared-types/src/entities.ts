@@ -133,6 +133,27 @@ export type Athlete = z.infer<typeof AthleteSchema>;
 
 export const CourseSchema = z.enum(['LCM', 'SCM']);
 
+// Eine Disziplin aus einer geladenen DSV7-Wettkampfdefinitionsliste
+// (Element WETTKAMPF, siehe apps/web/js/resultsImport/dsv7DefinitionParser.js)
+// — Grundlage für die Auswahlliste beim Anlegen von Startlisten-Einträgen.
+// Die Codes werden unverändert aus der Datei übernommen: round = Wettkampfart
+// (V/Z/F/E/A/N), stroke = Technik (F/R/B/S/L/X), style = Ausübung (GL/BE/AR/
+// ST/WE/GB/X), gender = Geschlecht (M/W/X/D). `event` ist das daraus
+// abgeleitete Disziplin-Label (z. B. "100 Freistil", "4x50 Lagen"), null,
+// wenn sich keines bilden ließ (z. B. Sonderform).
+export const CompetitionDisciplineSchema = z.object({
+  number: z.string().min(1).max(50),
+  round: z.string().max(5).default(''),
+  session: z.number().int().positive().nullable().optional(),
+  distanceM: z.number().int().positive(),
+  stroke: z.string().max(5),
+  style: z.string().max(5).default(''),
+  relaySize: z.number().int().positive().default(1),
+  gender: z.string().max(5).default(''),
+  event: z.string().min(1).max(200).nullable(),
+}).strict();
+export type CompetitionDiscipline = z.infer<typeof CompetitionDisciplineSchema>;
+
 export const CompetitionSchema = z.object({
   id: z.string().uuid(),
   clubId: z.string().uuid(),
@@ -151,6 +172,12 @@ export const CompetitionSchema = z.object({
   // nicht hier — gespeichert wird nur, was tatsächlich eingetragen ist.
   entryDeadline: nullableIsoDate.optional(),
   selectionDeadline: nullableIsoDate.optional(),
+  // Disziplinen aus einer geladenen DSV7-Wettkampfdefinitionsliste — wie die
+  // Fristen bewusst OHNE .default(), damit ein älterer Client ohne das Feld
+  // die geladene Liste beim Sync-Push nicht still leert. Nicht nullable:
+  // "keine Definition" ist ein leeres Array (Prisma-Json-Spalten nehmen
+  // kein schlichtes null an).
+  disciplines: z.array(CompetitionDisciplineSchema).max(500).optional(),
   createdAt: isoDate,
   updatedAt: isoDate,
 }).strict();

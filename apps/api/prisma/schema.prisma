@@ -415,6 +415,10 @@ model Competition {
   // Auswahl der Starts — beide optional.
   entryDeadline     DateTime?
   selectionDeadline DateTime?
+  // Disziplinen aus einer geladenen DSV7-Wettkampfdefinitionsliste — Struktur
+  // siehe CompetitionDisciplineSchema in packages/shared-types/src/entities.ts.
+  // Dient als Auswahlliste beim Anlegen von Startlisten-Einträgen.
+  disciplines       Json      @default("[]")
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?

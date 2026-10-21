@@ -67,6 +67,24 @@ export function dsv7EventLabel({ technik, distanzM, isRelay, relaySize }) {
   return EVENTS.includes(label) ? label : null;
 }
 
+// DSV7-Ausübung (Element WETTKAMPF) -> Zusatz am Disziplin-Label. "GL"
+// (ganze Lage) ist der Normalfall und bekommt keinen Zusatz; Teilübungen
+// (z. B. Beine/Arme bei Kindermehrkämpfen) sind eigene Disziplinen.
+export const DSV7_STYLE_SUFFIX = { BE: 'Beine', AR: 'Arme', ST: 'Start', WE: 'Wende', GB: 'Grundschnelligkeit' };
+
+// Wie dsv7EventLabel(), aber OHNE Prüfung gegen EVENTS: Label für eine
+// Disziplin aus einer Wettkampfdefinitionsliste, das auch dann gebildet
+// wird, wenn die Strecke nicht in EVENTS steht (z. B. 25 Freistil) —
+// Result.event/StartlistEntry.event sind freie Textfelder. `null` nur bei
+// unbekanntem Technik-Code (Sonderform "X") oder fehlender Distanz.
+export function dsv7DisciplineEventLabel({ technik, distanzM, relaySize, style }) {
+  const strokeName = DSV7_STROKE_TO_NAME[technik];
+  if (!strokeName || !distanzM) return null;
+  const base = relaySize > 1 ? `${relaySize}x${distanzM} ${strokeName}` : `${distanzM} ${strokeName}`;
+  const suffix = DSV7_STYLE_SUFFIX[style];
+  return suffix ? `${base} ${suffix}` : base;
+}
+
 export const EXERCISE_CATEGORIES = [
   { value: 'technik', label: 'Technik' },
   { value: 'ausdauer', label: 'Ausdauer' },
