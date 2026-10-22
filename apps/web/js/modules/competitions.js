@@ -17,8 +17,9 @@ import { navigate } from '../router.js';
 import { t, trCode, trOptions, trOptionsFlat } from '../i18n.js';
 import { buildLiveGroups, renderLiveMode, buildResultIndex, findResultForEntry } from './competitionLive.js';
 import { buildStopwatchPanel } from './stopwatch.js';
-import { resultsImportButton } from './resultsImportUI.js';
-import { disciplinesLoadButton, disciplinesSummary, disciplineSelect } from './competitionDisciplines.js';
+import { resultsImportButton, startResultsImportFromText } from './resultsImportUI.js';
+import { disciplinesLoadButton, disciplinesSummary, disciplineSelect, competitionFromFileButton } from './competitionDisciplines.js';
+import { LIST_RESULTS } from '../resultsImport/dsv7DefinitionParser.js';
 import { defaultSelectionDeadline, validateDeadlines } from './competitionDeadlines.js';
 import { getCurrentUser } from '../state.js';
 import { teamFilterChips, loadTeamSelection, saveTeamSelection, matchesTeams, competitionGroupIds, athleteGroupMap } from '../teamFilter.js';
@@ -49,7 +50,10 @@ function renderList(container, competitions, groups, entries, athletes) {
   const wrap = el('div');
   wrap.appendChild(el('div', { class: 'page-head' }, [
     el('div', {}, [el('h1', { class: 'mt-0' }, t('competitions.title'))]),
-    el('div', { class: 'page-actions' }, [el('button', { class: 'btn btn-primary', onclick: () => openCompModal(null, () => refresh()) }, t('competitions.addComp'))]),
+    el('div', { class: 'page-actions' }, [
+      competitionFromFileButton(openCompFromFile),
+      el('button', { class: 'btn btn-primary', onclick: () => openCompModal(null, () => refresh()) }, t('competitions.addComp')),
+    ]),
   ]));
   wrap.appendChild(laneWave());
 
@@ -82,6 +86,18 @@ function renderList(container, competitions, groups, entries, athletes) {
 
   function refresh() {
     return redraw(container, () => Promise.all(LIST_STORES.map(getAll)), (lists) => renderList(container, ...lists));
+  }
+
+  // Wettkampf aus einer DSV7-/DSV8-Datei: das Formular ist mit Name, Datum,
+  // Ort, Bahn, Meldeschluss und Disziplinen vorbelegt und bleibt vor dem
+  // Speichern änderbar. Danach öffnet sich der neue Wettkampf; bei einer
+  // Ergebnisliste folgt dort direkt der Ergebnisimport (mit eigener
+  // Vorschau, abbrechbar).
+  function openCompFromFile({ prefill, parsed, text }) {
+    openCompModal(null, (saved) => {
+      navigate('competitions', saved.id);
+      if (parsed.listArt === LIST_RESULTS) startResultsImportFromText(text, saved, () => renderDetail(container, saved.id));
+    }, prefill);
   }
 }
 
@@ -309,9 +325,12 @@ function appendEntryRows(tbody, entry, comp, athletes, athleteById, results, res
   tbody.appendChild(detailRow);
 }
 
-function openCompModal(comp, onSaved) {
+// `prefill` belegt einen NEUEN Wettkampf vor (z. B. aus einer DSV-Datei,
+// siehe competitionFromFileButton()); `onSaved` erhält den gespeicherten
+// Datensatz.
+function openCompModal(comp, onSaved, prefill = {}) {
   const isEdit = !!comp;
-  const data = comp ? { ...comp } : { name: '', date: todayISO(), location: '', course: 'LCM', notes: '' };
+  const data = comp ? { ...comp } : { name: '', date: todayISO(), location: '', course: 'LCM', notes: '', ...prefill };
   const form = el('form', { class: 'form-grid' });
   const fName = textInput(data.name, { required: true });
   const fDate = dateInput(data.date);
@@ -344,12 +363,12 @@ function openCompModal(comp, onSaved) {
     if (!fName.value.trim()) { toast(t('competitions.validationName'), 'error'); return; }
     const deadlineError = validateDeadlines({ date: fDate.value, entryDeadline: fEntryDeadline.value, selectionDeadline: fSelectionDeadline.value });
     if (deadlineError) { toast(t(`competitions.${deadlineError}`), 'error'); return; }
-    await put('competitions', {
+    const saved = await put('competitions', {
       ...data, name: fName.value.trim(), date: toIsoDateTime(fDate.value), location: fLoc.value.trim(), course: fCourse.value, notes: fNotes.value.trim(),
       entryDeadline: toIsoDateTime(fEntryDeadline.value), selectionDeadline: toIsoDateTime(fSelectionDeadline.value),
     });
     toast(isEdit ? t('competitions.savedEdit') : t('competitions.savedCreate'));
-    close(); onSaved?.();
+    close(); onSaved?.(saved);
   });
   const { close } = openModal({ title: isEdit ? t('competitions.modalEditTitle') : t('competitions.modalCreateTitle'), bodyNode: form, wide: true });
 }

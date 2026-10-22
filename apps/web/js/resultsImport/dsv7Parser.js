@@ -1,5 +1,6 @@
-// Parser für DSV7-Wettkampfergebnislisten
-// ("DSV Standard", Format 7, DSV, gültig ab 01.01.2023) in das
+// Parser für DSV7- und DSV8-Wettkampfergebnislisten
+// ("DSV Standard", Format 7, DSV, gültig ab 01.01.2023; Format 8, gültig
+// ab 01.08.2026, ab 01.01.2027 alleinig) in das
 // gemeinsame Zwischenformat ImportedResult (siehe
 // docs/Plans/dsv7-lenex-import-plan.md Abschnitt 4).
 //
@@ -19,6 +20,31 @@ import { timeToSec } from '../swimTime.js';
 import { dsv7EventLabel } from '../refdata.js';
 
 export class Dsv7ParseError extends Error {}
+
+// Unterstützte Versionen des "DSV Standard" (Attribut "Version" im
+// FORMAT-Element). Format 8 behält Zeilenformat und Elementaufbau von
+// Format 7 bei und ergänzt v. a. Attributwerte (u. a. neue Ausübungen für
+// Delfin-Kicks in Bauch-/Rückenlage) — beide werden daher vom selben
+// Parser gelesen.
+export const SUPPORTED_DSV_VERSIONS = ['7', '8'];
+
+// `accept`-Attribut der Datei-Inputs. Die DSV-Datenbank verlangt die
+// großgeschriebene Endung, EasyWk schrieb sie lange klein — beides zulassen.
+export const DSV_FILE_ACCEPT = '.dsv7,.DSV7,.dsv8,.DSV8';
+
+// Prüft das Attribut "Version" des FORMAT-Elements und liefert die
+// Formatversion als String ("7"/"8"). Ein fehlendes Attribut wird als
+// Format 7 gelesen (bisheriges Verhalten, ältere Exporte).
+export function checkDsvFormatVersion(versionRaw) {
+  const version = (versionRaw || '7').trim();
+  const major = String(parseInt(version, 10));
+  if (!SUPPORTED_DSV_VERSIONS.includes(major)) {
+    throw new Dsv7ParseError(
+      `Diese Datei verwendet das DSV-Format "${version}". Unterstützt werden die Formate ${SUPPORTED_DSV_VERSIONS.join(' und ')}.`,
+    );
+  }
+  return major;
+}
 
 // ---- Zeilen-Tokenizer -------------------------------------------------
 
@@ -117,9 +143,11 @@ export function unmappedEventKey({ technik, distanzM, isRelay, relaySize }) {
   return `${technik}|${distanzM}|${isRelay}|${relaySize}`;
 }
 
-// Parst eine vollständige DSV7-Wettkampfergebnisliste (als bereits
-// dekodierter UTF-8-Text) in { meta, clubs, unmappedEvents, results }.
+// Parst eine vollständige DSV7- oder DSV8-Wettkampfergebnisliste (als
+// bereits dekodierter UTF-8-Text) in
+// { formatVersion, meta, clubs, unmappedEvents, results }.
 //
+//   formatVersion   — "7" oder "8" (Attribut "Version" im FORMAT-Element).
 //   meta            — { veranstaltung, ort } zur Anzeige/Bestätigung in
 //                      der Importvorschau ("ist das die richtige Datei?").
 //   clubs           — alle VEREIN-Einträge der Datei, für die manuelle
@@ -138,6 +166,7 @@ export function parseDsv7WettkampfergebnisListe(text) {
   const lines = text.split(/\r?\n/);
 
   let listArt = null;
+  let formatVersion = null;
   let meta = { veranstaltung: '', ort: '' };
   const clubsBynationalID = new Map(); // dedupliziert über Vereinskennzahl bzw. Name
   const wettkampfByNr = new Map(); // Wettkampfnr -> { distanzM, technik, isRelay, relaySize }
@@ -170,6 +199,7 @@ export function parseDsv7WettkampfergebnisListe(text) {
             `Diese Datei ist keine Wettkampfergebnisliste (FORMAT: "${listArt}"). Für den Ergebnisimport wird ausschließlich der Listentyp "Wettkampfergebnisliste" unterstützt.`,
           );
         }
+        formatVersion = checkDsvFormatVersion(fields[1]);
         break;
       }
       case 'VERANSTALTUNG': {
@@ -386,10 +416,11 @@ export function parseDsv7WettkampfergebnisListe(text) {
   }
 
   if (listArt === null) {
-    throw new Dsv7ParseError('Keine gültige DSV7-Datei: Das FORMAT-Element (erste Zeile) fehlt.');
+    throw new Dsv7ParseError('Keine gültige DSV-Datei: Das FORMAT-Element (erste Zeile) fehlt.');
   }
 
   return {
+    formatVersion,
     meta,
     clubs: [...clubsBynationalID.values()],
     unmappedEvents: [...unmappedEventsByKey.values()],

@@ -145,6 +145,28 @@ Beispiel (real, disqualifiziert):
    Vorschau-Dialog zurück (Liste aller `VEREIN`-Einträge der Datei, robuster gegen
    Schreibweisen-Unterschiede).
 
+### 1.4a DSV8 (Format 8)
+
+Der DSV hat am 20.05.2026 Format 8 veröffentlicht: gültig ab 01.08.2026,
+Format 7 übergangsweise bis 31.12.2026, ab 01.01.2027 nur noch Format 8.
+Zeilenformat und Elementaufbau bleiben gleich; geändert wurden einzelne
+Attribute und Zahlungsvarianten, neu sind u. a. Ausübungen für Delfin-Kicks
+in Bauch- bzw. Rückenlage. Dateiendung `.DSV8` (Großschreibung verlangt die
+DSV-Datenbank, Exporte mit Kleinschreibung werden trotzdem angenommen).
+
+Umsetzung: Beide Parser lesen Format 7 und 8 (`FORMAT`-Attribut `Version`,
+andere Versionen werden abgelehnt). In einer DSV8-Datei werden noch nicht
+fest hinterlegte, zweistellige Ausübungs-Kürzel übernommen und als Zusatz am
+Disziplin-Label angezeigt, statt den Wettkampf zu verwerfen. Die
+Feldreihenfolge von `WETTKAMPF`, `PNERGEBNIS`, `STERGEBNIS` usw. ist aus
+Format 7 übernommen und sollte gegen das Original-Dokument
+(„DSV_Standard_8_gültig_ab_01082026") geprüft werden.
+
+Zusätzlich lässt sich in der Wettkampfliste ein ganzer Wettkampf aus einer
+DSV7-/DSV8-Wettkampfdefinitions- oder -ergebnisliste anlegen (Name, Ort,
+Bahnlänge 25/50 m, frühestes Abschnittsdatum, Meldeschluss, Disziplinen);
+bei einer Ergebnisliste folgt direkt der Ergebnisimport.
+
 ### 1.5 Lenex (zurückgestellt auf spätere Erweiterung)
 
 Lenex ist im Gegensatz zu DSV7 eine **ZIP-Datei mit einer XML-Datei** (`.lef`), mit

@@ -1,4 +1,4 @@
-// UI-Flow für den DSV7-Ergebnisimport in
+// UI-Flow für den DSV7-/DSV8-Ergebnisimport in
 // der Wettkampfansicht (siehe docs/Plans/dsv7-lenex-import-plan.md Abschnitt
 // 6). Verbindet die reine Parser-/Matching-Logik in resultsImport/*.js
 // mit einer Abfolge von Modals: Datei wählen -> (Vereinsauswahl, falls
@@ -12,7 +12,7 @@ import { field, selectInput, formActions } from '../forms.js';
 import { EVENTS, DSV7_STROKE_TO_NAME, registerSessionEvent } from '../refdata.js';
 import { t, trCode } from '../i18n.js';
 import { secToTime } from '../swimTime.js';
-import { parseDsv7WettkampfergebnisListe, Dsv7ParseError, unmappedEventKey } from '../resultsImport/dsv7Parser.js';
+import { parseDsv7WettkampfergebnisListe, Dsv7ParseError, unmappedEventKey, DSV_FILE_ACCEPT } from '../resultsImport/dsv7Parser.js';
 import { matchOwnClub, filterResultsForClub, buildImportPlan } from '../resultsImport/matching.js';
 import { loadImportContext, executeImportPlan } from '../resultsImport/importRunner.js';
 
@@ -28,7 +28,7 @@ function statusBadge(status) {
 // modules/competitions.js: renderDetail().
 export function resultsImportButton(comp, onImported) {
   const fileInput = el('input', {
-    type: 'file', accept: '.dsv7,.DSV7', style: 'display:none',
+    type: 'file', accept: DSV_FILE_ACCEPT, style: 'display:none',
     onchange: async (e) => {
       const file = e.target.files[0];
       fileInput.value = '';
@@ -47,7 +47,13 @@ async function startImport(file, comp, onImported) {
     toast(t('resultsImport.readError'), 'error');
     return;
   }
+  startResultsImportFromText(text, comp, onImported);
+}
 
+// Einstieg mit bereits gelesenem Dateiinhalt — auch für das Anlegen eines
+// Wettkampfs aus einer Ergebnisliste (modules/competitions.js), das die
+// Ergebnisse direkt im Anschluss importiert.
+export function startResultsImportFromText(text, comp, onImported) {
   let parsed;
   try {
     parsed = parseDsv7WettkampfergebnisListe(text);

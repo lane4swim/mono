@@ -81,7 +81,10 @@ export function dsv7DisciplineEventLabel({ technik, distanzM, relaySize, style }
   const strokeName = DSV7_STROKE_TO_NAME[technik];
   if (!strokeName || !distanzM) return null;
   const base = relaySize > 1 ? `${relaySize}x${distanzM} ${strokeName}` : `${distanzM} ${strokeName}`;
-  const suffix = DSV7_STYLE_SUFFIX[style];
+  // Ein hier unbekanntes Kürzel (neue Ausübungen aus Format 8, z. B.
+  // Delfin-Kicks) wird roh angehängt — sonst sähe die Teilübung wie die
+  // ganze Lage aus. "GL" und Sonderform "X" bleiben ohne Zusatz.
+  const suffix = DSV7_STYLE_SUFFIX[style] || (style && style !== 'GL' && style !== 'X' ? style : null);
   return suffix ? `${base} ${suffix}` : base;
 }
 

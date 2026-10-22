@@ -5,7 +5,7 @@ vi.mock('../js/demoMode.js', () => ({ IS_DEMO: false }));
 const dbMock = vi.hoisted(() => ({ put: vi.fn(async () => {}) }));
 vi.mock('../js/db.js', () => dbMock);
 
-import { disciplinesLoadButton, disciplineSelect, disciplineMatchesAthlete, findDisciplineIndex, disciplineLabel } from '../js/modules/competitionDisciplines.js';
+import { disciplinesLoadButton, disciplineSelect, disciplineMatchesAthlete, findDisciplineIndex, disciplineLabel, competitionFromFileButton } from '../js/modules/competitionDisciplines.js';
 import { selectInput, textInput } from '../js/forms.js';
 
 const DISCIPLINES = [
@@ -90,5 +90,48 @@ describe('disciplinesLoadButton', () => {
     await vi.waitFor(() => expect(onLoaded).toHaveBeenCalled());
     expect(dbMock.put).toHaveBeenCalledTimes(1);
     expect(dbMock.put.mock.calls[0][1].disciplines.map(d => d.number)).toEqual(['2']);
+  });
+});
+
+describe('competitionFromFileButton', () => {
+  function pick(file) {
+    const onParsed = vi.fn();
+    const wrap = competitionFromFileButton(onParsed);
+    const input = wrap.querySelector('input[type=file]');
+    expect(input.accept).toContain('.dsv8');
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    input.dispatchEvent(new Event('change'));
+    return onParsed;
+  }
+
+  it('belegt einen neuen Wettkampf aus einer DSV8-Wettkampfdefinitionsliste vor', async () => {
+    const file = new File(['x'], '2026-11-15-Hannover-Wk.DSV8');
+    file.text = async () => 'FORMAT:Wettkampfdefinitionsliste;8;\nVERANSTALTUNG:Herbstpokal;Hannover;25;AUTOMATISCH;\nABSCHNITT:1;15.11.2026;09:00;;10:00;;\nMELDESCHLUSS:01.11.2026;18:00;\nWETTKAMPF:1;E;1;;100;F;GL;W;SW;;;';
+    const onParsed = pick(file);
+    await vi.waitFor(() => expect(onParsed).toHaveBeenCalled());
+    const { prefill, parsed } = onParsed.mock.calls[0][0];
+    expect(parsed.listArt).toBe('wettkampfdefinitionsliste');
+    expect(prefill).toMatchObject({ name: 'Herbstpokal', location: 'Hannover', course: 'SCM', date: '2026-11-15', entryDeadline: '2026-11-01' });
+    expect(prefill.disciplines.map(d => d.number)).toEqual(['1']);
+  });
+
+  it('übergibt bei einer Ergebnisliste den Text für den anschließenden Import', async () => {
+    const text = 'FORMAT:Wettkampfergebnisliste;7;\nVERANSTALTUNG:Stadtmeisterschaft;Berlin;50;HANDZEIT;\nWETTKAMPF:1;E;1;;50;B;GL;W;SW;;;';
+    const file = new File(['x'], 'pr.dsv7');
+    file.text = async () => text;
+    const onParsed = pick(file);
+    await vi.waitFor(() => expect(onParsed).toHaveBeenCalled());
+    const result = onParsed.mock.calls[0][0];
+    expect(result.parsed.listArt).toBe('wettkampfergebnisliste');
+    expect(result.text).toBe(text);
+    expect(result.prefill).not.toHaveProperty('date');
+  });
+
+  it('ignoriert Dateien, die keine DSV-Datei sind', async () => {
+    const file = new File(['x'], 'kaputt.dsv8');
+    file.text = async () => 'irgendwas';
+    const onParsed = pick(file);
+    await new Promise(r => setTimeout(r, 0));
+    expect(onParsed).not.toHaveBeenCalled();
   });
 });
