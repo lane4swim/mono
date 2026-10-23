@@ -453,47 +453,9 @@ if [[ -z "${SUPERADMIN_EMAIL}" ]]; then
   exit 1
 fi
 
-if [[ -z "${SUPERADMIN_PASSWORD:-}" ]]; then
-  while true; do
-    read -rsp "  Superadmin-Passwort (mind. 12 Zeichen, wird nicht angezeigt): " SUPERADMIN_PASSWORD
-    echo
-    if [[ ${#SUPERADMIN_PASSWORD} -lt 12 ]]; then
-      echo "  Das Passwort muss mindestens 12 Zeichen lang sein — bitte erneut eingeben." >&2
-      continue
-    fi
-    read -rsp "  Superadmin-Passwort (Bestätigung): " SUPERADMIN_PASSWORD_CONFIRM
-    echo
-    if [[ "${SUPERADMIN_PASSWORD}" != "${SUPERADMIN_PASSWORD_CONFIRM}" ]]; then
-      echo "  Die beiden Eingaben stimmen nicht überein — bitte erneut eingeben." >&2
-      continue
-    fi
-    unset SUPERADMIN_PASSWORD_CONFIRM
-    break
-  done
-fi
-# Sicherheitsnetz auch für den nicht-interaktiven Pfad (SUPERADMIN_PASSWORD
-# per Umgebungsvariable vorgegeben) — die Schleife oben validiert nur den
-# interaktiv eingegebenen Fall.
-if [[ ${#SUPERADMIN_PASSWORD} -lt 12 ]]; then
-  echo "  Fehler: SUPERADMIN_PASSWORD muss mindestens 12 Zeichen lang sein (siehe apps/api/scripts/createSuperAdmin.ts)." >&2
-  exit 1
-fi
-# Das Passwort wird NICHT als --password=…-Argument übergeben — Argumente
-# eines laufenden Prozesses sind auf Linux über /proc/<pid>/cmdline für
-# JEDEN lokalen Benutzer lesbar (`ps aux` genügt), für die gesamte, bei
-# argon2id nicht ganz kurze Laufzeit von createSuperAdmin.ts. Stattdessen
-# als Umgebungsvariable NUR für diesen einen Befehl gesetzt (nicht per
-# `export`, das würde sie unnötig für den Rest dieses Skriptlaufs in der
-# Prozessumgebung belassen) — createSuperAdmin.ts liest SUPERADMIN_PASSWORD
-# bereits selbst vorrangig aus der Umgebung, siehe dort.
-if (
-  cd apps/api
-  SUPERADMIN_PASSWORD="${SUPERADMIN_PASSWORD}" npm run create-superadmin -- --email="${SUPERADMIN_EMAIL}" --name="${SUPERADMIN_NAME}"
-); then
-  echo "  Superadmin ${SUPERADMIN_EMAIL} angelegt."
-else
-  echo "  Hinweis: Anlegen übersprungen/fehlgeschlagen — existiert vermutlich bereits (${SUPERADMIN_EMAIL})."
-fi
+# shellcheck source=lib/superadmin.sh
+source "${REPO_ROOT}/scripts/lib/superadmin.sh"
+superadmin_ensure "${SUPERADMIN_EMAIL}" "${SUPERADMIN_NAME}"
 
 # --- Schritt 9: Nginx konfigurieren -------------------------------------------
 log "Schritt 9: Nginx konfigurieren"

@@ -52,8 +52,15 @@ function superadminPasswordError(password: string): string | null {
 
 const USAGE =
   'Verwendung: npm run create-superadmin -- --email=<email> --name="<Name>" [--force]\n' +
+  '            npm run create-superadmin -- --check-password\n' +
   'Das Passwort wird NICHT als Argument angegeben, sondern per Umgebungsvariable ' +
   'SUPERADMIN_PASSWORD oder interaktiv (ohne Terminal-Echo) abgefragt.';
+
+// Eigener Exit-Code für "Konto existiert bereits": die Setup-Skripte
+// (scripts/lib/superadmin.sh) überspringen dann den Schritt, brechen bei
+// jedem anderen Fehler (z. B. Passwort aus einem Datenleck) aber ab, statt
+// ihn als "existiert vermutlich bereits" zu verschleiern.
+const EXIT_ALREADY_EXISTS = 2;
 
 function parseArgs(argv: string[]): { options: Record<string, string>; flags: Set<string> } {
   const options: Record<string, string> = {};
@@ -161,6 +168,18 @@ async function main() {
   const { options, flags } = parseArgs(process.argv.slice(2));
   const { email, name } = options;
 
+  // Nur die Passwortregeln prüfen (ohne Datenbank), damit die Setup-Skripte
+  // ein abgelehntes Passwort schon bei der Eingabe melden und neu abfragen
+  // können — ihr `read -s` kennt die Leak-Liste nicht.
+  if (flags.has('check-password')) {
+    const policyError = superadminPasswordError(process.env.SUPERADMIN_PASSWORD ?? '');
+    if (policyError) {
+      console.error(policyError);
+      process.exit(1);
+    }
+    return;
+  }
+
   if (!email || !name) {
     console.error(USAGE);
     process.exit(1);
@@ -199,7 +218,7 @@ async function main() {
     const existingByEmail = await prisma.user.findUnique({ where: { email: validEmail } });
     if (existingByEmail) {
       console.error(`Es existiert bereits ein Konto mit der E-Mail-Adresse "${validEmail}".`);
-      process.exit(1);
+      process.exit(EXIT_ALREADY_EXISTS);
     }
 
     // Sicherheitsreview 2026-08-28, Befund M2, Empfehlung 2: verhindert
@@ -216,7 +235,7 @@ async function main() {
           `Es existiert bereits ein Superadmin-Konto (${existingSuperadmin.email}). ` +
             'Für den bewussten Ausnahmefall (z. B. ein zusätzliches Notfall-Konto) --force anhängen.',
         );
-        process.exit(1);
+        process.exit(EXIT_ALREADY_EXISTS);
       }
     }
 
