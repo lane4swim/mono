@@ -1,6 +1,7 @@
-// Disziplinen eines Wettkampfs aus einer DSV7-Wettkampfdefinitionsliste:
-// Laden der Datei (Startlisten-Card in modules/competitions.js) und die
-// Auswahlliste im Formular für Startlisten-Einträge. Die geladenen
+// Disziplinen eines Wettkampfs aus einer DSV7-/DSV8-Wettkampfdefinitionsliste:
+// Laden der Datei (Startlisten-Card in modules/competitions.js), das
+// Anlegen eines ganzen Wettkampfs aus einer DSV-Datei (Wettkampfliste) und
+// die Auswahlliste im Formular für Startlisten-Einträge. Die geladenen
 // Disziplinen liegen als `disciplines` am Wettkampf (siehe
 // CompetitionDisciplineSchema in packages/shared-types/src/entities.ts) und
 // werden mit ihm synchronisiert — alle Trainer:innen des Vereins sehen
@@ -11,12 +12,15 @@ import { toast } from '../ui.js';
 import { confirmAction } from '../modal.js';
 import { t, trCode } from '../i18n.js';
 import { DSV7_STROKE_TO_NAME } from '../refdata.js';
-import { parseDsv7Wettkampfdefinitionsliste } from '../resultsImport/dsv7DefinitionParser.js';
-import { Dsv7ParseError } from '../resultsImport/dsv7Parser.js';
+import { parseDsv7Wettkampfdefinitionsliste, parseDsvCompetition } from '../resultsImport/dsv7DefinitionParser.js';
+import { Dsv7ParseError, DSV_FILE_ACCEPT } from '../resultsImport/dsv7Parser.js';
 
 // Reale Wettkampfdefinitionslisten sind wenige KB groß; größere Dateien
 // werden gar nicht erst eingelesen.
 const MAX_FILE_BYTES = 1024 * 1024;
+// Wettkampfergebnislisten großer Veranstaltungen (alle Vereine, alle
+// Wertungen, Zwischenzeiten) sind deutlich größer.
+const MAX_COMPETITION_FILE_BYTES = 20 * 1024 * 1024;
 
 const ROUND_KEYS = { V: 'roundV', Z: 'roundZ', F: 'roundF', A: 'roundA', N: 'roundN' };
 const GENDER_KEYS = { M: 'genderM', W: 'genderW', X: 'genderX', D: 'genderD' };
@@ -58,7 +62,7 @@ export function findDisciplineIndex(disciplines, entry) {
 // Laden bzw. Ersetzen der Wettkampfdefinition.
 export function disciplinesLoadButton(comp, onLoaded) {
   const fileInput = el('input', {
-    type: 'file', accept: '.dsv7,.DSV7', style: 'display:none',
+    type: 'file', accept: DSV_FILE_ACCEPT, style: 'display:none',
     onchange: async (e) => {
       const file = e.target.files[0];
       fileInput.value = '';
@@ -91,6 +95,60 @@ async function loadDefinitionFile(file, comp, onLoaded) {
   } else {
     await save();
   }
+}
+
+// Button + verstecktes Datei-Input für die Wettkampfliste: liest eine
+// DSV7-/DSV8-Wettkampfdefinitions- oder -ergebnisliste und übergibt
+// `onParsed({ prefill, parsed, text })` die Vorbelegung für das
+// Wettkampf-Formular (Name, Datum, Ort, Bahn, Meldeschluss, Disziplinen).
+// `text` wird mitgegeben, damit die Ergebnisse einer Ergebnisliste nach
+// dem Anlegen direkt importiert werden können.
+export function competitionFromFileButton(onParsed) {
+  const fileInput = el('input', {
+    type: 'file', accept: DSV_FILE_ACCEPT, style: 'display:none',
+    onchange: async (e) => {
+      const file = e.target.files[0];
+      fileInput.value = '';
+      if (!file) return;
+      const result = await readCompetitionFile(file);
+      if (result) onParsed(result);
+    },
+  });
+  const btn = el('button', { class: 'btn btn-ghost', onclick: () => fileInput.click() }, t('competitions.createFromFile'));
+  return el('span', { style: 'display:inline-flex' }, [btn, fileInput]);
+}
+
+// Vorbelegung eines neuen Wettkampfs aus dem Ergebnis von
+// parseDsvCompetition(). Fehlende Angaben (Bahnlänge außer 25/50 m, kein
+// Abschnittsdatum) bleiben beim Formular-Standard und sind dort änderbar.
+function competitionPrefill({ meta, disciplines }, fileName = '') {
+  return {
+    name: meta.veranstaltung || fileName.replace(/\.dsv[78]$/i, ''),
+    location: meta.ort || '',
+    ...(meta.course ? { course: meta.course } : {}),
+    ...(meta.date ? { date: meta.date } : {}),
+    ...(meta.entryDeadline ? { entryDeadline: meta.entryDeadline } : {}),
+    disciplines,
+  };
+}
+
+async function readCompetitionFile(file) {
+  if (file.size > MAX_COMPETITION_FILE_BYTES) { toast(t('competitions.createFromFileTooLarge'), 'error'); return null; }
+  let text;
+  let parsed;
+  try {
+    text = await file.text();
+    parsed = parseDsvCompetition(text);
+  } catch (err) {
+    toast(err instanceof Dsv7ParseError ? err.message : t('competitions.createFromFileParseError'), 'error');
+    return null;
+  }
+  if (parsed.disciplines.length === 0 && !parsed.meta.veranstaltung) {
+    toast(t('competitions.disciplinesEmpty'), 'error');
+    return null;
+  }
+  if (parsed.skipped > 0) toast(t('competitions.disciplinesSkipped', { count: parsed.skipped }));
+  return { prefill: competitionPrefill(parsed, file.name), parsed, text };
 }
 
 // Kurzinfo für die Startlisten-Card: Anzahl geladener Disziplinen,

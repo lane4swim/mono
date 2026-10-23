@@ -196,6 +196,18 @@ DATEIENDE`;
   it('lehnt eine Datei ohne FORMAT-Element ab', () => {
     expect(() => parseDsv7WettkampfergebnisListe('DATEIENDE')).toThrow(Dsv7ParseError);
   });
+
+  it('liest Format 8 mit denselben Ergebnissen wie Format 7', () => {
+    const v7 = parseDsv7WettkampfergebnisListe(OFFICIAL_EXAMPLE);
+    const v8 = parseDsv7WettkampfergebnisListe(OFFICIAL_EXAMPLE.replace('WETTKAMPFERGEBNISLISTE;7;', 'WETTKAMPFERGEBNISLISTE;8;'));
+    expect(v7.formatVersion).toBe('7');
+    expect(v8.formatVersion).toBe('8');
+    expect(v8.results).toEqual(v7.results);
+  });
+
+  it('lehnt nicht unterstützte Formatversionen ab', () => {
+    expect(() => parseDsv7WettkampfergebnisListe('FORMAT:Wettkampfergebnisliste;6;\nDATEIENDE')).toThrow(Dsv7ParseError);
+  });
 });
 
 // Code-Review 2026-09-02, Befund K1: ResultSplitSchema.distanceM
