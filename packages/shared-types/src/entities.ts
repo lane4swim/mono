@@ -141,6 +141,29 @@ export const CourseSchema = z.enum(['LCM', 'SCM']);
 // ST/WE/GB/X), gender = Geschlecht (M/W/X/D). `event` ist das daraus
 // abgeleitete Disziplin-Label (z. B. "100 Freistil", "4x50 Lagen"), null,
 // wenn sich keines bilden ließ (z. B. Sonderform).
+//
+// Eine Pflichtzeit (Element PFLICHTZEIT) der Disziplin: classType =
+// Wertungsklasse-Typ ("JG" = Jahrgang, "AK" = Altersklasse, leer = alle),
+// min/max = MinJG/AK bzw. MaxJG/AK unverändert aus der Datei (leer =
+// offen), gender wie bei der Disziplin, time in Sekunden.
+export const CompetitionRequiredTimeSchema = z.object({
+  classType: z.string().max(5).default(''),
+  min: z.string().max(10).default(''),
+  max: z.string().max(10).default(''),
+  gender: z.string().max(5).default(''),
+  time: z.number().positive(),
+}).strict();
+export type CompetitionRequiredTime = z.infer<typeof CompetitionRequiredTimeSchema>;
+
+// Nachweiszeitraum der Pflichtzeiten (Element NACHWEIS): von/bis als
+// "JJJJ-MM-TT" (null = offen), course = geforderte Bahnlänge, null = jede.
+const isoDay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+export const CompetitionQualifyingWindowSchema = z.object({
+  from: isoDay.nullable(),
+  to: isoDay.nullable(),
+  course: CourseSchema.nullable(),
+}).strict();
+
 export const CompetitionDisciplineSchema = z.object({
   number: z.string().min(1).max(50),
   round: z.string().max(5).default(''),
@@ -151,6 +174,11 @@ export const CompetitionDisciplineSchema = z.object({
   relaySize: z.number().int().positive().default(1),
   gender: z.string().max(5).default(''),
   event: z.string().min(1).max(200).nullable(),
+  // Pflichtzeiten aus der Wettkampfdefinition; der Nachweiszeitraum gilt
+  // für die ganze Veranstaltung, wird aber je Disziplin mitgeführt, damit
+  // alles in der bestehenden JSON-Spalte `disciplines` liegt.
+  requiredTimes: z.array(CompetitionRequiredTimeSchema).max(100).optional(),
+  qualifyingWindow: CompetitionQualifyingWindowSchema.optional(),
 }).strict();
 export type CompetitionDiscipline = z.infer<typeof CompetitionDisciplineSchema>;
 

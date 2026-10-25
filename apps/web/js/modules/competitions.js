@@ -21,6 +21,7 @@ import { resultsImportButton, startResultsImportFromText } from './resultsImport
 import { disciplinesLoadButton, disciplinesSummary, disciplineSelect, competitionFromFileButton } from './competitionDisciplines.js';
 import { LIST_RESULTS } from '../resultsImport/dsv7DefinitionParser.js';
 import { defaultSelectionDeadline, validateDeadlines } from './competitionDeadlines.js';
+import { evaluateRequiredTime, requiredTimeLight, hasRequiredTimes } from './requiredTimes.js';
 import { getCurrentUser } from '../state.js';
 import { teamFilterChips, loadTeamSelection, saveTeamSelection, matchesTeams, competitionGroupIds, athleteGroupMap } from '../teamFilter.js';
 
@@ -201,6 +202,8 @@ async function renderDetail(container, compId) {
     const liveGroups = buildLiveGroups(compEntries);
     const liveIndexByKey = new Map(liveGroups.map((g, i) => [`${g.eventNumber}__${g.heat}`, i]));
 
+    // Pflichtzeiten-Ampel nur, wenn die Wettkampfdefinition welche enthält.
+    const showRequired = hasRequiredTimes(comp);
     const groups = groupByHeat(compEntries);
     const heatKeys = Object.keys(groups).sort((a, b) => a === '__none__' ? 1 : b === '__none__' ? -1 : Number(a) - Number(b));
     heatKeys.forEach(key => {
@@ -208,12 +211,12 @@ async function renderDetail(container, compId) {
       const table = el('table');
       table.appendChild(el('thead', {}, el('tr', {}, [
         el('th', {}, t('competitions.colLane')), el('th', {}, t('competitions.colNumber')), el('th', {}, t('competitions.colAthlete')), el('th', {}, t('competitions.colEvent')),
-        el('th', {}, t('competitions.colSeed')), el('th', {}, t('competitions.colResultTime')), el('th', {}, t('competitions.placeHeader')), el('th', {}, ''),
+        el('th', {}, t('competitions.colSeed')), showRequired ? el('th', {}, t('competitions.colRequiredTime')) : null, el('th', {}, t('competitions.colResultTime')), el('th', {}, t('competitions.placeHeader')), el('th', {}, ''),
       ])));
       const tbody = el('tbody');
       groups[key].sort((a, b) => (a.lane ?? 99) - (b.lane ?? 99)).forEach(entry => {
         const liveIndex = liveIndexByKey.get(`${entry.eventNumber}__${entry.heat}`);
-        appendEntryRows(tbody, entry, comp, athletes, athleteById, results, resultIndex, refreshDetail, liveIndex);
+        appendEntryRows(tbody, entry, comp, athletes, athleteById, results, resultIndex, refreshDetail, liveIndex, showRequired);
       });
       table.appendChild(tbody);
       startListCard.appendChild(el('div', { class: 'table-wrap mb-8' }, table));
@@ -248,8 +251,9 @@ function groupByHeat(entries) {
 // `athletes` (das volle Array) wird weiterhin durchgereicht, weil die
 // Modale unten (openEntryModal/openItemModal) eine Auswahlliste über ALLE
 // Athlet:innen brauchen; `athleteById`/`resultIndex` bedienen nur die
-// Zuordnung dieser einen Zeile (siehe renderDetail oben).
-function appendEntryRows(tbody, entry, comp, athletes, athleteById, results, resultIndex, onChanged, liveIndex) {
+// Zuordnung dieser einen Zeile (siehe renderDetail oben). `showRequired`
+// ergänzt die Spalte mit der Pflichtzeiten-Ampel (requiredTimes.js).
+function appendEntryRows(tbody, entry, comp, athletes, athleteById, results, resultIndex, onChanged, liveIndex, showRequired = false) {
   const athlete = athleteById.get(entry.athleteId);
   const existingResult = findResultForEntry(resultIndex, entry);
   let recordedLaps = existingResult?.laps ? [...existingResult.laps] : [];
@@ -281,7 +285,7 @@ function appendEntryRows(tbody, entry, comp, athletes, athleteById, results, res
   });
 
   const detailRow = el('tr', { hidden: true });
-  const detailTd = el('td', { colspan: '8' });
+  const detailTd = el('td', { colspan: showRequired ? '9' : '8' });
   detailRow.appendChild(detailTd);
   buildStopwatchPanel(detailTd, {
     initialLaps: recordedLaps,
@@ -310,6 +314,7 @@ function appendEntryRows(tbody, entry, comp, athletes, athleteById, results, res
     el('td', {}, fullName(athlete)),
     el('td', {}, trCode(entry.event, 'events')),
     el('td', { class: 'data' }, entry.seedTime ? secToTime(entry.seedTime) : '—'),
+    showRequired ? el('td', {}, requiredTimeLight(evaluateRequiredTime({ comp, entry, athlete, results }))) : null,
     el('td', {}, [timeInput, ' ', saveBtn, existingResult?.isPB ? ' ' : null, existingResult?.isPB ? badge('PB', 'pb') : null, recordedLaps.length > 0 ? ' ' : null, recordedLaps.length > 0 ? badge(t('competitions.stopwatchLapCount', { count: recordedLaps.length }), 'neutral') : null]),
     el('td', {}, placeInput),
     el('td', {}, [
