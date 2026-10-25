@@ -12,18 +12,10 @@
 import type { FastifyReply } from 'fastify';
 import type { ZodType } from 'zod';
 
-// `ZodType<T, any, any>` statt `ZodType<T>` (== `ZodType<T, ZodTypeDef, T>`):
-// ein Schema mit einem `.default(...)`-Feld hat einen abweichenden
-// Input-Typ (das Feld optional) und Output-Typ (das Feld immer gesetzt).
-// Mit `ZodType<T>` bindet TypeScript `T` an BEIDE Positionen gleichzeitig
-// und leitet daraus die Vereinigung aus Input- und Output-Typ ab (z. B.
-// `note: string | undefined` statt `note: string`) — der Rückgabewert
-// erschien dadurch optional, obwohl `.safeParse()` zur Laufzeit den
-// Default längst angewendet hat. Das dritte Typargument fixiert die
-// Input-Position auf `any`, sodass ausschließlich die Output-Position
-// (die tatsächliche Form von `parsed.data`) die Inferenz von `T` bestimmt.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- siehe Kommentar oben
-export function parseInput<T>(schema: ZodType<T, any, any>, data: unknown, reply: FastifyReply): T | null {
+// `ZodType<T>` bindet `T` nur an den Output-Typ (die tatsächliche Form von
+// `parsed.data`, mit angewendeten `.default(...)`-Werten); der Input-Typ ist
+// seit zod 4 standardmäßig `unknown` und beeinflusst die Inferenz nicht.
+export function parseInput<T>(schema: ZodType<T>, data: unknown, reply: FastifyReply): T | null {
   const parsed = schema.safeParse(data);
   if (parsed.success) return parsed.data;
   reply.code(400).send({ error: 'validation_failed', issues: parsed.error.issues });

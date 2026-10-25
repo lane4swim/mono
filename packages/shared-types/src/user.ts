@@ -81,14 +81,14 @@ export type Locale = z.infer<typeof LocaleSchema>;
 export const NormalizedEmailSchema = z.string().trim().toLowerCase().email();
 
 export const UserSchema = z.object({
-  id: z.string().uuid(),
+  id: z.string().guid(),
   // null nur, wenn roles === ['superadmin'] — jede andere Rolle gehört
   // genau einem Verein an.
-  clubId: z.string().uuid().nullable(),
+  clubId: z.string().guid().nullable(),
   name: z.string().min(1),
   email: z.string().email(),
   roles: UserRolesSchema,
-  athleteId: z.string().uuid().nullable(),
+  athleteId: z.string().guid().nullable(),
   locale: LocaleSchema,
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),

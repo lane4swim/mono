@@ -36,15 +36,15 @@ export type RefereeAssignmentStatus = z.infer<typeof RefereeAssignmentStatusSche
 
 export const RefereeAssignmentSchema = z
   .object({
-    id: z.string().uuid(),
-    userId: z.string().uuid(),
+    id: z.string().guid(),
+    userId: z.string().guid(),
     // Freitext statt Pflicht-Verknüpfung mit einem Competition-Datensatz
     // (Plan, Abschnitt 5.1) — Kampfrichter:innen amtieren häufig bei
     // Wettkämpfen anderer, ggf. vereinsfremder Ausrichter.
     competitionName: z.string().min(1).max(200),
     competitionPlace: z.string().max(300).default(''),
     // Optionaler Verweis auf einen vereinseigenen Wettkampf-Datensatz.
-    competitionId: z.string().uuid().nullable(),
+    competitionId: z.string().guid().nullable(),
     date: isoDate,
     function: RefereeFunctionSchema,
     note: z.string().max(500).default(''),
@@ -52,7 +52,7 @@ export const RefereeAssignmentSchema = z
     // Kampfrichter:in selbst angelegt/zuletzt geändert wurde — reines
     // Audit-Feld für die Anzeige ("von {name} erfasst"), siehe Plan
     // Abschnitt 5.5.
-    createdByAdminId: z.string().uuid().nullable(),
+    createdByAdminId: z.string().guid().nullable(),
     status: RefereeAssignmentStatusSchema,
     // Optionaler Kommentar zur Rückmeldung (z. B. Grund einer Absage).
     responseNote: z.string().max(500).default(''),
@@ -67,7 +67,7 @@ export const CreateRefereeAssignmentRequestSchema = z
   .object({
     competitionName: z.string().min(1).max(200),
     competitionPlace: z.string().max(300).default(''),
-    competitionId: z.string().uuid().nullable().optional(),
+    competitionId: z.string().guid().nullable().optional(),
     date: isoDate,
     function: RefereeFunctionSchema,
     note: z.string().max(500).default(''),
@@ -81,7 +81,7 @@ export const UpdateRefereeAssignmentRequestSchema = z
   .object({
     competitionName: z.string().min(1).max(200).optional(),
     competitionPlace: z.string().max(300).optional(),
-    competitionId: z.string().uuid().nullable().optional(),
+    competitionId: z.string().guid().nullable().optional(),
     date: isoDate.optional(),
     function: RefereeFunctionSchema.optional(),
     note: z.string().max(500).optional(),

@@ -73,7 +73,7 @@ export const CommentSchema = z.object({
   // jeden NEUEN Kommentar `authorId === request.user.sub` und lässt einen
   // Kommentar ohne `authorId` ausschließlich dann durch, wenn er
   // unverändert aus dem bereits gespeicherten Datensatz stammt.
-  authorId: z.string().uuid().optional(),
+  authorId: z.string().guid().optional(),
   authorName: z.string().min(1).max(200),
   text: z.string().min(1).max(5000),
   createdAt: isoDate,
@@ -81,15 +81,15 @@ export const CommentSchema = z.object({
 export type Comment = z.infer<typeof CommentSchema>;
 
 export const GroupSchema = z.object({
-  id: z.string().uuid(),
-  clubId: z.string().uuid(),
+  id: z.string().guid(),
+  clubId: z.string().guid(),
   name: z.string().min(1).max(200),
   description: z.string().max(2000).default(''),
   // Zuständige Trainer:innen/Admins (User.id), docs/Plans/
   // vereinsverwaltung-phase3-plan.md Abschnitt 1: rein organisatorisch,
   // keine Berechtigungsprüfung hängt daran (siehe Prisma-Schema-Kommentar
   // zu Group.trainerIds).
-  trainerIds: z.array(z.string().uuid()).max(50).default([]),
+  trainerIds: z.array(z.string().guid()).max(50).default([]),
   createdAt: isoDate,
   updatedAt: isoDate,
 }).strict();
@@ -105,13 +105,13 @@ export const AthleteAccountModeSchema = z.enum(['managed', 'invitable']);
 export type AthleteAccountMode = z.infer<typeof AthleteAccountModeSchema>;
 
 export const AthleteSchema = z.object({
-  id: z.string().uuid(),
-  clubId: z.string().uuid(),
+  id: z.string().guid(),
+  clubId: z.string().guid(),
   firstName: z.string().min(1).max(200),
   lastName: z.string().min(1).max(200),
   birthdate: nullableIsoDate,
   gender: AthleteGenderSchema,
-  groupId: z.string().uuid().nullable(),
+  groupId: z.string().guid().nullable(),
   joinDate: nullableIsoDate,
   active: z.boolean(),
   notes: z.string().max(10000).default(''),
@@ -183,8 +183,8 @@ export const CompetitionDisciplineSchema = z.object({
 export type CompetitionDiscipline = z.infer<typeof CompetitionDisciplineSchema>;
 
 export const CompetitionSchema = z.object({
-  id: z.string().uuid(),
-  clubId: z.string().uuid(),
+  id: z.string().guid(),
+  clubId: z.string().guid(),
   name: z.string().min(1).max(200),
   date: isoDate,
   location: z.string().max(300).default(''),
@@ -212,10 +212,10 @@ export const CompetitionSchema = z.object({
 export type Competition = z.infer<typeof CompetitionSchema>;
 
 export const StartlistEntrySchema = z.object({
-  id: z.string().uuid(),
-  clubId: z.string().uuid(),
-  competitionId: z.string().uuid(),
-  athleteId: z.string().uuid(),
+  id: z.string().guid(),
+  clubId: z.string().guid(),
+  competitionId: z.string().guid(),
+  athleteId: z.string().guid(),
   event: z.string().min(1).max(200),
   eventNumber: z.string().max(50).default(''),
   heat: z.number().int().positive().nullable(),
@@ -245,16 +245,16 @@ export const ResultSplitSchema = z.object({
 export type ResultSplit = z.infer<typeof ResultSplitSchema>;
 
 export const ResultSchema = z.object({
-  id: z.string().uuid(),
-  clubId: z.string().uuid(),
-  athleteId: z.string().uuid(),
+  id: z.string().guid(),
+  clubId: z.string().guid(),
+  athleteId: z.string().guid(),
   event: z.string().min(1).max(200),
   // Bei status !== "OK" gibt es keine gewertete Zeit (siehe
   // docs/Plans/dsv7-lenex-import-plan.md Abschnitt 3.4/5).
   time: z.number().positive().nullable(),
   date: isoDate,
   course: CourseSchema,
-  competitionId: z.string().uuid().nullable(),
+  competitionId: z.string().guid().nullable(),
   place: z.number().int().positive().nullable(),
   isPB: z.boolean(),
   // Rundenzeiten der Stoppuhr-Funktion — kumulierte Sekunden je Runde.
@@ -273,8 +273,8 @@ export const ResultSchema = z.object({
 export type Result = z.infer<typeof ResultSchema>;
 
 export const ExerciseSchema = z.object({
-  id: z.string().uuid(),
-  clubId: z.string().uuid(),
+  id: z.string().guid(),
+  clubId: z.string().guid(),
   name: z.string().min(1).max(200),
   category: z.string().min(1).max(100),
   stroke: z.string().max(100).nullable(),
@@ -313,7 +313,7 @@ export const PlainSetSchema = z.object({
   reps: z.number().int().positive(),
   intensity: z.string().max(200),
   restSec: z.number().int().nonnegative(),
-  exerciseId: z.string().uuid().nullable().optional(),
+  exerciseId: z.string().guid().nullable().optional(),
   // Material für GENAU diesen Satz — unabhängig von Exercise.equipment
   // (dem Katalog-Standard einer verknüpften Übung). `.optional()` statt
   // `.default([])`: ein fehlendes Feld (Altbestand vor dieser Änderung)
@@ -362,8 +362,8 @@ export const SetEntrySchema = z.discriminatedUnion('kind', [PlainSetSchema, Repe
 export type SetEntry = z.infer<typeof SetEntrySchema>;
 
 export const TemplateSchema = z.object({
-  id: z.string().uuid(),
-  clubId: z.string().uuid(),
+  id: z.string().guid(),
+  clubId: z.string().guid(),
   name: z.string().min(1).max(200),
   description: z.string().max(5000).default(''),
   tags: z.array(z.string().max(100)).max(50).default([]),
@@ -385,8 +385,8 @@ export type Template = z.infer<typeof TemplateSchema>;
 // Trainingsplan katalogisiert und in mehrere Pläne/Vorlagen eingefügt
 // werden kann.
 export const SectionTemplateSchema = z.object({
-  id: z.string().uuid(),
-  clubId: z.string().uuid(),
+  id: z.string().guid(),
+  clubId: z.string().guid(),
   name: z.string().min(1).max(200),
   description: z.string().max(5000).default(''),
   tags: z.array(z.string().max(100)).max(50).default([]),
@@ -409,11 +409,11 @@ export type PlanDay = z.infer<typeof PlanDaySchema>;
 export const PlanStatusSchema = z.enum(['aktiv', 'archiv']);
 
 export const PlanSchema = z.object({
-  id: z.string().uuid(),
-  clubId: z.string().uuid(),
+  id: z.string().guid(),
+  clubId: z.string().guid(),
   name: z.string().min(1).max(200),
   weekStart: isoDate,
-  groupId: z.string().uuid().nullable(),
+  groupId: z.string().guid().nullable(),
   status: PlanStatusSchema,
   days: z.array(PlanDaySchema).max(60),
   // Kommentare zum gesamten Trainingsplan (nicht zu einem einzelnen Satz
@@ -430,7 +430,7 @@ export type Plan = z.infer<typeof PlanSchema>;
 // Plan-Datensätze (Snapshot, keine dauerhafte Beziehung).
 export const CycleDaySchema = z.object({
   dayOfWeek: z.number().int().min(0).max(6), // 0 = Montag … 6 = Sonntag
-  templateId: z.string().uuid(),
+  templateId: z.string().guid(),
 }).strict();
 export type CycleDay = z.infer<typeof CycleDaySchema>;
 
@@ -442,8 +442,8 @@ export const CycleWeekSchema = z.object({
 export type CycleWeek = z.infer<typeof CycleWeekSchema>;
 
 export const PlanCycleSchema = z.object({
-  id: z.string().uuid(),
-  clubId: z.string().uuid(),
+  id: z.string().guid(),
+  clubId: z.string().guid(),
   name: z.string().min(1).max(200),
   description: z.string().max(2000).default(''),
   weeks: z.array(CycleWeekSchema).max(52), // Obergrenze analog Plan.days (max 60)
@@ -453,7 +453,7 @@ export const PlanCycleSchema = z.object({
 export type PlanCycle = z.infer<typeof PlanCycleSchema>;
 
 export const AttendanceRecordSchema = z.object({
-  athleteId: z.string().uuid(),
+  athleteId: z.string().guid(),
   present: z.boolean(),
   rpe: z.number().int().min(1).max(10).nullable(),
   note: z.string().max(2000).default(''),
@@ -461,16 +461,16 @@ export const AttendanceRecordSchema = z.object({
 export type AttendanceRecord = z.infer<typeof AttendanceRecordSchema>;
 
 export const TrainingSessionSchema = z.object({
-  id: z.string().uuid(),
-  clubId: z.string().uuid(),
+  id: z.string().guid(),
+  clubId: z.string().guid(),
   date: isoDate,
-  groupId: z.string().uuid().nullable(),
-  planId: z.string().uuid().nullable(),
+  groupId: z.string().guid().nullable(),
+  planId: z.string().guid().nullable(),
   trainerNote: z.string().max(5000).default(''),
   attendance: z.array(AttendanceRecordSchema).max(500),
   // Anwesende Trainer:innen (User.id), pro Einheit abgehakt. Default []
   // hält Einheiten aus der Zeit vor diesem Feld gültig.
-  coachIds: z.array(z.string().uuid()).max(50).default([]),
+  coachIds: z.array(z.string().guid()).max(50).default([]),
   // Manuelle Distanzangabe (Meter). null = aus dem verknüpften Plan-Tag
   // berechnen (Standardfall) — siehe docs/Plans/trainingsplanung-phase1-plan.md.
   actualDistance: z.number().int().nonnegative().nullable().default(null),
@@ -482,9 +482,9 @@ export type TrainingSession = z.infer<typeof TrainingSessionSchema>;
 export const ActionItemStatusSchema = z.enum(['offen', 'progress', 'done']);
 
 export const ActionItemSchema = z.object({
-  id: z.string().uuid(),
-  clubId: z.string().uuid(),
-  athleteId: z.string().uuid(),
+  id: z.string().guid(),
+  clubId: z.string().guid(),
+  athleteId: z.string().guid(),
   title: z.string().min(1).max(300),
   description: z.string().max(5000).default(''),
   category: z.string().min(1).max(100),
@@ -495,7 +495,7 @@ export const ActionItemSchema = z.object({
   // bleibt aber frei umzuweisen. Nullable + SetNull (siehe schema.prisma),
   // damit ein gelöschtes Trainer:innen-Konto das Handlungsfeld nicht
   // blockiert.
-  assignedTrainerId: z.string().uuid().nullable(),
+  assignedTrainerId: z.string().guid().nullable(),
   createdDate: isoDate,
   dueDate: nullableIsoDate,
   createdAt: isoDate,
@@ -508,11 +508,11 @@ export type ActionItem = z.infer<typeof ActionItemSchema>;
 // Autor:innen-Konto reißt die Ankündigung nicht mit (siehe schema.prisma:
 // Announcement.authorId, onDelete: SetNull).
 export const AnnouncementSchema = z.object({
-  id: z.string().uuid(),
-  clubId: z.string().uuid(),
+  id: z.string().guid(),
+  clubId: z.string().guid(),
   // null = an den gesamten Verein gerichtet; gesetzt = nur an diese Gruppe.
-  groupId: z.string().uuid().nullable(),
-  authorId: z.string().uuid().nullable(),
+  groupId: z.string().guid().nullable(),
+  authorId: z.string().guid().nullable(),
   title: z.string().min(1).max(200),
   body: z.string().min(1).max(5000),
   createdAt: isoDate,
@@ -533,8 +533,8 @@ export type CalendarEntryKind = z.infer<typeof CalendarEntryKindSchema>;
 const timeOfDay = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
 
 export const CalendarEntrySchema = z.object({
-  id: z.string().uuid(),
-  clubId: z.string().uuid(),
+  id: z.string().guid(),
+  clubId: z.string().guid(),
   kind: CalendarEntryKindSchema,
   title: z.string().min(1).max(200),
   // Beide inklusive; bei trainingSlot der Gültigkeitszeitraum der Regel.
@@ -542,7 +542,7 @@ export const CalendarEntrySchema = z.object({
   endDate: isoDate,
   // null = ganzer Verein. Ferien/Feiertage/Schließungen gelten immer
   // vereinsweit (siehe superRefine unten).
-  groupId: z.string().uuid().nullable().default(null),
+  groupId: z.string().guid().nullable().default(null),
   // Nur trainingSlot: Wochentage (0 = Montag … 6 = Sonntag, wie
   // CycleDaySchema) und Uhrzeit.
   weekdays: z.array(z.number().int().min(0).max(6)).max(7).default([]),
@@ -558,13 +558,13 @@ export const CalendarEntrySchema = z.object({
   updatedAt: isoDate,
 }).strict().superRefine((entry, ctx) => {
   if (entry.endDate.slice(0, 10) < entry.startDate.slice(0, 10)) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['endDate'], message: 'endDate liegt vor startDate' });
+    ctx.addIssue({ code: 'custom', path: ['endDate'], message: 'endDate liegt vor startDate' });
   }
   if (['publicHoliday', 'schoolHoliday', 'poolClosure'].includes(entry.kind) && entry.groupId !== null) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['groupId'], message: 'gilt immer vereinsweit' });
+    ctx.addIssue({ code: 'custom', path: ['groupId'], message: 'gilt immer vereinsweit' });
   }
   if (entry.kind === 'trainingSlot' && entry.weekdays.length === 0) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['weekdays'], message: 'mindestens ein Wochentag' });
+    ctx.addIssue({ code: 'custom', path: ['weekdays'], message: 'mindestens ein Wochentag' });
   }
 });
 export type CalendarEntry = z.infer<typeof CalendarEntrySchema>;
