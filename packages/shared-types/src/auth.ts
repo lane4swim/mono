@@ -167,10 +167,10 @@ export type ChangeEmailRequest = z.infer<typeof ChangeEmailRequestSchema>;
 // docs/Plans/kampfrichter-modul-plan.md, Abschnitt 1.4: "roles" statt "role" —
 // ein Konto kann mehrere Rollen gleichzeitig haben.
 export const AccessTokenClaimsSchema = z.object({
-  sub: z.string().uuid(),
+  sub: z.string().guid(),
   roles: UserRolesSchema,
-  clubId: z.string().uuid().nullable(),
-  athleteId: z.string().uuid().nullable(),
+  clubId: z.string().guid().nullable(),
+  athleteId: z.string().guid().nullable(),
 });
 export type AccessTokenClaims = z.infer<typeof AccessTokenClaimsSchema>;
 
@@ -184,21 +184,21 @@ export const MyDataExportSchema = z.object({
   exportedAt: z.string().datetime(),
   format: z.literal('lane1-user-data-export-v1'),
   user: PublicUserSchema,
-  athlete: z.record(z.unknown()).nullable(),
-  results: z.array(z.record(z.unknown())),
-  entries: z.array(z.record(z.unknown())),
-  actionItems: z.array(z.record(z.unknown())),
-  attendance: z.array(z.record(z.unknown())),
+  athlete: z.record(z.string(), z.unknown()).nullable(),
+  results: z.array(z.record(z.string(), z.unknown())),
+  entries: z.array(z.record(z.string(), z.unknown())),
+  actionItems: z.array(z.record(z.string(), z.unknown())),
+  attendance: z.array(z.record(z.string(), z.unknown())),
   // An userId gehängt, nicht athleteId — gilt für jede Person mit Konto
   // (docs/Plans/nutzer-qualifikationen-plan.md, Abschnitt 6). Nachträglich hier
   // ergänzt (dieses Schema war bislang unabhängig von der tatsächlichen
   // Export-Antwort auseinandergelaufen, siehe profile.repository.ts:
   // PersonalDataExport, das dieses Feld schon lange liefert).
-  qualifications: z.array(z.record(z.unknown())),
+  qualifications: z.array(z.record(z.string(), z.unknown())),
   // docs/Plans/kampfrichter-modul-plan.md, Abschnitt 5.7 — ebenfalls an userId
   // gehängt: gilt für jede Person mit Konto und der Rolle "referee",
   // unabhängig von einer Athletenverknüpfung.
-  refereeAssignments: z.array(z.record(z.unknown())),
+  refereeAssignments: z.array(z.record(z.string(), z.unknown())),
 });
 export type MyDataExport = z.infer<typeof MyDataExportSchema>;
 
@@ -206,8 +206,8 @@ export type MyDataExport = z.infer<typeof MyDataExportSchema>;
 // ein Zustand "purged" wäre unerreichbar (siehe schema.prisma:
 // DataDeletionRequest).
 export const DataDeletionRequestSchema = z.object({
-  id: z.string().uuid(),
-  userId: z.string().uuid(),
+  id: z.string().guid(),
+  userId: z.string().guid(),
   requestedAt: z.string().datetime(),
   purgeAfter: z.string().datetime(),
 });

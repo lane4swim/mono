@@ -10,7 +10,7 @@ import { MODULE_KEYS, ModuleKeySchema } from './modules.js';
 import { NormalizedEmailSchema } from './user.js';
 
 export const ClubSchema = z.object({
-  id: z.string().uuid(),
+  id: z.string().guid(),
   name: z.string().min(1),
   // Modul-Pakete, die dieser Verein gebucht hat — siehe modules.ts:
   // MODULE_PACKAGES. Steuert Frontend-Sichtbarkeit und Sync-Zugriff.
@@ -96,7 +96,7 @@ export type UpdateClubIdentityRequest = z.infer<typeof UpdateClubIdentityRequest
 // Superadmin-Oberfläche) mitgeschickt — Adresse/Telefon/DPO-Kontakt sind
 // sensibler als die übrigen, bereits breiter exponierten Club-Felder.
 export const ClubLegalInfoSchema = z.object({
-  clubId: z.string().uuid(),
+  clubId: z.string().guid(),
   // Nur lesend über diesen Endpunkt — der Vereinsname wird weiterhin über
   // ClubSchema.name / PATCH /api/clubs/:id gepflegt (Superadmin), hier
   // ausschließlich für die Diensteanbieter-Angabe im Impressum mitgeliefert
@@ -169,13 +169,13 @@ export const CreateInvitationRequestSchema = z.object({
   // einladen, wird clubId serverseitig ignoriert und stattdessen der eigene
   // Verein verwendet (siehe invitations.service.ts) — ein Admin kann nicht
   // in einen fremden Verein einladen.
-  clubId: z.string().uuid().optional(),
+  clubId: z.string().guid().optional(),
   // Bei role === 'athlete': verknüpft die Einladung mit einem bereits
   // angelegten Athletenprofil (das eigene Konto der Athletin/des Athleten).
   // Bei role === 'parent': verknüpft die Einladung mit dem ERSTEN Kind
   // (siehe Kommentar bei InvitationRoleSchema oben) — acceptInvitation()
   // legt daraus automatisch die erste ParentLink-Zeile an.
-  athleteId: z.string().uuid().nullable().optional(),
+  athleteId: z.string().guid().nullable().optional(),
 });
 export type CreateInvitationRequest = z.infer<typeof CreateInvitationRequestSchema>;
 
@@ -183,11 +183,11 @@ export type CreateInvitationRequest = z.infer<typeof CreateInvitationRequestSche
 // Klartext-Token. Danach ist nur noch der Hash gespeichert; das Token lässt
 // sich nicht erneut abrufen (nur widerrufen und neu ausstellen).
 export const IssuedInvitationSchema = z.object({
-  id: z.string().uuid(),
+  id: z.string().guid(),
   token: z.string(),
   email: z.string().email(),
   role: InvitationRoleSchema,
-  clubId: z.string().uuid().nullable(),
+  clubId: z.string().guid().nullable(),
   expiresAt: z.string().datetime(),
 });
 export type IssuedInvitation = z.infer<typeof IssuedInvitationSchema>;
@@ -200,11 +200,11 @@ export type CreateClubResponse = z.infer<typeof CreateClubResponseSchema>;
 
 // Für Auflistungen (Verwaltungsansicht) — bewusst ohne Token.
 export const InvitationSummarySchema = z.object({
-  id: z.string().uuid(),
+  id: z.string().guid(),
   email: z.string().email(),
   role: InvitationRoleSchema,
-  clubId: z.string().uuid().nullable(),
-  invitedById: z.string().uuid().nullable(),
+  clubId: z.string().guid().nullable(),
+  invitedById: z.string().guid().nullable(),
   expiresAt: z.string().datetime(),
   usedAt: z.string().datetime().nullable(),
   revokedAt: z.string().datetime().nullable(),

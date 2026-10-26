@@ -78,8 +78,8 @@ function chronologyIssue() {
 
 export const UserQualificationSchema = z
   .object({
-    id: z.string().uuid(),
-    userId: z.string().uuid(),
+    id: z.string().guid(),
+    userId: z.string().guid(),
     type: QualificationTypeSchema,
     note: z.string().max(500).default(''),
     acquiredOn: isoDate,

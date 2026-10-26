@@ -164,3 +164,43 @@ describe('parseDsvCompetition', () => {
     expect(() => parseDsv7Wettkampfdefinitionsliste('FORMAT:Wettkampfergebnisliste;8;\n')).toThrow(Dsv7ParseError);
   });
 });
+
+describe('Pflichtzeiten (PFLICHTZEIT/NACHWEIS)', () => {
+  const WITH_REQUIRED = `
+FORMAT:Wettkampfdefinitionsliste;8;
+VERANSTALTUNG:Bezirksmeisterschaften;Duisburg;50;AUTOMATISCH;
+NACHWEIS:01.01.2026;31.10.2026;AL;
+ABSCHNITT:1;14.11.2026;09:00;09:30;10:00;;
+WETTKAMPF:1;E;1;;100;F;GL;W;SW;;;
+WETTKAMPF:2;E;1;;50;R;GL;M;SW;;;
+PFLICHTZEIT:1;E;JG;2012;2013;00:01:15,50;W;
+PFLICHTZEIT:1;E;JG;2010;2011;00:01:10,00;W;
+PFLICHTZEIT:1;V;JG;2010;2011;00:01:10,00;W;
+PFLICHTZEIT:2;E;AK;20;;00:00:40,00;M;
+PFLICHTZEIT:2;E;XX;20;;00:00:40,00;M;
+PFLICHTZEIT:2;E;AK;20;;kaputt;M;
+DATEIENDE
+`;
+  const parsed = parseDsvCompetition(WITH_REQUIRED);
+
+  it('ordnet Pflichtzeiten über Nummer und Wettkampfart zu und verwirft ungültige', () => {
+    expect(parsed.disciplines[0].requiredTimes).toEqual([
+      { classType: 'JG', min: '2012', max: '2013', gender: 'W', time: 75.5 },
+      { classType: 'JG', min: '2010', max: '2011', gender: 'W', time: 70 },
+    ]);
+    expect(parsed.disciplines[1].requiredTimes).toEqual([{ classType: 'AK', min: '20', max: '', gender: 'M', time: 40 }]);
+    expect(parsed.requiredTimesCount).toBe(3);
+  });
+
+  it('übernimmt den Nachweiszeitraum, "AL" = jede Bahnlänge', () => {
+    expect(parsed.disciplines[0].qualifyingWindow).toEqual({ from: '2026-01-01', to: '2026-10-31', course: null });
+  });
+
+  it('bleibt schema-konform', () => {
+    for (const d of parsed.disciplines) expect(CompetitionDisciplineSchema.safeParse(d).success).toBe(true);
+  });
+
+  it('lässt Disziplinen ohne Pflichtzeit unverändert', () => {
+    expect(parseDsv7Wettkampfdefinitionsliste(DEFINITION).disciplines[0]).not.toHaveProperty('requiredTimes');
+  });
+});

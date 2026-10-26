@@ -8,25 +8,25 @@ import { z } from 'zod';
 // wenige Einträge begrenzt (Datenminimierung, siehe Plan Abschnitt 3.4).
 export const ParentChildOverviewSchema = z.object({
   athlete: z.object({
-    id: z.string().uuid(),
+    id: z.string().guid(),
     firstName: z.string(),
     lastName: z.string(),
-    groupId: z.string().uuid().nullable(),
+    groupId: z.string().guid().nullable(),
     groupName: z.string().nullable(),
   }),
   upcomingSessions: z.array(z.object({
-    id: z.string().uuid(),
+    id: z.string().guid(),
     date: z.string().datetime(),
     groupName: z.string().nullable(),
   })),
   upcomingCompetitions: z.array(z.object({
-    competitionId: z.string().uuid(),
+    competitionId: z.string().guid(),
     competitionName: z.string(),
     date: z.string().datetime(),
     event: z.string(),
   })),
   recentResults: z.array(z.object({
-    id: z.string().uuid(),
+    id: z.string().guid(),
     event: z.string(),
     time: z.number().nullable(),
     date: z.string().datetime(),
@@ -43,7 +43,7 @@ export type ParentOverviewResponse = z.infer<typeof ParentOverviewResponseSchema
 
 // Admin-Verwaltung der Eltern-Kind-Verknüpfungen (Plan Abschnitt 3.5).
 export const ParentLinkSchema = z.object({
-  athleteId: z.string().uuid(),
+  athleteId: z.string().guid(),
   firstName: z.string(),
   lastName: z.string(),
 });
@@ -55,7 +55,7 @@ export const ParentLinksResponseSchema = z.object({
 export type ParentLinksResponse = z.infer<typeof ParentLinksResponseSchema>;
 
 export const CreateParentLinkRequestSchema = z.object({
-  athleteId: z.string().uuid(),
+  athleteId: z.string().guid(),
 });
 export type CreateParentLinkRequest = z.infer<typeof CreateParentLinkRequestSchema>;
 
@@ -84,19 +84,19 @@ export type ParentCalendarQuery = z.infer<typeof ParentCalendarQuerySchema>;
 
 export const ParentCalendarChildSchema = z.object({
   athlete: z.object({
-    id: z.string().uuid(),
+    id: z.string().guid(),
     firstName: z.string(),
     lastName: z.string(),
-    groupId: z.string().uuid().nullable(),
+    groupId: z.string().guid().nullable(),
   }),
-  groups: z.array(z.object({ id: z.string().uuid(), name: z.string() })),
+  groups: z.array(z.object({ id: z.string().guid(), name: z.string() })),
   calendarEntries: z.array(z.object({
-    id: z.string().uuid(),
+    id: z.string().guid(),
     kind: z.string(),
     title: z.string(),
     startDate: isoDate,
     endDate: isoDate,
-    groupId: z.string().uuid().nullable(),
+    groupId: z.string().guid().nullable(),
     weekdays: z.array(z.number().int()),
     startTime: z.string().nullable(),
     endTime: z.string().nullable(),
@@ -104,19 +104,19 @@ export const ParentCalendarChildSchema = z.object({
     location: z.string(),
   })),
   plans: z.array(z.object({
-    id: z.string().uuid(),
+    id: z.string().guid(),
     name: z.string(),
-    groupId: z.string().uuid().nullable(),
+    groupId: z.string().guid().nullable(),
     days: z.array(z.object({ date: isoDate })),
   })),
   sessions: z.array(z.object({
-    id: z.string().uuid(),
+    id: z.string().guid(),
     date: isoDate,
-    groupId: z.string().uuid().nullable(),
-    attendance: z.array(z.object({ athleteId: z.string().uuid(), present: z.boolean() })),
+    groupId: z.string().guid().nullable(),
+    attendance: z.array(z.object({ athleteId: z.string().guid(), present: z.boolean() })),
   })),
   competitions: z.array(z.object({
-    id: z.string().uuid(),
+    id: z.string().guid(),
     name: z.string(),
     date: isoDate,
     location: z.string(),
@@ -124,7 +124,7 @@ export const ParentCalendarChildSchema = z.object({
     entryDeadline: isoDate.nullable(),
     selectionDeadline: isoDate.nullable(),
   })),
-  entries: z.array(z.object({ id: z.string().uuid(), competitionId: z.string().uuid(), athleteId: z.string().uuid() })),
+  entries: z.array(z.object({ id: z.string().guid(), competitionId: z.string().guid(), athleteId: z.string().guid() })),
 });
 export type ParentCalendarChild = z.infer<typeof ParentCalendarChildSchema>;
 

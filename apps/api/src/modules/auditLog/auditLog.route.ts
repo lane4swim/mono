@@ -14,7 +14,7 @@ import { parseInput } from '../../plugins/parseInput.js';
 // negatives `limit` hätte Prisma als "von hinten holen" gedeutet. Die
 // Obergrenze (200) setzt weiterhin auditLogService.list().
 const AuditLogQuerySchema = z.object({
-  clubId: z.string().uuid().optional(),
+  clubId: z.string().guid().optional(),
   before: z.string().datetime().optional(),
   limit: z.coerce.number().int().positive().optional(),
 });

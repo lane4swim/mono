@@ -30,9 +30,9 @@ export const SyncEventSchema = z.object({
   id: z.string().min(1), // client-generierte UUID, dient als Idempotenz-Schlüssel
   store: SyncStoreSchema,
   // Alle synchronisierten Entitäten tragen UUIDs als id (siehe entities.ts).
-  entityId: z.string().uuid(),
+  entityId: z.string().guid(),
   action: SyncActionSchema,
-  payload: z.record(z.unknown()).nullable(), // bei action === 'delete' ist payload null
+  payload: z.record(z.string(), z.unknown()).nullable(), // bei action === 'delete' ist payload null
   clientUpdatedAt: z.string().datetime(),
 });
 export type SyncEvent = z.infer<typeof SyncEventSchema>;
@@ -59,7 +59,7 @@ export const SyncEventResultStatusSchema = z.enum(['applied', 'conflict', 'error
 export const SyncEventResultSchema = z.object({
   eventId: z.string().min(1),
   status: SyncEventResultStatusSchema,
-  serverVersion: z.record(z.unknown()).nullable().optional(),
+  serverVersion: z.record(z.string(), z.unknown()).nullable().optional(),
   // `message` ist IMMER Deutsch (siehe sync.service.ts) — reine
   // Diagnose-/Log-Information, keine für Endnutzer:innen lokalisierte
   // Anzeige. `code` ist der dafür vorgesehene, sprachunabhängige
@@ -100,7 +100,7 @@ export const SyncChangeSchema = z.object({
   store: SyncStoreSchema,
   entityId: z.string().min(1),
   action: SyncActionSchema,
-  payload: z.record(z.unknown()).nullable(),
+  payload: z.record(z.string(), z.unknown()).nullable(),
   updatedAt: z.string().datetime(),
 });
 export type SyncChange = z.infer<typeof SyncChangeSchema>;

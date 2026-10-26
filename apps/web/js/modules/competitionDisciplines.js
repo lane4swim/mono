@@ -87,6 +87,7 @@ async function loadDefinitionFile(file, comp, onLoaded) {
   const save = async () => {
     await put('competitions', { ...comp, disciplines: parsed.disciplines });
     toast(t('competitions.disciplinesLoaded', { count: parsed.disciplines.length, veranstaltung: parsed.meta.veranstaltung || file.name })
+      + (parsed.requiredTimesCount > 0 ? ' ' + t('competitions.requiredTimesLoaded', { count: parsed.requiredTimesCount }) : '')
       + (parsed.skipped > 0 ? ' ' + t('competitions.disciplinesSkipped', { count: parsed.skipped }) : ''));
     onLoaded?.();
   };

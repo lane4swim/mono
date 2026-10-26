@@ -13,8 +13,16 @@
 // Wettkampfnr;Wettkampfart;Abschnittsnr;AnzahlStarter;Einzelstrecke;
 // Technik;Ausübung;Geschlecht;ZuordnungBestenliste;Qualifikations-
 // Wettkampfnr;QualifikationsWettkampfart;
+//
+// Pflichtzeiten (nur Wettkampfdefinitionsliste):
+// PFLICHTZEIT: Wettkampfnr;Wettkampfart;Wertungsklasse-Typ;MinJG/AK;
+// MaxJG/AK;Pflichtzeit;Geschlecht;
+// NACHWEIS: NachweisVon;NachweisBis;Bahnlänge;
+// Beide Layouts sind aus Format 7 übernommen und sollten wie WETTKAMPF
+// gegen das Original-Dokument von Format 8 geprüft werden.
 import { parseDsv7Line, Dsv7ParseError, checkDsvFormatVersion } from './dsv7Parser.js';
 import { dsv7DisciplineEventLabel } from '../refdata.js';
+import { timeToSec } from '../swimTime.js';
 
 // Grenzen von CompetitionDisciplineSchema/CompetitionSchema.disciplines
 // (packages/shared-types/src/entities.ts) — apps/web kann das Paket ohne
@@ -40,6 +48,10 @@ const STYLES = new Set(['', 'GL', 'BE', 'AR', 'ST', 'WE', 'GB', 'X']);
 // statt die Disziplin zu verwerfen.
 const DSV8_STYLE = /^[A-Z]{1,2}$/;
 const COURSE_BY_LANE_LENGTH = { 25: 'SCM', 50: 'LCM' };
+// Grenzen von CompetitionRequiredTimeSchema (entities.ts), siehe oben.
+const MAX_REQUIRED_TIMES_PER_DISCIPLINE = 100;
+const MAX_CLASS_BOUND_LENGTH = 10;
+const CLASS_TYPES = new Set(['', 'JG', 'AK']);
 const GENDERS = new Set(['', 'M', 'W', 'X', 'D']);
 
 function toInt(value) {
@@ -78,8 +90,13 @@ function parseDsvDate(value) {
 //                    in packages/shared-types/src/entities.ts), in
 //                    Datei-Reihenfolge; doppelte Nummer+Wettkampfart nur
 //                    einmal übernommen.
+//                    Hat ein Wettkampf Pflichtzeiten (PFLICHTZEIT mit
+//                    gleicher Nummer und Wettkampfart), tragen sie
+//                    `requiredTimes` und — falls die Datei ein NACHWEIS-
+//                    Element hat — `qualifyingWindow`.
 //   skipped       — Anzahl verworfener WETTKAMPF-Zeilen (fehlende/zu lange
 //                    Nummer, ungültige Distanz, unbekannter Code).
+//   requiredTimesCount — Anzahl übernommener Pflichtzeiten.
 //
 // Mehr als MAX_DISCIPLINES gültige Wettkämpfe sind ein Fehler statt einer
 // stillen Kürzung — eine abgeschnittene Liste sähe vollständig aus.
@@ -90,6 +107,10 @@ export function parseDsvCompetition(text, { listTypes = [LIST_DEFINITION, LIST_R
   const disciplines = [];
   const seen = new Set();
   let skipped = 0;
+  // "Nr|Wettkampfart" -> Pflichtzeiten; erst nach dem Lesen aller Zeilen
+  // zugeordnet, da die Reihenfolge der Elemente nicht garantiert ist.
+  const requiredTimesByKey = new Map();
+  let qualifyingWindow = null;
 
   for (const rawLine of text.split(/\r?\n/)) {
     const parsed = parseDsv7Line(rawLine);
@@ -123,6 +144,30 @@ export function parseDsvCompetition(text, { listTypes = [LIST_DEFINITION, LIST_R
       }
       case 'MELDESCHLUSS': {
         meta = { ...meta, entryDeadline: parseDsvDate(fields[0]) };
+        break;
+      }
+      case 'NACHWEIS': {
+        const [von, bis, bahnlaenge] = fields;
+        // 25/50 m; leer, "AL" (alle) und alles Übrige: jede Bahnlänge.
+        qualifyingWindow = {
+          from: parseDsvDate(von),
+          to: parseDsvDate(bis),
+          course: COURSE_BY_LANE_LENGTH[toInt(bahnlaenge)] || null,
+        };
+        break;
+      }
+      case 'PFLICHTZEIT': {
+        const [nr, art, typ, minRaw, maxRaw, zeit, geschlecht] = fields;
+        const classType = (typ || '').toUpperCase();
+        const gender = (geschlecht || '').toUpperCase();
+        const time = timeToSec(zeit);
+        const min = (minRaw || '').toUpperCase();
+        const max = (maxRaw || '').toUpperCase();
+        if (!nr || !CLASS_TYPES.has(classType) || !GENDERS.has(gender) || !(time > 0)
+          || min.length > MAX_CLASS_BOUND_LENGTH || max.length > MAX_CLASS_BOUND_LENGTH) break;
+        const key = `${nr}|${(art || '').toUpperCase()}`;
+        if (!requiredTimesByKey.has(key)) requiredTimesByKey.set(key, []);
+        requiredTimesByKey.get(key).push({ classType, min, max, gender, time: Math.round(time * 100) / 100 });
         break;
       }
       case 'WETTKAMPF': {
@@ -159,7 +204,7 @@ export function parseDsvCompetition(text, { listTypes = [LIST_DEFINITION, LIST_R
       }
       default:
         // ERZEUGER, VERANSTALTER, AUSRICHTER, MELDEADRESSE, BANKVERBINDUNG,
-        // BESONDERES, NACHWEIS, KAMPFGERICHT, WERTUNG, PFLICHTZEIT,
+        // BESONDERES, KAMPFGERICHT, WERTUNG,
         // MELDEGELD, VEREIN, PNERGEBNIS & Co., DATEIENDE — hier nicht
         // benötigt (Ergebnisse liest dsv7Parser.js).
         break;
@@ -172,7 +217,15 @@ export function parseDsvCompetition(text, { listTypes = [LIST_DEFINITION, LIST_R
   if (disciplines.length > MAX_DISCIPLINES) {
     throw new Dsv7ParseError(`Diese Datei enthält ${disciplines.length} Wettkämpfe — unterstützt werden höchstens ${MAX_DISCIPLINES} je Wettkampf.`);
   }
-  return { listArt, formatVersion, meta, disciplines, skipped };
+  let requiredTimesCount = 0;
+  for (const d of disciplines) {
+    const requiredTimes = (requiredTimesByKey.get(`${d.number}|${d.round}`) || []).slice(0, MAX_REQUIRED_TIMES_PER_DISCIPLINE);
+    if (requiredTimes.length === 0) continue;
+    d.requiredTimes = requiredTimes;
+    if (qualifyingWindow) d.qualifyingWindow = { ...qualifyingWindow };
+    requiredTimesCount += requiredTimes.length;
+  }
+  return { listArt, formatVersion, meta, disciplines, skipped, requiredTimesCount };
 }
 
 // Nur Wettkampfdefinitionslisten (Format 7 oder 8) — zum Laden der

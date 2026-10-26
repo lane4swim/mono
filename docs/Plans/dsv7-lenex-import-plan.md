@@ -167,6 +167,21 @@ DSV7-/DSV8-Wettkampfdefinitions- oder -ergebnisliste anlegen (Name, Ort,
 Bahnlänge 25/50 m, frühestes Abschnittsdatum, Meldeschluss, Disziplinen);
 bei einer Ergebnisliste folgt direkt der Ergebnisimport.
 
+**Pflichtzeiten.** Beim Laden einer Wettkampfdefinitionsliste werden auch
+`PFLICHTZEIT` (`Wettkampfnr;Wettkampfart;Wertungsklasse-Typ;MinJG/AK;MaxJG/AK;Pflichtzeit;Geschlecht;`)
+und `NACHWEIS` (`NachweisVon;NachweisBis;Bahnlänge;`) gelesen und als
+`requiredTimes`/`qualifyingWindow` an der jeweiligen Disziplin gespeichert
+(keine Migration nötig, liegt in der JSON-Spalte `disciplines`). Die
+Startliste zeigt je Einzelstart eine Ampel (`modules/requiredTimes.js`):
+grün = im Wettkampf erreicht, gelb = nur im Training erreicht, rot = nicht
+erreicht, grau = nicht prüfbar. Die Pflichtzeit wird nach Geschlecht und
+Alter im Wettkampfjahr gewählt (JG = Geburtsjahre; AK numerisch, ab AK 20
+in Fünf-Jahres-Klassen; Buchstaben-AK sind nicht auswertbar). Als
+Nachweis zählen gewertete Zeiten derselben Strecke vor dem Wettkampftag,
+nicht aus diesem Wettkampf, im Nachweiszeitraum und auf der geforderten
+Bahn (ohne NACHWEIS: Bahn des Wettkampfs). Feldlayouts aus Format 7
+übernommen — gegen das Format-8-Dokument prüfen.
+
 ### 1.5 Lenex (zurückgestellt auf spätere Erweiterung)
 
 Lenex ist im Gegensatz zu DSV7 eine **ZIP-Datei mit einer XML-Datei** (`.lef`), mit
