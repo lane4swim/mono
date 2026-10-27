@@ -207,6 +207,15 @@ export function parseDsvCompetition(text, { listTypes = [LIST_DEFINITION, LIST_R
         // BESONDERES, KAMPFGERICHT, WERTUNG,
         // MELDEGELD, VEREIN, PNERGEBNIS & Co., DATEIENDE — hier nicht
         // benötigt (Ergebnisse liest dsv7Parser.js).
+        //
+        // Die Anzahl der Kampfrichter:innen, die ein Verein stellen muss,
+        // gibt es in keinem Element (Format 7 wie 8): KAMPFGERICHT
+        // (Abschnittsnr;Position;Name;Verein) steht nur in der
+        // Ergebnisliste und nennt das tatsächlich eingesetzte Kampfgericht,
+        // ABSCHNITT nur die Uhrzeit der Kampfrichtersitzung; die Vorgabe
+        // steht allenfalls als Freitext in BESONDERES. Sie wird daher von
+        // Hand erfasst (Competition.refereesRequired, siehe
+        // modules/competitionReferees.js).
         break;
     }
   }

@@ -206,6 +206,10 @@ export const CompetitionSchema = z.object({
   // "keine Definition" ist ein leeres Array (Prisma-Json-Spalten nehmen
   // kein schlichtes null an).
   disciplines: z.array(CompetitionDisciplineSchema).max(500).optional(),
+  // Anzahl der Kampfrichter:innen, die der Verein laut Ausschreibung zu
+  // stellen hat. Immer von Hand erfasst — weder DSV7 noch DSV8 haben dafür
+  // ein Element. Wie die Fristen OHNE .default(); null = keine Vorgabe.
+  refereesRequired: z.number().int().min(0).max(99).nullable().optional(),
   createdAt: isoDate,
   updatedAt: isoDate,
 }).strict();

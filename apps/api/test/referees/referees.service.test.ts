@@ -296,3 +296,25 @@ describe('listUpcomingForClub()', () => {
     await expect(service.listUpcomingForClub({ id: referee.id, roles: ['referee'], clubId: referee.clubId })).rejects.toThrow(RefereeAssignmentForbiddenError);
   });
 });
+
+describe('listForCompetition()', () => {
+  it('liefert die aktiven Einsätze zu einem eigenen Wettkampf; nur für admin', async () => {
+    const { admin, referee } = fixture;
+    const adminCtx = { id: admin.id, roles: ['admin'], clubId: admin.clubId };
+    const linked = await service.createForMember(referee.id, baseInput({ competitionId: COMPETITION_IN_CLUB_A }), adminCtx);
+    const removed = await service.createForMember(referee.id, baseInput({ competitionId: COMPETITION_IN_CLUB_A, function: 'startrichter' }), adminCtx);
+    await service.createForMember(referee.id, baseInput(), adminCtx);
+    await service.removeForMember(referee.id, removed.id, adminCtx);
+    const list = await service.listForCompetition(COMPETITION_IN_CLUB_A, adminCtx);
+    expect(list.map((a) => a.id)).toEqual([linked.id]);
+    expect('deletedAt' in list[0]!).toBe(false);
+    await expect(service.listForCompetition(COMPETITION_IN_CLUB_A, { id: referee.id, roles: ['referee'], clubId: referee.clubId })).rejects.toThrow(RefereeAssignmentForbiddenError);
+  });
+
+  it('lehnt einen Wettkampf eines fremden Vereins oder einen unbekannten Wettkampf ab', async () => {
+    const { admin } = fixture;
+    const adminCtx = { id: admin.id, roles: ['admin'], clubId: admin.clubId };
+    await expect(service.listForCompetition(COMPETITION_IN_CLUB_B, adminCtx)).rejects.toBeInstanceOf(ForeignCompetitionError);
+    await expect(service.listForCompetition('99999999-9999-9999-9999-999999999999', adminCtx)).rejects.toBeInstanceOf(ForeignCompetitionError);
+  });
+});

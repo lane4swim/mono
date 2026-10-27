@@ -173,6 +173,15 @@ export async function refereesRoutes(app: FastifyInstance, opts: RefereesRoutesO
     return reply.code(200).send({ assignments });
   });
 
+  app.get<{ Params: { competitionId: string } }>(
+    '/api/competitions/:competitionId/referee-assignments',
+    { preHandler: adminGuard },
+    async (request, reply) => {
+      const assignments = await refereesService.listForCompetition(request.params.competitionId, requesterFrom(request));
+      return reply.code(200).send({ assignments });
+    },
+  );
+
   app.get<{ Params: { userId: string } }>(
     '/api/users/:userId/referee-assignments',
     { preHandler: adminGuard },
