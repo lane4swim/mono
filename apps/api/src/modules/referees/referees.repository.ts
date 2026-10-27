@@ -64,6 +64,9 @@ export interface RefereeAssignmentRepository {
   // Aktive Einsätze eines Vereins ab `from` (inklusive), nach Datum
   // aufsteigend — Rückmeldungs-Übersicht für admins.
   listUpcomingByClub(clubId: string, from: Date): Promise<RefereeAssignmentRecord[]>;
+  // Aktive Einsätze, die auf einen vereinseigenen Wettkampf verweisen —
+  // das Kampfgericht des Vereins auf der Wettkampf-Detailseite.
+  listByCompetition(competitionId: string): Promise<RefereeAssignmentRecord[]>;
   update(id: string, input: UpdateRefereeAssignmentInput): Promise<RefereeAssignmentRecord>;
   softDelete(id: string): Promise<void>;
 }
@@ -87,6 +90,12 @@ export class PrismaRefereeAssignmentRepository implements RefereeAssignmentRepos
     return this.prisma.refereeAssignment.findMany({
       where: { clubId, deletedAt: null, date: { gte: from } },
       orderBy: { date: 'asc' },
+    });
+  }
+  async listByCompetition(competitionId: string): Promise<RefereeAssignmentRecord[]> {
+    return this.prisma.refereeAssignment.findMany({
+      where: { competitionId, deletedAt: null },
+      orderBy: { createdAt: 'asc' },
     });
   }
   async update(id: string, input: UpdateRefereeAssignmentInput): Promise<RefereeAssignmentRecord> {

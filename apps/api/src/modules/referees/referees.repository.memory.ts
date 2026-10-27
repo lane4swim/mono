@@ -33,6 +33,11 @@ export class InMemoryRefereeAssignmentRepository implements RefereeAssignmentRep
       .filter((r) => r.clubId === clubId && !r.deletedAt && r.date.getTime() >= from.getTime())
       .sort((a, b) => a.date.getTime() - b.date.getTime());
   }
+  async listByCompetition(competitionId: string): Promise<RefereeAssignmentRecord[]> {
+    return this.rows
+      .filter((r) => r.competitionId === competitionId && !r.deletedAt)
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  }
   async update(id: string, input: UpdateRefereeAssignmentInput): Promise<RefereeAssignmentRecord> {
     const row = this.rows.find((r) => r.id === id);
     if (!row) throw new Error(`RefereeAssignment ${id} nicht gefunden.`);

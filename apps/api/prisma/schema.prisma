@@ -419,6 +419,10 @@ model Competition {
   // siehe CompetitionDisciplineSchema in packages/shared-types/src/entities.ts.
   // Dient als Auswahlliste beim Anlegen von Startlisten-Einträgen.
   disciplines       Json      @default("[]")
+  // Anzahl der Kampfrichter:innen, die der Verein laut Ausschreibung zu
+  // stellen hat — optional und immer von Hand erfasst: weder DSV7 noch
+  // DSV8 haben dafür ein Element (siehe dsv7DefinitionParser.js).
+  refereesRequired  Int?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
@@ -908,6 +912,8 @@ model RefereeAssignment {
   // "alle Einsätze eines Vereins nach Datum" (Admin-Übersicht/Reporting).
   @@index([userId, deletedAt])
   @@index([clubId, date])
+  // "Kampfgericht eines Wettkampfs" (Wettkampf-Detailseite).
+  @@index([competitionId])
   @@map("referee_assignments")
 }
 

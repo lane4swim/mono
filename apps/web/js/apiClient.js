@@ -519,6 +519,11 @@ export function respondToRefereeAssignment(id, { status, responseNote = '' }) {
 export function listUpcomingClubRefereeAssignments() {
   return request('/api/referee-assignments/upcoming');
 }
+// admin: Kampfgericht des Vereins für einen eigenen Wettkampf (Einsätze mit
+// dieser competitionId).
+export function listCompetitionRefereeAssignments(competitionId) {
+  return request(`/api/competitions/${encodeURIComponent(competitionId)}/referee-assignments`);
+}
 // admin: Verwaltung "im Namen von" einer Kampfrichter:in (Plan Abschnitt 5.5).
 export function listMemberRefereeAssignments(userId) {
   return request(`/api/users/${encodeURIComponent(userId)}/referee-assignments`);

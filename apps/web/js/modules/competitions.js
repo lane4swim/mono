@@ -21,6 +21,7 @@ import { resultsImportButton, startResultsImportFromText } from './resultsImport
 import { disciplinesLoadButton, disciplinesSummary, disciplineSelect, competitionFromFileButton } from './competitionDisciplines.js';
 import { LIST_RESULTS } from '../resultsImport/dsv7DefinitionParser.js';
 import { defaultSelectionDeadline, validateDeadlines } from './competitionDeadlines.js';
+import { competitionRefereesCard, parseRefereesRequired, MAX_REFEREES_REQUIRED } from './competitionReferees.js';
 import { evaluateRequiredTime, requiredTimeLight, hasRequiredTimes } from './requiredTimes.js';
 import { getCurrentUser } from '../state.js';
 import { teamFilterChips, loadTeamSelection, saveTeamSelection, matchesTeams, competitionGroupIds, athleteGroupMap } from '../teamFilter.js';
@@ -152,6 +153,7 @@ async function renderDetail(container, compId) {
     comp.entryDeadline ? `${t('competitions.formEntryDeadline')}: ${fmtDateLong(comp.entryDeadline)}` : null,
   ].filter(Boolean);
   if (deadlines.length > 0) wrap.appendChild(el('p', { class: 'text-sm' }, deadlines.join(' · ')));
+  const refereesCard = competitionRefereesCard(comp);
 
   const card = el('div', { class: 'card' }, [
     el('div', { class: 'flex justify-between items-center mb-16' }, [
@@ -223,6 +225,7 @@ async function renderDetail(container, compId) {
     });
   }
   wrap.appendChild(startListCard);
+  if (refereesCard) wrap.appendChild(refereesCard);
 
   container.appendChild(wrap);
 
@@ -355,12 +358,16 @@ function openCompModal(comp, onSaved, prefill = {}) {
   fDate.addEventListener('change', syncSelectionDefault);
   fEntryDeadline.addEventListener('change', syncSelectionDefault);
   fSelectionDeadline.addEventListener('change', () => { selectionFollowsDefault = false; });
+  // Kein DSV-Element liefert diese Zahl — sie steht nur im Freitext der
+  // Ausschreibung und wird daher immer von Hand eingetragen.
+  const fRefereesRequired = el('input', { type: 'number', min: '0', max: String(MAX_REFEREES_REQUIRED), step: '1', value: data.refereesRequired ?? '' });
   form.appendChild(field(t('competitions.formName'), fName, { span2: true }));
   form.appendChild(field(t('competitions.formDate'), fDate));
   form.appendChild(field(t('competitions.formCourse'), fCourse));
   form.appendChild(field(t('competitions.formEntryDeadline'), fEntryDeadline, { hint: t('competitions.formEntryDeadlineHint') }));
   form.appendChild(field(t('competitions.formSelectionDeadline'), fSelectionDeadline, { hint: t('competitions.formSelectionDeadlineHint') }));
   form.appendChild(field(t('competitions.formLocation'), fLoc, { span2: true }));
+  form.appendChild(field(t('competitions.formRefereesRequired'), fRefereesRequired, { span2: true, hint: t('competitions.formRefereesRequiredHint') }));
   form.appendChild(field(t('competitions.formNotes'), fNotes, { span2: true }));
   form.appendChild(formActions({ onCancel: () => close(), submitLabel: isEdit ? t('common.save') : t('common.create') }).row);
   form.addEventListener('submit', async (e) => {
@@ -368,9 +375,12 @@ function openCompModal(comp, onSaved, prefill = {}) {
     if (!fName.value.trim()) { toast(t('competitions.validationName'), 'error'); return; }
     const deadlineError = validateDeadlines({ date: fDate.value, entryDeadline: fEntryDeadline.value, selectionDeadline: fSelectionDeadline.value });
     if (deadlineError) { toast(t(`competitions.${deadlineError}`), 'error'); return; }
+    const refereesRequired = parseRefereesRequired(fRefereesRequired.value);
+    if (refereesRequired === undefined) { toast(t('competitions.validationRefereesRequired', { max: MAX_REFEREES_REQUIRED }), 'error'); return; }
     const saved = await put('competitions', {
       ...data, name: fName.value.trim(), date: toIsoDateTime(fDate.value), location: fLoc.value.trim(), course: fCourse.value, notes: fNotes.value.trim(),
       entryDeadline: toIsoDateTime(fEntryDeadline.value), selectionDeadline: toIsoDateTime(fSelectionDeadline.value),
+      refereesRequired,
     });
     toast(isEdit ? t('competitions.savedEdit') : t('competitions.savedCreate'));
     close(); onSaved?.(saved);

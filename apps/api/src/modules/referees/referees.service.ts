@@ -229,6 +229,18 @@ export function createRefereesService(deps: RefereesServiceDeps) {
       return (await deps.assignments.listUpcomingByClub(requester.clubId, today)).map(toPublic);
     },
 
+    // GET /api/competitions/:competitionId/referee-assignments — nur admin:
+    // das Kampfgericht des Vereins für einen eigenen Wettkampf (Abgleich
+    // mit Competition.refereesRequired). Ein fremder oder unbekannter
+    // Wettkampf wird wie beim Anlegen abgelehnt.
+    async listForCompetition(competitionId: string, requester: RequesterContext) {
+      if (!requester.roles.includes('admin') || !requester.clubId) {
+        throw new RefereeAssignmentForbiddenError('Nur Admins dürfen das Kampfgericht eines Wettkampfs einsehen.');
+      }
+      await assertCompetitionWithinClub(competitionId, requester.clubId);
+      return (await deps.assignments.listByCompetition(competitionId)).map(toPublic);
+    },
+
     // POST /api/users/:userId/referee-assignments — Erfassung "im Namen
     // von" (Plan Abschnitt 5.5).
     async createForMember(targetUserId: string, input: CreateAssignmentInput, requester: RequesterContext) {

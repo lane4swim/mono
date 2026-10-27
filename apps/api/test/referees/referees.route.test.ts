@@ -278,3 +278,28 @@ describe('Verwaltung im Namen einer Kampfrichter:in (admin) — /api/users/:user
     await app.close();
   });
 });
+
+describe('GET /api/competitions/:competitionId/referee-assignments', () => {
+  it('nur admin, nur für eigene Wettkämpfe', async () => {
+    const { app, keyPair, club, admin, referee } = await buildTestApp();
+    const adminToken = await tokenFor(keyPair, admin.id, 'admin', admin.clubId);
+    const created = await app.inject({ method: 'POST', url: `/api/users/${referee.id}/referee-assignments`, headers: { authorization: `Bearer ${adminToken}` }, payload: validPayload({ competitionId: COMPETITION_IN_CLUB }) });
+    expect(created.statusCode).toBe(201);
+    await app.inject({ method: 'POST', url: `/api/users/${referee.id}/referee-assignments`, headers: { authorization: `Bearer ${adminToken}` }, payload: validPayload() });
+
+    const list = await app.inject({ method: 'GET', url: `/api/competitions/${COMPETITION_IN_CLUB}/referee-assignments`, headers: { authorization: `Bearer ${adminToken}` } });
+    expect(list.statusCode).toBe(200);
+    expect(list.json().assignments.map((a: { id: string }) => a.id)).toEqual([created.json().id]);
+
+    const foreign = await app.inject({ method: 'GET', url: `/api/competitions/${COMPETITION_IN_OTHER_CLUB}/referee-assignments`, headers: { authorization: `Bearer ${adminToken}` } });
+    expect(foreign.statusCode).toBe(400);
+    expect(foreign.json().error).toBe('foreign_competition');
+
+    for (const role of ['referee', 'trainer', 'athlete']) {
+      const token = await tokenFor(keyPair, role === 'referee' ? referee.id : '00000000-0000-0000-0000-0000000000cc', role, club.id);
+      const response = await app.inject({ method: 'GET', url: `/api/competitions/${COMPETITION_IN_CLUB}/referee-assignments`, headers: { authorization: `Bearer ${token}` } });
+      expect(response.statusCode, role).toBe(403);
+    }
+    await app.close();
+  });
+});
