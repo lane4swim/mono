@@ -8,7 +8,9 @@ import type { ClubRepository } from '../invitations/invitations.repository.js';
 import type { AuditLogWriter } from '../auditLog/auditLog.service.js';
 import type { MailSender } from '../../mail/mailer.js';
 import { InvalidCurrentPasswordError, UserNotFoundError } from '../auth/auth.service.js';
-import { ForbiddenError, ClubNotFoundError } from '../invitations/invitations.service.js';
+import { ClubNotFoundError } from '../invitations/invitations.service.js';
+import { ForbiddenError } from '../shared/errors.js';
+import type { Requester } from '../../plugins/requester.js';
 import { verifyPassword } from '../../auth/password.js';
 import { buildOtpauthUri, generateTotpSecret, verifyTotp } from '../../auth/totp.js';
 import { verifyMfaSetupToken } from '../../auth/tokens.js';
@@ -24,11 +26,7 @@ import {
   MfaRequiredCannotDisableError,
 } from './mfaErrors.js';
 
-export interface MfaRequester {
-  id: string;
-  roles: string[];
-  clubId: string | null;
-}
+export type MfaRequester = Requester;
 
 export interface MfaServiceDeps {
   users: UserRepository;

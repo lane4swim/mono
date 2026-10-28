@@ -10,18 +10,14 @@ import {
   MfaForcedSetupRequestSchema,
   MfaForcedConfirmRequestSchema,
 } from '@lane1/shared-types';
-import type { MfaService, MfaRequester } from './mfa.service.js';
+import type { MfaService } from './mfa.service.js';
 import { parseInput } from '../../plugins/parseInput.js';
 import { requireAnyRole } from '../../plugins/authorize.js';
 import { accessTokenRateLimitKey, perIpAuthCeiling } from '../auth/auth.route.js';
+import { requesterFrom } from '../../plugins/requester.js';
 
 export interface MfaRoutesOptions {
   mfaService: MfaService;
-}
-
-function requesterFrom(request: { user?: { sub: string; roles: string[]; clubId: string | null } }): MfaRequester {
-  const user = request.user!;
-  return { id: user.sub, roles: user.roles, clubId: user.clubId };
 }
 
 // Schreibende Aufrufe prüfen Codes oder Passwörter — wie POST /api/me/password

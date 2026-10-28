@@ -6,6 +6,7 @@
 //   - list(): admin sieht die Einträge des EIGENEN Vereins, superadmin
 //     alle (optional nach clubId gefiltert).
 import type { AuditLogRepository, AuditLogEntryRecord } from './auditLog.repository.js';
+import type { Requester } from '../../plugins/requester.js';
 
 // docs/Plans/vereinsverwaltung-phase3-plan.md, Abschnitt 2.2 — die vier
 // Aktionstypen dieser Phase. Als Union statt freiem String, damit ein Tippfehler
@@ -82,10 +83,7 @@ export interface AuditLogWriter {
   record(input: RecordAuditLogEntryInput): Promise<void>;
 }
 
-export interface RequesterContext {
-  roles: string[];
-  clubId: string | null;
-}
+export type RequesterContext = Pick<Requester, 'roles' | 'clubId'>;
 
 export class ClubIdRequiredError extends Error {
   constructor() {

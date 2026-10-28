@@ -6,14 +6,10 @@ import type { InvitationsService } from './invitations.service.js';
 import { InvitationNotFoundError } from './invitations.service.js';
 import { requireAnyRole } from '../../plugins/authorize.js';
 import { parseInput } from '../../plugins/parseInput.js';
+import { requesterFrom } from '../../plugins/requester.js';
 
 export interface InvitationsRoutesOptions {
   invitationsService: InvitationsService;
-}
-
-function requesterFrom(request: { user?: { sub: string; roles: string[]; clubId: string | null } }) {
-  const user = request.user!;
-  return { id: user.sub, roles: user.roles, clubId: user.clubId };
 }
 
 export async function invitationsRoutes(app: FastifyInstance, opts: InvitationsRoutesOptions) {

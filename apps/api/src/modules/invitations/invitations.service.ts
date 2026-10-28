@@ -14,12 +14,9 @@ import { generateInvitationToken, hashInvitationToken } from '../../auth/tokens.
 import type { MailSender } from '../../mail/mailer.js';
 import type { UserRepository } from '../auth/auth.repository.js';
 import type { AuditLogWriter } from '../auditLog/auditLog.service.js';
+import type { Requester } from '../../plugins/requester.js';
+import { ForbiddenError } from '../shared/errors.js';
 
-export class ForbiddenError extends Error {
-  constructor(message = 'Für diese Aktion fehlt die Berechtigung.') {
-    super(message);
-  }
-}
 export class ClubNotFoundError extends Error {
   constructor() {
     super('Verein wurde nicht gefunden.');
@@ -75,11 +72,7 @@ export class InvitationRevokedError extends Error {
   }
 }
 
-export interface RequesterContext {
-  id: string;
-  roles: string[]; // Teilmenge von 'superadmin' | 'admin' | 'trainer' | 'athlete'
-  clubId: string | null;
-}
+export type RequesterContext = Requester;
 
 export interface InvitationsServiceDeps {
   clubs: ClubRepository;

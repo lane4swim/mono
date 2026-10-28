@@ -3,12 +3,13 @@
 // Nur eingeloggte Vereinsmitglieder (trainer/admin/athlete) dürfen
 // synchronisieren — Superadmin hat keinen eigenen Verein und wird über
 // requireAnyRole ausgeschlossen.
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { SyncPushRequestSchema, SyncPullQuerySchema } from '@lane1/shared-types';
 import type { SyncService, SyncRequester } from './sync.service.js';
 import { notifyAnnouncementCreated, type AnnouncementNotifyDeps } from './sync.announcementNotify.js';
 import { requireAnyRole } from '../../plugins/authorize.js';
 import { parseInput } from '../../plugins/parseInput.js';
+import { requesterFrom } from '../../plugins/requester.js';
 
 // Minimale, für dieses Modul ausreichende Nachschlagemöglichkeit für die
 // Modul-Pakete eines Vereins — bewusst kein volles ClubRepository, um
@@ -113,23 +114,24 @@ export async function syncRoutes(app: FastifyInstance, opts: SyncRoutesOptions) 
   // ohne Verein (theoretisch nur superadmin) kommt hier also nicht an —
   // clubId ist an dieser Stelle immer gesetzt. role/athleteId werden
   // zusätzlich mitgegeben, damit der Service die Rollen-Scopierung für
-  // "athlete" anwenden kann (siehe sync.service.ts). Analog zu requesterFrom()
-  // in invitations.route.ts — eine Stelle statt einer Wiederholung dieses
-  // Objekt-Literals in push()/pull(). Lädt die gebuchten Module des Vereins
+  // "athlete" anwenden kann (siehe sync.service.ts). Baut auf dem
+  // gemeinsamen requesterFrom() (plugins/requester.ts) auf — eine Stelle
+  // statt einer Wiederholung dieses Objekt-Literals in push()/pull(). Lädt die gebuchten Module des Vereins
   // über den obigen Cache — der JWT-Claim allein (request.user) kennt sie
   // nicht, da sich enabledModules jederzeit über die Superadmin-
   // Bearbeiten-Ansicht ändern kann, ohne dass ein neues Token ausgestellt
   // wird. `sub` (Sicherheitsreview 2026-08-27, Befund M2) wird zusätzlich als
   // `userId` durchgereicht — für die Autor:innen-Prüfung eingebetteter
   // Kommentare (siehe sync.commentAuthorship.ts).
-  async function requesterFrom(
-    request: { user?: { sub: string; roles: SyncRequester['roles']; clubId: string | null; athleteId: string | null } },
-  ): Promise<SyncRequester> {
+  async function syncRequesterFrom(request: FastifyRequest): Promise<SyncRequester> {
+    const { id, clubId } = requesterFrom(request);
     const user = request.user!;
-    const enabledModules = await resolveEnabledModules(user.clubId!);
+    const enabledModules = await resolveEnabledModules(clubId!);
     return {
-      userId: user.sub,
-      clubId: user.clubId!,
+      userId: id,
+      clubId: clubId!,
+      // Direkt aus den Claims statt aus Requester.roles (`string[]`):
+      // sync.permissions.ts braucht die engere `Role[]`-Typisierung.
       roles: user.roles,
       athleteId: user.athleteId,
       enabledModules,
@@ -139,7 +141,7 @@ export async function syncRoutes(app: FastifyInstance, opts: SyncRoutesOptions) 
   app.post('/api/sync/push', { preHandler: syncGuard }, async (request, reply) => {
     const body = parseInput(SyncPushRequestSchema, request.body, reply);
     if (!body) return;
-    const requester = await requesterFrom(request);
+    const requester = await syncRequesterFrom(request);
     const createdEventIds = new Set<string>();
     const results = await syncService.push(body.events, requester, { onCreated: (eventId) => createdEventIds.add(eventId) });
 
@@ -166,7 +168,7 @@ export async function syncRoutes(app: FastifyInstance, opts: SyncRoutesOptions) 
       // regulären 400-Antwort quittierte.
       const query = parseInput(SyncPullQuerySchema, request.query, reply);
       if (!query) return;
-      const result = await syncService.pull(query, await requesterFrom(request));
+      const result = await syncService.pull(query, await syncRequesterFrom(request));
       return reply.code(200).send(result);
     },
   );

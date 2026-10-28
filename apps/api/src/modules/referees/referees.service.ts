@@ -18,8 +18,10 @@ import type {
   CompetitionRepository,
 } from './referees.repository.js';
 import type { UserRepository } from '../auth/auth.repository.js';
-import { UserNotFoundError } from '../auth/auth.service.js';
 import type { AuditLogWriter } from '../auditLog/auditLog.service.js';
+import type { Requester } from '../../plugins/requester.js';
+import { ForbiddenError } from '../shared/errors.js';
+import { requireClub, requireClubAdmin, requireAdminOfSameClub, withoutDeletedAt, findActiveOwnedOrThrow } from '../shared/clubAccess.js';
 import type { RefereeNotifier } from './referees.notify.js';
 
 export class RefereeAssignmentNotFoundError extends Error {
@@ -27,11 +29,7 @@ export class RefereeAssignmentNotFoundError extends Error {
     super('Wettkampfeinsatz wurde nicht gefunden.');
   }
 }
-export class RefereeAssignmentForbiddenError extends Error {
-  constructor(message = 'Für diese Aktion fehlt die Berechtigung.') {
-    super(message);
-  }
-}
+export class RefereeAssignmentForbiddenError extends ForbiddenError {}
 // Ein mitgeschicktes competitionId muss zu einem Wettkampf des EIGENEN
 // Vereins gehören — Kampfrichter:innen amtieren zwar häufig bei fremden
 // Wettkämpfen (siehe Plan Abschnitt 5.1), diese existieren dann aber gar
@@ -44,11 +42,9 @@ export class ForeignCompetitionError extends Error {
   }
 }
 
-export interface RequesterContext {
-  id: string;
-  roles: string[]; // Teilmenge von 'admin' | 'referee' (u. a.) — superadmin erreicht diesen Service nie
-  clubId: string | null;
-}
+// superadmin erreicht diesen Service nie (siehe requireAnyRole() in
+// referees.route.ts).
+export type RequesterContext = Requester;
 
 export interface CreateAssignmentInput {
   competitionName: string;
@@ -101,14 +97,6 @@ export interface RefereesServiceDeps {
   onNotifyError?: (error: unknown) => void;
 }
 
-// Entfernt `deletedAt` aus der Antwort — reine interne Buchhaltung ohne
-// legitimen Grund, sie über die API auszuliefern (Datenminimierung, analog
-// toPublic() in qualifications.service.ts).
-function toPublic(row: RefereeAssignmentRecord): Omit<RefereeAssignmentRecord, 'deletedAt'> {
-  const { deletedAt: _deletedAt, ...publicRow } = row;
-  return publicRow;
-}
-
 export function createRefereesService(deps: RefereesServiceDeps) {
   // Benachrichtigungen sind best effort: ein Fehler beim Versand darf die
   // bereits gespeicherte Anfrage/Antwort nicht als gescheitert melden.
@@ -127,16 +115,14 @@ export function createRefereesService(deps: RefereesServiceDeps) {
     if (!competition || competition.clubId !== clubId) throw new ForeignCompetitionError();
   }
 
-  async function requireAdminOfSameClub(requester: RequesterContext, targetUserId: string) {
-    if (!requester.roles.includes('admin') || !requester.clubId) {
-      throw new RefereeAssignmentForbiddenError('Nur Admins dürfen Wettkampfeinsätze anderer Vereinsmitglieder verwalten.');
-    }
-    const targetUser = await deps.users.findById(targetUserId);
-    if (!targetUser) throw new UserNotFoundError();
-    if (targetUser.clubId !== requester.clubId) {
-      throw new RefereeAssignmentForbiddenError('Diese Person gehört nicht zu Ihrem Verein.');
-    }
-    return targetUser;
+  function requireAdminForMember(requester: RequesterContext, targetUserId: string) {
+    return requireAdminOfSameClub(
+      deps.users,
+      requester,
+      targetUserId,
+      'Nur Admins dürfen Wettkampfeinsätze anderer Vereinsmitglieder verwalten.',
+      RefereeAssignmentForbiddenError,
+    );
   }
 
   // Nur die Admin-Pfade ("im Namen von", Plan Abschnitt 5.5) landen im
@@ -156,22 +142,20 @@ export function createRefereesService(deps: RefereesServiceDeps) {
     });
   }
 
-  async function findOwnedOrThrow(targetUserId: string, id: string): Promise<RefereeAssignmentRecord> {
-    const existing = await deps.assignments.findById(id);
-    if (!existing || existing.userId !== targetUserId || existing.deletedAt) throw new RefereeAssignmentNotFoundError();
-    return existing;
+  function findOwnedOrThrow(targetUserId: string, id: string): Promise<RefereeAssignmentRecord> {
+    return findActiveOwnedOrThrow(deps.assignments, targetUserId, id, RefereeAssignmentNotFoundError);
   }
 
   return {
     // GET /api/me/referee-assignments — die Kampfrichter:in sieht nur die
     // eigenen Einsätze.
     async listOwn(requester: RequesterContext) {
-      return (await deps.assignments.listByUser(requester.id)).map(toPublic);
+      return (await deps.assignments.listByUser(requester.id)).map(withoutDeletedAt);
     },
 
     // POST /api/me/referee-assignments — Selbsterfassung.
     async createOwn(input: CreateAssignmentInput, requester: RequesterContext) {
-      if (!requester.clubId) throw new RefereeAssignmentForbiddenError('Für diese Aktion ist ein Verein erforderlich.');
+      requireClub(requester, undefined, RefereeAssignmentForbiddenError);
       await assertCompetitionWithinClub(input.competitionId, requester.clubId);
       const created = await deps.assignments.create({
         userId: requester.id,
@@ -180,7 +164,7 @@ export function createRefereesService(deps: RefereesServiceDeps) {
         status: 'confirmed',
         ...input,
       });
-      return toPublic(created);
+      return withoutDeletedAt(created);
     },
 
     // PATCH /api/me/referee-assignments/:id — createdByAdminId bleibt bei
@@ -190,7 +174,7 @@ export function createRefereesService(deps: RefereesServiceDeps) {
       const existing = await findOwnedOrThrow(requester.id, id);
       if (patch.competitionId !== undefined) await assertCompetitionWithinClub(patch.competitionId, existing.clubId);
       const updated = await deps.assignments.update(id, patch);
-      return toPublic(updated);
+      return withoutDeletedAt(updated);
     },
 
     // POST /api/me/referee-assignments/:id/response — Zu- oder Absage;
@@ -202,7 +186,7 @@ export function createRefereesService(deps: RefereesServiceDeps) {
         const referee = await deps.users.findById(requester.id);
         await notifySafely((n) => n.assignmentAnswered(updated, referee?.name ?? 'Kampfrichter:in'));
       }
-      return toPublic(updated);
+      return withoutDeletedAt(updated);
     },
 
     // DELETE /api/me/referee-assignments/:id
@@ -214,19 +198,17 @@ export function createRefereesService(deps: RefereesServiceDeps) {
     // GET /api/users/:userId/referee-assignments — nur admin, für
     // Mitglieder des eigenen Vereins.
     async listForMember(targetUserId: string, requester: RequesterContext) {
-      await requireAdminOfSameClub(requester, targetUserId);
-      return (await deps.assignments.listByUser(targetUserId)).map(toPublic);
+      await requireAdminForMember(requester, targetUserId);
+      return (await deps.assignments.listByUser(targetUserId)).map(withoutDeletedAt);
     },
 
     // GET /api/referee-assignments/upcoming — nur admin: alle kommenden
     // Einsätze des eigenen Vereins (ab heute, UTC), damit offene Anfragen
     // und Absagen auf einen Blick sichtbar sind.
     async listUpcomingForClub(requester: RequesterContext, now = new Date()) {
-      if (!requester.roles.includes('admin') || !requester.clubId) {
-        throw new RefereeAssignmentForbiddenError('Nur Admins dürfen die Einsätze des Vereins einsehen.');
-      }
+      requireClubAdmin(requester, 'Nur Admins dürfen die Einsätze des Vereins einsehen.', RefereeAssignmentForbiddenError);
       const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-      return (await deps.assignments.listUpcomingByClub(requester.clubId, today)).map(toPublic);
+      return (await deps.assignments.listUpcomingByClub(requester.clubId, today)).map(withoutDeletedAt);
     },
 
     // GET /api/competitions/:competitionId/referee-assignments — nur admin:
@@ -234,17 +216,15 @@ export function createRefereesService(deps: RefereesServiceDeps) {
     // mit Competition.refereesRequired). Ein fremder oder unbekannter
     // Wettkampf wird wie beim Anlegen abgelehnt.
     async listForCompetition(competitionId: string, requester: RequesterContext) {
-      if (!requester.roles.includes('admin') || !requester.clubId) {
-        throw new RefereeAssignmentForbiddenError('Nur Admins dürfen das Kampfgericht eines Wettkampfs einsehen.');
-      }
+      requireClubAdmin(requester, 'Nur Admins dürfen das Kampfgericht eines Wettkampfs einsehen.', RefereeAssignmentForbiddenError);
       await assertCompetitionWithinClub(competitionId, requester.clubId);
-      return (await deps.assignments.listByCompetition(competitionId)).map(toPublic);
+      return (await deps.assignments.listByCompetition(competitionId)).map(withoutDeletedAt);
     },
 
     // POST /api/users/:userId/referee-assignments — Erfassung "im Namen
     // von" (Plan Abschnitt 5.5).
     async createForMember(targetUserId: string, input: CreateAssignmentInput, requester: RequesterContext) {
-      const targetUser = await requireAdminOfSameClub(requester, targetUserId);
+      const targetUser = await requireAdminForMember(requester, targetUserId);
       await assertCompetitionWithinClub(input.competitionId, targetUser.clubId!);
       // Trägt ein admin mit eigener referee-Rolle sich selbst ein, gibt es
       // niemanden, der noch zusagen müsste.
@@ -258,14 +238,14 @@ export function createRefereesService(deps: RefereesServiceDeps) {
       });
       await recordMemberChange(requester, targetUserId, 'refereeAssignment.created', created);
       if (!self) await notifySafely((n) => n.assignmentRequested(created));
-      return toPublic(created);
+      return withoutDeletedAt(created);
     },
 
     // PATCH /api/users/:userId/referee-assignments/:id — createdByAdminId
     // wird auf die handelnde admin-Person aktualisiert (Plan Abschnitt 5.5:
     // "oder zuletzt bearbeitete").
     async updateForMember(targetUserId: string, id: string, patch: UpdateAssignmentInput, requester: RequesterContext) {
-      await requireAdminOfSameClub(requester, targetUserId);
+      await requireAdminForMember(requester, targetUserId);
       const existing = await findOwnedOrThrow(targetUserId, id);
       if (patch.competitionId !== undefined) await assertCompetitionWithinClub(patch.competitionId, existing.clubId);
       const reRequest = targetUserId !== requester.id && keyFieldsChanged(existing, patch);
@@ -276,12 +256,12 @@ export function createRefereesService(deps: RefereesServiceDeps) {
       });
       await recordMemberChange(requester, targetUserId, 'refereeAssignment.updated', updated);
       if (reRequest) await notifySafely((n) => n.assignmentRequested(updated));
-      return toPublic(updated);
+      return withoutDeletedAt(updated);
     },
 
     // DELETE /api/users/:userId/referee-assignments/:id
     async removeForMember(targetUserId: string, id: string, requester: RequesterContext): Promise<void> {
-      await requireAdminOfSameClub(requester, targetUserId);
+      await requireAdminForMember(requester, targetUserId);
       const existing = await findOwnedOrThrow(targetUserId, id);
       await deps.assignments.softDelete(id);
       await recordMemberChange(requester, targetUserId, 'refereeAssignment.deleted', existing);

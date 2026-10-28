@@ -5,6 +5,7 @@ import type { ParentLinkRepository } from './parents.repository.js';
 import type { ParentOverviewGateway } from './parents.overview.repository.js';
 import type { ParentCalendarGateway, DateRange } from './parents.calendar.repository.js';
 import type { AuditLogWriter } from '../auditLog/auditLog.service.js';
+import type { Requester } from '../../plugins/requester.js';
 
 // Minimale, für dieses Modul ausreichende Nachschlagemöglichkeiten —
 // analog AthleteLookup in invitations.repository.ts: keine Abhängigkeit
@@ -30,19 +31,16 @@ export class ParentNotInClubError extends Error {}
 export class AthleteNotInClubError extends Error {}
 export class UserNotParentError extends Error {}
 
-export interface RequesterContext {
-  userId: string;
-  clubId: string | null;
-}
+export type RequesterContext = Pick<Requester, 'id' | 'clubId'>;
 
 export function createParentsService(deps: ParentsServiceDeps) {
   return {
     // Eigene, stark eingeschränkte Sicht (Plan Abschnitt 3.4) — nur die
-    // eigenen verknüpften Kinder, nie fremde. `requester.userId` kommt
+    // eigenen verknüpften Kinder, nie fremde. `requester.id` kommt
     // aus dem Access Token, nicht aus der Anfrage — eine `parent`-Person
     // kann dadurch strukturell nur ihre eigenen Verknüpfungen abrufen.
     async getOverview(requester: RequesterContext): Promise<ParentOverviewResponse> {
-      const links = await deps.parentLinks.listByUser(requester.userId);
+      const links = await deps.parentLinks.listByUser(requester.id);
       const children = await Promise.all(links.map((link) => deps.overview.buildChildOverview(link.athleteId)));
       // Verwaiste Verknüpfungen (Athletenprofil zwischenzeitlich gelöscht)
       // werden stillschweigend herausgefiltert statt einen Fehler zu
@@ -54,7 +52,7 @@ export function createParentsService(deps: ParentsServiceDeps) {
     // die Person aus dem Access Token, nie aus der Anfrage.
     async getCalendar(requester: RequesterContext, range: DateRange): Promise<ParentCalendarResponse> {
       if (!deps.calendar) return { children: [] };
-      const links = await deps.parentLinks.listByUser(requester.userId);
+      const links = await deps.parentLinks.listByUser(requester.id);
       const children = await Promise.all(links.map((link) => deps.calendar!.buildChildCalendar(link.athleteId, range)));
       return { children: children.filter((c): c is NonNullable<typeof c> => c !== null) };
     },
@@ -87,7 +85,7 @@ export function createParentsService(deps: ParentsServiceDeps) {
       // Eine Verknüpfung gibt dem Elternkonto Zugriff auf die Daten des Kindes.
       await deps.auditLog.record({
         clubId: requester.clubId,
-        actorId: requester.userId,
+        actorId: requester.id,
         action: 'parentLink.added',
         targetId: targetUserId,
         metadata: { athleteId },
@@ -100,7 +98,7 @@ export function createParentsService(deps: ParentsServiceDeps) {
       await deps.parentLinks.remove(targetUserId, athleteId);
       await deps.auditLog.record({
         clubId: requester.clubId,
-        actorId: requester.userId,
+        actorId: requester.id,
         action: 'parentLink.removed',
         targetId: targetUserId,
         metadata: { athleteId },

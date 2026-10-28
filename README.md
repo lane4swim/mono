@@ -44,6 +44,22 @@ docs/
     backend-plan.md  vollständiger Backend-Entwicklungs- und Integrationsplan
 ```
 
+### Zentrale Backend-Bausteine (`apps/api/src`)
+
+Wiederkehrende Prüfungen und Hilfsfunktionen liegen an genau einer Stelle;
+Routen und Services verwenden sie, statt sie selbst nachzubauen. Eine
+Änderung an einer dieser Regeln wirkt dadurch überall gleichzeitig.
+
+| Baustein | Ort | Zweck |
+|---|---|---|
+| `Requester`, `requesterFrom()` | `plugins/requester.ts` | Anfrage-Kontext (`id`, `roles`, `clubId`) aus dem Access Token — der einzige Weg, auf dem Routen die anfragende Person an Services übergeben |
+| `requireClub()`, `requireClubAdmin()`, `requireAdminOfSameClub()` | `modules/shared/clubAccess.ts` | Zugriffsprüfungen „gehört zu einem Verein", „ist dort admin", „Zielperson ist im selben Verein" |
+| `withoutDeletedAt()`, `findActiveOwnedOrThrow()` | `modules/shared/clubAccess.ts` | Umgang mit personenbezogenen, per Soft-Delete entfernbaren Datensätzen |
+| `ForbiddenError` | `modules/shared/errors.ts` | Basisklasse für jede 403-Antwort; modulspezifische Klassen leiten davon ab und erben die HTTP-Abbildung |
+| `requireAnyRole()` | `plugins/authorize.ts` | Rollen-Guard als Fastify-preHandler |
+| `parseInput()` | `plugins/parseInput.ts` | Zod-Validierung mit einheitlicher 400-Antwort |
+| Fehler-Registry | `plugins/httpErrorHandler.ts` | Abbildung von Fehlerklassen auf HTTP-Status/-Code |
+
 ## Voraussetzungen
 
 - Node.js ≥ 22

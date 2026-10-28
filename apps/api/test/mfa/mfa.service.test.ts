@@ -3,7 +3,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { InvalidCurrentPasswordError, InvalidRefreshTokenError } from '../../src/modules/auth/auth.service.js';
 import { InMemoryAuditLogRepository } from '../../src/modules/auditLog/auditLog.repository.memory.js';
-import { ForbiddenError } from '../../src/modules/invitations/invitations.service.js';
+import { ForbiddenError } from '../../src/modules/shared/errors.js';
 import { InvalidMfaTokenError } from '../../src/auth/tokens.js';
 import { totpAt, totpStep } from '../../src/auth/totp.js';
 import { MfaNotConfiguredError } from '../../src/modules/mfa/mfa.core.js';

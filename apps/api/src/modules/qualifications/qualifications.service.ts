@@ -13,19 +13,17 @@ import type {
   QualificationReminderSettingRepository,
 } from './qualifications.repository.js';
 import type { UserRepository } from '../auth/auth.repository.js';
-import { UserNotFoundError } from '../auth/auth.service.js';
 import type { AuditLogWriter } from '../auditLog/auditLog.service.js';
+import type { Requester } from '../../plugins/requester.js';
+import { ForbiddenError } from '../shared/errors.js';
+import { requireClub, requireClubAdmin, requireAdminOfSameClub, withoutDeletedAt, findActiveOwnedOrThrow } from '../shared/clubAccess.js';
 
 export class QualificationNotFoundError extends Error {
   constructor() {
     super('Qualifikation wurde nicht gefunden.');
   }
 }
-export class QualificationForbiddenError extends Error {
-  constructor(message = 'Für diese Aktion fehlt die Berechtigung.') {
-    super(message);
-  }
-}
+export class QualificationForbiddenError extends ForbiddenError {}
 // Cross-Field-Prüfung auf dem MERGE aus bestehendem Datensatz + Patch (siehe
 // update() unten) — CreateUserQualificationRequestSchema deckt denselben
 // Fall beim Anlegen bereits über sein eigenes .refine() ab (siehe
@@ -37,11 +35,9 @@ export class QualificationInvalidDateRangeError extends Error {
   }
 }
 
-export interface RequesterContext {
-  id: string;
-  roles: string[]; // Teilmenge von 'admin' | 'trainer' | 'athlete' (superadmin erreicht diesen Service nie)
-  clubId: string | null;
-}
+// superadmin erreicht diesen Service nie (siehe requireAnyRole() in
+// qualifications.route.ts).
+export type RequesterContext = Requester;
 
 export interface CreateQualificationInput {
   type: string;
@@ -69,30 +65,14 @@ export interface QualificationsServiceDeps {
   auditLog: AuditLogWriter;
 }
 
-// Entfernt `deletedAt` aus der Antwort — reine interne Buchhaltung ohne
-// legitimen Grund, sie über die API auszuliefern (Datenminimierung, analog
-// toPublicInvitation() in invitations.service.ts).
-function toPublic(row: UserQualificationRecord): Omit<UserQualificationRecord, 'deletedAt'> {
-  const { deletedAt: _deletedAt, ...publicRow } = row;
-  return publicRow;
+const NOT_ADMIN_MESSAGE = 'Nur Admins dürfen Qualifikationen von Vereinsmitgliedern verwalten.';
+
+function requireAdminForMember(deps: QualificationsServiceDeps, requester: RequesterContext, targetUserId: string) {
+  return requireAdminOfSameClub(deps.users, requester, targetUserId, NOT_ADMIN_MESSAGE, QualificationForbiddenError);
 }
 
-async function requireAdminOfSameClub(deps: QualificationsServiceDeps, requester: RequesterContext, targetUserId: string) {
-  if (!requester.roles.includes('admin') || !requester.clubId) {
-    throw new QualificationForbiddenError('Nur Admins dürfen Qualifikationen von Vereinsmitgliedern verwalten.');
-  }
-  const targetUser = await deps.users.findById(targetUserId);
-  if (!targetUser) throw new UserNotFoundError();
-  if (targetUser.clubId !== requester.clubId) {
-    throw new QualificationForbiddenError('Diese Person gehört nicht zu Ihrem Verein.');
-  }
-  return targetUser;
-}
-
-async function findOwnedOrThrow(deps: QualificationsServiceDeps, targetUserId: string, id: string): Promise<UserQualificationRecord> {
-  const existing = await deps.qualifications.findById(id);
-  if (!existing || existing.userId !== targetUserId || existing.deletedAt) throw new QualificationNotFoundError();
-  return existing;
+function findOwnedOrThrow(deps: QualificationsServiceDeps, targetUserId: string, id: string): Promise<UserQualificationRecord> {
+  return findActiveOwnedOrThrow(deps.qualifications, targetUserId, id, QualificationNotFoundError);
 }
 
 // Nur die Admin-Pfade (Qualifikationen ANDERER Mitglieder) landen im
@@ -116,37 +96,37 @@ export function createQualificationsService(deps: QualificationsServiceDeps) {
     // GET /api/me/qualifications — jede angemeldete Person (admin/trainer/
     // athlete) sieht nur lesend die eigenen.
     async listOwn(requester: RequesterContext) {
-      return (await deps.qualifications.listByUser(requester.id)).map(toPublic);
+      return (await deps.qualifications.listByUser(requester.id)).map(withoutDeletedAt);
     },
 
     // GET /api/users/:userId/qualifications — nur admin, für Mitglieder des
     // eigenen Vereins.
     async listForMember(targetUserId: string, requester: RequesterContext) {
-      await requireAdminOfSameClub(deps, requester, targetUserId);
-      return (await deps.qualifications.listByUser(targetUserId)).map(toPublic);
+      await requireAdminForMember(deps, requester, targetUserId);
+      return (await deps.qualifications.listByUser(targetUserId)).map(withoutDeletedAt);
     },
 
     async create(targetUserId: string, input: CreateQualificationInput, requester: RequesterContext) {
-      await requireAdminOfSameClub(deps, requester, targetUserId);
+      await requireAdminForMember(deps, requester, targetUserId);
       assertChronology(input.acquiredOn, input.expiresOn);
       const created = await deps.qualifications.create({ userId: targetUserId, ...input });
       await recordMemberChange(deps, requester, targetUserId, 'qualification.created', { qualificationId: created.id, type: created.type });
-      return toPublic(created);
+      return withoutDeletedAt(created);
     },
 
     async update(targetUserId: string, id: string, patch: UpdateQualificationInput, requester: RequesterContext) {
-      await requireAdminOfSameClub(deps, requester, targetUserId);
+      await requireAdminForMember(deps, requester, targetUserId);
       const existing = await findOwnedOrThrow(deps, targetUserId, id);
       const mergedAcquiredOn = patch.acquiredOn ?? existing.acquiredOn;
       const mergedExpiresOn = patch.expiresOn !== undefined ? patch.expiresOn : existing.expiresOn;
       assertChronology(mergedAcquiredOn, mergedExpiresOn);
       const updated = await deps.qualifications.update(id, patch);
       await recordMemberChange(deps, requester, targetUserId, 'qualification.updated', { qualificationId: id, type: updated.type });
-      return toPublic(updated);
+      return withoutDeletedAt(updated);
     },
 
     async remove(targetUserId: string, id: string, requester: RequesterContext): Promise<void> {
-      await requireAdminOfSameClub(deps, requester, targetUserId);
+      await requireAdminForMember(deps, requester, targetUserId);
       const existing = await findOwnedOrThrow(deps, targetUserId, id);
       await deps.qualifications.softDelete(id);
       await recordMemberChange(deps, requester, targetUserId, 'qualification.deleted', { qualificationId: id, type: existing.type });
@@ -161,9 +141,7 @@ export function createQualificationsService(deps: QualificationsServiceDeps) {
     // würde jede Qualifikation fälschlich als "gültig" statt z. B. "läuft
     // bald ab" anzeigen, sobald die Schwellen vom Standardwert abweichen.
     async listReminderSettings(requester: RequesterContext) {
-      if (!requester.clubId) {
-        throw new QualificationForbiddenError('Für diese Aktion ist ein Verein erforderlich.');
-      }
+      requireClub(requester, undefined, QualificationForbiddenError);
       const rows = await deps.reminderSettings.listByClub(requester.clubId);
       return rows.map((r) => ({ type: r.type, thresholdsDays: r.thresholdsDays }));
     },
@@ -171,9 +149,7 @@ export function createQualificationsService(deps: QualificationsServiceDeps) {
     // PUT /api/qualification-settings/:type — nur admin, immer für den
     // eigenen Verein (keine clubId im Request — analog /api/me/*).
     async setReminderSetting(type: string, thresholdsDays: number[], requester: RequesterContext) {
-      if (!requester.roles.includes('admin') || !requester.clubId) {
-        throw new QualificationForbiddenError('Nur Admins dürfen die Erinnerungs-Schwellen ändern.');
-      }
+      requireClubAdmin(requester, 'Nur Admins dürfen die Erinnerungs-Schwellen ändern.', QualificationForbiddenError);
       const row = await deps.reminderSettings.upsert(requester.clubId, type, thresholdsDays);
       return { type: row.type, thresholdsDays: row.thresholdsDays };
     },

@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createClubLegalInfoService, type ClubLegalInfoService } from '../../src/modules/clubLegalInfo/clubLegalInfo.service.js';
 import { InMemoryClubLegalInfoRepository } from '../../src/modules/clubLegalInfo/clubLegalInfo.repository.memory.js';
-import { ForbiddenError, ClubNotFoundError } from '../../src/modules/invitations/invitations.service.js';
+import { ClubNotFoundError } from '../../src/modules/invitations/invitations.service.js';
+import { ForbiddenError } from '../../src/modules/shared/errors.js';
 import { createAuditLogService } from '../../src/modules/auditLog/auditLog.service.js';
 import { InMemoryAuditLogRepository } from '../../src/modules/auditLog/auditLog.repository.memory.js';
 

@@ -13,9 +13,10 @@ import {
   QualificationTypeSchema,
   DEFAULT_QUALIFICATION_REMINDER_THRESHOLDS_DAYS,
 } from '@lane1/shared-types';
-import type { QualificationsService, RequesterContext } from './qualifications.service.js';
+import type { QualificationsService } from './qualifications.service.js';
 import { requireAnyRole } from '../../plugins/authorize.js';
 import { parseInput } from '../../plugins/parseInput.js';
+import { requesterFrom } from '../../plugins/requester.js';
 
 // Minimale, für dieses Modul ausreichende Nachschlagemöglichkeit für die
 // Modul-Pakete eines Vereins — bewusst dieselbe schlanke Form wie
@@ -43,11 +44,6 @@ interface CachedClubModules {
 // resolveEnabledModules()), eine vorzeitige Extraktion wäre hier
 // spekulative Abstraktion für einen bislang einzigen zweiten Fall.
 const CLUB_MODULES_CACHE_TTL_MS = 45_000;
-
-function requesterFrom(request: { user?: { sub: string; roles: string[]; clubId: string | null } }): RequesterContext {
-  const user = request.user!;
-  return { id: user.sub, roles: user.roles, clubId: user.clubId };
-}
 
 export async function qualificationsRoutes(app: FastifyInstance, opts: QualificationsRoutesOptions) {
   const { qualificationsService, clubs } = opts;

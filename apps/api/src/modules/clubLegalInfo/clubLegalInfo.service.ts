@@ -14,14 +14,12 @@
 //     superadmin (jeder Verein) — exakte Kopie der Zugriffsprüfung aus
 //     invitations.service.ts: updateClubIdentity().
 import type { ClubLegalInfoRepository, ClubLegalInfoRecord, UpdateClubLegalInfoInput } from './clubLegalInfo.repository.js';
-import { ForbiddenError, ClubNotFoundError } from '../invitations/invitations.service.js';
+import { ClubNotFoundError } from '../invitations/invitations.service.js';
+import { ForbiddenError } from '../shared/errors.js';
+import type { Requester } from '../../plugins/requester.js';
 import type { AuditLogWriter } from '../auditLog/auditLog.service.js';
 
-export interface RequesterContext {
-  id: string;
-  roles: string[];
-  clubId: string | null;
-}
+export type RequesterContext = Requester;
 
 export interface ClubLegalInfoServiceDeps {
   legalInfo: ClubLegalInfoRepository;

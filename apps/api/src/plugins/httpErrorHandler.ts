@@ -27,8 +27,8 @@ import {
   LastAdminError,
 } from '../modules/auth/auth.service.js';
 import { UserNotFoundForExportError, ErasureAlreadyRequestedError } from '../modules/profile/profile.repository.js';
+import { ForbiddenError } from '../modules/shared/errors.js';
 import {
-  ForbiddenError,
   ClubNotFoundError,
   AthleteNotFoundError,
   AthleteClubMismatchError,
@@ -42,12 +42,10 @@ import {
 } from '../modules/invitations/invitations.service.js';
 import {
   QualificationNotFoundError,
-  QualificationForbiddenError,
   QualificationInvalidDateRangeError,
 } from '../modules/qualifications/qualifications.service.js';
 import {
   RefereeAssignmentNotFoundError,
-  RefereeAssignmentForbiddenError,
   ForeignCompetitionError,
 } from '../modules/referees/referees.service.js';
 import { ClubIdRequiredError as AuditLogClubIdRequiredError } from '../modules/auditLog/auditLog.service.js';
@@ -110,6 +108,9 @@ const HTTP_ERROR_REGISTRY = new Map<abstract new (...args: never[]) => Error, Ht
   [InvalidOrExpiredResetTokenError, { status: 410, code: 'invalid_reset_token' }],
   [UserNotFoundForExportError, { status: 404, code: 'not_found' }],
   [ErasureAlreadyRequestedError, { status: 409, code: 'erasure_already_requested' }],
+  // Deckt per `instanceof` auch alle Unterklassen ab (z. B.
+  // QualificationForbiddenError, RefereeAssignmentForbiddenError, siehe
+  // modules/shared/errors.ts).
   [ForbiddenError, { status: 403, code: 'forbidden' }],
   [ClubNotFoundError, { status: 404, code: 'club_not_found' }],
   [AthleteNotFoundError, { status: 404, code: 'athlete_not_found' }],
@@ -122,7 +123,6 @@ const HTTP_ERROR_REGISTRY = new Map<abstract new (...args: never[]) => Error, Ht
   [InvitationAlreadyUsedError, { status: 410, code: 'invalid_invitation' }],
   [InvitationRevokedError, { status: 410, code: 'invalid_invitation' }],
   [QualificationNotFoundError, { status: 404, code: 'not_found' }],
-  [QualificationForbiddenError, { status: 403, code: 'forbidden' }],
   [QualificationInvalidDateRangeError, { status: 400, code: 'qualification_invalid_date_range' }],
   // PATCH /api/users/:userId/roles (docs/Plans/kampfrichter-modul-plan.md,
   // Abschnitt 1.4).
@@ -131,7 +131,6 @@ const HTTP_ERROR_REGISTRY = new Map<abstract new (...args: never[]) => Error, Ht
   [LastAdminError, { status: 409, code: 'last_admin' }],
   // docs/Plans/kampfrichter-modul-plan.md, Abschnitt 5.
   [RefereeAssignmentNotFoundError, { status: 404, code: 'not_found' }],
-  [RefereeAssignmentForbiddenError, { status: 403, code: 'forbidden' }],
   [ForeignCompetitionError, { status: 400, code: 'foreign_competition' }],
   // docs/Plans/vereinsverwaltung-phase3-plan.md, Abschnitt 2.
   [AuditLogClubIdRequiredError, { status: 400, code: 'club_id_required' }],

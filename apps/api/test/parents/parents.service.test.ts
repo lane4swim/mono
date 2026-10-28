@@ -49,7 +49,7 @@ describe('parentsService.getOverview()', () => {
     const overview = new InMemoryParentOverviewGateway(new Map([[CHILD_A_ID, makeOverview(CHILD_A_ID)]]));
     const service = createParentsService({ parentLinks, overview, users: makeUsers({}), athletes: makeAthletes({}), auditLog: NO_AUDIT });
 
-    const result = await service.getOverview({ userId: PARENT_ID, clubId: CLUB_A });
+    const result = await service.getOverview({ id: PARENT_ID, clubId: CLUB_A });
     expect(result.children).toHaveLength(1);
     expect(result.children[0]!.athlete.id).toBe(CHILD_A_ID);
   });
@@ -60,7 +60,7 @@ describe('parentsService.getOverview()', () => {
     const overview = new InMemoryParentOverviewGateway(new Map()); // liefert null für CHILD_A_ID
     const service = createParentsService({ parentLinks, overview, users: makeUsers({}), athletes: makeAthletes({}), auditLog: NO_AUDIT });
 
-    const result = await service.getOverview({ userId: PARENT_ID, clubId: CLUB_A });
+    const result = await service.getOverview({ id: PARENT_ID, clubId: CLUB_A });
     expect(result.children).toHaveLength(0);
   });
 
@@ -72,7 +72,7 @@ describe('parentsService.getOverview()', () => {
       athletes: makeAthletes({}),
       auditLog: NO_AUDIT,
     });
-    const result = await service.getOverview({ userId: PARENT_ID, clubId: CLUB_A });
+    const result = await service.getOverview({ id: PARENT_ID, clubId: CLUB_A });
     expect(result.children).toEqual([]);
   });
 });
@@ -98,36 +98,36 @@ describe('parentsService — Admin-Verknüpfungsverwaltung', () => {
 
   it('legt eine Verknüpfung an, wenn Konto und Athletenprofil zum eigenen Verein gehören', async () => {
     const { service, parentLinks } = build();
-    await service.addLink(PARENT_ID, CHILD_A_ID, { userId: 'admin-1', clubId: CLUB_A });
+    await service.addLink(PARENT_ID, CHILD_A_ID, { id: 'admin-1', clubId: CLUB_A });
     expect(await parentLinks.listByUser(PARENT_ID)).toHaveLength(1);
   });
 
   it('lehnt eine Verknüpfung ab, wenn das Ziel-Konto einem fremden Verein gehört', async () => {
     const { service } = build();
-    await expect(service.addLink('foreign-parent', CHILD_A_ID, { userId: 'admin-1', clubId: CLUB_A })).rejects.toThrow(ParentNotInClubError);
+    await expect(service.addLink('foreign-parent', CHILD_A_ID, { id: 'admin-1', clubId: CLUB_A })).rejects.toThrow(ParentNotInClubError);
   });
 
   it('lehnt eine Verknüpfung ab, wenn das Ziel-Konto nicht die Rolle "parent" trägt', async () => {
     const { service } = build();
-    await expect(service.addLink('trainer-1', CHILD_A_ID, { userId: 'admin-1', clubId: CLUB_A })).rejects.toThrow(UserNotParentError);
+    await expect(service.addLink('trainer-1', CHILD_A_ID, { id: 'admin-1', clubId: CLUB_A })).rejects.toThrow(UserNotParentError);
   });
 
   it('lehnt eine Verknüpfung ab, wenn das Athletenprofil einem fremden Verein gehört', async () => {
     const { service } = build();
-    await expect(service.addLink(PARENT_ID, CHILD_B_ID, { userId: 'admin-1', clubId: CLUB_A })).rejects.toThrow(AthleteNotInClubError);
+    await expect(service.addLink(PARENT_ID, CHILD_B_ID, { id: 'admin-1', clubId: CLUB_A })).rejects.toThrow(AthleteNotInClubError);
   });
 
   it('listLinks() liefert die verknüpften Kinder mit Namen', async () => {
     const { service } = build();
-    await service.addLink(PARENT_ID, CHILD_A_ID, { userId: 'admin-1', clubId: CLUB_A });
-    const links = await service.listLinks(PARENT_ID, { userId: 'admin-1', clubId: CLUB_A });
+    await service.addLink(PARENT_ID, CHILD_A_ID, { id: 'admin-1', clubId: CLUB_A });
+    const links = await service.listLinks(PARENT_ID, { id: 'admin-1', clubId: CLUB_A });
     expect(links).toEqual([{ athleteId: CHILD_A_ID, firstName: 'Mara', lastName: 'Vogel' }]);
   });
 
   it('removeLink() entfernt eine bestehende Verknüpfung', async () => {
     const { service, parentLinks } = build();
-    await service.addLink(PARENT_ID, CHILD_A_ID, { userId: 'admin-1', clubId: CLUB_A });
-    await service.removeLink(PARENT_ID, CHILD_A_ID, { userId: 'admin-1', clubId: CLUB_A });
+    await service.addLink(PARENT_ID, CHILD_A_ID, { id: 'admin-1', clubId: CLUB_A });
+    await service.removeLink(PARENT_ID, CHILD_A_ID, { id: 'admin-1', clubId: CLUB_A });
     expect(await parentLinks.listByUser(PARENT_ID)).toHaveLength(0);
   });
 });
@@ -145,7 +145,7 @@ describe('parentsService — Audit-Log (Issue #96)', () => {
       athletes: makeAthletes({ [CHILD_A_ID]: { clubId: CLUB_A, firstName: 'Mara', lastName: 'Vogel' } }),
       auditLog: createAuditLogService({ entries: auditLogEntries }),
     });
-    const admin = { userId: 'admin-1', clubId: CLUB_A };
+    const admin = { id: 'admin-1', clubId: CLUB_A };
 
     await service.addLink(PARENT_ID, CHILD_A_ID, admin);
     await service.removeLink(PARENT_ID, CHILD_A_ID, admin);
