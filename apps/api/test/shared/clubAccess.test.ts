@@ -3,6 +3,8 @@ import {
   requireClub,
   requireClubAdmin,
   requireAdminOfSameClub,
+  requireOwnClubOrSuperadmin,
+  requireClubAdminOrSuperadmin,
   withoutDeletedAt,
   findActiveOwnedOrThrow,
   CLUB_REQUIRED_MESSAGE,
@@ -81,6 +83,53 @@ describe('requireAdminOfSameClub()', () => {
   it('prüft die Admin-Rolle, bevor die Zielperson geladen wird', async () => {
     const users = new InMemoryUserRepository();
     await expect(requireAdminOfSameClub(users, { id: 't-1', roles: ['trainer'], clubId: CLUB_A }, 'unbekannt', 'nein')).rejects.toThrow(new ForbiddenError('nein'));
+  });
+
+  it('weist superadmin ohne allowSuperadmin ab', async () => {
+    const users = new InMemoryUserRepository();
+    const member = await createUser(users, CLUB_A, ['trainer'], 'trainer@a.de');
+    await expect(requireAdminOfSameClub(users, { id: 'sa-1', roles: ['superadmin'], clubId: null }, member.id, 'nein')).rejects.toThrow(new ForbiddenError('nein'));
+  });
+
+  it('lässt superadmin mit allowSuperadmin jede Zielperson verwalten, ohne Vereinsabgleich', async () => {
+    const users = new InMemoryUserRepository();
+    const member = await createUser(users, CLUB_B, ['trainer'], 'trainer@b.de');
+    const superadmin = { id: 'sa-1', roles: ['superadmin'], clubId: null };
+    const target = await requireAdminOfSameClub(users, superadmin, member.id, 'nein', ForbiddenError, { allowSuperadmin: true });
+    expect(target.id).toBe(member.id);
+    // Eine unbekannte Zielperson bleibt auch für superadmin ein 404.
+    await expect(requireAdminOfSameClub(users, superadmin, 'unbekannt', 'nein', ForbiddenError, { allowSuperadmin: true })).rejects.toThrow(UserNotFoundError);
+  });
+
+  it('verändert mit allowSuperadmin nichts für admins', async () => {
+    const users = new InMemoryUserRepository();
+    const admin = await createUser(users, CLUB_A, ['admin'], 'admin@a.de');
+    const superadminTarget = await createUser(users, null, ['superadmin'], 'sa@lane1.de');
+    const promise = requireAdminOfSameClub(users, { id: admin.id, roles: admin.roles, clubId: CLUB_A }, superadminTarget.id, 'nein', ForbiddenError, { allowSuperadmin: true });
+    await expect(promise).rejects.toThrow(NOT_SAME_CLUB_MESSAGE);
+  });
+});
+
+describe('requireOwnClubOrSuperadmin()', () => {
+  it('lässt jedes Mitglied des Vereins und superadmin durch', () => {
+    expect(() => requireOwnClubOrSuperadmin({ roles: ['athlete'], clubId: CLUB_A }, CLUB_A, 'nein')).not.toThrow();
+    expect(() => requireOwnClubOrSuperadmin({ roles: ['superadmin'], clubId: null }, CLUB_B, 'nein')).not.toThrow();
+  });
+
+  it('weist Mitglieder anderer Vereine ab', () => {
+    expect(() => requireOwnClubOrSuperadmin({ roles: ['admin'], clubId: CLUB_A }, CLUB_B, 'nein')).toThrow(new ForbiddenError('nein'));
+  });
+});
+
+describe('requireClubAdminOrSuperadmin()', () => {
+  it('lässt admins des Vereins und superadmin durch', () => {
+    expect(() => requireClubAdminOrSuperadmin({ roles: ['admin'], clubId: CLUB_A }, CLUB_A, 'nein')).not.toThrow();
+    expect(() => requireClubAdminOrSuperadmin({ roles: ['superadmin'], clubId: null }, CLUB_B, 'nein')).not.toThrow();
+  });
+
+  it('weist admins anderer Vereine und Nicht-Admins des eigenen Vereins ab', () => {
+    expect(() => requireClubAdminOrSuperadmin({ roles: ['admin'], clubId: CLUB_A }, CLUB_B, 'nein')).toThrow(new ForbiddenError('nein'));
+    expect(() => requireClubAdminOrSuperadmin({ roles: ['trainer'], clubId: CLUB_A }, CLUB_A, 'nein')).toThrow(new ForbiddenError('nein'));
   });
 });
 

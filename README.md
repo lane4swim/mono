@@ -54,6 +54,7 @@ Routen und Services verwenden sie, statt sie selbst nachzubauen. Eine
 |---|---|---|
 | `Requester`, `requesterFrom()` | `plugins/requester.ts` | Anfrage-Kontext (`id`, `roles`, `clubId`) aus dem Access Token — der einzige Weg, auf dem Routen die anfragende Person an Services übergeben |
 | `requireClub()`, `requireClubAdmin()`, `requireAdminOfSameClub()` | `modules/shared/clubAccess.ts` | Zugriffsprüfungen „gehört zu einem Verein", „ist dort admin", „Zielperson ist im selben Verein" |
+| `requireOwnClubOrSuperadmin()`, `requireClubAdminOrSuperadmin()` | `modules/shared/clubAccess.ts` | Zugriff auf einen per `clubId` angegebenen Verein (Mitglied bzw. admin des Vereins, superadmin für jeden Verein) |
 | `withoutDeletedAt()`, `findActiveOwnedOrThrow()` | `modules/shared/clubAccess.ts` | Umgang mit personenbezogenen, per Soft-Delete entfernbaren Datensätzen |
 | `ForbiddenError` | `modules/shared/errors.ts` | Basisklasse für jede 403-Antwort; modulspezifische Klassen leiten davon ab und erben die HTTP-Abbildung |
 | `requireAnyRole()` | `plugins/authorize.ts` | Rollen-Guard als Fastify-preHandler |

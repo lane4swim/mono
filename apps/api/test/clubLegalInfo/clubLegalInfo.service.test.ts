@@ -78,6 +78,11 @@ describe('update()', () => {
     await expect(service.update(CLUB_B, UPDATE_INPUT, { id: 'user-1', roles: ['admin'], clubId: CLUB_A })).rejects.toBeInstanceOf(ForbiddenError);
   });
 
+  // Der Service prüft die Rolle selbst, nicht nur requireAnyRole() der Route.
+  it('Nicht-Admins dürfen auch die Angaben des eigenen Vereins nicht ändern', async () => {
+    await expect(service.update(CLUB_A, UPDATE_INPUT, { id: 'user-1', roles: ['trainer'], clubId: CLUB_A })).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
   it('superadmin kann die Angaben jedes Vereins ändern', async () => {
     const result = await service.update(CLUB_B, UPDATE_INPUT, { id: 'user-1', roles: ['superadmin'], clubId: null });
     expect(result).toMatchObject(UPDATE_INPUT);

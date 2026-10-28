@@ -11,11 +11,12 @@
 //     authScreens.js) — bestätigt mit dem Auftraggeber: der Endpunkt ist
 //     nur "von innerhalb des Vereins" erreichbar.
 //   - update(): nur admin (ausschließlich der EIGENE Verein) oder
-//     superadmin (jeder Verein) — exakte Kopie der Zugriffsprüfung aus
+//     superadmin (jeder Verein) — dieselbe zentrale Prüfung
+//     (shared/clubAccess.ts: requireClubAdminOrSuperadmin()) wie
 //     invitations.service.ts: updateClubIdentity().
 import type { ClubLegalInfoRepository, ClubLegalInfoRecord, UpdateClubLegalInfoInput } from './clubLegalInfo.repository.js';
 import { ClubNotFoundError } from '../invitations/invitations.service.js';
-import { ForbiddenError } from '../shared/errors.js';
+import { requireOwnClubOrSuperadmin, requireClubAdminOrSuperadmin } from '../shared/clubAccess.js';
 import type { Requester } from '../../plugins/requester.js';
 import type { AuditLogWriter } from '../auditLog/auditLog.service.js';
 
@@ -29,18 +30,14 @@ export interface ClubLegalInfoServiceDeps {
 export function createClubLegalInfoService(deps: ClubLegalInfoServiceDeps) {
   return {
     async get(clubId: string, requester: RequesterContext): Promise<ClubLegalInfoRecord> {
-      if (!requester.roles.includes('superadmin') && requester.clubId !== clubId) {
-        throw new ForbiddenError('Rechtliche Angaben können nur für den eigenen Verein abgerufen werden.');
-      }
+      requireOwnClubOrSuperadmin(requester, clubId, 'Rechtliche Angaben können nur für den eigenen Verein abgerufen werden.');
       const record = await deps.legalInfo.findByClubId(clubId);
       if (!record) throw new ClubNotFoundError();
       return record;
     },
 
     async update(clubId: string, data: UpdateClubLegalInfoInput, requester: RequesterContext): Promise<ClubLegalInfoRecord> {
-      if (requester.roles.includes('admin') && requester.clubId !== clubId) {
-        throw new ForbiddenError('Admins dürfen nur die rechtlichen Angaben des eigenen Vereins ändern.');
-      }
+      requireClubAdminOrSuperadmin(requester, clubId, 'Nur Admins des eigenen Vereins oder Superadmins dürfen die rechtlichen Angaben ändern.');
       const existing = await deps.legalInfo.findByClubId(clubId);
       if (!existing) throw new ClubNotFoundError();
       const updated = await deps.legalInfo.update(clubId, data);

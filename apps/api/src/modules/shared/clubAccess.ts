@@ -1,6 +1,7 @@
 // Zentrale Stelle für die wiederkehrenden Zugriffsprüfungen "gehört die
-// anfragende Person zu einem Verein", "ist sie dort admin" und "gehört die
-// Zielperson zu demselben Verein" sowie für den Umgang mit
+// anfragende Person zu einem Verein", "ist sie dort admin", "gehört die
+// Zielperson zu demselben Verein" und "darf sie auf einen per clubId
+// angegebenen Verein zugreifen" sowie für den Umgang mit
 // personenbezogenen, per Soft-Delete entfernbaren Datensätzen
 // (Qualifikationen, Kampfrichtereinsätze, …). Services rufen diese
 // Funktionen auf, statt die Prüfungen selbst nachzubauen — eine Änderung
@@ -46,23 +47,61 @@ export function requireClubAdmin<R extends Pick<Requester, 'roles' | 'clubId'>>(
   if (!requester.roles.includes('admin') || !requester.clubId) throw new Forbidden(message);
 }
 
+export interface AdminOfSameClubOptions {
+  // superadmin (gehört zu keinem Verein) darf jede Zielperson verwalten,
+  // ohne Vereinsabgleich — z. B. das Zurücksetzen der
+  // Zwei-Faktor-Anmeldung. Ohne diese Option wird superadmin wie jede
+  // andere Nicht-Admin-Rolle abgewiesen.
+  allowSuperadmin?: boolean;
+}
+
 // requireClubAdmin() plus: die Zielperson existiert und gehört zum
 // selben Verein. Liefert den geladenen Datensatz der Zielperson zurück,
 // damit der Aufrufer ihn nicht erneut laden muss. Eine unbekannte
 // Zielperson ergibt UserNotFoundError (404), eine vereinsfremde die
-// übergebene Fehlerklasse (403).
+// übergebene Fehlerklasse (403). Eine Zielperson ohne Verein (superadmin)
+// gehört nie "zum selben Verein" eines admins, da dessen clubId nach
+// requireClubAdmin() immer gesetzt ist.
 export async function requireAdminOfSameClub(
   users: Pick<UserRepository, 'findById'>,
   requester: Requester,
   targetUserId: string,
   notAdminMessage: string,
   Forbidden: ErrorClass = ForbiddenError,
+  options: AdminOfSameClubOptions = {},
 ): Promise<UserRecord> {
-  requireClubAdmin(requester, notAdminMessage, Forbidden);
+  const asSuperadmin = options.allowSuperadmin === true && requester.roles.includes('superadmin');
+  if (!asSuperadmin) requireClubAdmin(requester, notAdminMessage, Forbidden);
   const targetUser = await users.findById(targetUserId);
   if (!targetUser) throw new UserNotFoundError();
-  if (targetUser.clubId !== requester.clubId) throw new Forbidden(NOT_SAME_CLUB_MESSAGE);
+  if (!asSuperadmin && targetUser.clubId !== requester.clubId) throw new Forbidden(NOT_SAME_CLUB_MESSAGE);
   return targetUser;
+}
+
+// Für Endpunkte, deren Ziel ein per clubId angegebener Verein ist (etwa
+// /api/clubs/:id/...): jedes Mitglied des Vereins darf zugreifen,
+// superadmin auf jeden Verein.
+export function requireOwnClubOrSuperadmin(
+  requester: Pick<Requester, 'roles' | 'clubId'>,
+  clubId: string,
+  message: string,
+  Forbidden: ErrorClass = ForbiddenError,
+): void {
+  if (requester.roles.includes('superadmin')) return;
+  if (requester.clubId !== clubId) throw new Forbidden(message);
+}
+
+// Wie requireOwnClubOrSuperadmin(), aber nur für admins des Vereins (plus
+// superadmin für jeden Verein). Prüft die Rolle selbst, statt sich allein
+// auf requireAnyRole() der Route zu verlassen.
+export function requireClubAdminOrSuperadmin(
+  requester: Pick<Requester, 'roles' | 'clubId'>,
+  clubId: string,
+  message: string,
+  Forbidden: ErrorClass = ForbiddenError,
+): void {
+  if (requester.roles.includes('superadmin')) return;
+  if (!requester.roles.includes('admin') || requester.clubId !== clubId) throw new Forbidden(message);
 }
 
 // Entfernt `deletedAt` aus einer API-Antwort — reine interne Buchhaltung
