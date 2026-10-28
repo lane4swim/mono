@@ -14,12 +14,10 @@ import { generateInvitationToken, hashInvitationToken } from '../../auth/tokens.
 import type { MailSender } from '../../mail/mailer.js';
 import type { UserRepository } from '../auth/auth.repository.js';
 import type { AuditLogWriter } from '../auditLog/auditLog.service.js';
+import type { Requester } from '../../plugins/requester.js';
+import { ForbiddenError } from '../shared/errors.js';
+import { requireClubAdminOrSuperadmin } from '../shared/clubAccess.js';
 
-export class ForbiddenError extends Error {
-  constructor(message = 'Für diese Aktion fehlt die Berechtigung.') {
-    super(message);
-  }
-}
 export class ClubNotFoundError extends Error {
   constructor() {
     super('Verein wurde nicht gefunden.');
@@ -75,11 +73,7 @@ export class InvitationRevokedError extends Error {
   }
 }
 
-export interface RequesterContext {
-  id: string;
-  roles: string[]; // Teilmenge von 'superadmin' | 'admin' | 'trainer' | 'athlete'
-  clubId: string | null;
-}
+export type RequesterContext = Requester;
 
 export interface InvitationsServiceDeps {
   clubs: ClubRepository;
@@ -468,9 +462,7 @@ export function createInvitationsService(deps: InvitationsServiceDeps) {
       requester: RequesterContext,
     ): Promise<ClubRecord> {
       requireActionRole(requester, ACTION_ROLES.updateClubIdentity, 'Nur Admins (oder Superadministrator:innen) dürfen die Vereinskennung ändern.');
-      if (requester.roles.includes('admin') && requester.clubId !== clubId) {
-        throw new ForbiddenError('Admins dürfen nur die Vereinskennung des eigenen Vereins ändern.');
-      }
+      requireClubAdminOrSuperadmin(requester, clubId, 'Admins dürfen nur die Vereinskennung des eigenen Vereins ändern.');
       const club = await deps.clubs.findById(clubId);
       if (!club) throw new ClubNotFoundError();
       const updated = await deps.clubs.updateIdentity(clubId, identity);

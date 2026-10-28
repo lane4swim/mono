@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createClubLegalInfoService, type ClubLegalInfoService } from '../../src/modules/clubLegalInfo/clubLegalInfo.service.js';
 import { InMemoryClubLegalInfoRepository } from '../../src/modules/clubLegalInfo/clubLegalInfo.repository.memory.js';
-import { ForbiddenError, ClubNotFoundError } from '../../src/modules/invitations/invitations.service.js';
+import { ClubNotFoundError } from '../../src/modules/invitations/invitations.service.js';
+import { ForbiddenError } from '../../src/modules/shared/errors.js';
 import { createAuditLogService } from '../../src/modules/auditLog/auditLog.service.js';
 import { InMemoryAuditLogRepository } from '../../src/modules/auditLog/auditLog.repository.memory.js';
 
@@ -75,6 +76,11 @@ describe('update()', () => {
 
   it('admin darf NICHT die Angaben eines fremden Vereins ändern', async () => {
     await expect(service.update(CLUB_B, UPDATE_INPUT, { id: 'user-1', roles: ['admin'], clubId: CLUB_A })).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  // Der Service prüft die Rolle selbst, nicht nur requireAnyRole() der Route.
+  it('Nicht-Admins dürfen auch die Angaben des eigenen Vereins nicht ändern', async () => {
+    await expect(service.update(CLUB_A, UPDATE_INPUT, { id: 'user-1', roles: ['trainer'], clubId: CLUB_A })).rejects.toBeInstanceOf(ForbiddenError);
   });
 
   it('superadmin kann die Angaben jedes Vereins ändern', async () => {

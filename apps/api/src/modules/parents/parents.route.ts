@@ -5,17 +5,13 @@
 // 'athlete') lässt diese Rolle strukturell nicht hinein.
 import type { FastifyInstance } from 'fastify';
 import { CreateParentLinkRequestSchema, ParentCalendarQuerySchema } from '@lane1/shared-types';
-import type { ParentsService, RequesterContext } from './parents.service.js';
+import type { ParentsService } from './parents.service.js';
 import { requireAnyRole } from '../../plugins/authorize.js';
 import { parseInput } from '../../plugins/parseInput.js';
+import { requesterFrom } from '../../plugins/requester.js';
 
 export interface ParentsRoutesOptions {
   parentsService: ParentsService;
-}
-
-function requesterFrom(request: { user?: { sub: string; clubId: string | null } }): RequesterContext {
-  const user = request.user!;
-  return { userId: user.sub, clubId: user.clubId };
 }
 
 export async function parentsRoutes(app: FastifyInstance, opts: ParentsRoutesOptions) {

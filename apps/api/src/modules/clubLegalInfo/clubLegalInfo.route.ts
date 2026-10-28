@@ -4,17 +4,13 @@
 // fachlichen Hintergrund.
 import type { FastifyInstance } from 'fastify';
 import { UpdateClubLegalInfoRequestSchema } from '@lane1/shared-types';
-import type { ClubLegalInfoService, RequesterContext } from './clubLegalInfo.service.js';
+import type { ClubLegalInfoService } from './clubLegalInfo.service.js';
 import { requireAnyRole } from '../../plugins/authorize.js';
 import { parseInput } from '../../plugins/parseInput.js';
+import { requesterFrom } from '../../plugins/requester.js';
 
 export interface ClubLegalInfoRoutesOptions {
   clubLegalInfoService: ClubLegalInfoService;
-}
-
-function requesterFrom(request: { user?: { sub: string; roles: string[]; clubId: string | null } }): RequesterContext {
-  const user = request.user!;
-  return { id: user.sub, roles: user.roles, clubId: user.clubId };
 }
 
 export async function clubLegalInfoRoutes(app: FastifyInstance, opts: ClubLegalInfoRoutesOptions) {

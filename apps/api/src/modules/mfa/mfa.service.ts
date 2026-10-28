@@ -8,7 +8,10 @@ import type { ClubRepository } from '../invitations/invitations.repository.js';
 import type { AuditLogWriter } from '../auditLog/auditLog.service.js';
 import type { MailSender } from '../../mail/mailer.js';
 import { InvalidCurrentPasswordError, UserNotFoundError } from '../auth/auth.service.js';
-import { ForbiddenError, ClubNotFoundError } from '../invitations/invitations.service.js';
+import { ClubNotFoundError } from '../invitations/invitations.service.js';
+import { ForbiddenError } from '../shared/errors.js';
+import { requireAdminOfSameClub, requireClubAdminOrSuperadmin } from '../shared/clubAccess.js';
+import type { Requester } from '../../plugins/requester.js';
 import { verifyPassword } from '../../auth/password.js';
 import { buildOtpauthUri, generateTotpSecret, verifyTotp } from '../../auth/totp.js';
 import { verifyMfaSetupToken } from '../../auth/tokens.js';
@@ -24,11 +27,7 @@ import {
   MfaRequiredCannotDisableError,
 } from './mfaErrors.js';
 
-export interface MfaRequester {
-  id: string;
-  roles: string[];
-  clubId: string | null;
-}
+export type MfaRequester = Requester;
 
 export interface MfaServiceDeps {
   users: UserRepository;
@@ -194,14 +193,14 @@ export function createMfaService(deps: MfaServiceDeps) {
     // selbst TOTP nutzt, mit einem Code.
     async resetForUser(targetUserId: string, requester: MfaRequester, currentPassword: string, secondFactor: SecondFactorInput) {
       if (targetUserId === requester.id) throw new ForbiddenError('Die eigene Zwei-Faktor-Anmeldung lässt sich nicht auf diesem Weg zurücksetzen.');
-      const isSuperadmin = requester.roles.includes('superadmin');
-      if (!isSuperadmin && !requester.roles.includes('admin')) {
-        throw new ForbiddenError('Nur Admins und Superadmins dürfen die Zwei-Faktor-Anmeldung zurücksetzen.');
-      }
-      const target = await requireUser(targetUserId);
-      if (!isSuperadmin && (target.clubId === null || target.clubId !== requester.clubId || target.roles.includes('superadmin'))) {
-        throw new ForbiddenError('Diese Person gehört nicht zu Ihrem Verein.');
-      }
+      const target = await requireAdminOfSameClub(
+        deps.users,
+        requester,
+        targetUserId,
+        'Nur Admins und Superadmins dürfen die Zwei-Faktor-Anmeldung zurücksetzen.',
+        ForbiddenError,
+        { allowSuperadmin: true },
+      );
       const actor = await requireUser(requester.id);
       await requirePassword(actor, currentPassword);
       await requireOwnSecondFactor(actor, secondFactor);
@@ -224,10 +223,7 @@ export function createMfaService(deps: MfaServiceDeps) {
       currentPassword: string,
       secondFactor: SecondFactorInput,
     ) {
-      const isSuperadmin = requester.roles.includes('superadmin');
-      if (!isSuperadmin && !(requester.roles.includes('admin') && requester.clubId === clubId)) {
-        throw new ForbiddenError('Nur Admins des eigenen Vereins oder Superadmins dürfen diese Einstellung ändern.');
-      }
+      requireClubAdminOrSuperadmin(requester, clubId, 'Nur Admins des eigenen Vereins oder Superadmins dürfen diese Einstellung ändern.');
       const club = await deps.clubs.findById(clubId);
       if (!club) throw new ClubNotFoundError();
       const actor = await requireUser(requester.id);

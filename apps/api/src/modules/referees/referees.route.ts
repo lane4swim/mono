@@ -8,9 +8,10 @@
 // Modul-Gate-Cache unten).
 import type { FastifyInstance } from 'fastify';
 import { CreateRefereeAssignmentRequestSchema, UpdateRefereeAssignmentRequestSchema, RespondRefereeAssignmentRequestSchema } from '@lane1/shared-types';
-import type { RefereesService, RequesterContext } from './referees.service.js';
+import type { RefereesService } from './referees.service.js';
 import { requireAnyRole } from '../../plugins/authorize.js';
 import { parseInput } from '../../plugins/parseInput.js';
+import { requesterFrom } from '../../plugins/requester.js';
 
 // Minimale, für dieses Modul ausreichende Nachschlagemöglichkeit für die
 // Modul-Pakete eines Vereins — bewusst dieselbe schlanke Form wie
@@ -37,11 +38,6 @@ interface CachedClubModules {
 // eine nachträgliche Extraktion ist bewusst nicht Teil dieses Plans, um
 // den Umfang nicht über das Kampfrichter-Modul hinaus auszuweiten.
 const CLUB_MODULES_CACHE_TTL_MS = 45_000;
-
-function requesterFrom(request: { user?: { sub: string; roles: string[]; clubId: string | null } }): RequesterContext {
-  const user = request.user!;
-  return { id: user.sub, roles: user.roles, clubId: user.clubId };
-}
 
 function toCreateInput(body: {
   competitionName: string;

@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { InMemoryMailSender } from '../../src/mail/mailer.memory.js';
+import { ForbiddenError } from '../../src/modules/shared/errors.js';
 import {
   createInvitationsService,
-  ForbiddenError,
   ClubNotFoundError,
   AthleteNotFoundError,
   AthleteClubMismatchError,
