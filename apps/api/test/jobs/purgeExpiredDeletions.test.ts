@@ -97,6 +97,24 @@ describe('purgeExpiredDeletions — Comment.authorName-Anonymisierung (Befund N5
 
     expect((db.exercises![0]!.comments as Array<{ authorName: string }>)[0]!.authorName).toBe(ANONYMIZED_COMMENT_AUTHOR);
   });
+
+  // Issue #151 — siehe Prisma-Pendant in profileErasure.integration.test.ts.
+  it('anonymisiert Kommentare an Ergebnissen anderer Athlet:innen, nur im eigenen Verein', async () => {
+    const comment = { id: 'c1', authorId: 'u1', authorName: 'Coach Nina', text: 'Starke Wende', createdAt: NOW.toISOString() };
+    const db = makeDb({
+      users: [{ id: 'u1', clubId: 'club-1', athleteId: null, name: 'Coach Nina' }],
+      deletionRequests: [{ id: 'req1', userId: 'u1', purgeAfter: PAST }],
+      results: [
+        { id: 'r1', athleteId: 'a-other', clubId: 'club-1', comments: [comment] },
+        { id: 'r2', athleteId: 'a-foreign', clubId: 'club-2', comments: [comment] },
+      ],
+    });
+    const gateway = new InMemoryErasureJobGateway(db);
+    await purgeExpiredDeletions(gateway, NOW);
+
+    expect((db.results[0]!.comments as Array<{ authorName: string }>)[0]!.authorName).toBe(ANONYMIZED_COMMENT_AUTHOR);
+    expect((db.results[1]!.comments as Array<{ authorName: string }>)[0]!.authorName).toBe('Coach Nina');
+  });
 });
 
 // Sicherheitsreview 2026-08-27, Befund M1: Invitation.email (die

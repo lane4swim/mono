@@ -2,12 +2,20 @@ import { ANONYMIZED_INVITATION_EMAIL, type ErasureJobGateway, type DueErasureReq
 import type { TombstoneRecord } from '../modules/sync/sync.gateway.js';
 import type { AuditLogEntryRecord } from '../modules/auditLog/auditLog.repository.js';
 import { newAuditPseudonym, pseudonymizeAuditEntry } from './auditLogPseudonymization.js';
-import { anonymizePlanCommentAuthors, anonymizeExerciseCommentAuthors, anonymizeTemplateCommentAuthors, anonymizeSectionTemplateCommentAuthors } from './commentAnonymization.js';
+import {
+  anonymizePlanCommentAuthors,
+  anonymizeExerciseCommentAuthors,
+  anonymizeResultCommentAuthors,
+  anonymizeTemplateCommentAuthors,
+  anonymizeSectionTemplateCommentAuthors,
+} from './commentAnonymization.js';
 
 export interface InMemoryErasureDatabase {
   users: Array<{ id: string; clubId: string | null; athleteId: string | null; [key: string]: unknown }>;
   athletes: Array<{ id: string; [key: string]: unknown }>;
-  results: Array<{ id: string; athleteId: string; [key: string]: unknown }>;
+  // `clubId`/`comments` optional — nur Tests der Kommentar-Anonymisierung
+  // (Issue #151) brauchen sie.
+  results: Array<{ id: string; athleteId: string; clubId?: string; comments?: unknown; [key: string]: unknown }>;
   entries: Array<{ id: string; athleteId: string; [key: string]: unknown }>;
   actionItems: Array<{ id: string; athleteId: string; [key: string]: unknown }>;
   sessions: Array<{ id: string; clubId: string; attendance: Array<{ athleteId?: string; [key: string]: unknown }> }>;
@@ -98,6 +106,11 @@ export class InMemoryErasureJobGateway implements ErasureJobGateway {
         if (exercise.clubId !== clubId) continue;
         const { changed, comments } = anonymizeExerciseCommentAuthors(exercise, author);
         if (changed) exercise.comments = comments;
+      }
+      for (const result of this.db.results) {
+        if (result.clubId !== clubId) continue;
+        const { changed, comments } = anonymizeResultCommentAuthors({ comments: result.comments }, author);
+        if (changed) result.comments = comments;
       }
       for (const template of this.db.templates ?? []) {
         if (template.clubId !== clubId) continue;

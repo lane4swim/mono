@@ -1,5 +1,6 @@
 // Anonymisiert `Comment.authorName` beim Art.-17-Hard-Purge. Der Klarname
-// steckt eingebettet in "plans.comments", "exercises.comments" sowie
+// steckt eingebettet in "plans.comments", "exercises.comments",
+// "results.comments" sowie
 // verschachtelt in "plans.days[].sets[].comments" und
 // "templates.sets[].comments" — dieselbe SetEntry-Struktur trägt Plan.days
 // wie Template.sets. Ohne diesen Schritt überlebten die Namen samt
@@ -147,6 +148,16 @@ export function anonymizeExerciseCommentAuthors(
   author: DeletedCommentAuthor,
 ): { changed: boolean; comments: unknown } {
   const comments = anonymizeCommentArray(exercise.comments, author);
+  return { changed: comments.changed, comments: comments.value };
+}
+
+// Ergebnisse tragen ihre Kommentare wie Übungen als flaches Array direkt
+// am Datensatz (ResultSchema.comments, seit dem DSV7/Lenex-Import).
+export function anonymizeResultCommentAuthors(
+  result: { comments: unknown },
+  author: DeletedCommentAuthor,
+): { changed: boolean; comments: unknown } {
+  const comments = anonymizeCommentArray(result.comments, author);
   return { changed: comments.changed, comments: comments.value };
 }
 
