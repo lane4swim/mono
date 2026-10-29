@@ -7,7 +7,13 @@
 // orchestriert von jobs/purgeExpiredDeletions.ts.
 import type { PrismaClient, Prisma } from '@prisma/client';
 import { newAuditPseudonym, pseudonymizeAuditEntry } from './auditLogPseudonymization.js';
-import { anonymizePlanCommentAuthors, anonymizeExerciseCommentAuthors, anonymizeTemplateCommentAuthors, anonymizeSectionTemplateCommentAuthors } from './commentAnonymization.js';
+import {
+  anonymizePlanCommentAuthors,
+  anonymizeExerciseCommentAuthors,
+  anonymizeResultCommentAuthors,
+  anonymizeTemplateCommentAuthors,
+  anonymizeSectionTemplateCommentAuthors,
+} from './commentAnonymization.js';
 
 // Platzhalter, auf den `Invitation.email` beim Hard-Purge gesetzt wird
 // (purgeUserAndDependents() unten); Gegenstück zu ANONYMIZED_COMMENT_AUTHOR
@@ -142,7 +148,7 @@ export class PrismaErasureJobGateway implements ErasureJobGateway {
 
       // Comment.authorName ist ein freier, beim Anlegen aus dem eingeloggten
       // Konto übernommener Klarname — eingebettet in "plans.comments",
-      // "exercises.comments", "plans.days[].sets[].comments",
+      // "exercises.comments", "results.comments", "plans.days[].sets[].comments",
       // "templates.sets[].comments" und "section_templates.entries[].comments"
       // (Struktur siehe commentAnonymization.ts).
       // Bewusst NICHT an `user.athleteId` gekoppelt: Kommentare stammen auch
@@ -209,6 +215,24 @@ export class PrismaErasureJobGateway implements ErasureJobGateway {
           const { changed, comments } = anonymizeExerciseCommentAuthors(row, author);
           if (changed) {
             await tx.exercise.update({ where: { id: row.id }, data: { comments: comments as Prisma.InputJsonValue } });
+          }
+        }
+
+        // Die Ergebnisse der EIGENEN Athlet:innen-Person sind oben bereits
+        // gelöscht; hier bleiben nur Kommentare an Ergebnissen anderer
+        // Athlet:innen übrig (Issue #151).
+        const affectedResults = await tx.$queryRaw<Array<{ id: string; comments: unknown }>>`
+          SELECT id, comments FROM "results"
+          WHERE "clubId" = ${user.clubId}
+            AND (
+              comments @> ${authorIdContainment}::jsonb
+              OR comments @> ${authorNameContainment}::jsonb
+            )
+        `;
+        for (const row of affectedResults) {
+          const { changed, comments } = anonymizeResultCommentAuthors(row, author);
+          if (changed) {
+            await tx.result.update({ where: { id: row.id }, data: { comments: comments as Prisma.InputJsonValue } });
           }
         }
 

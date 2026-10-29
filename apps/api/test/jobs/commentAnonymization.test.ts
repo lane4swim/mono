@@ -13,6 +13,7 @@ import {
   anonymizeSetEntries,
   anonymizePlanCommentAuthors,
   anonymizeExerciseCommentAuthors,
+  anonymizeResultCommentAuthors,
   anonymizeTemplateCommentAuthors,
   anonymizeSectionTemplateCommentAuthors,
 } from '../../src/jobs/commentAnonymization.js';
@@ -202,6 +203,17 @@ describe('anonymizeExerciseCommentAuthors', () => {
     const result = anonymizeExerciseCommentAuthors({ comments: [makeComment()] }, MARA);
     expect(result.changed).toBe(true);
     expect((result.comments as Array<{ authorName: string }>)[0]!.authorName).toBe(ANONYMIZED_COMMENT_AUTHOR);
+  });
+});
+
+describe('anonymizeResultCommentAuthors', () => {
+  it('anonymisiert Kommentare an Ergebnissen und lässt fremde unangetastet', () => {
+    const result = anonymizeResultCommentAuthors({ comments: [makeComment(), makeComment({ id: 'c2', authorId: JENS_ID, authorName: 'Jens Bauer' })] }, MARA);
+    expect(result.changed).toBe(true);
+    const comments = result.comments as Array<{ authorName: string; authorId?: string }>;
+    expect(comments[0]!.authorName).toBe(ANONYMIZED_COMMENT_AUTHOR);
+    expect(comments[0]!.authorId).toBeUndefined();
+    expect(comments[1]).toMatchObject({ authorId: JENS_ID, authorName: 'Jens Bauer' });
   });
 });
 

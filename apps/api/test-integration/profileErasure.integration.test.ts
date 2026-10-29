@@ -526,6 +526,42 @@ describe('PrismaErasureJobGateway.purgeUserAndDependents() — Comment.authorNam
     const updated = await prisma.exercise.findUnique({ where: { id: exercise.id } });
     expect(updated?.comments).toMatchObject([{ authorName: ANONYMIZED_COMMENT_AUTHOR, text: 'Trainer-Hinweis' }]);
   });
+
+  // Issue #151: Ergebnisse tragen seit dem DSV7/Lenex-Import ebenfalls
+  // Kommentare (ResultSchema.comments). Gelöscht werden beim Purge nur die
+  // Ergebnisse der EIGENEN Athlet:innen-Person — ein Kommentar der
+  // gelöschten Person am Ergebnis einer ANDEREN Athlet:in bleibt stehen und
+  // muss deshalb anonymisiert werden.
+  it('anonymisiert Kommentare an Ergebnissen anderer Athlet:innen', async () => {
+    const club = await createTestClub();
+    const now = new Date();
+    const trainer = await prisma.user.create({
+      data: { clubId: club.id, name: 'Coach Nina', email: `nina-${randomUUID()}@example.org`, passwordHash: 'hash', role: 'trainer', roles: ['trainer'], athleteId: null },
+    });
+    const otherAthlete = await prisma.athlete.create({ data: { clubId: club.id, firstName: 'Tim', lastName: 'Sommer' } });
+    const result = await prisma.result.create({
+      data: {
+        clubId: club.id,
+        athleteId: otherAthlete.id,
+        event: '100F',
+        time: 61.2,
+        date: now,
+        comments: [
+          { id: 'c1', authorId: trainer.id, authorName: 'Coach Nina', text: 'Starke Wende', createdAt: now.toISOString() },
+          { id: 'c2', authorId: randomUUID(), authorName: 'Jens Bauer', text: 'Nicht meins', createdAt: now.toISOString() },
+        ],
+      },
+    });
+
+    await erasureGateway.purgeUserAndDependents(trainer.id);
+
+    const updated = await prisma.result.findUnique({ where: { id: result.id } });
+    expect(updated?.comments).toMatchObject([
+      { authorName: ANONYMIZED_COMMENT_AUTHOR, text: 'Starke Wende' },
+      { authorName: 'Jens Bauer', text: 'Nicht meins' },
+    ]);
+    expect(JSON.stringify(updated?.comments)).not.toContain(trainer.id);
+  });
 });
 
 describe('PrismaErasureJobGateway.findDuePendingRequests()', () => {
