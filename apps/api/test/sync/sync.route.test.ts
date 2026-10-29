@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { MODULE_KEYS } from '@lane1/shared-types';
 import { buildApp } from '../../src/app.js';
-import { sweepExpiredClubModules, type CachedClubModules } from '../../src/modules/sync/sync.route.js';
+import { sweepExpiredClubModules, type CachedClubModules } from '../../src/plugins/clubModules.js';
 import { loadEnv } from '../../src/config/env.js';
 import { createAuthService } from '../../src/modules/auth/auth.service.js';
 import { InMemoryUserRepository, InMemoryRefreshTokenRepository, InMemoryPasswordResetTokenRepository } from '../../src/modules/auth/auth.repository.memory.js';
