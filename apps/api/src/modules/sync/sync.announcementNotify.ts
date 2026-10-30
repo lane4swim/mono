@@ -3,13 +3,10 @@
 // sync.service.ts (dessen push() reine Push/Pull-Mechanik bleibt, siehe
 // dortiger Datei-Kopfkommentar) — sync.route.ts ruft diese Funktion NACH
 // syncService.push() fire-and-forget auf, siehe dort.
-import type { PushSender } from '../../push/pusher.js';
-import type { PushSubscriptionRepository } from '../push/push.repository.js';
+import { sendPushToUsers, type PushDeliveryDeps } from '../../push/sendToUsers.js';
 import type { AnnouncementRecipientsGateway } from './announcementRecipients.repository.js';
 
-export interface AnnouncementNotifyDeps {
-  pusher: PushSender;
-  pushSubscriptions: PushSubscriptionRepository;
+export interface AnnouncementNotifyDeps extends PushDeliveryDeps {
   recipients: AnnouncementRecipientsGateway;
 }
 
@@ -45,17 +42,6 @@ export async function notifyAnnouncementCreated(
     const groupId = typeof payload?.groupId === 'string' ? payload.groupId : null;
 
     const recipientIds = await deps.recipients.findRecipientUserIds(clubId, groupId, authorUserId);
-    if (recipientIds.length === 0) continue;
-
-    const subscriptionsByUser = await deps.pushSubscriptions.listByUserIds(recipientIds);
-    const allSubscriptions = [...subscriptionsByUser.values()].flat();
-    if (allSubscriptions.length === 0) continue;
-
-    const { expiredSubscriptionIds } = await deps.pusher.send(allSubscriptions, {
-      title: 'Neue Ankündigung',
-      body: title,
-      url: '#/announcements',
-    });
-    if (expiredSubscriptionIds.length > 0) await deps.pushSubscriptions.deleteByIds(expiredSubscriptionIds);
+    await sendPushToUsers(deps, recipientIds, { title: 'Neue Ankündigung', body: title, url: '#/announcements' });
   }
 }
