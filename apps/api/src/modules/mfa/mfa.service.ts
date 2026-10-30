@@ -7,6 +7,7 @@ import type { MfaRecoveryCodeRepository, RefreshTokenRepository, UserRecord, Use
 import type { ClubRepository } from '../invitations/invitations.repository.js';
 import type { AuditLogWriter } from '../auditLog/auditLog.service.js';
 import type { MailSender } from '../../mail/mailer.js';
+import { notifySecurityChange } from '../../mail/securityNotice.js';
 import { InvalidCurrentPasswordError, UserNotFoundError } from '../auth/auth.service.js';
 import { ClubNotFoundError } from '../invitations/invitations.service.js';
 import { ForbiddenError } from '../shared/errors.js';
@@ -65,11 +66,7 @@ export function createMfaService(deps: MfaServiceDeps) {
   }
 
   function notify(user: UserRecord, changeType: 'mfa' | 'recoveryCodesRegenerated' = 'mfa'): void {
-    deps.mailer
-      .sendAccountSecurityChangeNotice({ to: user.email, recipientName: user.name, changeType, locale: user.locale })
-      .catch((err) => {
-        console.error('[mfa] Fehler beim Versand des Sicherheitshinweises:', err);
-      });
+    void notifySecurityChange(deps.mailer, user, changeType, 'mfa');
   }
 
   async function newRecoveryCodes(userId: string): Promise<string[]> {

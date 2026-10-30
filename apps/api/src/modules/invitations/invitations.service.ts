@@ -13,7 +13,7 @@ import type { ClubRepository, InvitationRepository, InvitationRecord, ClubRecord
 import { generateInvitationToken, hashInvitationToken } from '../../auth/tokens.js';
 import type { MailSender } from '../../mail/mailer.js';
 import type { UserRepository } from '../auth/auth.repository.js';
-import type { AuditLogWriter } from '../auditLog/auditLog.service.js';
+import { userLabelOr, type AuditLogWriter } from '../auditLog/auditLog.service.js';
 import type { Requester } from '../../plugins/requester.js';
 import { ForbiddenError } from '../shared/errors.js';
 import { requireClubAdminOrSuperadmin } from '../shared/clubAccess.js';
@@ -122,7 +122,7 @@ async function resolveRequester(users: UserRepository, requesterId: string): Pro
   const requesterUser = await users.findById(requesterId);
   return {
     locale: requesterUser?.locale,
-    actorLabel: requesterUser ? `${requesterUser.name} <${requesterUser.email}>` : requesterId,
+    actorLabel: userLabelOr(requesterUser, requesterId),
   };
 }
 

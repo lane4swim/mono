@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { createAuditLogService, ClubIdRequiredError, type AuditLogService } from '../../src/modules/auditLog/auditLog.service.js';
+import { createAuditLogService, ClubIdRequiredError, userLabel, userLabelOr, type AuditLogService } from '../../src/modules/auditLog/auditLog.service.js';
 import { InMemoryAuditLogRepository } from '../../src/modules/auditLog/auditLog.repository.memory.js';
 
 const CLUB_A = '11111111-1111-1111-1111-111111111111';
@@ -111,5 +111,19 @@ describe('record() — Schreibfehler', () => {
 
     expect(consoleError).toHaveBeenCalledWith(expect.stringContaining('invitation.created'), expect.any(Error));
     consoleError.mockRestore();
+  });
+});
+
+describe('userLabel() / userLabelOr()', () => {
+  const user = { name: 'Mara Vogel', email: 'mara@example.org' };
+
+  it('formatiert "Name <E-Mail>"', () => {
+    expect(userLabel(user)).toBe('Mara Vogel <mara@example.org>');
+    expect(userLabelOr(user, 'user-1')).toBe('Mara Vogel <mara@example.org>');
+  });
+
+  it('fällt für ein nicht geladenes Konto auf die ID zurück', () => {
+    expect(userLabelOr(null, 'user-1')).toBe('user-1');
+    expect(userLabelOr(undefined, 'user-1')).toBe('user-1');
   });
 });

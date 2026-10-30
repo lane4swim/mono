@@ -29,7 +29,8 @@ import { InvalidMfaCodeError, MfaSetupRequiredError } from '../mfa/mfaErrors.js'
 import { signAccessToken, generateRefreshToken, hashRefreshToken, generatePasswordResetToken, hashPasswordResetToken } from '../../auth/tokens.js';
 import type { KeyPair } from '../../auth/keys.js';
 import type { MailSender } from '../../mail/mailer.js';
-import { type AuditLogWriter, userLabel, UNKNOWN_ACTOR_LABEL, SYSTEM_ACTOR_LABEL } from '../auditLog/auditLog.service.js';
+import { type AuditLogWriter, userLabel, userLabelOr, UNKNOWN_ACTOR_LABEL, SYSTEM_ACTOR_LABEL } from '../auditLog/auditLog.service.js';
+import { notifySecurityChange } from '../../mail/securityNotice.js';
 
 // Fest einprogrammierter, gültig kodierter argon2id-Hash für ein beliebiges
 // Dummy-Passwort — dient AUSSCHLIESSLICH dazu, login() bei einer unbekannten
@@ -313,7 +314,7 @@ export function createAuthService(deps: AuthServiceDeps) {
       actorLabel: SYSTEM_ACTOR_LABEL,
       action: 'auth.refreshTokenReuse',
       targetId: userId,
-      targetLabel: user ? userLabel(user) : userId,
+      targetLabel: userLabelOr(user, userId),
     });
   }
 
@@ -520,11 +521,7 @@ export function createAuthService(deps: AuthServiceDeps) {
         await deps.auditLog.record({ clubId: user.clubId, actorId: user.id, actorLabel: userLabel(user), action: 'auth.recoveryCodeUsed', targetId: user.id, targetLabel: userLabel(user) });
         // Ohne await, wie die übrigen Sicherheitshinweise: ein Mailfehler darf
         // die Anmeldung nicht scheitern lassen.
-        deps.mailer
-          .sendAccountSecurityChangeNotice({ to: user.email, recipientName: user.name, changeType: 'recoveryCodeUsed', locale: user.locale })
-          .catch((err) => {
-            console.error('[auth] Fehler beim Versand des Hinweises zur Anmeldung mit Wiederherstellungscode:', err);
-          });
+        void notifySecurityChange(deps.mailer, user, 'recoveryCodeUsed', 'auth');
       }
       return issueSession(user);
     },
@@ -783,11 +780,7 @@ export function createAuthService(deps: AuthServiceDeps) {
       // Übernahme erst beim nächsten eigenen Anmeldeversuch. Bewusst ohne
       // await (wie bei requestPasswordReset()): ein Fehlschlag darf den
       // erfolgreichen Passwortwechsel nicht verzögern oder scheitern lassen.
-      deps.mailer
-        .sendAccountSecurityChangeNotice({ to: user.email, recipientName: user.name, changeType: 'password', locale: user.locale })
-        .catch((err) => {
-          console.error('[auth] Fehler beim Versand des Sicherheitshinweises nach Passwortwechsel:', err);
-        });
+      void notifySecurityChange(deps.mailer, user, 'password', 'auth');
 
       const tokens = await issueTokens(updated);
       const clubContext = await resolveClubContext(deps.clubs, updated.clubId);
@@ -860,11 +853,7 @@ export function createAuthService(deps: AuthServiceDeps) {
       // updated.email: im Übernahme-Fall gehört die neue Adresse bereits der
       // angreifenden Person, nur die bisherige erreicht noch die rechtmäßige.
       // Ohne await, aus demselben Grund wie bei changePassword().
-      deps.mailer
-        .sendAccountSecurityChangeNotice({ to: user.email, recipientName: user.name, changeType: 'email', locale: user.locale })
-        .catch((err) => {
-          console.error('[auth] Fehler beim Versand des Sicherheitshinweises nach E-Mail-Wechsel:', err);
-        });
+      void notifySecurityChange(deps.mailer, user, 'email', 'auth');
 
       const tokens = await issueTokens(updated);
       const clubContext = await resolveClubContext(deps.clubs, updated.clubId);
@@ -917,10 +906,10 @@ export function createAuthService(deps: AuthServiceDeps) {
       await deps.auditLog.record({
         clubId: user?.clubId ?? null,
         actorId: userId,
-        actorLabel: user ? `${user.name} <${user.email}>` : userId,
+        actorLabel: userLabelOr(user, userId),
         action: 'user.deletionRequested',
         targetId: userId,
-        targetLabel: user ? `${user.name} <${user.email}>` : userId,
+        targetLabel: userLabelOr(user, userId),
         metadata: { purgeAfter: request.purgeAfter.toISOString() },
       });
       return { purgeAfter: request.purgeAfter };
@@ -1007,10 +996,10 @@ export function createAuthService(deps: AuthServiceDeps) {
       await deps.auditLog.record({
         clubId: requester.clubId,
         actorId: requester.id,
-        actorLabel: actor ? `${actor.name} <${actor.email}>` : requester.id,
+        actorLabel: userLabelOr(actor, requester.id),
         action: 'user.rolesChanged',
         targetId: targetUserId,
-        targetLabel: `${updated.name} <${updated.email}>`,
+        targetLabel: userLabel(updated),
         metadata: { oldRoles, newRoles: roles },
       });
       return toPublicUser(updated);
