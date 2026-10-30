@@ -16,7 +16,8 @@ import { jobsRoutes } from './modules/jobs/jobs.route.js';
 import { createJobsStatusService } from './modules/jobs/jobs.service.js';
 import { PrismaJobStateRepository, type JobStateRepository } from './jobs/scheduler/jobState.repository.js';
 import { authRoutes } from './modules/auth/auth.route.js';
-import { syncRoutes, type ClubModulesLookup } from './modules/sync/sync.route.js';
+import { syncRoutes } from './modules/sync/sync.route.js';
+import { createClubModulesResolver, type ClubModulesLookup } from './plugins/clubModules.js';
 import { PrismaAnnouncementRecipientsGateway } from './modules/sync/announcementRecipients.repository.js';
 import { parentsRoutes } from './modules/parents/parents.route.js';
 import { createParentsService, type ParentsService } from './modules/parents/parents.service.js';
@@ -62,10 +63,10 @@ export interface BuildAppOverrides {
   authService?: AuthService;
   invitationsService?: InvitationsService;
   syncService?: SyncService;
-  // Für sync.route.ts: lädt pro Request die gebuchten Module des Vereins
-  // (siehe requesterFrom() dort). Unabhängig von `syncService` überschreibbar,
-  // damit ein Test mit In-Memory-syncService trotzdem eine In-Memory-
-  // Club-Lookup mitgeben kann, ohne eine echte Datenbank zu brauchen.
+  // Datenquelle des Modul-Resolvers (plugins/clubModules.ts) für Sync,
+  // Qualifikationen und Kampfrichter. Unabhängig von den Services
+  // überschreibbar, damit Tests mit In-Memory-Services auch eine
+  // In-Memory-Club-Lookup mitgeben können, ohne echte Datenbank.
   clubs?: ClubModulesLookup;
   qualificationsService?: QualificationsService;
   refereesService?: RefereesService;
@@ -283,12 +284,11 @@ export async function buildApp(env: Env, overrides: BuildAppOverrides = {}): Pro
     overrides.syncService ??
     createSyncService({ gateway: new PrismaSyncGateway(getPrisma()) });
 
-  // Eine gemeinsame Club-Lookup-Instanz für syncRoutes UND
-  // qualificationsRoutes unten — beide brauchen ausschließlich
-  // `findById(clubId): { enabledModules }` (siehe jeweils eigene, schlanke
-  // ClubModulesLookup-Interfaces), ein Override ersetzt dadurch beide auf
-  // einmal.
-  const clubModulesLookup = overrides.clubs ?? new PrismaClubRepository(getPrisma());
+  // EIN Modul-Resolver samt Cache für alle Routen, die gebuchte Module
+  // prüfen (Sync, Qualifikationen, Kampfrichter) — siehe
+  // plugins/clubModules.ts. `overrides.clubs` ersetzt die Datenquelle für
+  // alle drei auf einmal.
+  const clubModules = createClubModulesResolver(app, overrides.clubs ?? new PrismaClubRepository(getPrisma()));
 
   const qualificationsService =
     overrides.qualificationsService ??
@@ -342,13 +342,13 @@ export async function buildApp(env: Env, overrides: BuildAppOverrides = {}): Pro
   await app.register(authRoutes, { authService });
   await app.register(syncRoutes, {
     syncService,
-    clubs: clubModulesLookup,
+    clubModules,
     // Phase 2, Abschnitt 2.4: Push-Auslöser für ein neues Announcement.
     announcementNotify: { pusher, pushSubscriptions, recipients: new PrismaAnnouncementRecipientsGateway(getPrisma()) },
   });
   await app.register(invitationsRoutes, { invitationsService });
-  await app.register(qualificationsRoutes, { qualificationsService, clubs: clubModulesLookup });
-  await app.register(refereesRoutes, { refereesService, clubs: clubModulesLookup });
+  await app.register(qualificationsRoutes, { qualificationsService, clubModules });
+  await app.register(refereesRoutes, { refereesService, clubModules });
   await app.register(auditLogRoutes, { auditLogService });
   await app.register(clubLegalInfoRoutes, { clubLegalInfoService });
   await app.register(pushRoutes, { subscriptions: pushSubscriptions, vapidPublicKey: env.VAPID_PUBLIC_KEY ?? null });

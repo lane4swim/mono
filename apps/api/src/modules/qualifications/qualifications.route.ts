@@ -3,7 +3,8 @@
 // pull) — UserQualification ist kein Sync-Store (siehe Plan, Abschnitt
 // 1.1). Die Modul-Buchung eines Vereins (`enabledModules`, siehe
 // packages/shared-types/src/modules.ts: MODULE_PACKAGES.qualifications)
-// wird deshalb hier selbst durchgesetzt, nicht über
+// wird deshalb hier selbst durchgesetzt — über das gemeinsame Modul-Gate
+// (plugins/clubModules.ts: requireClubModule()), nicht über
 // sync.permissions.ts: canRead()/canWrite().
 import type { FastifyInstance } from 'fastify';
 import {
@@ -17,70 +18,18 @@ import type { QualificationsService } from './qualifications.service.js';
 import { requireAnyRole } from '../../plugins/authorize.js';
 import { parseInput } from '../../plugins/parseInput.js';
 import { requesterFrom } from '../../plugins/requester.js';
-
-// Minimale, für dieses Modul ausreichende Nachschlagemöglichkeit für die
-// Modul-Pakete eines Vereins — bewusst dieselbe schlanke Form wie
-// sync.route.ts: ClubModulesLookup (siehe dort), damit ein und dieselbe
-// PrismaClubRepository-Instanz (app.ts) beide Stellen bedient, ohne dass
-// dieses Modul von invitations/sync abhängen muss.
-export interface ClubModulesLookup {
-  findById(clubId: string): Promise<{ enabledModules: string[] } | null>;
-}
+import { requireClubModule, type ClubModulesResolver } from '../../plugins/clubModules.js';
 
 export interface QualificationsRoutesOptions {
   qualificationsService: QualificationsService;
-  clubs: ClubModulesLookup;
+  // Gebuchte Module des Vereins, siehe plugins/clubModules.ts.
+  clubModules: ClubModulesResolver;
 }
-
-interface CachedClubModules {
-  enabledModules: string[];
-  expiresAt: number;
-}
-
-// Bewusst als eigene, kleine Cache-Closure dupliziert statt aus
-// sync.route.ts extrahiert (siehe docs/Plans/nutzer-qualifikationen-plan.md,
-// Abschnitt 1.2: "bei einem dritten Verwendungsfall lohnt sich ein
-// gemeinsamer Helper") — bislang genau EIN Vorbild (sync.route.ts:
-// resolveEnabledModules()), eine vorzeitige Extraktion wäre hier
-// spekulative Abstraktion für einen bislang einzigen zweiten Fall.
-const CLUB_MODULES_CACHE_TTL_MS = 45_000;
 
 export async function qualificationsRoutes(app: FastifyInstance, opts: QualificationsRoutesOptions) {
-  const { qualificationsService, clubs } = opts;
+  const { qualificationsService, clubModules } = opts;
 
-  const clubModulesCache = new Map<string, CachedClubModules>();
-  const sweepInterval = setInterval(() => {
-    const now = Date.now();
-    for (const [clubId, entry] of clubModulesCache) {
-      if (entry.expiresAt <= now) clubModulesCache.delete(clubId);
-    }
-  }, CLUB_MODULES_CACHE_TTL_MS);
-  sweepInterval.unref?.();
-  app.addHook('onClose', () => clearInterval(sweepInterval));
-
-  async function resolveEnabledModules(clubId: string): Promise<string[]> {
-    const now = Date.now();
-    const cached = clubModulesCache.get(clubId);
-    if (cached && cached.expiresAt > now) return cached.enabledModules;
-    const club = await clubs.findById(clubId);
-    const enabledModules = club?.enabledModules ?? [];
-    clubModulesCache.set(clubId, { enabledModules, expiresAt: now + CLUB_MODULES_CACHE_TTL_MS });
-    return enabledModules;
-  }
-
-  // Läuft NACH requireAnyRole() (siehe *Guard unten) — request.user.roles ist an
-  // dieser Stelle bereits geprüft, `superadmin` (kein eigener Verein) kommt
-  // hier also nie an (Entscheidung zu Frage 5, Abschnitt 8 des Plans).
-  async function requireQualificationsModule(request: { user?: { clubId: string | null } }, reply: { code: (n: number) => { send: (b: unknown) => void } }) {
-    const clubId = request.user!.clubId!;
-    const enabledModules = await resolveEnabledModules(clubId);
-    if (!enabledModules.includes('qualifications')) {
-      reply.code(403).send({
-        error: 'module_not_enabled',
-        message: 'Das Qualifikationsmanagement ist für diesen Verein nicht gebucht.',
-      });
-    }
-  }
+  const requireQualificationsModule = requireClubModule(clubModules, 'qualifications', 'Das Qualifikationsmanagement ist für diesen Verein nicht gebucht.');
 
   // Eigene, schreibgeschützte Ansicht — jede Rolle außer superadmin.
   // `referee` ist Teil davon, weil die Kampfrichter-Seite (kampfrichter.js)

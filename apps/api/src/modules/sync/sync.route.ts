@@ -10,68 +10,16 @@ import { notifyAnnouncementCreated, type AnnouncementNotifyDeps } from './sync.a
 import { requireAnyRole } from '../../plugins/authorize.js';
 import { parseInput } from '../../plugins/parseInput.js';
 import { requesterFrom } from '../../plugins/requester.js';
-
-// Minimale, für dieses Modul ausreichende Nachschlagemöglichkeit für die
-// Modul-Pakete eines Vereins — bewusst kein volles ClubRepository, um
-// keine Abhängigkeit auf das gesamte invitations-Modul einzuführen (siehe
-// AthleteLookup in invitations.repository.ts für dasselbe Prinzip).
-export interface ClubModulesLookup {
-  findById(clubId: string): Promise<{ enabledModules: string[] } | null>;
-}
+import type { ClubModulesResolver } from '../../plugins/clubModules.js';
 
 export interface SyncRoutesOptions {
   syncService: SyncService;
-  clubs: ClubModulesLookup;
+  // Gebuchte Module des Vereins, siehe plugins/clubModules.ts.
+  clubModules: ClubModulesResolver;
   // Phase 2, Abschnitt 2.4 (docs/Plans/phase2-plan.md): optional, damit
   // Tests, die den Announcement-Push-Hook nicht brauchen, ihn weglassen
   // können (dann ein No-op, siehe requestHandler unten).
   announcementNotify?: AnnouncementNotifyDeps;
-}
-
-// Review 30.08.2026, Befund E1: requesterFrom() rief clubs.findById() bei
-// JEDER Push-/Pull-Anfrage auf — ein Erstabgleich (syncClient.js: pull()
-// läuft in einer Schleife bis hasMore === false, bis zu
-// MAX_PULL_ITERATIONS = 1000 Seiten) fragte damit bis zu 1.000-mal
-// dieselbe, sich währenddessen nicht ändernde Club-Zeile ab. Kurzlebiger
-// In-Memory-Cache statt einer echten Invalidierung: ein per Superadmin-
-// Bearbeiten-Ansicht geändertes enabledModules-Set wirkt dadurch höchstens
-// CLUB_MODULES_CACHE_TTL_MS später statt sofort — gegenüber der
-// Access-Token-Laufzeit von 15 Minuten (JWT_ACCESS_TTL_SECONDS, siehe
-// S5) ohnehin die schärfere Schranke, und exakt der in der Empfehlung
-// dieses Befunds akzeptierte Trade-off.
-//
-// Bewusst als Closure INNERHALB syncRoutes() (unten), nicht als
-// Modul-weiter Singleton: jeder buildApp()-Aufruf — insbesondere jeder
-// Test über buildTestApp() — bekommt dadurch automatisch seinen eigenen,
-// leeren Cache, ohne dass Tests ihn manuell zurücksetzen müssten oder
-// zwischen ihnen veraltete Werte eines anderen Tests sehen könnten.
-// Unproblematisch für den dokumentierten Produktivbetrieb (PM2 ohne
-// Cluster-Modus, siehe docs/deployment/deployment.md — GENAU EIN Node-Prozess, kein
-// Mehrprozess-Konsistenzproblem).
-const CLUB_MODULES_CACHE_TTL_MS = 45_000;
-
-export interface CachedClubModules {
-  enabledModules: string[];
-  expiresAt: number;
-}
-
-// Code-Review 2026-09-02, Befund R2: ein Eintrag bekam bislang nur ein
-// `expiresAt` und wurde bei Ablauf per erneutem set() überschrieben, NIE
-// aber entfernt — ein Verein, der nach seinem letzten Zugriff aus der
-// Datenbank verschwindet (z. B. per hartem DSGVO-Purge, siehe
-// scripts/purgeDeletedData.ts), hinterließe seinen Cache-Eintrag dadurch
-// dauerhaft in dieser Map, für die gesamte Lebensdauer des Prozesses. Bei
-// der dokumentierten Größenordnung (ein Verein je Installation, siehe
-// CLUB_MODULES_CACHE_TTL_MS-Kommentar oben) folgenlos; für eine künftige
-// Mehrvereins-Installation eine kleine, unbegrenzte Halde.
-//
-// Als reine, exportierte Funktion (statt Inline-Code im setInterval()-Callback
-// unten) — analog zu splitAtSafeTimestampBoundary() in sync.pagination.ts —
-// damit die Sweep-Logik selbst ohne Timer/Fastify-Instanz testbar ist.
-export function sweepExpiredClubModules(cache: Map<string, CachedClubModules>, now: number): void {
-  for (const [clubId, entry] of cache) {
-    if (entry.expiresAt <= now) cache.delete(clubId);
-  }
 }
 
 // Sicherheitsreview 2026-08, Befund N4: push()/pull() vertrauen vollständig
@@ -80,35 +28,8 @@ export function sweepExpiredClubModules(cache: Map<string, CachedClubModules>, n
 // akzeptiert (siehe ausführliche Begründung in plugins/authenticate.ts,
 // direkt über app.authenticate), nicht übersehen.
 export async function syncRoutes(app: FastifyInstance, opts: SyncRoutesOptions) {
-  const { syncService, clubs, announcementNotify } = opts;
+  const { syncService, clubModules, announcementNotify } = opts;
   const syncGuard = [app.authenticate, requireAnyRole('trainer', 'admin', 'athlete')];
-
-  const clubModulesCache = new Map<string, CachedClubModules>();
-
-  // Periodischer Sweep entfernt abgelaufene Einträge (siehe
-  // sweepExpiredClubModules()-Kommentar oben), unabhängig davon, ob der
-  // jeweilige Verein je wieder abgefragt wird.
-  //
-  // `.unref()`: dieser Timer allein soll den Node-Prozess nicht am Beenden
-  // hindern (relevant u. a. für Tests, die buildTestApp() ohne
-  // anschließendes app.close() verwenden). Zusätzlich an `onClose`
-  // gehängt, damit ein tatsächlich geschlossener/neu gebauter Test-App
-  // (siehe Closure-Kommentar oben: jeder buildApp()-Aufruf bekommt seine
-  // eigene Cache-Instanz) den eigenen Timer nicht über das Testende hinaus
-  // weiterlaufen lässt.
-  const sweepInterval = setInterval(() => sweepExpiredClubModules(clubModulesCache, Date.now()), CLUB_MODULES_CACHE_TTL_MS);
-  sweepInterval.unref?.();
-  app.addHook('onClose', () => clearInterval(sweepInterval));
-
-  async function resolveEnabledModules(clubId: string): Promise<string[]> {
-    const now = Date.now();
-    const cached = clubModulesCache.get(clubId);
-    if (cached && cached.expiresAt > now) return cached.enabledModules;
-    const club = await clubs.findById(clubId);
-    const enabledModules = club?.enabledModules ?? [];
-    clubModulesCache.set(clubId, { enabledModules, expiresAt: now + CLUB_MODULES_CACHE_TTL_MS });
-    return enabledModules;
-  }
 
   // requireAnyRole hat bereits sichergestellt, dass die Rolle stimmt; eine Rolle
   // ohne Verein (theoretisch nur superadmin) kommt hier also nicht an —
@@ -116,17 +37,16 @@ export async function syncRoutes(app: FastifyInstance, opts: SyncRoutesOptions) 
   // zusätzlich mitgegeben, damit der Service die Rollen-Scopierung für
   // "athlete" anwenden kann (siehe sync.service.ts). Baut auf dem
   // gemeinsamen requesterFrom() (plugins/requester.ts) auf — eine Stelle
-  // statt einer Wiederholung dieses Objekt-Literals in push()/pull(). Lädt die gebuchten Module des Vereins
-  // über den obigen Cache — der JWT-Claim allein (request.user) kennt sie
-  // nicht, da sich enabledModules jederzeit über die Superadmin-
-  // Bearbeiten-Ansicht ändern kann, ohne dass ein neues Token ausgestellt
-  // wird. `sub` (Sicherheitsreview 2026-08-27, Befund M2) wird zusätzlich als
-  // `userId` durchgereicht — für die Autor:innen-Prüfung eingebetteter
-  // Kommentare (siehe sync.commentAuthorship.ts).
+  // statt einer Wiederholung dieses Objekt-Literals in push()/pull(). Die
+  // gebuchten Module des Vereins kommen aus dem gemeinsamen, kurzlebigen
+  // Cache (plugins/clubModules.ts) — der JWT-Claim allein kennt sie
+  // nicht. `sub` wird zusätzlich als `userId` durchgereicht — für die
+  // Autor:innen-Prüfung eingebetteter Kommentare (siehe
+  // sync.commentAuthorship.ts).
   async function syncRequesterFrom(request: FastifyRequest): Promise<SyncRequester> {
     const { id, clubId } = requesterFrom(request);
     const user = request.user!;
-    const enabledModules = await resolveEnabledModules(clubId!);
+    const enabledModules = await clubModules(clubId!);
     return {
       userId: id,
       clubId: clubId!,
