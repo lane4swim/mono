@@ -21,6 +21,27 @@ async function buildSubscriptions(userId: string, count = 1): Promise<InMemoryPu
 }
 
 describe('notifyUpcomingSessions()', () => {
+  // Trainingseinheiten werden als UTC-Mitternacht gespeichert; in der
+  // lokalen Zeitzone eines Servers westlich von UTC formatiert, nannte die
+  // Erinnerung den Vortag.
+  it('nennt das Datum der Einheit auch auf einem Server westlich von UTC korrekt', async () => {
+    const originalTz = process.env.TZ;
+    process.env.TZ = 'America/New_York';
+    try {
+      const gateway = new InMemoryNotifyUpcomingSessionsGateway(
+        [session({ date: new Date('2026-09-11T00:00:00.000Z') })],
+        new Map(),
+        new Map([[ATHLETE1_ID, 'athlete1']]),
+      );
+      const pusher = new InMemoryPushSender();
+      await notifyUpcomingSessions(gateway, pusher, await buildSubscriptions('athlete1'), NOW);
+      expect(pusher.sent[0]?.payload.body).toBe('Deine nächste Trainingseinheit ist am 11.9.2026.');
+    } finally {
+      if (originalTz === undefined) delete process.env.TZ;
+      else process.env.TZ = originalTz;
+    }
+  });
+
   it('verschickt eine Push-Erinnerung an alle Empfänger:innen mit aktivem Abo', async () => {
     const gateway = new InMemoryNotifyUpcomingSessionsGateway(
       [session()],

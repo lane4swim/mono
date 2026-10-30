@@ -57,6 +57,7 @@ Routen und Services verwenden sie, statt sie selbst nachzubauen. Eine
 | `requireOwnClubOrSuperadmin()`, `requireClubAdminOrSuperadmin()` | `modules/shared/clubAccess.ts` | Zugriff auf einen per `clubId` angegebenen Verein (Mitglied bzw. admin des Vereins, superadmin für jeden Verein) |
 | `withoutDeletedAt()`, `findActiveOwnedOrThrow()` | `modules/shared/clubAccess.ts` | Umgang mit personenbezogenen, per Soft-Delete entfernbaren Datensätzen |
 | `createClubModulesResolver()`, `requireClubModule()` | `plugins/clubModules.ts` | Gebuchte Module eines Vereins (ein gemeinsamer, kurzlebiger Cache je App-Instanz) und Sperre für Routen eines nicht gebuchten Moduls (403 `module_not_enabled`) |
+| `sendPushToUsers()`, `formatPushDate()` | `push/sendToUsers.ts` | Push-Versand an Konten (Abos laden, senden, abgelaufene Abos löschen) und Datumsangaben in Push-Texten (Kalendertage in UTC) |
 | `ForbiddenError` | `modules/shared/errors.ts` | Basisklasse für jede 403-Antwort; modulspezifische Klassen leiten davon ab und erben die HTTP-Abbildung |
 | `requireAnyRole()` | `plugins/authorize.ts` | Rollen-Guard als Fastify-preHandler |
 | `parseInput()` | `plugins/parseInput.ts` | Zod-Validierung mit einheitlicher 400-Antwort |

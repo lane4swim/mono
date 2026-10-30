@@ -9,8 +9,7 @@
 // purgeExpiredDeletions.ts.
 import type { NotifyExpiringQualificationsGateway, AdminContact } from './qualificationReminder.repository.js';
 import type { MailSender } from '../mail/mailer.js';
-import type { PushSender } from '../push/pusher.js';
-import type { PushSubscriptionRepository } from '../modules/push/push.repository.js';
+import { sendPushToUsers, type PushDeliveryDeps } from '../push/sendToUsers.js';
 import { DEFAULT_QUALIFICATION_REMINDER_THRESHOLDS_DAYS } from '@lane1/shared-types';
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -45,10 +44,7 @@ export interface NotifyResult {
 // aktives Abo, bleibt E-Mail unverändert der verlässliche Kanal — ein
 // fehlgeschlagener/ausbleibender Push-Versand lässt recordReminderSent()
 // unberührt (siehe Aufrufstelle unten: nach, nicht statt des E-Mail-Versands).
-export interface PushDeps {
-  pusher: PushSender;
-  pushSubscriptions: PushSubscriptionRepository;
-}
+export type PushDeps = PushDeliveryDeps;
 
 export async function notifyExpiringQualifications(
   gateway: NotifyExpiringQualificationsGateway,
@@ -123,15 +119,11 @@ export async function notifyExpiringQualifications(
 
         if (push) {
           try {
-            const subs = await push.pushSubscriptions.listByUserId(candidate.userId);
-            if (subs.length > 0) {
-              const { expiredSubscriptionIds } = await push.pusher.send(subs, {
-                title: isExpired ? 'Qualifikation abgelaufen' : 'Qualifikation läuft bald ab',
-                body: `${candidate.type} von ${candidate.userName}`,
-                url: '#/qualifications',
-              });
-              if (expiredSubscriptionIds.length > 0) await push.pushSubscriptions.deleteByIds(expiredSubscriptionIds);
-            }
+            await sendPushToUsers(push, [candidate.userId], {
+              title: isExpired ? 'Qualifikation abgelaufen' : 'Qualifikation läuft bald ab',
+              body: `${candidate.type} von ${candidate.userName}`,
+              url: '#/qualifications',
+            });
           } catch {
             // Push ist ein reiner Zusatzkanal (siehe PushDeps-Kommentar
             // oben) — ein Fehlschlag hier darf den E-Mail-Erfolg dieses

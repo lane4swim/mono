@@ -8,7 +8,7 @@
 // notifyExpiringQualifications.ts.
 import type { NotifyUpcomingSessionsGateway } from './sessionReminder.repository.js';
 import type { PushSender } from '../push/pusher.js';
-import type { PushSubscriptionRepository } from '../modules/push/push.repository.js';
+import { sendPushToUsers, formatPushDate, type PushDeliveryDeps } from '../push/sendToUsers.js';
 
 // Knapp unter "ein Tag vorher", robust gegen einen Cron-Takt von z. B.
 // alle 6h (siehe Plan, Abschnitt 1.5.2) — eine Einheit fällt damit
@@ -24,7 +24,7 @@ export interface NotifyUpcomingSessionsResult {
 export async function notifyUpcomingSessions(
   gateway: NotifyUpcomingSessionsGateway,
   pusher: PushSender,
-  pushSubscriptions: PushSubscriptionRepository,
+  pushSubscriptions: PushDeliveryDeps['pushSubscriptions'],
   now: Date = new Date(),
   windowHours: number = UPCOMING_SESSION_REMINDER_HOURS,
 ): Promise<NotifyUpcomingSessionsResult> {
@@ -42,18 +42,11 @@ export async function notifyUpcomingSessions(
       if (await gateway.hasReminderBeenSent(candidate.id)) continue;
 
       const recipientIds = await gateway.findRecipientUserIds(candidate.clubId, candidate.athleteIds);
-      if (recipientIds.length > 0) {
-        const subscriptionsByUser = await pushSubscriptions.listByUserIds(recipientIds);
-        const allSubscriptions = [...subscriptionsByUser.values()].flat();
-        if (allSubscriptions.length > 0) {
-          const { expiredSubscriptionIds } = await pusher.send(allSubscriptions, {
-            title: 'Bevorstehendes Training',
-            body: `Deine nächste Trainingseinheit ist am ${candidate.date.toLocaleDateString('de-DE')}.`,
-            url: '#/sessions',
-          });
-          if (expiredSubscriptionIds.length > 0) await pushSubscriptions.deleteByIds(expiredSubscriptionIds);
-        }
-      }
+      await sendPushToUsers({ pusher, pushSubscriptions }, recipientIds, {
+        title: 'Bevorstehendes Training',
+        body: `Deine nächste Trainingseinheit ist am ${formatPushDate(candidate.date)}.`,
+        url: '#/sessions',
+      });
 
       // Wird auch OHNE Empfänger:innen/Abos als erledigt markiert (kein
       // Nachhol-Versuch bei jedem künftigen Lauf für eine Einheit, deren
