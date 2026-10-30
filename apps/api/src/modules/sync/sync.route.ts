@@ -40,9 +40,9 @@ export async function syncRoutes(app: FastifyInstance, opts: SyncRoutesOptions) 
   // statt einer Wiederholung dieses Objekt-Literals in push()/pull(). Die
   // gebuchten Module des Vereins kommen aus dem gemeinsamen, kurzlebigen
   // Cache (plugins/clubModules.ts) — der JWT-Claim allein kennt sie
-  // nicht. `sub` (Sicherheitsreview 2026-08-27, Befund M2) wird zusätzlich als
-  // `userId` durchgereicht — für die Autor:innen-Prüfung eingebetteter
-  // Kommentare (siehe sync.commentAuthorship.ts).
+  // nicht. `sub` wird zusätzlich als `userId` durchgereicht — für die
+  // Autor:innen-Prüfung eingebetteter Kommentare (siehe
+  // sync.commentAuthorship.ts).
   async function syncRequesterFrom(request: FastifyRequest): Promise<SyncRequester> {
     const { id, clubId } = requesterFrom(request);
     const user = request.user!;
