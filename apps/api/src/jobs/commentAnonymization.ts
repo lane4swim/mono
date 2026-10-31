@@ -21,6 +21,8 @@
 // Reine, DB-freie Funktionen — von erasure.repository.ts (Prisma) UND
 // erasure.repository.memory.ts (InMemory-Testdouble) gemeinsam genutzt,
 // damit beide Implementierungen exakt dasselbe Verhalten zeigen.
+import { isRecord, mapPlainSets, type MapResult } from '../modules/shared/setEntries.js';
+import { mapCommentArrays, type CommentBearingStore } from '../modules/shared/commentLocations.js';
 
 // Ein sprachneutraler, technischer Marker statt eines Anzeigetexts: ein fest
 // in die DB geschriebener Name wäre unabhängig von der Locale der
@@ -34,15 +36,6 @@ export const ANONYMIZED_COMMENT_AUTHOR = '__deleted_account__';
 export interface DeletedCommentAuthor {
   id: string;
   name: string | null;
-}
-
-interface AnonymizeResult<T> {
-  changed: boolean;
-  value: T;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
 }
 
 // Ein einzelnes Comment-Array (CommentSchema[]) — die flache Basisebene,
@@ -66,7 +59,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 // Anonymisierung — eine Verschlechterung gegenüber dem Stand vor M2. Für
 // alles seit M2 Geschriebene greift ausschließlich der exakte
 // `authorId`-Abgleich, für den diese Unschärfe nicht mehr gilt.
-export function anonymizeCommentArray(comments: unknown, author: DeletedCommentAuthor): AnonymizeResult<unknown> {
+export function anonymizeCommentArray(comments: unknown, author: DeletedCommentAuthor): MapResult {
   if (!Array.isArray(comments)) return { changed: false, value: comments };
   let changed = false;
   const value = comments.map((entry) => {
@@ -83,99 +76,63 @@ export function anonymizeCommentArray(comments: unknown, author: DeletedCommentA
   return { changed, value };
 }
 
-// Eine einzelne SetEntry (PlainSet, RepeatBlock ODER Section, siehe
-// SetEntrySchema): ein "set" trägt sein eigenes comments-Array direkt, ein
-// "block" enthält stattdessen eine verschachtelte sets-Liste (keine
-// verschachtelten Blöcke laut Schema), eine "section" analog eine
-// entries-Liste (keine verschachtelten Abschnitte) — jeweils rekursiv
-// weitersuchen.
-function anonymizeSetEntry(entry: unknown, author: DeletedCommentAuthor): AnonymizeResult<unknown> {
-  if (!isRecord(entry)) return { changed: false, value: entry };
-  if (entry.kind === 'set') {
-    const { changed, value: comments } = anonymizeCommentArray(entry.comments, author);
-    return changed ? { changed: true, value: { ...entry, comments } } : { changed: false, value: entry };
-  }
-  if (entry.kind === 'block' && Array.isArray(entry.sets)) {
-    const { changed, value: sets } = anonymizeSetEntries(entry.sets, author);
-    return changed ? { changed: true, value: { ...entry, sets } } : { changed: false, value: entry };
-  }
-  if (entry.kind === 'section' && Array.isArray(entry.entries)) {
-    const { changed, value: entries } = anonymizeSetEntries(entry.entries, author);
-    return changed ? { changed: true, value: { ...entry, entries } } : { changed: false, value: entry };
-  }
-  return { changed: false, value: entry };
-}
-
-// Eine SetEntry[]-Liste — verwendet sowohl für einen einzelnen Plan-Tag
-// (PlanDay.sets) als auch für Template.sets (identische Struktur).
-export function anonymizeSetEntries(entries: unknown, author: DeletedCommentAuthor): AnonymizeResult<unknown> {
-  if (!Array.isArray(entries)) return { changed: false, value: entries };
-  let changed = false;
-  const value = entries.map((entry) => {
-    const result = anonymizeSetEntry(entry, author);
-    if (result.changed) changed = true;
-    return result.value;
+// Eine SetEntry[]-Liste (Template.sets, SectionTemplate.entries oder ein
+// Plan-Tag) — anonymisiert die Kommentare jedes einzelnen Satzes, auch in
+// Blöcken und Abschnitten (Durchlauf siehe modules/shared/setEntries.ts).
+export function anonymizeSetEntries(entries: unknown, author: DeletedCommentAuthor): MapResult {
+  return mapPlainSets(entries, (set) => {
+    const { changed, value } = anonymizeCommentArray(set.comments, author);
+    return changed ? { ...set, comments: value } : null;
   });
-  return { changed, value };
 }
 
-function anonymizePlanDays(days: unknown, author: DeletedCommentAuthor): AnonymizeResult<unknown> {
-  if (!Array.isArray(days)) return { changed: false, value: days };
-  let changed = false;
-  const value = days.map((day) => {
-    if (!isRecord(day)) return day;
-    const { changed: dayChanged, value: sets } = anonymizeSetEntries(day.sets, author);
-    if (dayChanged) changed = true;
-    return dayChanged ? { ...day, sets } : day;
-  });
-  return { changed, value };
+// Anonymisiert alle Kommentar-Felder eines Datensatzes des Stores `store`
+// (welche das sind, legt modules/shared/commentLocations.ts fest). Der
+// Aufrufer schreibt `fields` nur zurück, wenn `changed` gesetzt ist.
+export function anonymizeCommentAuthors(
+  store: CommentBearingStore,
+  record: Record<string, unknown>,
+  author: DeletedCommentAuthor,
+): { changed: boolean; fields: Record<string, unknown> } {
+  return mapCommentArrays(store, record, (comments) => anonymizeCommentArray(comments, author));
 }
 
-// Anonymisiert einen Plan.comments-Wert an eventuell zwei Stellen
-// (Plan-weite Kommentare + je Tag/Satz/Block verschachtelte) — der
-// Aufrufer schreibt "comments"/"days" nur zurück, wenn `changed` true ist.
 export function anonymizePlanCommentAuthors(
   plan: { comments: unknown; days: unknown },
   author: DeletedCommentAuthor,
 ): { changed: boolean; comments: unknown; days: unknown } {
-  const comments = anonymizeCommentArray(plan.comments, author);
-  const days = anonymizePlanDays(plan.days, author);
-  return { changed: comments.changed || days.changed, comments: comments.value, days: days.value };
+  const { changed, fields } = anonymizeCommentAuthors('plans', plan, author);
+  return { changed, comments: fields.comments, days: fields.days };
 }
 
 export function anonymizeExerciseCommentAuthors(
   exercise: { comments: unknown },
   author: DeletedCommentAuthor,
 ): { changed: boolean; comments: unknown } {
-  const comments = anonymizeCommentArray(exercise.comments, author);
-  return { changed: comments.changed, comments: comments.value };
+  const { changed, fields } = anonymizeCommentAuthors('exercises', exercise, author);
+  return { changed, comments: fields.comments };
 }
 
-// Ergebnisse tragen ihre Kommentare wie Übungen als flaches Array direkt
-// am Datensatz (ResultSchema.comments, seit dem DSV7/Lenex-Import).
 export function anonymizeResultCommentAuthors(
   result: { comments: unknown },
   author: DeletedCommentAuthor,
 ): { changed: boolean; comments: unknown } {
-  const comments = anonymizeCommentArray(result.comments, author);
-  return { changed: comments.changed, comments: comments.value };
+  const { changed, fields } = anonymizeCommentAuthors('results', result, author);
+  return { changed, comments: fields.comments };
 }
 
 export function anonymizeTemplateCommentAuthors(
   template: { sets: unknown },
   author: DeletedCommentAuthor,
 ): { changed: boolean; sets: unknown } {
-  const sets = anonymizeSetEntries(template.sets, author);
-  return { changed: sets.changed, sets: sets.value };
+  const { changed, fields } = anonymizeCommentAuthors('templates', template, author);
+  return { changed, sets: fields.sets };
 }
 
-// Wie anonymizeTemplateCommentAuthors(), nur für SectionTemplate.entries
-// (dieselbe SetEntry-Struktur wie Template.sets, nur ohne die
-// section-Variante selbst — siehe SectionTemplateSchema).
 export function anonymizeSectionTemplateCommentAuthors(
   sectionTemplate: { entries: unknown },
   author: DeletedCommentAuthor,
 ): { changed: boolean; entries: unknown } {
-  const entries = anonymizeSetEntries(sectionTemplate.entries, author);
-  return { changed: entries.changed, entries: entries.value };
+  const { changed, fields } = anonymizeCommentAuthors('sectionTemplates', sectionTemplate, author);
+  return { changed, entries: fields.entries };
 }
