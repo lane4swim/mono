@@ -40,67 +40,8 @@
 // verbieten — auch Trainer:innen könnten dann keinen unpassenden Kommentar
 // mehr entfernen.
 import type { EntityStoreName } from '@lane1/shared-types';
-
-// Die fünf Stores, deren Entity-Schema irgendwo ein CommentSchema[]
-// einbettet (siehe entities.ts: ExerciseSchema.comments,
-// PlanSchema.comments, PlainSetSchema.comments — Letzteres über
-// Plan.days[].sets, Template.sets UND SectionTemplate.entries erreichbar —
-// sowie ResultSchema.comments, seit dem DSV7/Lenex-Ergebnisimport: ein
-// Import überschreibt time/place/splits/status, muss bestehende Kommentare
-// aber unangetastet lassen, siehe docs/Plans/dsv7-lenex-import-plan.md Abschnitt 3.2).
-export const COMMENT_BEARING_STORES: ReadonlySet<EntityStoreName> = new Set(['exercises', 'plans', 'templates', 'sectionTemplates', 'results']);
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-// Sammelt die comments-Arrays aller SetEntry-Einträge (PlainSet,
-// RepeatBlock ODER Section, siehe SetEntrySchema) — ein "set" trägt sein
-// eigenes comments-Array direkt, ein "block" enthält stattdessen eine
-// verschachtelte sets-Liste (keine verschachtelten Blöcke laut Schema),
-// eine "section" analog eine entries-Liste (keine verschachtelten
-// Abschnitte), dort jeweils rekursiv weitergesucht. Identisches
-// Traversierungsmuster wie collectSetExerciseIds() in sync.foreignKeys.ts,
-// hier nur für "comments" statt "exerciseId".
-function collectSetEntryCommentGroups(sets: unknown): unknown[][] {
-  if (!Array.isArray(sets)) return [];
-  const groups: unknown[][] = [];
-  for (const entry of sets) {
-    if (!isRecord(entry)) continue;
-    if (entry.kind === 'set') {
-      groups.push(Array.isArray(entry.comments) ? entry.comments : []);
-    } else if (entry.kind === 'block') {
-      groups.push(...collectSetEntryCommentGroups(entry.sets));
-    } else if (entry.kind === 'section') {
-      groups.push(...collectSetEntryCommentGroups(entry.entries));
-    }
-  }
-  return groups;
-}
-
-// Alle comments-Arrays eines Datensatzes für einen der drei betroffenen
-// Stores — jeweils EIN Array je Fundstelle (Plan-weite Kommentare, je
-// Satz/Block verschachtelte, Übungs-/Vorlagen-Kommentare). Wird sowohl
-// auf den Zod-validierten Payload als auch auf den rohen, zuletzt
-// gespeicherten Stand (SyncGateway.findById()) angewendet.
-function collectCommentGroups(store: EntityStoreName, record: Record<string, unknown> | null): unknown[][] {
-  if (!record) return [];
-  if (store === 'exercises' || store === 'results') {
-    return [Array.isArray(record.comments) ? record.comments : []];
-  }
-  if (store === 'templates') {
-    return collectSetEntryCommentGroups(record.sets);
-  }
-  if (store === 'sectionTemplates') {
-    return collectSetEntryCommentGroups(record.entries);
-  }
-  // store === 'plans'
-  const groups: unknown[][] = [Array.isArray(record.comments) ? record.comments : []];
-  for (const day of Array.isArray(record.days) ? record.days : []) {
-    if (isRecord(day)) groups.push(...collectSetEntryCommentGroups(day.sets));
-  }
-  return groups;
-}
+import { isRecord } from '../shared/setEntries.js';
+import { collectCommentArrays, isCommentBearingStore } from '../shared/commentLocations.js';
 
 // Reihenfolgeunabhängige, rekursiv stabile Serialisierung eines
 // Kommentars als Vergleichsschlüssel. Objektschlüssel werden sortiert,
@@ -118,30 +59,30 @@ function fingerprint(value: unknown): string {
   return JSON.stringify(value) ?? 'null';
 }
 
-// Prüft einen bereits Zod-validierten create/update-Payload für einen der
-// drei betroffenen Stores gegen den zuletzt gespeicherten Stand. Gibt bei
-// einem Verstoß eine Fehlermeldung zurück, sonst `null` — Stores ohne
-// eingebettete Kommentare (alle übrigen sieben) sind immer `null`
-// (No-op).
 // Stabiler, sprachunabhängiger Stellvertreter für den (einzigen)
 // Fehlertext unten (siehe apps/web/js/i18n/{de-DE,en-US}.js:
 // common.syncErrors).
 export const COMMENT_AUTHORSHIP_ERROR_CODE = 'comment_authorship_invalid';
 
+// Prüft einen bereits Zod-validierten create/update-Payload gegen den
+// zuletzt gespeicherten Stand. Welche Stores Kommentare tragen und wo,
+// legt modules/shared/commentLocations.ts fest. Gibt bei einem Verstoß
+// eine Fehlermeldung zurück, sonst `null` — für Stores ohne eingebettete
+// Kommentare immer `null` (No-op).
 export function assertCommentAuthorship(
   store: EntityStoreName,
   payload: Record<string, unknown>,
   existing: Record<string, unknown> | null,
   requesterId: string,
 ): string | null {
-  if (!COMMENT_BEARING_STORES.has(store)) return null;
+  if (!isCommentBearingStore(store)) return null;
 
   // Vorrat: alle FREMDEN Kommentare des bestehenden Datensatzes als
   // Vielfachmenge (Schlüssel -> verbleibende Anzahl). Eigene Kommentare
   // stehen bewusst nicht darin — sie dürfen ohnehin frei geändert werden
   // und müssen daher nichts "verbrauchen".
   const availableForeign = new Map<string, number>();
-  for (const group of collectCommentGroups(store, existing)) {
+  for (const group of collectCommentArrays(store, existing)) {
     for (const comment of group) {
       if (!isRecord(comment) || comment.authorId === requesterId) continue;
       const key = fingerprint(comment);
@@ -149,7 +90,7 @@ export function assertCommentAuthorship(
     }
   }
 
-  for (const group of collectCommentGroups(store, payload)) {
+  for (const group of collectCommentArrays(store, payload)) {
     for (const comment of group) {
       if (!isRecord(comment) || comment.authorId === requesterId) continue;
       const key = fingerprint(comment);

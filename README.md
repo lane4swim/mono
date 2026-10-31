@@ -60,6 +60,8 @@ Routen und Services verwenden sie, statt sie selbst nachzubauen. Eine
 | `sendPushToUsers()`, `formatPushDate()` | `push/sendToUsers.ts` | Push-Versand an Konten (Abos laden, senden, abgelaufene Abos löschen) und Datumsangaben in Push-Texten (Kalendertage in UTC) |
 | `notifySecurityChange()` | `mail/securityNotice.ts` | Sicherheitshinweis-Mail an ein Konto (best effort: Fehler werden protokolliert, nie weitergeworfen) |
 | `userLabel()`, `userLabelOr()` | `modules/auditLog/auditLog.service.ts` | Audit-Log-Label „Name <E-Mail>", mit Rückfall auf die ID für ein nicht geladenes Konto |
+| `forEachPlainSet()`, `mapPlainSets()`, `isRecord()` | `modules/shared/setEntries.ts` | Durchlaufen der SetEntry-Struktur (Sätze, Blöcke, Abschnitte) in Vorlagen und Plan-Tagen |
+| `COMMENT_LOCATIONS`, `collectCommentArrays()`, `mapCommentArrays()` | `modules/shared/commentLocations.ts` | Welche Stores wo Kommentare tragen — eine Quelle für Autor:innen-Prüfung beim Sync und Anonymisierung beim DSGVO-Purge |
 | `ForbiddenError` | `modules/shared/errors.ts` | Basisklasse für jede 403-Antwort; modulspezifische Klassen leiten davon ab und erben die HTTP-Abbildung |
 | `requireAnyRole()` | `plugins/authorize.ts` | Rollen-Guard als Fastify-preHandler |
 | `parseInput()` | `plugins/parseInput.ts` | Zod-Validierung mit einheitlicher 400-Antwort |

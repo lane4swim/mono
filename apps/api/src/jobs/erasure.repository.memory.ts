@@ -2,13 +2,8 @@ import { ANONYMIZED_INVITATION_EMAIL, type ErasureJobGateway, type DueErasureReq
 import type { TombstoneRecord } from '../modules/sync/sync.gateway.js';
 import type { AuditLogEntryRecord } from '../modules/auditLog/auditLog.repository.js';
 import { newAuditPseudonym, pseudonymizeAuditEntry } from './auditLogPseudonymization.js';
-import {
-  anonymizePlanCommentAuthors,
-  anonymizeExerciseCommentAuthors,
-  anonymizeResultCommentAuthors,
-  anonymizeTemplateCommentAuthors,
-  anonymizeSectionTemplateCommentAuthors,
-} from './commentAnonymization.js';
+import { anonymizeCommentAuthors } from './commentAnonymization.js';
+import { COMMENT_LOCATIONS, type CommentBearingStore } from '../modules/shared/commentLocations.js';
 
 export interface InMemoryErasureDatabase {
   users: Array<{ id: string; clubId: string | null; athleteId: string | null; [key: string]: unknown }>;
@@ -44,6 +39,16 @@ export interface InMemoryErasureDatabase {
   // Optional (Issue #96) — siehe auditLogPseudonymization.ts.
   auditLogEntries?: AuditLogEntryRecord[];
 }
+
+// Welches Array der In-Memory-Datenbank zu welchem Store mit Kommentaren
+// gehört — Gegenstück zu COMMENT_PURGE_TABLES in erasure.repository.ts.
+const COMMENT_STORE_ROWS = {
+  exercises: 'exercises',
+  plans: 'plans',
+  templates: 'templates',
+  sectionTemplates: 'sectionTemplates',
+  results: 'results',
+} as const satisfies Record<CommentBearingStore, keyof InMemoryErasureDatabase>;
 
 export class InMemoryErasureJobGateway implements ErasureJobGateway {
   constructor(private readonly db: InMemoryErasureDatabase) {}
@@ -97,30 +102,13 @@ export class InMemoryErasureJobGateway implements ErasureJobGateway {
     if (user.clubId) {
       const clubId = user.clubId;
       const author = { id: userId, name: typeof user.name === 'string' ? user.name : null };
-      for (const plan of this.db.plans ?? []) {
-        if (plan.clubId !== clubId) continue;
-        const { changed, comments, days } = anonymizePlanCommentAuthors(plan, author);
-        if (changed) { plan.comments = comments; plan.days = days; }
-      }
-      for (const exercise of this.db.exercises ?? []) {
-        if (exercise.clubId !== clubId) continue;
-        const { changed, comments } = anonymizeExerciseCommentAuthors(exercise, author);
-        if (changed) exercise.comments = comments;
-      }
-      for (const result of this.db.results) {
-        if (result.clubId !== clubId) continue;
-        const { changed, comments } = anonymizeResultCommentAuthors({ comments: result.comments }, author);
-        if (changed) result.comments = comments;
-      }
-      for (const template of this.db.templates ?? []) {
-        if (template.clubId !== clubId) continue;
-        const { changed, sets } = anonymizeTemplateCommentAuthors(template, author);
-        if (changed) template.sets = sets;
-      }
-      for (const sectionTemplate of this.db.sectionTemplates ?? []) {
-        if (sectionTemplate.clubId !== clubId) continue;
-        const { changed, entries } = anonymizeSectionTemplateCommentAuthors(sectionTemplate, author);
-        if (changed) sectionTemplate.entries = entries;
+      for (const store of Object.keys(COMMENT_LOCATIONS) as CommentBearingStore[]) {
+        const rows = (this.db[COMMENT_STORE_ROWS[store]] ?? []) as Array<{ clubId?: string } & Record<string, unknown>>;
+        for (const row of rows) {
+          if (row.clubId !== clubId) continue;
+          const { changed, fields } = anonymizeCommentAuthors(store, row, author);
+          if (changed) Object.assign(row, fields);
+        }
       }
     }
 

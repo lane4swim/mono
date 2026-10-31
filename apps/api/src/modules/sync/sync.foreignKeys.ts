@@ -20,6 +20,7 @@
 // TATSÄCHLICH zum eigenen Verein gehört.
 import type { EntityStoreName } from '@lane1/shared-types';
 import type { SyncGateway } from './sync.gateway.js';
+import { forEachPlainSet } from '../shared/setEntries.js';
 
 // Code-Review, Befund L2 ("Nebenbei"): trug vormals KEINEN durchgängigen
 // Diskriminator — die `nested`-Variante wurde über `'kind' in ref &&
@@ -36,35 +37,19 @@ export type ForeignKeyRef =
   | { kind: 'userList'; field: string } // wie 'user', aber ein Array von users.id (z. B. Group.trainerIds)
   | { kind: 'nested'; store: EntityStoreName; extract: (payload: Record<string, unknown>) => string[] }; // mehrere Referenzen verschachtelt im Payload, siehe collectSetExerciseIds() unten
 
-// "templates.sets" und "plans.days[].sets" tragen dieselbe SetEntry[]-Struktur
-// (packages/shared-types/src/entities.ts: PlainSetSchema/RepeatBlockSchema/
-// SectionSchema) wie das Frontend in js/modules/setEditor.js verwendet: ein
-// Eintrag ist ein einzelner Satz (kind: 'set', trägt optional eine
-// exerciseId), ein Block (kind: 'block', mehrere einzelne Sätze, keine
-// verschachtelten Blöcke) oder ein Abschnitt (kind: 'section', mehrere
-// Sätze/Blöcke, keine verschachtelten Abschnitte). Anders als athleteId/
-// groupId/competitionId/assignedTrainerId ist exerciseId hier NICHT
-// top-level, sondern beliebig tief in diesem Array verschachtelt — die
-// generische { field, store }-Form von ForeignKeyRef (die nur
-// payload[field] liest) erreicht sie nicht. Diese Funktion sammelt alle
-// gesetzten exerciseId-Werte aus einem SetEntry[]-Array unabhängig von der
-// Verschachtelung ein, damit assertForeignKeysWithinClub() jede davon
-// genauso gegen den eigenen Verein prüfen kann wie jede andere
-// Fremdschlüssel-Referenz.
+// Anders als athleteId/groupId/competitionId/assignedTrainerId ist
+// exerciseId NICHT top-level, sondern steckt in jedem einzelnen Satz einer
+// SetEntry[]-Liste ("templates.sets", "section_templates.entries",
+// "plans.days[].sets"; Struktur siehe modules/shared/setEntries.ts) — die
+// generische { field, store }-Form von ForeignKeyRef erreicht sie nicht.
+// Diese Funktion sammelt alle gesetzten exerciseId-Werte ein, damit
+// assertForeignKeysWithinClub() jede davon genauso gegen den eigenen Verein
+// prüfen kann wie jede andere Fremdschlüssel-Referenz.
 function collectSetExerciseIds(sets: unknown): string[] {
-  if (!Array.isArray(sets)) return [];
   const ids: string[] = [];
-  for (const entry of sets) {
-    if (!entry || typeof entry !== 'object') continue;
-    const e = entry as { kind?: unknown; exerciseId?: unknown; sets?: unknown; entries?: unknown };
-    if (e.kind === 'set') {
-      if (typeof e.exerciseId === 'string') ids.push(e.exerciseId);
-    } else if (e.kind === 'block') {
-      ids.push(...collectSetExerciseIds(e.sets));
-    } else if (e.kind === 'section') {
-      ids.push(...collectSetExerciseIds(e.entries));
-    }
-  }
+  forEachPlainSet(sets, (set) => {
+    if (typeof set.exerciseId === 'string') ids.push(set.exerciseId);
+  });
   return ids;
 }
 

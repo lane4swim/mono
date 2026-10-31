@@ -562,6 +562,33 @@ describe('PrismaErasureJobGateway.purgeUserAndDependents() — Comment.authorNam
     ]);
     expect(JSON.stringify(updated?.comments)).not.toContain(trainer.id);
   });
+
+  // Abschnittsvorlagen tragen dieselbe SetEntry-Struktur wie Vorlagen; der
+  // Kommentar steckt hier in einem Satz innerhalb eines Blocks.
+  it('anonymisiert verschachtelte Kommentare in Abschnittsvorlagen', async () => {
+    const club = await createTestClub();
+    const { user } = await seedAthleteUser(club.id);
+    const now = new Date();
+    const sectionTemplate = await prisma.sectionTemplate.create({
+      data: {
+        clubId: club.id,
+        name: 'Einschwimmen',
+        entries: [
+          {
+            kind: 'block', id: 'b1', label: '', repeatCount: 2,
+            sets: [{ kind: 'set', id: 's1', description: '', distance: 100, reps: 1, intensity: 'GA1', restSec: 0, comments: [{ id: 'c1', authorId: user.id, authorName: user.name, text: 'Locker', createdAt: now.toISOString() }] }],
+          },
+        ],
+      },
+    });
+
+    await erasureGateway.purgeUserAndDependents(user.id);
+
+    const updated = await prisma.sectionTemplate.findUnique({ where: { id: sectionTemplate.id } });
+    const block = (updated?.entries as Array<{ sets: Array<Record<string, unknown>> }>)[0]!;
+    expect(block.sets[0]).toMatchObject({ comments: [{ authorName: ANONYMIZED_COMMENT_AUTHOR, text: 'Locker' }] });
+    expect(JSON.stringify(updated?.entries)).not.toContain(user.id);
+  });
 });
 
 describe('PrismaErasureJobGateway.findDuePendingRequests()', () => {

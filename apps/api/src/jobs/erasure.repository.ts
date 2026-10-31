@@ -5,15 +5,21 @@
 // Hard-Purge, sobald die Aufbewahrungsfrist (purgeAfter) abgelaufen ist —
 // ausgeführt vom integrierten Scheduler bzw. scripts/purgeDeletedData.ts und
 // orchestriert von jobs/purgeExpiredDeletions.ts.
-import type { PrismaClient, Prisma } from '@prisma/client';
+import { Prisma, type PrismaClient } from '@prisma/client';
 import { newAuditPseudonym, pseudonymizeAuditEntry } from './auditLogPseudonymization.js';
-import {
-  anonymizePlanCommentAuthors,
-  anonymizeExerciseCommentAuthors,
-  anonymizeResultCommentAuthors,
-  anonymizeTemplateCommentAuthors,
-  anonymizeSectionTemplateCommentAuthors,
-} from './commentAnonymization.js';
+import { anonymizeCommentAuthors } from './commentAnonymization.js';
+import { COMMENT_LOCATIONS, type CommentBearingStore, type CommentLocation } from '../modules/shared/commentLocations.js';
+
+// Tabelle und Prisma-Model je Store mit Kommentaren. `satisfies` erzwingt
+// einen Eintrag für JEDEN Store aus COMMENT_LOCATIONS — ein neuer Store mit
+// Kommentaren lässt sich nicht hinzufügen, ohne dass der Purge ihn erfasst.
+const COMMENT_PURGE_TABLES = {
+  exercises: { table: 'exercises', delegate: 'exercise' },
+  plans: { table: 'plans', delegate: 'plan' },
+  templates: { table: 'templates', delegate: 'template' },
+  sectionTemplates: { table: 'section_templates', delegate: 'sectionTemplate' },
+  results: { table: 'results', delegate: 'result' },
+} as const satisfies Record<CommentBearingStore, { table: string; delegate: string }>;
 
 // Platzhalter, auf den `Invitation.email` beim Hard-Purge gesetzt wird
 // (purgeUserAndDependents() unten); Gegenstück zu ANONYMIZED_COMMENT_AUTHOR
@@ -150,7 +156,8 @@ export class PrismaErasureJobGateway implements ErasureJobGateway {
       // Konto übernommener Klarname — eingebettet in "plans.comments",
       // "exercises.comments", "results.comments", "plans.days[].sets[].comments",
       // "templates.sets[].comments" und "section_templates.entries[].comments"
-      // (Struktur siehe commentAnonymization.ts).
+      // (welche Stores und Felder, legt modules/shared/commentLocations.ts
+      // fest).
       // Bewusst NICHT an `user.athleteId` gekoppelt: Kommentare stammen auch
       // von Trainer:innen/Admins ohne athleteId, deren Klarnamen ein
       // athletengebundener Filter unangetastet ließe. Gescoped auf
@@ -184,79 +191,32 @@ export class PrismaErasureJobGateway implements ErasureJobGateway {
         const authorNameContainment = JSON.stringify([{ authorName: user.name }]);
         const pathVars = JSON.stringify({ id: user.id, name: user.name });
 
-        const affectedPlans = await tx.$queryRaw<Array<{ id: string; comments: unknown; days: unknown }>>`
-          SELECT id, comments, days FROM "plans"
-          WHERE "clubId" = ${user.clubId}
-            AND (
-              comments @> ${authorIdContainment}::jsonb
-              OR comments @> ${authorNameContainment}::jsonb
-              OR jsonb_path_exists(days, '$.**.comments[*] ? (@.authorId == $id || @.authorName == $name)', ${pathVars}::jsonb)
-            )
-        `;
-        for (const row of affectedPlans) {
-          const { changed, comments, days } = anonymizePlanCommentAuthors(row, author);
-          if (changed) {
-            await tx.plan.update({
-              where: { id: row.id },
-              data: { comments: comments as Prisma.InputJsonValue, days: days as Prisma.InputJsonValue },
-            });
-          }
-        }
-
-        const affectedExercises = await tx.$queryRaw<Array<{ id: string; comments: unknown }>>`
-          SELECT id, comments FROM "exercises"
-          WHERE "clubId" = ${user.clubId}
-            AND (
-              comments @> ${authorIdContainment}::jsonb
-              OR comments @> ${authorNameContainment}::jsonb
-            )
-        `;
-        for (const row of affectedExercises) {
-          const { changed, comments } = anonymizeExerciseCommentAuthors(row, author);
-          if (changed) {
-            await tx.exercise.update({ where: { id: row.id }, data: { comments: comments as Prisma.InputJsonValue } });
-          }
-        }
-
+        // Jeder Store mit Kommentaren (COMMENT_LOCATIONS), jeweils mit dem
+        // Vorfilter seiner Kommentar-Felder: `@>` für ein flaches
+        // Kommentar-Array, `jsonb_path_exists` für verschachtelte Sätze.
         // Die Ergebnisse der EIGENEN Athlet:innen-Person sind oben bereits
-        // gelöscht; hier bleiben nur Kommentare an Ergebnissen anderer
-        // Athlet:innen übrig (Issue #151).
-        const affectedResults = await tx.$queryRaw<Array<{ id: string; comments: unknown }>>`
-          SELECT id, comments FROM "results"
-          WHERE "clubId" = ${user.clubId}
-            AND (
-              comments @> ${authorIdContainment}::jsonb
-              OR comments @> ${authorNameContainment}::jsonb
-            )
-        `;
-        for (const row of affectedResults) {
-          const { changed, comments } = anonymizeResultCommentAuthors(row, author);
-          if (changed) {
-            await tx.result.update({ where: { id: row.id }, data: { comments: comments as Prisma.InputJsonValue } });
-          }
-        }
-
-        const affectedTemplates = await tx.$queryRaw<Array<{ id: string; sets: unknown }>>`
-          SELECT id, sets FROM "templates"
-          WHERE "clubId" = ${user.clubId}
-            AND jsonb_path_exists(sets, '$.**.comments[*] ? (@.authorId == $id || @.authorName == $name)', ${pathVars}::jsonb)
-        `;
-        for (const row of affectedTemplates) {
-          const { changed, sets } = anonymizeTemplateCommentAuthors(row, author);
-          if (changed) {
-            await tx.template.update({ where: { id: row.id }, data: { sets: sets as Prisma.InputJsonValue } });
-          }
-        }
-
-        const affectedSectionTemplates = await tx.$queryRaw<Array<{ id: string; entries: unknown }>>`
-          SELECT id, entries FROM "section_templates"
-          WHERE "clubId" = ${user.clubId}
-            AND jsonb_path_exists(entries, '$.**.comments[*] ? (@.authorId == $id || @.authorName == $name)', ${pathVars}::jsonb)
-        `;
-        for (const row of affectedSectionTemplates) {
-          const { changed, entries } = anonymizeSectionTemplateCommentAuthors(row, author);
-          if (changed) {
-            await tx.sectionTemplate.update({ where: { id: row.id }, data: { entries: entries as Prisma.InputJsonValue } });
+        // gelöscht; bei "results" bleiben nur Kommentare an Ergebnissen
+        // anderer Athlet:innen übrig.
+        for (const store of Object.keys(COMMENT_LOCATIONS) as CommentBearingStore[]) {
+          const locations: readonly CommentLocation[] = COMMENT_LOCATIONS[store];
+          const { table, delegate } = COMMENT_PURGE_TABLES[store];
+          const columns = locations.map((location) => Prisma.raw(`"${location.field}"`));
+          const conditions = locations.map((location) => {
+            const column = Prisma.raw(`"${location.field}"`);
+            return location.kind === 'comments'
+              ? Prisma.sql`${column} @> ${authorIdContainment}::jsonb OR ${column} @> ${authorNameContainment}::jsonb`
+              : Prisma.sql`jsonb_path_exists(${column}, '$.**.comments[*] ? (@.authorId == $id || @.authorName == $name)', ${pathVars}::jsonb)`;
+          });
+          const rows = await tx.$queryRaw<Array<{ id: string } & Record<string, unknown>>>`
+            SELECT id, ${Prisma.join(columns, ', ')} FROM ${Prisma.raw(`"${table}"`)}
+            WHERE "clubId" = ${user.clubId}
+              AND (${Prisma.join(conditions, ' OR ')})
+          `;
+          for (const row of rows) {
+            const { changed, fields } = anonymizeCommentAuthors(store, row, author);
+            if (changed) {
+              await tx[delegate].update({ where: { id: row.id }, data: fields as Record<string, Prisma.InputJsonValue> });
+            }
           }
         }
       }
