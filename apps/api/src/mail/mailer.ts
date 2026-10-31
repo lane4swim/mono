@@ -109,138 +109,153 @@ const ROLE_LABEL: Record<SupportedLocale, Record<InvitationMailPayload['role'], 
   },
 };
 
-// Exportiert (wie buildHtmlBody() unten), damit die Lokalisierung direkt
-// gegen die tatsächliche Text-/Betreff-Ausgabe testbar ist.
-export function buildSubject(payload: InvitationMailPayload): string {
-  const locale = resolveLocale(payload.locale);
-  return locale === 'en-US'
-    ? `Invitation to ${payload.clubName} on Lane 1`
-    : `Einladung zu ${payload.clubName} bei Lane 1`;
+// Eine fertig gerenderte E-Mail. Jede Vorlage wird über eine render*()-
+// Funktion je Mailtyp erzeugt (exportiert, damit Betreff/Text/HTML direkt
+// testbar sind); SmtpMailSender verschickt nur noch deren Ergebnis
+// (deliver()).
+export interface RenderedMail {
+  subject: string;
+  text: string;
+  html: string;
 }
 
-export function buildTextBody(payload: InvitationMailPayload): string {
-  const locale = resolveLocale(payload.locale);
-  const expires = payload.expiresAt.toLocaleDateString(locale, { year: 'numeric', month: 'long', day: 'numeric' });
-  const roleLabel = ROLE_LABEL[locale][payload.role];
-  if (locale === 'en-US') {
-    return [
-      payload.recipientName ? `Hi ${payload.recipientName},` : 'Hi,',
-      '',
-      `You have been invited as ${roleLabel} for "${payload.clubName}" on Lane 1.`,
-      '',
-      'Please open the following link to activate your account:',
-      payload.inviteUrl,
-      '',
-      `This link is valid until ${expires}.`,
-      '',
-      'Best regards,',
-      'The Lane 1 team',
-    ].join('\n');
-  }
-  return [
-    payload.recipientName ? `Hallo ${payload.recipientName},` : 'Hallo,',
-    '',
-    `Sie wurden als ${roleLabel} für "${payload.clubName}" bei Lane 1 eingeladen.`,
-    '',
-    `Bitte öffnen Sie den folgenden Link, um Ihr Konto zu aktivieren:`,
-    payload.inviteUrl,
-    '',
-    `Dieser Link ist gültig bis zum ${expires}.`,
-    '',
-    'Sportliche Grüße,',
-    'Ihr Lane-1-Team',
-  ].join('\n');
+// Anrede und Grußformel — für jede Vorlage gleich, daher nur hier.
+function textGreeting(locale: SupportedLocale, name: string | null | undefined): string {
+  if (locale === 'en-US') return name ? `Hi ${name},` : 'Hi,';
+  return name ? `Hallo ${name},` : 'Hallo,';
 }
 
-// Exportiert (statt modul-intern), damit escapeHtml()-Regressionen (siehe
-// mailer.test.ts) direkt gegen die tatsächliche HTML-Ausgabe testbar sind,
-// ohne einen echten SMTP-Versand nachzustellen.
-export function buildHtmlBody(payload: InvitationMailPayload): string {
+function htmlGreeting(locale: SupportedLocale, name: string | null | undefined): string {
+  if (locale === 'en-US') return `<p>${name ? `Hi ${escapeHtml(name)},` : 'Hi,'}</p>`;
+  return `<p>${name ? `Hallo ${escapeHtml(name)},` : 'Hallo,'}</p>`;
+}
+
+const TEXT_SIGN_OFF: Record<SupportedLocale, readonly string[]> = {
+  'de-DE': ['Sportliche Grüße,', 'Ihr Lane-1-Team'],
+  'en-US': ['Best regards,', 'The Lane 1 team'],
+};
+
+const HTML_SIGN_OFF: Record<SupportedLocale, string> = {
+  'de-DE': '<p>Sportliche Grüße,<br>Ihr Lane-1-Team</p>',
+  'en-US': '<p>Best regards,<br>The Lane 1 team</p>',
+};
+
+// Datum bzw. Datum mit Uhrzeit in der Sprache der Empfänger:in.
+function formatMailDate(date: Date, locale: SupportedLocale): string {
+  return date.toLocaleDateString(locale, { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+function formatMailDateTime(date: Date, locale: SupportedLocale): string {
+  return date.toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+export function renderInvitationMail(payload: InvitationMailPayload): RenderedMail {
   const locale = resolveLocale(payload.locale);
-  const expires = payload.expiresAt.toLocaleDateString(locale, { year: 'numeric', month: 'long', day: 'numeric' });
+  const expires = formatMailDate(payload.expiresAt, locale);
   const roleLabel = ROLE_LABEL[locale][payload.role];
+  const greeting = htmlGreeting(locale, payload.recipientName);
   if (locale === 'en-US') {
-    return `
-      <p>${payload.recipientName ? `Hi ${escapeHtml(payload.recipientName)},` : 'Hi,'}</p>
+    return {
+      subject: `Invitation to ${payload.clubName} on Lane 1`,
+      text: [
+        textGreeting(locale, payload.recipientName),
+        '',
+        `You have been invited as ${roleLabel} for "${payload.clubName}" on Lane 1.`,
+        '',
+        'Please open the following link to activate your account:',
+        payload.inviteUrl,
+        '',
+        `This link is valid until ${expires}.`,
+        '',
+        ...TEXT_SIGN_OFF[locale],
+      ].join('\n'),
+      html: `
+      ${greeting}
       <p>You have been invited as <strong>${escapeHtml(roleLabel)}</strong> for
          "${escapeHtml(payload.clubName)}" on Lane 1.</p>
       <p><a href="${escapeHtml(payload.inviteUrl)}">Activate account</a></p>
       <p style="color:#5B7A85;font-size:13px">This link is valid until ${expires}.</p>
-      <p>Best regards,<br>The Lane 1 team</p>
-    `.trim();
+      ${HTML_SIGN_OFF[locale]}
+    `.trim(),
+    };
   }
-  return `
-    <p>${payload.recipientName ? `Hallo ${escapeHtml(payload.recipientName)},` : 'Hallo,'}</p>
+  return {
+    subject: `Einladung zu ${payload.clubName} bei Lane 1`,
+    text: [
+      textGreeting(locale, payload.recipientName),
+      '',
+      `Sie wurden als ${roleLabel} für "${payload.clubName}" bei Lane 1 eingeladen.`,
+      '',
+      `Bitte öffnen Sie den folgenden Link, um Ihr Konto zu aktivieren:`,
+      payload.inviteUrl,
+      '',
+      `Dieser Link ist gültig bis zum ${expires}.`,
+      '',
+      ...TEXT_SIGN_OFF[locale],
+    ].join('\n'),
+    html: `
+    ${greeting}
     <p>Sie wurden als <strong>${escapeHtml(roleLabel)}</strong> für
        „${escapeHtml(payload.clubName)}" bei Lane 1 eingeladen.</p>
     <p><a href="${escapeHtml(payload.inviteUrl)}">Konto aktivieren</a></p>
     <p style="color:#5B7A85;font-size:13px">Dieser Link ist gültig bis zum ${expires}.</p>
-    <p>Sportliche Grüße,<br>Ihr Lane-1-Team</p>
-  `.trim();
+    ${HTML_SIGN_OFF[locale]}
+  `.trim(),
+  };
 }
 
-// "Passwort vergessen"-E-Mail — dieselbe Struktur (exportierte, einzeln testbare Subject/Text/HTML-
-// Builder) wie bei der Einladungs-E-Mail oben, aus demselben Grund
-// (Lokalisierung direkt gegen die tatsächliche Ausgabe testbar).
-export function buildPasswordResetSubject(payload: PasswordResetMailPayload): string {
+export function renderPasswordResetMail(payload: PasswordResetMailPayload): RenderedMail {
   const locale = resolveLocale(payload.locale);
-  return locale === 'en-US' ? 'Reset your Lane 1 password' : 'Passwort bei Lane 1 zurücksetzen';
-}
-
-export function buildPasswordResetTextBody(payload: PasswordResetMailPayload): string {
-  const locale = resolveLocale(payload.locale);
-  const expires = payload.expiresAt.toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short' });
+  const expires = formatMailDateTime(payload.expiresAt, locale);
+  const greeting = htmlGreeting(locale, payload.recipientName);
   if (locale === 'en-US') {
-    return [
-      payload.recipientName ? `Hi ${payload.recipientName},` : 'Hi,',
-      '',
-      'We received a request to reset your Lane 1 password. Open the following link to choose a new one:',
-      payload.resetUrl,
-      '',
-      `This link is valid until ${expires} and can only be used once.`,
-      '',
-      "If you didn't request this, you can safely ignore this email — your password stays unchanged.",
-      '',
-      'Best regards,',
-      'The Lane 1 team',
-    ].join('\n');
-  }
-  return [
-    payload.recipientName ? `Hallo ${payload.recipientName},` : 'Hallo,',
-    '',
-    'Für Ihr Lane-1-Konto wurde eine Anfrage zum Zurücksetzen des Passworts gestellt. Öffnen Sie den folgenden Link, um ein neues Passwort zu vergeben:',
-    payload.resetUrl,
-    '',
-    `Dieser Link ist gültig bis ${expires} und nur einmal verwendbar.`,
-    '',
-    'Falls Sie das nicht angefordert haben, können Sie diese E-Mail ignorieren — Ihr Passwort bleibt unverändert.',
-    '',
-    'Sportliche Grüße,',
-    'Ihr Lane-1-Team',
-  ].join('\n');
-}
-
-export function buildPasswordResetHtmlBody(payload: PasswordResetMailPayload): string {
-  const locale = resolveLocale(payload.locale);
-  const expires = payload.expiresAt.toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short' });
-  if (locale === 'en-US') {
-    return `
-      <p>${payload.recipientName ? `Hi ${escapeHtml(payload.recipientName)},` : 'Hi,'}</p>
+    return {
+      subject: 'Reset your Lane 1 password',
+      text: [
+        textGreeting(locale, payload.recipientName),
+        '',
+        'We received a request to reset your Lane 1 password. Open the following link to choose a new one:',
+        payload.resetUrl,
+        '',
+        `This link is valid until ${expires} and can only be used once.`,
+        '',
+        "If you didn't request this, you can safely ignore this email — your password stays unchanged.",
+        '',
+        ...TEXT_SIGN_OFF[locale],
+      ].join('\n'),
+      html: `
+      ${greeting}
       <p>We received a request to reset your Lane 1 password.</p>
       <p><a href="${escapeHtml(payload.resetUrl)}">Choose a new password</a></p>
       <p style="color:#5B7A85;font-size:13px">This link is valid until ${expires} and can only be used once.</p>
       <p style="color:#5B7A85;font-size:13px">If you didn't request this, you can safely ignore this email — your password stays unchanged.</p>
-      <p>Best regards,<br>The Lane 1 team</p>
-    `.trim();
+      ${HTML_SIGN_OFF[locale]}
+    `.trim(),
+    };
   }
-  return `
-    <p>${payload.recipientName ? `Hallo ${escapeHtml(payload.recipientName)},` : 'Hallo,'}</p>
+  return {
+    subject: 'Passwort bei Lane 1 zurücksetzen',
+    text: [
+      textGreeting(locale, payload.recipientName),
+      '',
+      'Für Ihr Lane-1-Konto wurde eine Anfrage zum Zurücksetzen des Passworts gestellt. Öffnen Sie den folgenden Link, um ein neues Passwort zu vergeben:',
+      payload.resetUrl,
+      '',
+      `Dieser Link ist gültig bis ${expires} und nur einmal verwendbar.`,
+      '',
+      'Falls Sie das nicht angefordert haben, können Sie diese E-Mail ignorieren — Ihr Passwort bleibt unverändert.',
+      '',
+      ...TEXT_SIGN_OFF[locale],
+    ].join('\n'),
+    html: `
+    ${greeting}
     <p>Für Ihr Lane-1-Konto wurde eine Anfrage zum Zurücksetzen des Passworts gestellt.</p>
     <p><a href="${escapeHtml(payload.resetUrl)}">Neues Passwort vergeben</a></p>
     <p style="color:#5B7A85;font-size:13px">Dieser Link ist gültig bis ${expires} und nur einmal verwendbar.</p>
     <p style="color:#5B7A85;font-size:13px">Falls Sie das nicht angefordert haben, können Sie diese E-Mail ignorieren — Ihr Passwort bleibt unverändert.</p>
-    <p>Sportliche Grüße,<br>Ihr Lane-1-Team</p>
-  `.trim();
+    ${HTML_SIGN_OFF[locale]}
+  `.trim(),
+  };
 }
 
 // Sicherheitsbenachrichtigung — dieselbe Struktur (exportierte, einzeln
@@ -271,63 +286,56 @@ const CHANGE_SENTENCE: Record<SupportedLocale, Record<AccountSecurityChangeMailP
   },
 };
 
-export function buildAccountSecurityChangeSubject(payload: AccountSecurityChangeMailPayload): string {
-  const locale = resolveLocale(payload.locale);
-  return locale === 'en-US' ? 'Your Lane 1 account was changed' : 'Ihr Lane-1-Konto wurde geändert';
-}
-
-export function buildAccountSecurityChangeTextBody(payload: AccountSecurityChangeMailPayload): string {
+export function renderAccountSecurityChangeMail(payload: AccountSecurityChangeMailPayload): RenderedMail {
   const locale = resolveLocale(payload.locale);
   const changed = CHANGE_SENTENCE[locale][payload.changeType];
+  const greeting = htmlGreeting(locale, payload.recipientName);
   if (locale === 'en-US') {
-    return [
-      payload.recipientName ? `Hi ${payload.recipientName},` : 'Hi,',
-      '',
-      changed,
-      '',
-      "If you made this change yourself, you can ignore this email — nothing further to do.",
-      '',
-      "If you did NOT make this change, your account may be compromised: please contact your club's administrator immediately.",
-      '',
-      'Best regards,',
-      'The Lane 1 team',
-    ].join('\n');
-  }
-  return [
-    payload.recipientName ? `Hallo ${payload.recipientName},` : 'Hallo,',
-    '',
-    changed,
-    '',
-    'Wenn Sie diese Änderung selbst vorgenommen haben, können Sie diese E-Mail ignorieren — es ist nichts weiter zu tun.',
-    '',
-    'Falls Sie diese Änderung NICHT vorgenommen haben, könnte Ihr Konto kompromittiert sein: Bitte wenden Sie sich umgehend an Ihre Vereinsleitung.',
-    '',
-    'Sportliche Grüße,',
-    'Ihr Lane-1-Team',
-  ].join('\n');
-}
-
-export function buildAccountSecurityChangeHtmlBody(payload: AccountSecurityChangeMailPayload): string {
-  const locale = resolveLocale(payload.locale);
-  const changed = CHANGE_SENTENCE[locale][payload.changeType];
-  if (locale === 'en-US') {
-    return `
-      <p>${payload.recipientName ? `Hi ${escapeHtml(payload.recipientName)},` : 'Hi,'}</p>
+    return {
+      subject: 'Your Lane 1 account was changed',
+      text: [
+        textGreeting(locale, payload.recipientName),
+        '',
+        changed,
+        '',
+        "If you made this change yourself, you can ignore this email — nothing further to do.",
+        '',
+        "If you did NOT make this change, your account may be compromised: please contact your club's administrator immediately.",
+        '',
+        ...TEXT_SIGN_OFF[locale],
+      ].join('\n'),
+      html: `
+      ${greeting}
       <p>${escapeHtml(changed)}</p>
       <p>If you made this change yourself, you can ignore this email.</p>
       <p style="color:#B3261E;font-weight:bold">If you did NOT make this change, your account may be compromised:
          please contact your club's administrator immediately.</p>
-      <p>Best regards,<br>The Lane 1 team</p>
-    `.trim();
+      ${HTML_SIGN_OFF[locale]}
+    `.trim(),
+    };
   }
-  return `
-    <p>${payload.recipientName ? `Hallo ${escapeHtml(payload.recipientName)},` : 'Hallo,'}</p>
+  return {
+    subject: 'Ihr Lane-1-Konto wurde geändert',
+    text: [
+      textGreeting(locale, payload.recipientName),
+      '',
+      changed,
+      '',
+      'Wenn Sie diese Änderung selbst vorgenommen haben, können Sie diese E-Mail ignorieren — es ist nichts weiter zu tun.',
+      '',
+      'Falls Sie diese Änderung NICHT vorgenommen haben, könnte Ihr Konto kompromittiert sein: Bitte wenden Sie sich umgehend an Ihre Vereinsleitung.',
+      '',
+      ...TEXT_SIGN_OFF[locale],
+    ].join('\n'),
+    html: `
+    ${greeting}
     <p>${escapeHtml(changed)}</p>
     <p>Wenn Sie diese Änderung selbst vorgenommen haben, können Sie diese E-Mail ignorieren.</p>
     <p style="color:#B3261E;font-weight:bold">Falls Sie diese Änderung NICHT vorgenommen haben, könnte Ihr Konto
        kompromittiert sein: Bitte wenden Sie sich umgehend an Ihre Vereinsleitung.</p>
-    <p>Sportliche Grüße,<br>Ihr Lane-1-Team</p>
-  `.trim();
+    ${HTML_SIGN_OFF[locale]}
+  `.trim(),
+  };
 }
 
 // Qualifikations-Ablauf-Erinnerung (docs/Plans/nutzer-qualifikationen-plan.md,
@@ -385,71 +393,59 @@ function resolveQualificationTypeLabel(locale: SupportedLocale, type: string): s
   return QUALIFICATION_TYPE_LABEL[locale][type as QualificationType] ?? QUALIFICATION_TYPE_LABEL[locale].sonstige;
 }
 
-export function buildQualificationReminderSubject(payload: QualificationReminderMailPayload): string {
+export function renderQualificationReminderMail(payload: QualificationReminderMailPayload): RenderedMail {
   const locale = resolveLocale(payload.locale);
   const typeLabel = resolveQualificationTypeLabel(locale, payload.type);
+  const expires = formatMailDate(payload.expiresOn, locale);
+  const greeting = htmlGreeting(locale, payload.recipientName);
   if (locale === 'en-US') {
-    return payload.isExpired ? `${typeLabel} has expired` : `${typeLabel} is expiring soon`;
-  }
-  return payload.isExpired ? `${typeLabel} ist abgelaufen` : `${typeLabel} läuft bald ab`;
-}
-
-export function buildQualificationReminderTextBody(payload: QualificationReminderMailPayload): string {
-  const locale = resolveLocale(payload.locale);
-  const typeLabel = resolveQualificationTypeLabel(locale, payload.type);
-  const expires = payload.expiresOn.toLocaleDateString(locale, { year: 'numeric', month: 'long', day: 'numeric' });
-  if (locale === 'en-US') {
-    return [
-      payload.recipientName ? `Hi ${payload.recipientName},` : 'Hi,',
-      '',
-      payload.isExpired
-        ? `The ${typeLabel} of ${payload.qualifiedPersonName} expired on ${expires}.`
-        : `The ${typeLabel} of ${payload.qualifiedPersonName} expires on ${expires}.`,
-      '',
-      'Please check whether a renewal/refresher course needs to be organized.',
-      '',
-      'Best regards,',
-      'The Lane 1 team',
-    ].join('\n');
-  }
-  return [
-    payload.recipientName ? `Hallo ${payload.recipientName},` : 'Hallo,',
-    '',
-    payload.isExpired
-      ? `${typeLabel} von ${payload.qualifiedPersonName} ist am ${expires} abgelaufen.`
-      : `${typeLabel} von ${payload.qualifiedPersonName} läuft am ${expires} ab.`,
-    '',
-    'Bitte prüfen Sie, ob ein Verlängerungs-/Auffrischungslehrgang organisiert werden muss.',
-    '',
-    'Sportliche Grüße,',
-    'Ihr Lane-1-Team',
-  ].join('\n');
-}
-
-export function buildQualificationReminderHtmlBody(payload: QualificationReminderMailPayload): string {
-  const locale = resolveLocale(payload.locale);
-  const typeLabel = resolveQualificationTypeLabel(locale, payload.type);
-  const expires = payload.expiresOn.toLocaleDateString(locale, { year: 'numeric', month: 'long', day: 'numeric' });
-  if (locale === 'en-US') {
-    return `
-      <p>${payload.recipientName ? `Hi ${escapeHtml(payload.recipientName)},` : 'Hi,'}</p>
+    return {
+      subject: payload.isExpired ? `${typeLabel} has expired` : `${typeLabel} is expiring soon`,
+      text: [
+        textGreeting(locale, payload.recipientName),
+        '',
+        payload.isExpired
+          ? `The ${typeLabel} of ${payload.qualifiedPersonName} expired on ${expires}.`
+          : `The ${typeLabel} of ${payload.qualifiedPersonName} expires on ${expires}.`,
+        '',
+        'Please check whether a renewal/refresher course needs to be organized.',
+        '',
+        ...TEXT_SIGN_OFF[locale],
+      ].join('\n'),
+      html: `
+      ${greeting}
       <p>The <strong>${escapeHtml(typeLabel)}</strong> of ${escapeHtml(payload.qualifiedPersonName)}
          ${payload.isExpired ? `expired on ${expires}.` : `expires on ${expires}.`}</p>
       <p>Please check whether a renewal/refresher course needs to be organized.</p>
-      <p>Best regards,<br>The Lane 1 team</p>
-    `.trim();
+      ${HTML_SIGN_OFF[locale]}
+    `.trim(),
+    };
   }
-  return `
-    <p>${payload.recipientName ? `Hallo ${escapeHtml(payload.recipientName)},` : 'Hallo,'}</p>
+  return {
+    subject: payload.isExpired ? `${typeLabel} ist abgelaufen` : `${typeLabel} läuft bald ab`,
+    text: [
+      textGreeting(locale, payload.recipientName),
+      '',
+      payload.isExpired
+        ? `${typeLabel} von ${payload.qualifiedPersonName} ist am ${expires} abgelaufen.`
+        : `${typeLabel} von ${payload.qualifiedPersonName} läuft am ${expires} ab.`,
+      '',
+      'Bitte prüfen Sie, ob ein Verlängerungs-/Auffrischungslehrgang organisiert werden muss.',
+      '',
+      ...TEXT_SIGN_OFF[locale],
+    ].join('\n'),
+    html: `
+    ${greeting}
     <p><strong>${escapeHtml(typeLabel)}</strong> von ${escapeHtml(payload.qualifiedPersonName)}
        ${payload.isExpired ? `ist am ${expires} abgelaufen.` : `läuft am ${expires} ab.`}</p>
     <p>Bitte prüfen Sie, ob ein Verlängerungs-/Auffrischungslehrgang organisiert werden muss.</p>
-    <p>Sportliche Grüße,<br>Ihr Lane-1-Team</p>
-  `.trim();
+    ${HTML_SIGN_OFF[locale]}
+  `.trim(),
+  };
 }
 
-// Escapt auch einfache Anführungszeichen, obwohl buildHtmlBody() heute nur
-// doppelt gequotete Attribute nutzt: eine allgemein benannte Hilfsfunktion
+// Escapt auch einfache Anführungszeichen, obwohl die Vorlagen heute nur
+// doppelt gequotete Attribute nutzen: eine allgemein benannte Hilfsfunktion
 // soll vollständig escapen, damit ein künftiger Aufrufer (etwa ein einfach
 // gequotetes Attribut) nicht stillschweigend eine Lücke erbt.
 // `&#39;` statt `&apos;`: Erstere ist auch in älteren/eingeschränkten
@@ -510,48 +506,32 @@ export class SmtpMailSender implements MailSender {
     return this.transportPromise;
   }
 
-  async sendInvitationEmail(payload: InvitationMailPayload): Promise<void> {
+  // Die einzige Stelle, die tatsächlich eine E-Mail verschickt.
+  private async deliver(to: string, mail: RenderedMail): Promise<void> {
     const transport = await this.getTransport();
     await transport.sendMail({
       from: `"${this.config.fromName}" <${this.config.fromEmail}>`,
-      to: payload.to,
-      subject: buildSubject(payload),
-      text: buildTextBody(payload),
-      html: buildHtmlBody(payload),
+      to,
+      subject: mail.subject,
+      text: mail.text,
+      html: mail.html,
     });
+  }
+
+  async sendInvitationEmail(payload: InvitationMailPayload): Promise<void> {
+    await this.deliver(payload.to, renderInvitationMail(payload));
   }
 
   async sendPasswordResetEmail(payload: PasswordResetMailPayload): Promise<void> {
-    const transport = await this.getTransport();
-    await transport.sendMail({
-      from: `"${this.config.fromName}" <${this.config.fromEmail}>`,
-      to: payload.to,
-      subject: buildPasswordResetSubject(payload),
-      text: buildPasswordResetTextBody(payload),
-      html: buildPasswordResetHtmlBody(payload),
-    });
+    await this.deliver(payload.to, renderPasswordResetMail(payload));
   }
 
   async sendAccountSecurityChangeNotice(payload: AccountSecurityChangeMailPayload): Promise<void> {
-    const transport = await this.getTransport();
-    await transport.sendMail({
-      from: `"${this.config.fromName}" <${this.config.fromEmail}>`,
-      to: payload.to,
-      subject: buildAccountSecurityChangeSubject(payload),
-      text: buildAccountSecurityChangeTextBody(payload),
-      html: buildAccountSecurityChangeHtmlBody(payload),
-    });
+    await this.deliver(payload.to, renderAccountSecurityChangeMail(payload));
   }
 
   async sendQualificationReminderEmail(payload: QualificationReminderMailPayload): Promise<void> {
-    const transport = await this.getTransport();
-    await transport.sendMail({
-      from: `"${this.config.fromName}" <${this.config.fromEmail}>`,
-      to: payload.to,
-      subject: buildQualificationReminderSubject(payload),
-      text: buildQualificationReminderTextBody(payload),
-      html: buildQualificationReminderHtmlBody(payload),
-    });
+    await this.deliver(payload.to, renderQualificationReminderMail(payload));
   }
 }
 
