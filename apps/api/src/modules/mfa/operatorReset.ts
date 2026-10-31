@@ -6,6 +6,7 @@
 import type { MfaRecoveryCodeRepository, RefreshTokenRepository, UserRepository } from '../auth/auth.repository.js';
 import { SYSTEM_ACTOR_LABEL, userLabel, type AuditLogWriter } from '../auditLog/auditLog.service.js';
 import type { MailSender } from '../../mail/mailer.js';
+import { notifySecurityChange } from '../../mail/securityNotice.js';
 
 export interface OperatorResetDeps {
   users: Pick<UserRepository, 'findByEmail' | 'clearTotp'>;
@@ -39,11 +40,8 @@ export async function resetMfaAsOperator(deps: OperatorResetDeps, email: string)
     targetLabel: label,
     metadata: { via: 'cli' },
   });
-  try {
-    await deps.mailer.sendAccountSecurityChangeNotice({ to: user.email, recipientName: user.name, changeType: 'mfa', locale: user.locale });
-  } catch (err) {
-    // Das Zurücksetzen ist bereits geschehen; ein Mailfehler ändert daran nichts.
-    console.error('[reset-mfa] Sicherheitshinweis konnte nicht versendet werden:', err);
-  }
+  // Abgewartet, damit das Skript nicht vor dem Versand endet; ein
+  // Mailfehler ändert am bereits erfolgten Zurücksetzen nichts.
+  await notifySecurityChange(deps.mailer, user, 'mfa', 'reset-mfa');
   return { status: 'reset', userId: user.id, label };
 }

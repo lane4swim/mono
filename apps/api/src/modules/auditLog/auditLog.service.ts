@@ -57,9 +57,17 @@ export const UNKNOWN_ACTOR_LABEL = '__unknown__';
 export const SYSTEM_ACTOR_LABEL = '__system__';
 
 // Schnappschuss-Label "Name <E-Mail>" (siehe AuditLogEntry.actorLabel in
-// schema.prisma) — eine Stelle statt je Aufrufer eigener Formatierung.
+// schema.prisma). Zentrale Stelle für dieses Format: jeder Audit-Eintrag
+// bildet seine Labels über userLabel()/userLabelOr(), keine Stelle baut
+// den String selbst zusammen.
 export function userLabel(user: { name: string; email: string }): string {
   return `${user.name} <${user.email}>`;
+}
+
+// Wie userLabel(), aber für ein Konto, das nicht (mehr) geladen werden
+// konnte: dann steht die ID im Label, damit der Eintrag zuordenbar bleibt.
+export function userLabelOr(user: { name: string; email: string } | null | undefined, fallbackId: string): string {
+  return user ? userLabel(user) : fallbackId;
 }
 
 export interface RecordAuditLogEntryInput {
@@ -109,7 +117,7 @@ export function createAuditLogService(deps: AuditLogServiceDeps) {
   async function resolveUserLabel(id: string | null): Promise<string> {
     if (!id) return '';
     const user = deps.users ? await deps.users.findById(id) : null;
-    return user ? userLabel(user) : id;
+    return userLabelOr(user, id);
   }
 
   return {
