@@ -58,6 +58,8 @@ Routen und Services verwenden sie, statt sie selbst nachzubauen. Eine
 | `withoutDeletedAt()`, `findActiveOwnedOrThrow()` | `modules/shared/clubAccess.ts` | Umgang mit personenbezogenen, per Soft-Delete entfernbaren Datensätzen |
 | `createClubModulesResolver()`, `requireClubModule()` | `plugins/clubModules.ts` | Gebuchte Module eines Vereins (ein gemeinsamer, kurzlebiger Cache je App-Instanz) und Sperre für Routen eines nicht gebuchten Moduls (403 `module_not_enabled`) |
 | `sendPushToUsers()`, `formatPushDate()` | `push/sendToUsers.ts` | Push-Versand an Konten (Abos laden, senden, abgelaufene Abos löschen) und Datumsangaben in Push-Texten (Kalendertage in UTC) |
+| `notifySecurityChange()` | `mail/securityNotice.ts` | Sicherheitshinweis-Mail an ein Konto (best effort: Fehler werden protokolliert, nie weitergeworfen) |
+| `userLabel()`, `userLabelOr()` | `modules/auditLog/auditLog.service.ts` | Audit-Log-Label „Name <E-Mail>", mit Rückfall auf die ID für ein nicht geladenes Konto |
 | `ForbiddenError` | `modules/shared/errors.ts` | Basisklasse für jede 403-Antwort; modulspezifische Klassen leiten davon ab und erben die HTTP-Abbildung |
 | `requireAnyRole()` | `plugins/authorize.ts` | Rollen-Guard als Fastify-preHandler |
 | `parseInput()` | `plugins/parseInput.ts` | Zod-Validierung mit einheitlicher 400-Antwort |
