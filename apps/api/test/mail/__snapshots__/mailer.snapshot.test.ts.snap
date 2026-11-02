@@ -1,0 +1,1417 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`E-Mail-Schnappschüsse > Einladung — default / mit Name / admin 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hallo Mara &lt;Vogel&gt; &amp; &quot;Co&quot;,</p>
+    <p>Sie wurden als <strong>Administrator:in</strong> für
+       „SV &quot;Wasser&quot; &amp; &lt;Freunde&gt;" bei Lane 1 eingeladen.</p>
+    <p><a href="https://app.example.org/#/accept-invite/abc?x=1&amp;y=&quot;2&quot;">Konto aktivieren</a></p>
+    <p style="color:#5B7A85;font-size:13px">Dieser Link ist gültig bis zum 1. August 2026.</p>
+    <p>Sportliche Grüße,<br>Ihr Lane-1-Team</p>",
+  "subject": "Einladung zu SV "Wasser" & <Freunde> bei Lane 1",
+  "text": "Hallo Mara <Vogel> & "Co",
+
+Sie wurden als Administrator:in für "SV "Wasser" & <Freunde>" bei Lane 1 eingeladen.
+
+Bitte öffnen Sie den folgenden Link, um Ihr Konto zu aktivieren:
+https://app.example.org/#/accept-invite/abc?x=1&y="2"
+
+Dieser Link ist gültig bis zum 1. August 2026.
+
+Sportliche Grüße,
+Ihr Lane-1-Team",
+  "to": "neu@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Einladung — default / mit Name / athlete 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hallo Mara &lt;Vogel&gt; &amp; &quot;Co&quot;,</p>
+    <p>Sie wurden als <strong>Athlet:in</strong> für
+       „SV &quot;Wasser&quot; &amp; &lt;Freunde&gt;" bei Lane 1 eingeladen.</p>
+    <p><a href="https://app.example.org/#/accept-invite/abc?x=1&amp;y=&quot;2&quot;">Konto aktivieren</a></p>
+    <p style="color:#5B7A85;font-size:13px">Dieser Link ist gültig bis zum 1. August 2026.</p>
+    <p>Sportliche Grüße,<br>Ihr Lane-1-Team</p>",
+  "subject": "Einladung zu SV "Wasser" & <Freunde> bei Lane 1",
+  "text": "Hallo Mara <Vogel> & "Co",
+
+Sie wurden als Athlet:in für "SV "Wasser" & <Freunde>" bei Lane 1 eingeladen.
+
+Bitte öffnen Sie den folgenden Link, um Ihr Konto zu aktivieren:
+https://app.example.org/#/accept-invite/abc?x=1&y="2"
+
+Dieser Link ist gültig bis zum 1. August 2026.
+
+Sportliche Grüße,
+Ihr Lane-1-Team",
+  "to": "neu@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Einladung — default / mit Name / parent 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hallo Mara &lt;Vogel&gt; &amp; &quot;Co&quot;,</p>
+    <p>Sie wurden als <strong>Erziehungsberechtigte:r</strong> für
+       „SV &quot;Wasser&quot; &amp; &lt;Freunde&gt;" bei Lane 1 eingeladen.</p>
+    <p><a href="https://app.example.org/#/accept-invite/abc?x=1&amp;y=&quot;2&quot;">Konto aktivieren</a></p>
+    <p style="color:#5B7A85;font-size:13px">Dieser Link ist gültig bis zum 1. August 2026.</p>
+    <p>Sportliche Grüße,<br>Ihr Lane-1-Team</p>",
+  "subject": "Einladung zu SV "Wasser" & <Freunde> bei Lane 1",
+  "text": "Hallo Mara <Vogel> & "Co",
+
+Sie wurden als Erziehungsberechtigte:r für "SV "Wasser" & <Freunde>" bei Lane 1 eingeladen.
+
+Bitte öffnen Sie den folgenden Link, um Ihr Konto zu aktivieren:
+https://app.example.org/#/accept-invite/abc?x=1&y="2"
+
+Dieser Link ist gültig bis zum 1. August 2026.
+
+Sportliche Grüße,
+Ihr Lane-1-Team",
+  "to": "neu@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Einladung — default / mit Name / referee 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hallo Mara &lt;Vogel&gt; &amp; &quot;Co&quot;,</p>
+    <p>Sie wurden als <strong>Kampfrichter:in</strong> für
+       „SV &quot;Wasser&quot; &amp; &lt;Freunde&gt;" bei Lane 1 eingeladen.</p>
+    <p><a href="https://app.example.org/#/accept-invite/abc?x=1&amp;y=&quot;2&quot;">Konto aktivieren</a></p>
+    <p style="color:#5B7A85;font-size:13px">Dieser Link ist gültig bis zum 1. August 2026.</p>
+    <p>Sportliche Grüße,<br>Ihr Lane-1-Team</p>",
+  "subject": "Einladung zu SV "Wasser" & <Freunde> bei Lane 1",
+  "text": "Hallo Mara <Vogel> & "Co",
+
+Sie wurden als Kampfrichter:in für "SV "Wasser" & <Freunde>" bei Lane 1 eingeladen.
+
+Bitte öffnen Sie den folgenden Link, um Ihr Konto zu aktivieren:
+https://app.example.org/#/accept-invite/abc?x=1&y="2"
+
+Dieser Link ist gültig bis zum 1. August 2026.
+
+Sportliche Grüße,
+Ihr Lane-1-Team",
+  "to": "neu@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Einladung — default / mit Name / trainer 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hallo Mara &lt;Vogel&gt; &amp; &quot;Co&quot;,</p>
+    <p>Sie wurden als <strong>Trainer:in</strong> für
+       „SV &quot;Wasser&quot; &amp; &lt;Freunde&gt;" bei Lane 1 eingeladen.</p>
+    <p><a href="https://app.example.org/#/accept-invite/abc?x=1&amp;y=&quot;2&quot;">Konto aktivieren</a></p>
+    <p style="color:#5B7A85;font-size:13px">Dieser Link ist gültig bis zum 1. August 2026.</p>
+    <p>Sportliche Grüße,<br>Ihr Lane-1-Team</p>",
+  "subject": "Einladung zu SV "Wasser" & <Freunde> bei Lane 1",
+  "text": "Hallo Mara <Vogel> & "Co",
+
+Sie wurden als Trainer:in für "SV "Wasser" & <Freunde>" bei Lane 1 eingeladen.
+
+Bitte öffnen Sie den folgenden Link, um Ihr Konto zu aktivieren:
+https://app.example.org/#/accept-invite/abc?x=1&y="2"
+
+Dieser Link ist gültig bis zum 1. August 2026.
+
+Sportliche Grüße,
+Ihr Lane-1-Team",
+  "to": "neu@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Einladung — default / ohne Name / admin 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hallo,</p>
+    <p>Sie wurden als <strong>Administrator:in</strong> für
+       „SV &quot;Wasser&quot; &amp; &lt;Freunde&gt;" bei Lane 1 eingeladen.</p>
+    <p><a href="https://app.example.org/#/accept-invite/abc?x=1&amp;y=&quot;2&quot;">Konto aktivieren</a></p>
+    <p style="color:#5B7A85;font-size:13px">Dieser Link ist gültig bis zum 1. August 2026.</p>
+    <p>Sportliche Grüße,<br>Ihr Lane-1-Team</p>",
+  "subject": "Einladung zu SV "Wasser" & <Freunde> bei Lane 1",
+  "text": "Hallo,
+
+Sie wurden als Administrator:in für "SV "Wasser" & <Freunde>" bei Lane 1 eingeladen.
+
+Bitte öffnen Sie den folgenden Link, um Ihr Konto zu aktivieren:
+https://app.example.org/#/accept-invite/abc?x=1&y="2"
+
+Dieser Link ist gültig bis zum 1. August 2026.
+
+Sportliche Grüße,
+Ihr Lane-1-Team",
+  "to": "neu@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Einladung — default / ohne Name / athlete 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hallo,</p>
+    <p>Sie wurden als <strong>Athlet:in</strong> für
+       „SV &quot;Wasser&quot; &amp; &lt;Freunde&gt;" bei Lane 1 eingeladen.</p>
+    <p><a href="https://app.example.org/#/accept-invite/abc?x=1&amp;y=&quot;2&quot;">Konto aktivieren</a></p>
+    <p style="color:#5B7A85;font-size:13px">Dieser Link ist gültig bis zum 1. August 2026.</p>
+    <p>Sportliche Grüße,<br>Ihr Lane-1-Team</p>",
+  "subject": "Einladung zu SV "Wasser" & <Freunde> bei Lane 1",
+  "text": "Hallo,
+
+Sie wurden als Athlet:in für "SV "Wasser" & <Freunde>" bei Lane 1 eingeladen.
+
+Bitte öffnen Sie den folgenden Link, um Ihr Konto zu aktivieren:
+https://app.example.org/#/accept-invite/abc?x=1&y="2"
+
+Dieser Link ist gültig bis zum 1. August 2026.
+
+Sportliche Grüße,
+Ihr Lane-1-Team",
+  "to": "neu@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Einladung — default / ohne Name / parent 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hallo,</p>
+    <p>Sie wurden als <strong>Erziehungsberechtigte:r</strong> für
+       „SV &quot;Wasser&quot; &amp; &lt;Freunde&gt;" bei Lane 1 eingeladen.</p>
+    <p><a href="https://app.example.org/#/accept-invite/abc?x=1&amp;y=&quot;2&quot;">Konto aktivieren</a></p>
+    <p style="color:#5B7A85;font-size:13px">Dieser Link ist gültig bis zum 1. August 2026.</p>
+    <p>Sportliche Grüße,<br>Ihr Lane-1-Team</p>",
+  "subject": "Einladung zu SV "Wasser" & <Freunde> bei Lane 1",
+  "text": "Hallo,
+
+Sie wurden als Erziehungsberechtigte:r für "SV "Wasser" & <Freunde>" bei Lane 1 eingeladen.
+
+Bitte öffnen Sie den folgenden Link, um Ihr Konto zu aktivieren:
+https://app.example.org/#/accept-invite/abc?x=1&y="2"
+
+Dieser Link ist gültig bis zum 1. August 2026.
+
+Sportliche Grüße,
+Ihr Lane-1-Team",
+  "to": "neu@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Einladung — default / ohne Name / referee 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hallo,</p>
+    <p>Sie wurden als <strong>Kampfrichter:in</strong> für
+       „SV &quot;Wasser&quot; &amp; &lt;Freunde&gt;" bei Lane 1 eingeladen.</p>
+    <p><a href="https://app.example.org/#/accept-invite/abc?x=1&amp;y=&quot;2&quot;">Konto aktivieren</a></p>
+    <p style="color:#5B7A85;font-size:13px">Dieser Link ist gültig bis zum 1. August 2026.</p>
+    <p>Sportliche Grüße,<br>Ihr Lane-1-Team</p>",
+  "subject": "Einladung zu SV "Wasser" & <Freunde> bei Lane 1",
+  "text": "Hallo,
+
+Sie wurden als Kampfrichter:in für "SV "Wasser" & <Freunde>" bei Lane 1 eingeladen.
+
+Bitte öffnen Sie den folgenden Link, um Ihr Konto zu aktivieren:
+https://app.example.org/#/accept-invite/abc?x=1&y="2"
+
+Dieser Link ist gültig bis zum 1. August 2026.
+
+Sportliche Grüße,
+Ihr Lane-1-Team",
+  "to": "neu@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Einladung — default / ohne Name / trainer 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hallo,</p>
+    <p>Sie wurden als <strong>Trainer:in</strong> für
+       „SV &quot;Wasser&quot; &amp; &lt;Freunde&gt;" bei Lane 1 eingeladen.</p>
+    <p><a href="https://app.example.org/#/accept-invite/abc?x=1&amp;y=&quot;2&quot;">Konto aktivieren</a></p>
+    <p style="color:#5B7A85;font-size:13px">Dieser Link ist gültig bis zum 1. August 2026.</p>
+    <p>Sportliche Grüße,<br>Ihr Lane-1-Team</p>",
+  "subject": "Einladung zu SV "Wasser" & <Freunde> bei Lane 1",
+  "text": "Hallo,
+
+Sie wurden als Trainer:in für "SV "Wasser" & <Freunde>" bei Lane 1 eingeladen.
+
+Bitte öffnen Sie den folgenden Link, um Ihr Konto zu aktivieren:
+https://app.example.org/#/accept-invite/abc?x=1&y="2"
+
+Dieser Link ist gültig bis zum 1. August 2026.
+
+Sportliche Grüße,
+Ihr Lane-1-Team",
+  "to": "neu@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Einladung — en-US / mit Name / admin 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hi Mara &lt;Vogel&gt; &amp; &quot;Co&quot;,</p>
+      <p>You have been invited as <strong>administrator</strong> for
+         "SV &quot;Wasser&quot; &amp; &lt;Freunde&gt;" on Lane 1.</p>
+      <p><a href="https://app.example.org/#/accept-invite/abc?x=1&amp;y=&quot;2&quot;">Activate account</a></p>
+      <p style="color:#5B7A85;font-size:13px">This link is valid until August 1, 2026.</p>
+      <p>Best regards,<br>The Lane 1 team</p>",
+  "subject": "Invitation to SV "Wasser" & <Freunde> on Lane 1",
+  "text": "Hi Mara <Vogel> & "Co",
+
+You have been invited as administrator for "SV "Wasser" & <Freunde>" on Lane 1.
+
+Please open the following link to activate your account:
+https://app.example.org/#/accept-invite/abc?x=1&y="2"
+
+This link is valid until August 1, 2026.
+
+Best regards,
+The Lane 1 team",
+  "to": "neu@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Einladung — en-US / mit Name / athlete 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hi Mara &lt;Vogel&gt; &amp; &quot;Co&quot;,</p>
+      <p>You have been invited as <strong>athlete</strong> for
+         "SV &quot;Wasser&quot; &amp; &lt;Freunde&gt;" on Lane 1.</p>
+      <p><a href="https://app.example.org/#/accept-invite/abc?x=1&amp;y=&quot;2&quot;">Activate account</a></p>
+      <p style="color:#5B7A85;font-size:13px">This link is valid until August 1, 2026.</p>
+      <p>Best regards,<br>The Lane 1 team</p>",
+  "subject": "Invitation to SV "Wasser" & <Freunde> on Lane 1",
+  "text": "Hi Mara <Vogel> & "Co",
+
+You have been invited as athlete for "SV "Wasser" & <Freunde>" on Lane 1.
+
+Please open the following link to activate your account:
+https://app.example.org/#/accept-invite/abc?x=1&y="2"
+
+This link is valid until August 1, 2026.
+
+Best regards,
+The Lane 1 team",
+  "to": "neu@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Einladung — en-US / mit Name / parent 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hi Mara &lt;Vogel&gt; &amp; &quot;Co&quot;,</p>
+      <p>You have been invited as <strong>parent/guardian</strong> for
+         "SV &quot;Wasser&quot; &amp; &lt;Freunde&gt;" on Lane 1.</p>
+      <p><a href="https://app.example.org/#/accept-invite/abc?x=1&amp;y=&quot;2&quot;">Activate account</a></p>
+      <p style="color:#5B7A85;font-size:13px">This link is valid until August 1, 2026.</p>
+      <p>Best regards,<br>The Lane 1 team</p>",
+  "subject": "Invitation to SV "Wasser" & <Freunde> on Lane 1",
+  "text": "Hi Mara <Vogel> & "Co",
+
+You have been invited as parent/guardian for "SV "Wasser" & <Freunde>" on Lane 1.
+
+Please open the following link to activate your account:
+https://app.example.org/#/accept-invite/abc?x=1&y="2"
+
+This link is valid until August 1, 2026.
+
+Best regards,
+The Lane 1 team",
+  "to": "neu@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Einladung — en-US / mit Name / referee 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hi Mara &lt;Vogel&gt; &amp; &quot;Co&quot;,</p>
+      <p>You have been invited as <strong>referee</strong> for
+         "SV &quot;Wasser&quot; &amp; &lt;Freunde&gt;" on Lane 1.</p>
+      <p><a href="https://app.example.org/#/accept-invite/abc?x=1&amp;y=&quot;2&quot;">Activate account</a></p>
+      <p style="color:#5B7A85;font-size:13px">This link is valid until August 1, 2026.</p>
+      <p>Best regards,<br>The Lane 1 team</p>",
+  "subject": "Invitation to SV "Wasser" & <Freunde> on Lane 1",
+  "text": "Hi Mara <Vogel> & "Co",
+
+You have been invited as referee for "SV "Wasser" & <Freunde>" on Lane 1.
+
+Please open the following link to activate your account:
+https://app.example.org/#/accept-invite/abc?x=1&y="2"
+
+This link is valid until August 1, 2026.
+
+Best regards,
+The Lane 1 team",
+  "to": "neu@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Einladung — en-US / mit Name / trainer 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hi Mara &lt;Vogel&gt; &amp; &quot;Co&quot;,</p>
+      <p>You have been invited as <strong>coach</strong> for
+         "SV &quot;Wasser&quot; &amp; &lt;Freunde&gt;" on Lane 1.</p>
+      <p><a href="https://app.example.org/#/accept-invite/abc?x=1&amp;y=&quot;2&quot;">Activate account</a></p>
+      <p style="color:#5B7A85;font-size:13px">This link is valid until August 1, 2026.</p>
+      <p>Best regards,<br>The Lane 1 team</p>",
+  "subject": "Invitation to SV "Wasser" & <Freunde> on Lane 1",
+  "text": "Hi Mara <Vogel> & "Co",
+
+You have been invited as coach for "SV "Wasser" & <Freunde>" on Lane 1.
+
+Please open the following link to activate your account:
+https://app.example.org/#/accept-invite/abc?x=1&y="2"
+
+This link is valid until August 1, 2026.
+
+Best regards,
+The Lane 1 team",
+  "to": "neu@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Einladung — en-US / ohne Name / admin 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hi,</p>
+      <p>You have been invited as <strong>administrator</strong> for
+         "SV &quot;Wasser&quot; &amp; &lt;Freunde&gt;" on Lane 1.</p>
+      <p><a href="https://app.example.org/#/accept-invite/abc?x=1&amp;y=&quot;2&quot;">Activate account</a></p>
+      <p style="color:#5B7A85;font-size:13px">This link is valid until August 1, 2026.</p>
+      <p>Best regards,<br>The Lane 1 team</p>",
+  "subject": "Invitation to SV "Wasser" & <Freunde> on Lane 1",
+  "text": "Hi,
+
+You have been invited as administrator for "SV "Wasser" & <Freunde>" on Lane 1.
+
+Please open the following link to activate your account:
+https://app.example.org/#/accept-invite/abc?x=1&y="2"
+
+This link is valid until August 1, 2026.
+
+Best regards,
+The Lane 1 team",
+  "to": "neu@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Einladung — en-US / ohne Name / athlete 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hi,</p>
+      <p>You have been invited as <strong>athlete</strong> for
+         "SV &quot;Wasser&quot; &amp; &lt;Freunde&gt;" on Lane 1.</p>
+      <p><a href="https://app.example.org/#/accept-invite/abc?x=1&amp;y=&quot;2&quot;">Activate account</a></p>
+      <p style="color:#5B7A85;font-size:13px">This link is valid until August 1, 2026.</p>
+      <p>Best regards,<br>The Lane 1 team</p>",
+  "subject": "Invitation to SV "Wasser" & <Freunde> on Lane 1",
+  "text": "Hi,
+
+You have been invited as athlete for "SV "Wasser" & <Freunde>" on Lane 1.
+
+Please open the following link to activate your account:
+https://app.example.org/#/accept-invite/abc?x=1&y="2"
+
+This link is valid until August 1, 2026.
+
+Best regards,
+The Lane 1 team",
+  "to": "neu@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Einladung — en-US / ohne Name / parent 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hi,</p>
+      <p>You have been invited as <strong>parent/guardian</strong> for
+         "SV &quot;Wasser&quot; &amp; &lt;Freunde&gt;" on Lane 1.</p>
+      <p><a href="https://app.example.org/#/accept-invite/abc?x=1&amp;y=&quot;2&quot;">Activate account</a></p>
+      <p style="color:#5B7A85;font-size:13px">This link is valid until August 1, 2026.</p>
+      <p>Best regards,<br>The Lane 1 team</p>",
+  "subject": "Invitation to SV "Wasser" & <Freunde> on Lane 1",
+  "text": "Hi,
+
+You have been invited as parent/guardian for "SV "Wasser" & <Freunde>" on Lane 1.
+
+Please open the following link to activate your account:
+https://app.example.org/#/accept-invite/abc?x=1&y="2"
+
+This link is valid until August 1, 2026.
+
+Best regards,
+The Lane 1 team",
+  "to": "neu@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Einladung — en-US / ohne Name / referee 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hi,</p>
+      <p>You have been invited as <strong>referee</strong> for
+         "SV &quot;Wasser&quot; &amp; &lt;Freunde&gt;" on Lane 1.</p>
+      <p><a href="https://app.example.org/#/accept-invite/abc?x=1&amp;y=&quot;2&quot;">Activate account</a></p>
+      <p style="color:#5B7A85;font-size:13px">This link is valid until August 1, 2026.</p>
+      <p>Best regards,<br>The Lane 1 team</p>",
+  "subject": "Invitation to SV "Wasser" & <Freunde> on Lane 1",
+  "text": "Hi,
+
+You have been invited as referee for "SV "Wasser" & <Freunde>" on Lane 1.
+
+Please open the following link to activate your account:
+https://app.example.org/#/accept-invite/abc?x=1&y="2"
+
+This link is valid until August 1, 2026.
+
+Best regards,
+The Lane 1 team",
+  "to": "neu@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Einladung — en-US / ohne Name / trainer 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hi,</p>
+      <p>You have been invited as <strong>coach</strong> for
+         "SV &quot;Wasser&quot; &amp; &lt;Freunde&gt;" on Lane 1.</p>
+      <p><a href="https://app.example.org/#/accept-invite/abc?x=1&amp;y=&quot;2&quot;">Activate account</a></p>
+      <p style="color:#5B7A85;font-size:13px">This link is valid until August 1, 2026.</p>
+      <p>Best regards,<br>The Lane 1 team</p>",
+  "subject": "Invitation to SV "Wasser" & <Freunde> on Lane 1",
+  "text": "Hi,
+
+You have been invited as coach for "SV "Wasser" & <Freunde>" on Lane 1.
+
+Please open the following link to activate your account:
+https://app.example.org/#/accept-invite/abc?x=1&y="2"
+
+This link is valid until August 1, 2026.
+
+Best regards,
+The Lane 1 team",
+  "to": "neu@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Passwort zurücksetzen — default / mit Name 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hallo Mara &lt;Vogel&gt; &amp; &quot;Co&quot;,</p>
+    <p>Für Ihr Lane-1-Konto wurde eine Anfrage zum Zurücksetzen des Passworts gestellt.</p>
+    <p><a href="https://app.example.org/#/reset-password/tok?a=1&amp;b=2">Neues Passwort vergeben</a></p>
+    <p style="color:#5B7A85;font-size:13px">Dieser Link ist gültig bis 01.08.2026, 14:35 und nur einmal verwendbar.</p>
+    <p style="color:#5B7A85;font-size:13px">Falls Sie das nicht angefordert haben, können Sie diese E-Mail ignorieren — Ihr Passwort bleibt unverändert.</p>
+    <p>Sportliche Grüße,<br>Ihr Lane-1-Team</p>",
+  "subject": "Passwort bei Lane 1 zurücksetzen",
+  "text": "Hallo Mara <Vogel> & "Co",
+
+Für Ihr Lane-1-Konto wurde eine Anfrage zum Zurücksetzen des Passworts gestellt. Öffnen Sie den folgenden Link, um ein neues Passwort zu vergeben:
+https://app.example.org/#/reset-password/tok?a=1&b=2
+
+Dieser Link ist gültig bis 01.08.2026, 14:35 und nur einmal verwendbar.
+
+Falls Sie das nicht angefordert haben, können Sie diese E-Mail ignorieren — Ihr Passwort bleibt unverändert.
+
+Sportliche Grüße,
+Ihr Lane-1-Team",
+  "to": "mara@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Passwort zurücksetzen — default / ohne Name 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hallo,</p>
+    <p>Für Ihr Lane-1-Konto wurde eine Anfrage zum Zurücksetzen des Passworts gestellt.</p>
+    <p><a href="https://app.example.org/#/reset-password/tok?a=1&amp;b=2">Neues Passwort vergeben</a></p>
+    <p style="color:#5B7A85;font-size:13px">Dieser Link ist gültig bis 01.08.2026, 14:35 und nur einmal verwendbar.</p>
+    <p style="color:#5B7A85;font-size:13px">Falls Sie das nicht angefordert haben, können Sie diese E-Mail ignorieren — Ihr Passwort bleibt unverändert.</p>
+    <p>Sportliche Grüße,<br>Ihr Lane-1-Team</p>",
+  "subject": "Passwort bei Lane 1 zurücksetzen",
+  "text": "Hallo,
+
+Für Ihr Lane-1-Konto wurde eine Anfrage zum Zurücksetzen des Passworts gestellt. Öffnen Sie den folgenden Link, um ein neues Passwort zu vergeben:
+https://app.example.org/#/reset-password/tok?a=1&b=2
+
+Dieser Link ist gültig bis 01.08.2026, 14:35 und nur einmal verwendbar.
+
+Falls Sie das nicht angefordert haben, können Sie diese E-Mail ignorieren — Ihr Passwort bleibt unverändert.
+
+Sportliche Grüße,
+Ihr Lane-1-Team",
+  "to": "mara@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Passwort zurücksetzen — en-US / mit Name 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hi Mara &lt;Vogel&gt; &amp; &quot;Co&quot;,</p>
+      <p>We received a request to reset your Lane 1 password.</p>
+      <p><a href="https://app.example.org/#/reset-password/tok?a=1&amp;b=2">Choose a new password</a></p>
+      <p style="color:#5B7A85;font-size:13px">This link is valid until Aug 1, 2026, 2:35 PM and can only be used once.</p>
+      <p style="color:#5B7A85;font-size:13px">If you didn't request this, you can safely ignore this email — your password stays unchanged.</p>
+      <p>Best regards,<br>The Lane 1 team</p>",
+  "subject": "Reset your Lane 1 password",
+  "text": "Hi Mara <Vogel> & "Co",
+
+We received a request to reset your Lane 1 password. Open the following link to choose a new one:
+https://app.example.org/#/reset-password/tok?a=1&b=2
+
+This link is valid until Aug 1, 2026, 2:35 PM and can only be used once.
+
+If you didn't request this, you can safely ignore this email — your password stays unchanged.
+
+Best regards,
+The Lane 1 team",
+  "to": "mara@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Passwort zurücksetzen — en-US / ohne Name 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hi,</p>
+      <p>We received a request to reset your Lane 1 password.</p>
+      <p><a href="https://app.example.org/#/reset-password/tok?a=1&amp;b=2">Choose a new password</a></p>
+      <p style="color:#5B7A85;font-size:13px">This link is valid until Aug 1, 2026, 2:35 PM and can only be used once.</p>
+      <p style="color:#5B7A85;font-size:13px">If you didn't request this, you can safely ignore this email — your password stays unchanged.</p>
+      <p>Best regards,<br>The Lane 1 team</p>",
+  "subject": "Reset your Lane 1 password",
+  "text": "Hi,
+
+We received a request to reset your Lane 1 password. Open the following link to choose a new one:
+https://app.example.org/#/reset-password/tok?a=1&b=2
+
+This link is valid until Aug 1, 2026, 2:35 PM and can only be used once.
+
+If you didn't request this, you can safely ignore this email — your password stays unchanged.
+
+Best regards,
+The Lane 1 team",
+  "to": "mara@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Qualifikations-Erinnerung — default / mit Name / abgelaufen / erste_hilfe 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hallo Mara &lt;Vogel&gt; &amp; &quot;Co&quot;,</p>
+    <p><strong>Erste-Hilfe-Kurs</strong> von Tim &lt;Sommer&gt;
+       ist am 15. September 2026 abgelaufen.</p>
+    <p>Bitte prüfen Sie, ob ein Verlängerungs-/Auffrischungslehrgang organisiert werden muss.</p>
+    <p>Sportliche Grüße,<br>Ihr Lane-1-Team</p>",
+  "subject": "Erste-Hilfe-Kurs ist abgelaufen",
+  "text": "Hallo Mara <Vogel> & "Co",
+
+Erste-Hilfe-Kurs von Tim <Sommer> ist am 15. September 2026 abgelaufen.
+
+Bitte prüfen Sie, ob ein Verlängerungs-/Auffrischungslehrgang organisiert werden muss.
+
+Sportliche Grüße,
+Ihr Lane-1-Team",
+  "to": "admin@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Qualifikations-Erinnerung — default / mit Name / abgelaufen / unbekannter_typ 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hallo Mara &lt;Vogel&gt; &amp; &quot;Co&quot;,</p>
+    <p><strong>Qualifikation</strong> von Tim &lt;Sommer&gt;
+       ist am 15. September 2026 abgelaufen.</p>
+    <p>Bitte prüfen Sie, ob ein Verlängerungs-/Auffrischungslehrgang organisiert werden muss.</p>
+    <p>Sportliche Grüße,<br>Ihr Lane-1-Team</p>",
+  "subject": "Qualifikation ist abgelaufen",
+  "text": "Hallo Mara <Vogel> & "Co",
+
+Qualifikation von Tim <Sommer> ist am 15. September 2026 abgelaufen.
+
+Bitte prüfen Sie, ob ein Verlängerungs-/Auffrischungslehrgang organisiert werden muss.
+
+Sportliche Grüße,
+Ihr Lane-1-Team",
+  "to": "admin@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Qualifikations-Erinnerung — default / mit Name / läuft ab / erste_hilfe 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hallo Mara &lt;Vogel&gt; &amp; &quot;Co&quot;,</p>
+    <p><strong>Erste-Hilfe-Kurs</strong> von Tim &lt;Sommer&gt;
+       läuft am 15. September 2026 ab.</p>
+    <p>Bitte prüfen Sie, ob ein Verlängerungs-/Auffrischungslehrgang organisiert werden muss.</p>
+    <p>Sportliche Grüße,<br>Ihr Lane-1-Team</p>",
+  "subject": "Erste-Hilfe-Kurs läuft bald ab",
+  "text": "Hallo Mara <Vogel> & "Co",
+
+Erste-Hilfe-Kurs von Tim <Sommer> läuft am 15. September 2026 ab.
+
+Bitte prüfen Sie, ob ein Verlängerungs-/Auffrischungslehrgang organisiert werden muss.
+
+Sportliche Grüße,
+Ihr Lane-1-Team",
+  "to": "admin@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Qualifikations-Erinnerung — default / mit Name / läuft ab / unbekannter_typ 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hallo Mara &lt;Vogel&gt; &amp; &quot;Co&quot;,</p>
+    <p><strong>Qualifikation</strong> von Tim &lt;Sommer&gt;
+       läuft am 15. September 2026 ab.</p>
+    <p>Bitte prüfen Sie, ob ein Verlängerungs-/Auffrischungslehrgang organisiert werden muss.</p>
+    <p>Sportliche Grüße,<br>Ihr Lane-1-Team</p>",
+  "subject": "Qualifikation läuft bald ab",
+  "text": "Hallo Mara <Vogel> & "Co",
+
+Qualifikation von Tim <Sommer> läuft am 15. September 2026 ab.
+
+Bitte prüfen Sie, ob ein Verlängerungs-/Auffrischungslehrgang organisiert werden muss.
+
+Sportliche Grüße,
+Ihr Lane-1-Team",
+  "to": "admin@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Qualifikations-Erinnerung — default / ohne Name / abgelaufen / erste_hilfe 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hallo,</p>
+    <p><strong>Erste-Hilfe-Kurs</strong> von Tim &lt;Sommer&gt;
+       ist am 15. September 2026 abgelaufen.</p>
+    <p>Bitte prüfen Sie, ob ein Verlängerungs-/Auffrischungslehrgang organisiert werden muss.</p>
+    <p>Sportliche Grüße,<br>Ihr Lane-1-Team</p>",
+  "subject": "Erste-Hilfe-Kurs ist abgelaufen",
+  "text": "Hallo,
+
+Erste-Hilfe-Kurs von Tim <Sommer> ist am 15. September 2026 abgelaufen.
+
+Bitte prüfen Sie, ob ein Verlängerungs-/Auffrischungslehrgang organisiert werden muss.
+
+Sportliche Grüße,
+Ihr Lane-1-Team",
+  "to": "admin@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Qualifikations-Erinnerung — default / ohne Name / abgelaufen / unbekannter_typ 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hallo,</p>
+    <p><strong>Qualifikation</strong> von Tim &lt;Sommer&gt;
+       ist am 15. September 2026 abgelaufen.</p>
+    <p>Bitte prüfen Sie, ob ein Verlängerungs-/Auffrischungslehrgang organisiert werden muss.</p>
+    <p>Sportliche Grüße,<br>Ihr Lane-1-Team</p>",
+  "subject": "Qualifikation ist abgelaufen",
+  "text": "Hallo,
+
+Qualifikation von Tim <Sommer> ist am 15. September 2026 abgelaufen.
+
+Bitte prüfen Sie, ob ein Verlängerungs-/Auffrischungslehrgang organisiert werden muss.
+
+Sportliche Grüße,
+Ihr Lane-1-Team",
+  "to": "admin@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Qualifikations-Erinnerung — default / ohne Name / läuft ab / erste_hilfe 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hallo,</p>
+    <p><strong>Erste-Hilfe-Kurs</strong> von Tim &lt;Sommer&gt;
+       läuft am 15. September 2026 ab.</p>
+    <p>Bitte prüfen Sie, ob ein Verlängerungs-/Auffrischungslehrgang organisiert werden muss.</p>
+    <p>Sportliche Grüße,<br>Ihr Lane-1-Team</p>",
+  "subject": "Erste-Hilfe-Kurs läuft bald ab",
+  "text": "Hallo,
+
+Erste-Hilfe-Kurs von Tim <Sommer> läuft am 15. September 2026 ab.
+
+Bitte prüfen Sie, ob ein Verlängerungs-/Auffrischungslehrgang organisiert werden muss.
+
+Sportliche Grüße,
+Ihr Lane-1-Team",
+  "to": "admin@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Qualifikations-Erinnerung — default / ohne Name / läuft ab / unbekannter_typ 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hallo,</p>
+    <p><strong>Qualifikation</strong> von Tim &lt;Sommer&gt;
+       läuft am 15. September 2026 ab.</p>
+    <p>Bitte prüfen Sie, ob ein Verlängerungs-/Auffrischungslehrgang organisiert werden muss.</p>
+    <p>Sportliche Grüße,<br>Ihr Lane-1-Team</p>",
+  "subject": "Qualifikation läuft bald ab",
+  "text": "Hallo,
+
+Qualifikation von Tim <Sommer> läuft am 15. September 2026 ab.
+
+Bitte prüfen Sie, ob ein Verlängerungs-/Auffrischungslehrgang organisiert werden muss.
+
+Sportliche Grüße,
+Ihr Lane-1-Team",
+  "to": "admin@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Qualifikations-Erinnerung — en-US / mit Name / abgelaufen / erste_hilfe 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hi Mara &lt;Vogel&gt; &amp; &quot;Co&quot;,</p>
+      <p>The <strong>First Aid Course</strong> of Tim &lt;Sommer&gt;
+         expired on September 15, 2026.</p>
+      <p>Please check whether a renewal/refresher course needs to be organized.</p>
+      <p>Best regards,<br>The Lane 1 team</p>",
+  "subject": "First Aid Course has expired",
+  "text": "Hi Mara <Vogel> & "Co",
+
+The First Aid Course of Tim <Sommer> expired on September 15, 2026.
+
+Please check whether a renewal/refresher course needs to be organized.
+
+Best regards,
+The Lane 1 team",
+  "to": "admin@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Qualifikations-Erinnerung — en-US / mit Name / abgelaufen / unbekannter_typ 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hi Mara &lt;Vogel&gt; &amp; &quot;Co&quot;,</p>
+      <p>The <strong>Qualification</strong> of Tim &lt;Sommer&gt;
+         expired on September 15, 2026.</p>
+      <p>Please check whether a renewal/refresher course needs to be organized.</p>
+      <p>Best regards,<br>The Lane 1 team</p>",
+  "subject": "Qualification has expired",
+  "text": "Hi Mara <Vogel> & "Co",
+
+The Qualification of Tim <Sommer> expired on September 15, 2026.
+
+Please check whether a renewal/refresher course needs to be organized.
+
+Best regards,
+The Lane 1 team",
+  "to": "admin@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Qualifikations-Erinnerung — en-US / mit Name / läuft ab / erste_hilfe 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hi Mara &lt;Vogel&gt; &amp; &quot;Co&quot;,</p>
+      <p>The <strong>First Aid Course</strong> of Tim &lt;Sommer&gt;
+         expires on September 15, 2026.</p>
+      <p>Please check whether a renewal/refresher course needs to be organized.</p>
+      <p>Best regards,<br>The Lane 1 team</p>",
+  "subject": "First Aid Course is expiring soon",
+  "text": "Hi Mara <Vogel> & "Co",
+
+The First Aid Course of Tim <Sommer> expires on September 15, 2026.
+
+Please check whether a renewal/refresher course needs to be organized.
+
+Best regards,
+The Lane 1 team",
+  "to": "admin@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Qualifikations-Erinnerung — en-US / mit Name / läuft ab / unbekannter_typ 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hi Mara &lt;Vogel&gt; &amp; &quot;Co&quot;,</p>
+      <p>The <strong>Qualification</strong> of Tim &lt;Sommer&gt;
+         expires on September 15, 2026.</p>
+      <p>Please check whether a renewal/refresher course needs to be organized.</p>
+      <p>Best regards,<br>The Lane 1 team</p>",
+  "subject": "Qualification is expiring soon",
+  "text": "Hi Mara <Vogel> & "Co",
+
+The Qualification of Tim <Sommer> expires on September 15, 2026.
+
+Please check whether a renewal/refresher course needs to be organized.
+
+Best regards,
+The Lane 1 team",
+  "to": "admin@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Qualifikations-Erinnerung — en-US / ohne Name / abgelaufen / erste_hilfe 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hi,</p>
+      <p>The <strong>First Aid Course</strong> of Tim &lt;Sommer&gt;
+         expired on September 15, 2026.</p>
+      <p>Please check whether a renewal/refresher course needs to be organized.</p>
+      <p>Best regards,<br>The Lane 1 team</p>",
+  "subject": "First Aid Course has expired",
+  "text": "Hi,
+
+The First Aid Course of Tim <Sommer> expired on September 15, 2026.
+
+Please check whether a renewal/refresher course needs to be organized.
+
+Best regards,
+The Lane 1 team",
+  "to": "admin@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Qualifikations-Erinnerung — en-US / ohne Name / abgelaufen / unbekannter_typ 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hi,</p>
+      <p>The <strong>Qualification</strong> of Tim &lt;Sommer&gt;
+         expired on September 15, 2026.</p>
+      <p>Please check whether a renewal/refresher course needs to be organized.</p>
+      <p>Best regards,<br>The Lane 1 team</p>",
+  "subject": "Qualification has expired",
+  "text": "Hi,
+
+The Qualification of Tim <Sommer> expired on September 15, 2026.
+
+Please check whether a renewal/refresher course needs to be organized.
+
+Best regards,
+The Lane 1 team",
+  "to": "admin@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Qualifikations-Erinnerung — en-US / ohne Name / läuft ab / erste_hilfe 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hi,</p>
+      <p>The <strong>First Aid Course</strong> of Tim &lt;Sommer&gt;
+         expires on September 15, 2026.</p>
+      <p>Please check whether a renewal/refresher course needs to be organized.</p>
+      <p>Best regards,<br>The Lane 1 team</p>",
+  "subject": "First Aid Course is expiring soon",
+  "text": "Hi,
+
+The First Aid Course of Tim <Sommer> expires on September 15, 2026.
+
+Please check whether a renewal/refresher course needs to be organized.
+
+Best regards,
+The Lane 1 team",
+  "to": "admin@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Qualifikations-Erinnerung — en-US / ohne Name / läuft ab / unbekannter_typ 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hi,</p>
+      <p>The <strong>Qualification</strong> of Tim &lt;Sommer&gt;
+         expires on September 15, 2026.</p>
+      <p>Please check whether a renewal/refresher course needs to be organized.</p>
+      <p>Best regards,<br>The Lane 1 team</p>",
+  "subject": "Qualification is expiring soon",
+  "text": "Hi,
+
+The Qualification of Tim <Sommer> expires on September 15, 2026.
+
+Please check whether a renewal/refresher course needs to be organized.
+
+Best regards,
+The Lane 1 team",
+  "to": "admin@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Sicherheitshinweis — default / mit Name / email 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hallo Mara &lt;Vogel&gt; &amp; &quot;Co&quot;,</p>
+    <p>Die E-Mail-Adresse Ihres Lane-1-Kontos wurde soeben geändert. Diese Nachricht ging an Ihre BISHERIGE hinterlegte Adresse, unabhängig von der Änderung selbst.</p>
+    <p>Wenn Sie diese Änderung selbst vorgenommen haben, können Sie diese E-Mail ignorieren.</p>
+    <p style="color:#B3261E;font-weight:bold">Falls Sie diese Änderung NICHT vorgenommen haben, könnte Ihr Konto
+       kompromittiert sein: Bitte wenden Sie sich umgehend an Ihre Vereinsleitung.</p>
+    <p>Sportliche Grüße,<br>Ihr Lane-1-Team</p>",
+  "subject": "Ihr Lane-1-Konto wurde geändert",
+  "text": "Hallo Mara <Vogel> & "Co",
+
+Die E-Mail-Adresse Ihres Lane-1-Kontos wurde soeben geändert. Diese Nachricht ging an Ihre BISHERIGE hinterlegte Adresse, unabhängig von der Änderung selbst.
+
+Wenn Sie diese Änderung selbst vorgenommen haben, können Sie diese E-Mail ignorieren — es ist nichts weiter zu tun.
+
+Falls Sie diese Änderung NICHT vorgenommen haben, könnte Ihr Konto kompromittiert sein: Bitte wenden Sie sich umgehend an Ihre Vereinsleitung.
+
+Sportliche Grüße,
+Ihr Lane-1-Team",
+  "to": "mara@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Sicherheitshinweis — default / mit Name / mfa 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hallo Mara &lt;Vogel&gt; &amp; &quot;Co&quot;,</p>
+    <p>Die Zwei-Faktor-Anmeldung Ihres Lane-1-Kontos wurde soeben geändert (eingerichtet, abgeschaltet oder zurückgesetzt).</p>
+    <p>Wenn Sie diese Änderung selbst vorgenommen haben, können Sie diese E-Mail ignorieren.</p>
+    <p style="color:#B3261E;font-weight:bold">Falls Sie diese Änderung NICHT vorgenommen haben, könnte Ihr Konto
+       kompromittiert sein: Bitte wenden Sie sich umgehend an Ihre Vereinsleitung.</p>
+    <p>Sportliche Grüße,<br>Ihr Lane-1-Team</p>",
+  "subject": "Ihr Lane-1-Konto wurde geändert",
+  "text": "Hallo Mara <Vogel> & "Co",
+
+Die Zwei-Faktor-Anmeldung Ihres Lane-1-Kontos wurde soeben geändert (eingerichtet, abgeschaltet oder zurückgesetzt).
+
+Wenn Sie diese Änderung selbst vorgenommen haben, können Sie diese E-Mail ignorieren — es ist nichts weiter zu tun.
+
+Falls Sie diese Änderung NICHT vorgenommen haben, könnte Ihr Konto kompromittiert sein: Bitte wenden Sie sich umgehend an Ihre Vereinsleitung.
+
+Sportliche Grüße,
+Ihr Lane-1-Team",
+  "to": "mara@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Sicherheitshinweis — default / mit Name / password 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hallo Mara &lt;Vogel&gt; &amp; &quot;Co&quot;,</p>
+    <p>Das Passwort Ihres Lane-1-Kontos wurde soeben geändert.</p>
+    <p>Wenn Sie diese Änderung selbst vorgenommen haben, können Sie diese E-Mail ignorieren.</p>
+    <p style="color:#B3261E;font-weight:bold">Falls Sie diese Änderung NICHT vorgenommen haben, könnte Ihr Konto
+       kompromittiert sein: Bitte wenden Sie sich umgehend an Ihre Vereinsleitung.</p>
+    <p>Sportliche Grüße,<br>Ihr Lane-1-Team</p>",
+  "subject": "Ihr Lane-1-Konto wurde geändert",
+  "text": "Hallo Mara <Vogel> & "Co",
+
+Das Passwort Ihres Lane-1-Kontos wurde soeben geändert.
+
+Wenn Sie diese Änderung selbst vorgenommen haben, können Sie diese E-Mail ignorieren — es ist nichts weiter zu tun.
+
+Falls Sie diese Änderung NICHT vorgenommen haben, könnte Ihr Konto kompromittiert sein: Bitte wenden Sie sich umgehend an Ihre Vereinsleitung.
+
+Sportliche Grüße,
+Ihr Lane-1-Team",
+  "to": "mara@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Sicherheitshinweis — default / mit Name / recoveryCodeUsed 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hallo Mara &lt;Vogel&gt; &amp; &quot;Co&quot;,</p>
+    <p>Soeben hat sich jemand mit einem Wiederherstellungscode der Zwei-Faktor-Anmeldung bei Ihrem Lane-1-Konto angemeldet.</p>
+    <p>Wenn Sie diese Änderung selbst vorgenommen haben, können Sie diese E-Mail ignorieren.</p>
+    <p style="color:#B3261E;font-weight:bold">Falls Sie diese Änderung NICHT vorgenommen haben, könnte Ihr Konto
+       kompromittiert sein: Bitte wenden Sie sich umgehend an Ihre Vereinsleitung.</p>
+    <p>Sportliche Grüße,<br>Ihr Lane-1-Team</p>",
+  "subject": "Ihr Lane-1-Konto wurde geändert",
+  "text": "Hallo Mara <Vogel> & "Co",
+
+Soeben hat sich jemand mit einem Wiederherstellungscode der Zwei-Faktor-Anmeldung bei Ihrem Lane-1-Konto angemeldet.
+
+Wenn Sie diese Änderung selbst vorgenommen haben, können Sie diese E-Mail ignorieren — es ist nichts weiter zu tun.
+
+Falls Sie diese Änderung NICHT vorgenommen haben, könnte Ihr Konto kompromittiert sein: Bitte wenden Sie sich umgehend an Ihre Vereinsleitung.
+
+Sportliche Grüße,
+Ihr Lane-1-Team",
+  "to": "mara@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Sicherheitshinweis — default / mit Name / recoveryCodesRegenerated 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hallo Mara &lt;Vogel&gt; &amp; &quot;Co&quot;,</p>
+    <p>Für Ihr Lane-1-Konto wurden soeben neue Wiederherstellungscodes der Zwei-Faktor-Anmeldung erzeugt; die bisherigen gelten nicht mehr.</p>
+    <p>Wenn Sie diese Änderung selbst vorgenommen haben, können Sie diese E-Mail ignorieren.</p>
+    <p style="color:#B3261E;font-weight:bold">Falls Sie diese Änderung NICHT vorgenommen haben, könnte Ihr Konto
+       kompromittiert sein: Bitte wenden Sie sich umgehend an Ihre Vereinsleitung.</p>
+    <p>Sportliche Grüße,<br>Ihr Lane-1-Team</p>",
+  "subject": "Ihr Lane-1-Konto wurde geändert",
+  "text": "Hallo Mara <Vogel> & "Co",
+
+Für Ihr Lane-1-Konto wurden soeben neue Wiederherstellungscodes der Zwei-Faktor-Anmeldung erzeugt; die bisherigen gelten nicht mehr.
+
+Wenn Sie diese Änderung selbst vorgenommen haben, können Sie diese E-Mail ignorieren — es ist nichts weiter zu tun.
+
+Falls Sie diese Änderung NICHT vorgenommen haben, könnte Ihr Konto kompromittiert sein: Bitte wenden Sie sich umgehend an Ihre Vereinsleitung.
+
+Sportliche Grüße,
+Ihr Lane-1-Team",
+  "to": "mara@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Sicherheitshinweis — default / ohne Name / email 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hallo,</p>
+    <p>Die E-Mail-Adresse Ihres Lane-1-Kontos wurde soeben geändert. Diese Nachricht ging an Ihre BISHERIGE hinterlegte Adresse, unabhängig von der Änderung selbst.</p>
+    <p>Wenn Sie diese Änderung selbst vorgenommen haben, können Sie diese E-Mail ignorieren.</p>
+    <p style="color:#B3261E;font-weight:bold">Falls Sie diese Änderung NICHT vorgenommen haben, könnte Ihr Konto
+       kompromittiert sein: Bitte wenden Sie sich umgehend an Ihre Vereinsleitung.</p>
+    <p>Sportliche Grüße,<br>Ihr Lane-1-Team</p>",
+  "subject": "Ihr Lane-1-Konto wurde geändert",
+  "text": "Hallo,
+
+Die E-Mail-Adresse Ihres Lane-1-Kontos wurde soeben geändert. Diese Nachricht ging an Ihre BISHERIGE hinterlegte Adresse, unabhängig von der Änderung selbst.
+
+Wenn Sie diese Änderung selbst vorgenommen haben, können Sie diese E-Mail ignorieren — es ist nichts weiter zu tun.
+
+Falls Sie diese Änderung NICHT vorgenommen haben, könnte Ihr Konto kompromittiert sein: Bitte wenden Sie sich umgehend an Ihre Vereinsleitung.
+
+Sportliche Grüße,
+Ihr Lane-1-Team",
+  "to": "mara@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Sicherheitshinweis — default / ohne Name / mfa 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hallo,</p>
+    <p>Die Zwei-Faktor-Anmeldung Ihres Lane-1-Kontos wurde soeben geändert (eingerichtet, abgeschaltet oder zurückgesetzt).</p>
+    <p>Wenn Sie diese Änderung selbst vorgenommen haben, können Sie diese E-Mail ignorieren.</p>
+    <p style="color:#B3261E;font-weight:bold">Falls Sie diese Änderung NICHT vorgenommen haben, könnte Ihr Konto
+       kompromittiert sein: Bitte wenden Sie sich umgehend an Ihre Vereinsleitung.</p>
+    <p>Sportliche Grüße,<br>Ihr Lane-1-Team</p>",
+  "subject": "Ihr Lane-1-Konto wurde geändert",
+  "text": "Hallo,
+
+Die Zwei-Faktor-Anmeldung Ihres Lane-1-Kontos wurde soeben geändert (eingerichtet, abgeschaltet oder zurückgesetzt).
+
+Wenn Sie diese Änderung selbst vorgenommen haben, können Sie diese E-Mail ignorieren — es ist nichts weiter zu tun.
+
+Falls Sie diese Änderung NICHT vorgenommen haben, könnte Ihr Konto kompromittiert sein: Bitte wenden Sie sich umgehend an Ihre Vereinsleitung.
+
+Sportliche Grüße,
+Ihr Lane-1-Team",
+  "to": "mara@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Sicherheitshinweis — default / ohne Name / password 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hallo,</p>
+    <p>Das Passwort Ihres Lane-1-Kontos wurde soeben geändert.</p>
+    <p>Wenn Sie diese Änderung selbst vorgenommen haben, können Sie diese E-Mail ignorieren.</p>
+    <p style="color:#B3261E;font-weight:bold">Falls Sie diese Änderung NICHT vorgenommen haben, könnte Ihr Konto
+       kompromittiert sein: Bitte wenden Sie sich umgehend an Ihre Vereinsleitung.</p>
+    <p>Sportliche Grüße,<br>Ihr Lane-1-Team</p>",
+  "subject": "Ihr Lane-1-Konto wurde geändert",
+  "text": "Hallo,
+
+Das Passwort Ihres Lane-1-Kontos wurde soeben geändert.
+
+Wenn Sie diese Änderung selbst vorgenommen haben, können Sie diese E-Mail ignorieren — es ist nichts weiter zu tun.
+
+Falls Sie diese Änderung NICHT vorgenommen haben, könnte Ihr Konto kompromittiert sein: Bitte wenden Sie sich umgehend an Ihre Vereinsleitung.
+
+Sportliche Grüße,
+Ihr Lane-1-Team",
+  "to": "mara@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Sicherheitshinweis — default / ohne Name / recoveryCodeUsed 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hallo,</p>
+    <p>Soeben hat sich jemand mit einem Wiederherstellungscode der Zwei-Faktor-Anmeldung bei Ihrem Lane-1-Konto angemeldet.</p>
+    <p>Wenn Sie diese Änderung selbst vorgenommen haben, können Sie diese E-Mail ignorieren.</p>
+    <p style="color:#B3261E;font-weight:bold">Falls Sie diese Änderung NICHT vorgenommen haben, könnte Ihr Konto
+       kompromittiert sein: Bitte wenden Sie sich umgehend an Ihre Vereinsleitung.</p>
+    <p>Sportliche Grüße,<br>Ihr Lane-1-Team</p>",
+  "subject": "Ihr Lane-1-Konto wurde geändert",
+  "text": "Hallo,
+
+Soeben hat sich jemand mit einem Wiederherstellungscode der Zwei-Faktor-Anmeldung bei Ihrem Lane-1-Konto angemeldet.
+
+Wenn Sie diese Änderung selbst vorgenommen haben, können Sie diese E-Mail ignorieren — es ist nichts weiter zu tun.
+
+Falls Sie diese Änderung NICHT vorgenommen haben, könnte Ihr Konto kompromittiert sein: Bitte wenden Sie sich umgehend an Ihre Vereinsleitung.
+
+Sportliche Grüße,
+Ihr Lane-1-Team",
+  "to": "mara@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Sicherheitshinweis — default / ohne Name / recoveryCodesRegenerated 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hallo,</p>
+    <p>Für Ihr Lane-1-Konto wurden soeben neue Wiederherstellungscodes der Zwei-Faktor-Anmeldung erzeugt; die bisherigen gelten nicht mehr.</p>
+    <p>Wenn Sie diese Änderung selbst vorgenommen haben, können Sie diese E-Mail ignorieren.</p>
+    <p style="color:#B3261E;font-weight:bold">Falls Sie diese Änderung NICHT vorgenommen haben, könnte Ihr Konto
+       kompromittiert sein: Bitte wenden Sie sich umgehend an Ihre Vereinsleitung.</p>
+    <p>Sportliche Grüße,<br>Ihr Lane-1-Team</p>",
+  "subject": "Ihr Lane-1-Konto wurde geändert",
+  "text": "Hallo,
+
+Für Ihr Lane-1-Konto wurden soeben neue Wiederherstellungscodes der Zwei-Faktor-Anmeldung erzeugt; die bisherigen gelten nicht mehr.
+
+Wenn Sie diese Änderung selbst vorgenommen haben, können Sie diese E-Mail ignorieren — es ist nichts weiter zu tun.
+
+Falls Sie diese Änderung NICHT vorgenommen haben, könnte Ihr Konto kompromittiert sein: Bitte wenden Sie sich umgehend an Ihre Vereinsleitung.
+
+Sportliche Grüße,
+Ihr Lane-1-Team",
+  "to": "mara@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Sicherheitshinweis — en-US / mit Name / email 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hi Mara &lt;Vogel&gt; &amp; &quot;Co&quot;,</p>
+      <p>The email address for your Lane 1 account was just changed. This message went to your PREVIOUS address on file, independent of the change itself.</p>
+      <p>If you made this change yourself, you can ignore this email.</p>
+      <p style="color:#B3261E;font-weight:bold">If you did NOT make this change, your account may be compromised:
+         please contact your club's administrator immediately.</p>
+      <p>Best regards,<br>The Lane 1 team</p>",
+  "subject": "Your Lane 1 account was changed",
+  "text": "Hi Mara <Vogel> & "Co",
+
+The email address for your Lane 1 account was just changed. This message went to your PREVIOUS address on file, independent of the change itself.
+
+If you made this change yourself, you can ignore this email — nothing further to do.
+
+If you did NOT make this change, your account may be compromised: please contact your club's administrator immediately.
+
+Best regards,
+The Lane 1 team",
+  "to": "mara@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Sicherheitshinweis — en-US / mit Name / mfa 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hi Mara &lt;Vogel&gt; &amp; &quot;Co&quot;,</p>
+      <p>Two-factor sign-in for your Lane 1 account was just changed (set up, turned off or reset).</p>
+      <p>If you made this change yourself, you can ignore this email.</p>
+      <p style="color:#B3261E;font-weight:bold">If you did NOT make this change, your account may be compromised:
+         please contact your club's administrator immediately.</p>
+      <p>Best regards,<br>The Lane 1 team</p>",
+  "subject": "Your Lane 1 account was changed",
+  "text": "Hi Mara <Vogel> & "Co",
+
+Two-factor sign-in for your Lane 1 account was just changed (set up, turned off or reset).
+
+If you made this change yourself, you can ignore this email — nothing further to do.
+
+If you did NOT make this change, your account may be compromised: please contact your club's administrator immediately.
+
+Best regards,
+The Lane 1 team",
+  "to": "mara@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Sicherheitshinweis — en-US / mit Name / password 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hi Mara &lt;Vogel&gt; &amp; &quot;Co&quot;,</p>
+      <p>The password for your Lane 1 account was just changed.</p>
+      <p>If you made this change yourself, you can ignore this email.</p>
+      <p style="color:#B3261E;font-weight:bold">If you did NOT make this change, your account may be compromised:
+         please contact your club's administrator immediately.</p>
+      <p>Best regards,<br>The Lane 1 team</p>",
+  "subject": "Your Lane 1 account was changed",
+  "text": "Hi Mara <Vogel> & "Co",
+
+The password for your Lane 1 account was just changed.
+
+If you made this change yourself, you can ignore this email — nothing further to do.
+
+If you did NOT make this change, your account may be compromised: please contact your club's administrator immediately.
+
+Best regards,
+The Lane 1 team",
+  "to": "mara@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Sicherheitshinweis — en-US / mit Name / recoveryCodeUsed 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hi Mara &lt;Vogel&gt; &amp; &quot;Co&quot;,</p>
+      <p>Someone just signed in to your Lane 1 account using a two-factor recovery code.</p>
+      <p>If you made this change yourself, you can ignore this email.</p>
+      <p style="color:#B3261E;font-weight:bold">If you did NOT make this change, your account may be compromised:
+         please contact your club's administrator immediately.</p>
+      <p>Best regards,<br>The Lane 1 team</p>",
+  "subject": "Your Lane 1 account was changed",
+  "text": "Hi Mara <Vogel> & "Co",
+
+Someone just signed in to your Lane 1 account using a two-factor recovery code.
+
+If you made this change yourself, you can ignore this email — nothing further to do.
+
+If you did NOT make this change, your account may be compromised: please contact your club's administrator immediately.
+
+Best regards,
+The Lane 1 team",
+  "to": "mara@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Sicherheitshinweis — en-US / mit Name / recoveryCodesRegenerated 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hi Mara &lt;Vogel&gt; &amp; &quot;Co&quot;,</p>
+      <p>New two-factor recovery codes were just generated for your Lane 1 account; the previous ones no longer work.</p>
+      <p>If you made this change yourself, you can ignore this email.</p>
+      <p style="color:#B3261E;font-weight:bold">If you did NOT make this change, your account may be compromised:
+         please contact your club's administrator immediately.</p>
+      <p>Best regards,<br>The Lane 1 team</p>",
+  "subject": "Your Lane 1 account was changed",
+  "text": "Hi Mara <Vogel> & "Co",
+
+New two-factor recovery codes were just generated for your Lane 1 account; the previous ones no longer work.
+
+If you made this change yourself, you can ignore this email — nothing further to do.
+
+If you did NOT make this change, your account may be compromised: please contact your club's administrator immediately.
+
+Best regards,
+The Lane 1 team",
+  "to": "mara@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Sicherheitshinweis — en-US / ohne Name / email 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hi,</p>
+      <p>The email address for your Lane 1 account was just changed. This message went to your PREVIOUS address on file, independent of the change itself.</p>
+      <p>If you made this change yourself, you can ignore this email.</p>
+      <p style="color:#B3261E;font-weight:bold">If you did NOT make this change, your account may be compromised:
+         please contact your club's administrator immediately.</p>
+      <p>Best regards,<br>The Lane 1 team</p>",
+  "subject": "Your Lane 1 account was changed",
+  "text": "Hi,
+
+The email address for your Lane 1 account was just changed. This message went to your PREVIOUS address on file, independent of the change itself.
+
+If you made this change yourself, you can ignore this email — nothing further to do.
+
+If you did NOT make this change, your account may be compromised: please contact your club's administrator immediately.
+
+Best regards,
+The Lane 1 team",
+  "to": "mara@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Sicherheitshinweis — en-US / ohne Name / mfa 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hi,</p>
+      <p>Two-factor sign-in for your Lane 1 account was just changed (set up, turned off or reset).</p>
+      <p>If you made this change yourself, you can ignore this email.</p>
+      <p style="color:#B3261E;font-weight:bold">If you did NOT make this change, your account may be compromised:
+         please contact your club's administrator immediately.</p>
+      <p>Best regards,<br>The Lane 1 team</p>",
+  "subject": "Your Lane 1 account was changed",
+  "text": "Hi,
+
+Two-factor sign-in for your Lane 1 account was just changed (set up, turned off or reset).
+
+If you made this change yourself, you can ignore this email — nothing further to do.
+
+If you did NOT make this change, your account may be compromised: please contact your club's administrator immediately.
+
+Best regards,
+The Lane 1 team",
+  "to": "mara@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Sicherheitshinweis — en-US / ohne Name / password 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hi,</p>
+      <p>The password for your Lane 1 account was just changed.</p>
+      <p>If you made this change yourself, you can ignore this email.</p>
+      <p style="color:#B3261E;font-weight:bold">If you did NOT make this change, your account may be compromised:
+         please contact your club's administrator immediately.</p>
+      <p>Best regards,<br>The Lane 1 team</p>",
+  "subject": "Your Lane 1 account was changed",
+  "text": "Hi,
+
+The password for your Lane 1 account was just changed.
+
+If you made this change yourself, you can ignore this email — nothing further to do.
+
+If you did NOT make this change, your account may be compromised: please contact your club's administrator immediately.
+
+Best regards,
+The Lane 1 team",
+  "to": "mara@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Sicherheitshinweis — en-US / ohne Name / recoveryCodeUsed 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hi,</p>
+      <p>Someone just signed in to your Lane 1 account using a two-factor recovery code.</p>
+      <p>If you made this change yourself, you can ignore this email.</p>
+      <p style="color:#B3261E;font-weight:bold">If you did NOT make this change, your account may be compromised:
+         please contact your club's administrator immediately.</p>
+      <p>Best regards,<br>The Lane 1 team</p>",
+  "subject": "Your Lane 1 account was changed",
+  "text": "Hi,
+
+Someone just signed in to your Lane 1 account using a two-factor recovery code.
+
+If you made this change yourself, you can ignore this email — nothing further to do.
+
+If you did NOT make this change, your account may be compromised: please contact your club's administrator immediately.
+
+Best regards,
+The Lane 1 team",
+  "to": "mara@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Sicherheitshinweis — en-US / ohne Name / recoveryCodesRegenerated 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hi,</p>
+      <p>New two-factor recovery codes were just generated for your Lane 1 account; the previous ones no longer work.</p>
+      <p>If you made this change yourself, you can ignore this email.</p>
+      <p style="color:#B3261E;font-weight:bold">If you did NOT make this change, your account may be compromised:
+         please contact your club's administrator immediately.</p>
+      <p>Best regards,<br>The Lane 1 team</p>",
+  "subject": "Your Lane 1 account was changed",
+  "text": "Hi,
+
+New two-factor recovery codes were just generated for your Lane 1 account; the previous ones no longer work.
+
+If you made this change yourself, you can ignore this email — nothing further to do.
+
+If you did NOT make this change, your account may be compromised: please contact your club's administrator immediately.
+
+Best regards,
+The Lane 1 team",
+  "to": "mara@example.org",
+}
+`;

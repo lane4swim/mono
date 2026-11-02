@@ -1,17 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
 import { InMemoryMailSender } from '../../src/mail/mailer.memory.js';
 import {
-  buildHtmlBody,
-  buildTextBody,
-  buildSubject,
-  buildPasswordResetSubject,
-  buildPasswordResetTextBody,
-  buildPasswordResetHtmlBody,
-  buildAccountSecurityChangeSubject,
-  buildAccountSecurityChangeTextBody,
-  buildAccountSecurityChangeHtmlBody,
-  buildQualificationReminderSubject,
-  buildQualificationReminderTextBody,
+  renderInvitationMail,
+  renderPasswordResetMail,
+  renderAccountSecurityChangeMail,
+  renderQualificationReminderMail,
   SmtpMailSender,
   ConsoleMailSender,
 } from '../../src/mail/mailer.js';
@@ -85,63 +78,63 @@ describe('ConsoleMailSender — kein Token/Link im Server-Log (Sicherheitsregres
   });
 });
 
-describe('buildHtmlBody() — HTML-Escaping', () => {
+describe('renderInvitationMail().html — HTML-Escaping', () => {
   it('escaped recipientName, clubName und Rollen-Label', () => {
-    const html = buildHtmlBody({
+    const html = renderInvitationMail({
       to: 'x@example.org',
       recipientName: '<script>alert(1)</script>',
       role: 'trainer',
       clubName: 'SV "Wasserfreunde" & <Freunde>',
       inviteUrl: 'https://app.example.org/#/accept-invite/abc123',
       expiresAt: new Date('2026-08-01T00:00:00.000Z'),
-    });
+    }).html;
     expect(html).not.toContain('<script>alert(1)</script>');
     expect(html).toContain('&lt;script&gt;');
     expect(html).not.toContain('SV "Wasserfreunde" & <Freunde>');
   });
 
   // Regressionstest für die Code-Review-Korrektur: inviteUrl war die
-  // einzige interpolierte Stelle in buildHtmlBody(), die NICHT durch
+  // einzige interpolierte Stelle in renderInvitationMail().html, die NICHT durch
   // escapeHtml() lief — bei einem Wert mit HTML-Sonderzeichen (z. B. über
   // eine kompromittierte/fehlkonfigurierte FRONTEND_BASE_URL) hätte das
   // href-Attribut aufgebrochen werden können.
   it('escaped inviteUrl (vormals die einzige Ausnahme von der sonst konsequenten Regel)', () => {
-    const html = buildHtmlBody({
+    const html = renderInvitationMail({
       to: 'x@example.org',
       role: 'trainer',
       clubName: 'SV Wasserfreunde',
       inviteUrl: 'https://boese.example.org/"><script>alert(1)</script>',
       expiresAt: new Date('2026-08-01T00:00:00.000Z'),
-    });
+    }).html;
     expect(html).not.toContain('"><script>alert(1)</script>');
     expect(html).toContain('&quot;&gt;&lt;script&gt;');
   });
 
   it('behält einen normalen inviteUrl unverändert nutzbar als href', () => {
-    const html = buildHtmlBody({
+    const html = renderInvitationMail({
       to: 'x@example.org',
       role: 'trainer',
       clubName: 'SV Wasserfreunde',
       inviteUrl: 'https://app.example.org/#/accept-invite/abc123',
       expiresAt: new Date('2026-08-01T00:00:00.000Z'),
-    });
+    }).html;
     expect(html).toContain('href="https://app.example.org/#/accept-invite/abc123"');
   });
 
   // Regressionstest für Befund S8 (Code-Review): escapeHtml() escapte
   // bislang keine einfachen Anführungszeichen. Heute folgenlos (jedes
-  // Attribut in buildHtmlBody() ist doppelt gequotet), aber die Funktion
+  // Attribut in renderInvitationMail().html ist doppelt gequotet), aber die Funktion
   // heißt allgemein "escapeHtml" und sollte als solche vollständig
   // escapen, unabhängig von der aktuellen Verwendung durch ihre Aufrufer.
   it('escaped einfache Anführungszeichen in clubName/recipientName', () => {
-    const html = buildHtmlBody({
+    const html = renderInvitationMail({
       to: 'x@example.org',
       recipientName: "O'Brien",
       role: 'trainer',
       clubName: "Verein 'X'",
       inviteUrl: 'https://app.example.org/#/accept-invite/abc123',
       expiresAt: new Date('2026-08-01T00:00:00.000Z'),
-    });
+    }).html;
     expect(html).not.toContain("O'Brien");
     expect(html).not.toContain("Verein 'X'");
     expect(html).toContain('O&#39;Brien');
@@ -163,31 +156,31 @@ describe('Lokalisierung (Befund W9)', () => {
   };
 
   it('baut Betreff/Text/HTML auf Deutsch, wenn locale fehlt (Fallback)', () => {
-    expect(buildSubject(basePayload)).toContain('Einladung zu');
-    expect(buildTextBody(basePayload)).toContain('Trainer:in');
-    expect(buildHtmlBody(basePayload)).toContain('Trainer:in');
+    expect(renderInvitationMail(basePayload).subject).toContain('Einladung zu');
+    expect(renderInvitationMail(basePayload).text).toContain('Trainer:in');
+    expect(renderInvitationMail(basePayload).html).toContain('Trainer:in');
   });
 
   it('baut Betreff/Text/HTML auf Deutsch für eine unbekannte Locale (Fallback)', () => {
     const payload = { ...basePayload, locale: 'fr-FR' };
-    expect(buildSubject(payload)).toContain('Einladung zu');
-    expect(buildTextBody(payload)).toContain('Trainer:in');
+    expect(renderInvitationMail(payload).subject).toContain('Einladung zu');
+    expect(renderInvitationMail(payload).text).toContain('Trainer:in');
   });
 
   it('baut Betreff/Text/HTML auf Englisch für locale "en-US"', () => {
     const payload = { ...basePayload, locale: 'en-US' };
-    expect(buildSubject(payload)).toBe('Invitation to SV Wasserfreunde on Lane 1');
-    const text = buildTextBody(payload);
+    expect(renderInvitationMail(payload).subject).toBe('Invitation to SV Wasserfreunde on Lane 1');
+    const text = renderInvitationMail(payload).text;
     expect(text).toContain('coach');
     expect(text).not.toContain('Trainer:in');
-    const html = buildHtmlBody(payload);
+    const html = renderInvitationMail(payload).html;
     expect(html).toContain('coach');
     expect(html).not.toContain('Trainer:in');
   });
 
   it('formatiert das Ablaufdatum passend zur Locale', () => {
-    const de = buildTextBody(basePayload);
-    const en = buildTextBody({ ...basePayload, locale: 'en-US' });
+    const de = renderInvitationMail(basePayload).text;
+    const en = renderInvitationMail({ ...basePayload, locale: 'en-US' }).text;
     expect(de).toContain('1. August 2026');
     expect(en).toContain('August 1, 2026');
   });
@@ -215,34 +208,34 @@ describe('ConsoleMailSender — Passwort-Reset-E-Mail: kein Token/Link im Server
   });
 });
 
-describe('buildPasswordResetHtmlBody() — HTML-Escaping', () => {
+describe('renderPasswordResetMail().html — HTML-Escaping', () => {
   it('escaped recipientName', () => {
-    const html = buildPasswordResetHtmlBody({
+    const html = renderPasswordResetMail({
       to: 'x@example.org',
       recipientName: '<script>alert(1)</script>',
       resetUrl: 'https://app.example.org/#/reset-password/abc123',
       expiresAt: new Date('2026-08-01T00:00:00.000Z'),
-    });
+    }).html;
     expect(html).not.toContain('<script>alert(1)</script>');
     expect(html).toContain('&lt;script&gt;');
   });
 
   it('escaped resetUrl (analog zur inviteUrl-Korrektur oben)', () => {
-    const html = buildPasswordResetHtmlBody({
+    const html = renderPasswordResetMail({
       to: 'x@example.org',
       resetUrl: 'https://boese.example.org/"><script>alert(1)</script>',
       expiresAt: new Date('2026-08-01T00:00:00.000Z'),
-    });
+    }).html;
     expect(html).not.toContain('"><script>alert(1)</script>');
     expect(html).toContain('&quot;&gt;&lt;script&gt;');
   });
 
   it('behält eine normale resetUrl unverändert nutzbar als href', () => {
-    const html = buildPasswordResetHtmlBody({
+    const html = renderPasswordResetMail({
       to: 'x@example.org',
       resetUrl: 'https://app.example.org/#/reset-password/abc123',
       expiresAt: new Date('2026-08-01T00:00:00.000Z'),
-    });
+    }).html;
     expect(html).toContain('href="https://app.example.org/#/reset-password/abc123"');
   });
 });
@@ -255,21 +248,21 @@ describe('Passwort-Reset-E-Mail — Lokalisierung', () => {
   };
 
   it('baut Betreff/Text auf Deutsch, wenn locale fehlt (Fallback)', () => {
-    expect(buildPasswordResetSubject(basePayload)).toBe('Passwort bei Lane 1 zurücksetzen');
-    expect(buildPasswordResetTextBody(basePayload)).toContain('Zurücksetzen des Passworts');
+    expect(renderPasswordResetMail(basePayload).subject).toBe('Passwort bei Lane 1 zurücksetzen');
+    expect(renderPasswordResetMail(basePayload).text).toContain('Zurücksetzen des Passworts');
   });
 
   it('baut Betreff/Text auf Englisch für locale "en-US"', () => {
     const payload = { ...basePayload, locale: 'en-US' };
-    expect(buildPasswordResetSubject(payload)).toBe('Reset your Lane 1 password');
-    const text = buildPasswordResetTextBody(payload);
+    expect(renderPasswordResetMail(payload).subject).toBe('Reset your Lane 1 password');
+    const text = renderPasswordResetMail(payload).text;
     expect(text).toContain('reset your Lane 1 password');
     expect(text).not.toContain('Passwort');
   });
 
   it('enthält den Hinweis, dass eine nicht angeforderte Mail ignoriert werden kann (beide Sprachen)', () => {
-    expect(buildPasswordResetTextBody(basePayload)).toContain('nicht angefordert');
-    expect(buildPasswordResetTextBody({ ...basePayload, locale: 'en-US' })).toContain("didn't request this");
+    expect(renderPasswordResetMail(basePayload).text).toContain('nicht angefordert');
+    expect(renderPasswordResetMail({ ...basePayload, locale: 'en-US' }).text).toContain("didn't request this");
   });
 });
 
@@ -302,13 +295,13 @@ describe('ConsoleMailSender — Sicherheitshinweis: kein Fehlschlag, sichtbares 
   });
 });
 
-describe('buildAccountSecurityChangeHtmlBody() — HTML-Escaping', () => {
+describe('renderAccountSecurityChangeMail().html — HTML-Escaping', () => {
   it('escaped recipientName', () => {
-    const html = buildAccountSecurityChangeHtmlBody({
+    const html = renderAccountSecurityChangeMail({
       to: 'x@example.org',
       recipientName: '<script>alert(1)</script>',
       changeType: 'email',
-    });
+    }).html;
     expect(html).not.toContain('<script>alert(1)</script>');
     expect(html).toContain('&lt;script&gt;');
   });
@@ -318,24 +311,24 @@ describe('Sicherheitshinweis nach Konto-Änderung — Lokalisierung (Befund S4)'
   const basePayload = { to: 'x@example.org', changeType: 'email' as const };
 
   it('baut Betreff/Text auf Deutsch, wenn locale fehlt (Fallback), und nennt "E-Mail-Adresse"', () => {
-    expect(buildAccountSecurityChangeSubject(basePayload)).toBe('Ihr Lane-1-Konto wurde geändert');
-    expect(buildAccountSecurityChangeTextBody(basePayload)).toContain('E-Mail-Adresse');
+    expect(renderAccountSecurityChangeMail(basePayload).subject).toBe('Ihr Lane-1-Konto wurde geändert');
+    expect(renderAccountSecurityChangeMail(basePayload).text).toContain('E-Mail-Adresse');
   });
 
   it('baut Betreff/Text auf Englisch für locale "en-US"', () => {
     const payload = { ...basePayload, locale: 'en-US' };
-    expect(buildAccountSecurityChangeSubject(payload)).toBe('Your Lane 1 account was changed');
-    expect(buildAccountSecurityChangeTextBody(payload)).toContain('email address');
+    expect(renderAccountSecurityChangeMail(payload).subject).toBe('Your Lane 1 account was changed');
+    expect(renderAccountSecurityChangeMail(payload).text).toContain('email address');
   });
 
   it('unterscheidet im Text zwischen "E-Mail-Adresse" und "Passwort" je nach changeType', () => {
-    expect(buildAccountSecurityChangeTextBody({ to: 'x@example.org', changeType: 'email' })).toContain('E-Mail-Adresse');
-    expect(buildAccountSecurityChangeTextBody({ to: 'x@example.org', changeType: 'password' })).toContain('Passwort');
+    expect(renderAccountSecurityChangeMail({ to: 'x@example.org', changeType: 'email' }).text).toContain('E-Mail-Adresse');
+    expect(renderAccountSecurityChangeMail({ to: 'x@example.org', changeType: 'password' }).text).toContain('Passwort');
   });
 
   it('weist in beiden Sprachen darauf hin, sich bei einer nicht selbst veranlassten Änderung an die Vereinsleitung zu wenden', () => {
-    expect(buildAccountSecurityChangeTextBody(basePayload)).toContain('Vereinsleitung');
-    expect(buildAccountSecurityChangeTextBody({ ...basePayload, locale: 'en-US' })).toContain("administrator");
+    expect(renderAccountSecurityChangeMail(basePayload).text).toContain('Vereinsleitung');
+    expect(renderAccountSecurityChangeMail({ ...basePayload, locale: 'en-US' }).text).toContain("administrator");
   });
 });
 
@@ -465,7 +458,7 @@ describe('Erinnerungsmail — Qualifikationstyp im Betreff (Issue #58)', () => {
 
   it('zeigt für jeden Kampfrichter-Qualifikationstyp den konkreten Namen statt "Qualifikation" (de-DE)', () => {
     for (const type of REFEREE_QUALIFICATION_TYPES) {
-      const subject = buildQualificationReminderSubject(payloadFor(type, 'de-DE'));
+      const subject = renderQualificationReminderMail(payloadFor(type, 'de-DE')).subject;
       expect(subject).not.toContain('Qualifikation läuft bald ab');
       expect(subject.toLowerCase()).not.toBe('qualifikation läuft bald ab');
     }
@@ -473,7 +466,7 @@ describe('Erinnerungsmail — Qualifikationstyp im Betreff (Issue #58)', () => {
 
   it('zeigt für jeden Kampfrichter-Qualifikationstyp den konkreten Namen statt "Qualification" (en-US)', () => {
     for (const type of REFEREE_QUALIFICATION_TYPES) {
-      const subject = buildQualificationReminderSubject(payloadFor(type, 'en-US'));
+      const subject = renderQualificationReminderMail(payloadFor(type, 'en-US')).subject;
       expect(subject).not.toBe('Qualification is expiring soon');
     }
   });
@@ -481,15 +474,15 @@ describe('Erinnerungsmail — Qualifikationstyp im Betreff (Issue #58)', () => {
   it('trägt für JEDEN bekannten Qualifikationstyp (nicht nur Kampfrichter) ein eigenes Label in beiden Sprachen, kein Rückfall auf "sonstige"', () => {
     const knownTypes = QUALIFICATION_TYPES.filter((t) => t !== 'sonstige');
     for (const type of knownTypes) {
-      const deText = buildQualificationReminderTextBody(payloadFor(type, 'de-DE'));
-      const enText = buildQualificationReminderTextBody(payloadFor(type, 'en-US'));
+      const deText = renderQualificationReminderMail(payloadFor(type, 'de-DE')).text;
+      const enText = renderQualificationReminderMail(payloadFor(type, 'en-US')).text;
       expect(deText).not.toContain('Qualifikation von Petra Klein');
       expect(enText).not.toContain('Qualification of Petra Klein');
     }
   });
 
   it('behält den Fallback auf "Qualifikation"/"Qualification" für einen unbekannten Typ', () => {
-    expect(buildQualificationReminderSubject(payloadFor('irgendein-unbekannter-typ', 'de-DE'))).toContain('Qualifikation läuft bald ab');
-    expect(buildQualificationReminderSubject(payloadFor('irgendein-unbekannter-typ', 'en-US'))).toBe('Qualification is expiring soon');
+    expect(renderQualificationReminderMail(payloadFor('irgendein-unbekannter-typ', 'de-DE')).subject).toContain('Qualifikation läuft bald ab');
+    expect(renderQualificationReminderMail(payloadFor('irgendein-unbekannter-typ', 'en-US')).subject).toBe('Qualification is expiring soon');
   });
 });
