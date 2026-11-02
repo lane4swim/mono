@@ -73,11 +73,52 @@ export async function verifyAccessToken(token: string, keyPair: KeyPair): Promis
   }
 }
 
-// Kurzlebiges Token zwischen Passwort- und Code-Schritt der Zwei-Faktor-
-// Anmeldung (Issue #97). Belegt nur "Passwort war korrekt" und taugt für
-// nichts anderes: `purpose: 'mfa'` lässt verifyAccessToken() es ablehnen,
-// und verifyMfaToken() verlangt genau diesen Zweck. `jti` identifiziert den
-// Anmeldeversuch für die Fehlversuchs-Grenze (modules/mfa/mfaChallenges.ts).
+// Zweckgebundene Tokens: mit demselben Schlüssel signiert wie das Access
+// Token, aber mit einem `purpose`-Claim, der sie auf genau einen Schritt
+// beschränkt. verifyAccessToken() lehnt jedes Token mit `purpose` ab, und
+// verifyPurposeToken() nimmt nur den erwarteten Zweck an — ein Token taugt
+// damit nie für einen anderen Schritt (siehe test/auth/tokenPurposes.test.ts).
+// signPurposeToken()/verifyPurposeToken() sind die zentrale Stelle für
+// Ausstellen und Prüfen; die exportierten Funktionen je Zweck sind dünne
+// Hüllen mit eigener TTL und eigener Fehlerklasse.
+type TokenPurpose = 'mfa' | 'mfa-setup';
+
+// `jti` identifiziert das einzelne Token (für mfaTokens die Fehlversuchs-
+// Grenze je Anmeldeversuch, siehe modules/mfa/mfaChallenges.ts).
+async function signPurposeToken(purpose: TokenPurpose, userId: string, ttlSeconds: number, keyPair: KeyPair): Promise<{ token: string; jti: string }> {
+  const privateKey = await getPrivateKey(keyPair.privateKey);
+  const jti = randomBytes(16).toString('base64url');
+  const token = await new SignJWT({ purpose })
+    .setProtectedHeader({ alg: ALG })
+    .setSubject(userId)
+    .setJti(jti)
+    .setIssuedAt()
+    .setExpirationTime(`${ttlSeconds}s`)
+    .sign(privateKey);
+  return { token, jti };
+}
+
+// Jeder Fehler — falsche Signatur, abgelaufen, anderer Zweck, fehlende
+// Claims — wird zu derselben, zweckeigenen Fehlerklasse: die aufrufende
+// Person erfährt nur "ungültig oder abgelaufen", nicht den Grund.
+async function verifyPurposeToken(
+  purpose: TokenPurpose,
+  token: string,
+  keyPair: KeyPair,
+  InvalidTokenError: new () => Error,
+): Promise<{ userId: string; jti: string; expiresAt: Date }> {
+  const publicKey = await getPublicKey(keyPair.publicKey);
+  try {
+    const { payload } = await jwtVerify(token, publicKey, { algorithms: [ALG] });
+    if (payload.purpose !== purpose || !payload.sub || !payload.jti || !payload.exp) throw new InvalidTokenError();
+    return { userId: payload.sub, jti: payload.jti, expiresAt: new Date(payload.exp * 1000) };
+  } catch {
+    throw new InvalidTokenError();
+  }
+}
+
+// mfaToken zwischen Passwort- und Code-Schritt der Zwei-Faktor-Anmeldung
+// (Issue #97). Belegt nur "Passwort war korrekt".
 export const MFA_TOKEN_TTL_SECONDS = 5 * 60;
 
 export class InvalidMfaTokenError extends Error {
@@ -87,35 +128,18 @@ export class InvalidMfaTokenError extends Error {
 }
 
 export async function signMfaToken(userId: string, keyPair: KeyPair): Promise<{ token: string; jti: string }> {
-  const privateKey = await getPrivateKey(keyPair.privateKey);
-  const jti = randomBytes(16).toString('base64url');
-  const token = await new SignJWT({ purpose: 'mfa' })
-    .setProtectedHeader({ alg: ALG })
-    .setSubject(userId)
-    .setJti(jti)
-    .setIssuedAt()
-    .setExpirationTime(`${MFA_TOKEN_TTL_SECONDS}s`)
-    .sign(privateKey);
-  return { token, jti };
+  return signPurposeToken('mfa', userId, MFA_TOKEN_TTL_SECONDS, keyPair);
 }
 
 export async function verifyMfaToken(token: string, keyPair: KeyPair): Promise<{ userId: string; jti: string; expiresAt: Date }> {
-  const publicKey = await getPublicKey(keyPair.publicKey);
-  try {
-    const { payload } = await jwtVerify(token, publicKey, { algorithms: [ALG] });
-    if (payload.purpose !== 'mfa' || !payload.sub || !payload.jti || !payload.exp) throw new InvalidMfaTokenError();
-    return { userId: payload.sub, jti: payload.jti, expiresAt: new Date(payload.exp * 1000) };
-  } catch {
-    throw new InvalidMfaTokenError();
-  }
+  return verifyPurposeToken('mfa', token, keyPair, InvalidMfaTokenError);
 }
 
-// Token für die erzwungene Einrichtung (Issue #97, Plan PR 3): ist TOTP für
-// eine Person Pflicht, aber noch nicht eingerichtet, liefert die Anmeldung
-// nach korrektem Passwort statt einer Sitzung dieses Token. Es taugt nur für
-// POST /auth/mfa-setup und /auth/mfa-setup/confirm (`purpose: 'mfa-setup'`),
-// nicht als Access Token und nicht als mfaToken. 15 Minuten: Zeit genug, um
-// eine Authenticator-App zu installieren.
+// setupToken für die erzwungene Einrichtung (Issue #97, Plan PR 3): ist
+// TOTP für eine Person Pflicht, aber noch nicht eingerichtet, liefert die
+// Anmeldung nach korrektem Passwort statt einer Sitzung dieses Token. Es
+// taugt nur für POST /auth/mfa-setup und /auth/mfa-setup/confirm.
+// 15 Minuten: Zeit genug, um eine Authenticator-App zu installieren.
 export const MFA_SETUP_TOKEN_TTL_SECONDS = 15 * 60;
 
 export class InvalidMfaSetupTokenError extends Error {
@@ -125,25 +149,12 @@ export class InvalidMfaSetupTokenError extends Error {
 }
 
 export async function signMfaSetupToken(userId: string, keyPair: KeyPair): Promise<string> {
-  const privateKey = await getPrivateKey(keyPair.privateKey);
-  return new SignJWT({ purpose: 'mfa-setup' })
-    .setProtectedHeader({ alg: ALG })
-    .setSubject(userId)
-    .setJti(randomBytes(16).toString('base64url'))
-    .setIssuedAt()
-    .setExpirationTime(`${MFA_SETUP_TOKEN_TTL_SECONDS}s`)
-    .sign(privateKey);
+  return (await signPurposeToken('mfa-setup', userId, MFA_SETUP_TOKEN_TTL_SECONDS, keyPair)).token;
 }
 
 export async function verifyMfaSetupToken(token: string, keyPair: KeyPair): Promise<{ userId: string }> {
-  const publicKey = await getPublicKey(keyPair.publicKey);
-  try {
-    const { payload } = await jwtVerify(token, publicKey, { algorithms: [ALG] });
-    if (payload.purpose !== 'mfa-setup' || !payload.sub) throw new InvalidMfaSetupTokenError();
-    return { userId: payload.sub };
-  } catch {
-    throw new InvalidMfaSetupTokenError();
-  }
+  const { userId } = await verifyPurposeToken('mfa-setup', token, keyPair, InvalidMfaSetupTokenError);
+  return { userId };
 }
 
 // Code-Review, Befund R7: generateRefreshToken()/generateInvitationToken()
