@@ -22,6 +22,7 @@ import type { AuditLogWriter } from '../auditLog/auditLog.service.js';
 import type { Requester } from '../../plugins/requester.js';
 import { ForbiddenError } from '../shared/errors.js';
 import { requireClub, requireClubAdmin, requireAdminOfSameClub, withoutDeletedAt, findActiveOwnedOrThrow } from '../shared/clubAccess.js';
+import { startOfUtcDay } from '../shared/dates.js';
 import type { RefereeNotifier } from './referees.notify.js';
 
 export class RefereeAssignmentNotFoundError extends Error {
@@ -207,8 +208,7 @@ export function createRefereesService(deps: RefereesServiceDeps) {
     // und Absagen auf einen Blick sichtbar sind.
     async listUpcomingForClub(requester: RequesterContext, now = new Date()) {
       requireClubAdmin(requester, 'Nur Admins dürfen die Einsätze des Vereins einsehen.', RefereeAssignmentForbiddenError);
-      const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-      return (await deps.assignments.listUpcomingByClub(requester.clubId, today)).map(withoutDeletedAt);
+      return (await deps.assignments.listUpcomingByClub(requester.clubId, startOfUtcDay(now))).map(withoutDeletedAt);
     },
 
     // GET /api/competitions/:competitionId/referee-assignments — nur admin:
