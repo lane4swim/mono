@@ -210,7 +210,16 @@ async function renderDetail(container, compId) {
     const heatKeys = Object.keys(groups).sort((a, b) => a === '__none__' ? 1 : b === '__none__' ? -1 : Number(a) - Number(b));
     heatKeys.forEach(key => {
       startListCard.appendChild(el('h4', { style: 'margin:18px 0 8px' }, key === '__none__' ? t('competitions.noHeatAssigned') : t('competitions.heatLabel', { n: key })));
-      const table = el('table');
+      // Je Lauf eine eigene Tabelle — mit automatischer Spaltenbreite hätte
+      // jede ihre eigenen Spalten, die untereinander nicht fluchten. Daher
+      // table-layout:fixed mit festen Breiten per <colgroup> (siehe
+      // .start-list-table in styles.css); die Athlet:in-Spalte nimmt den Rest.
+      const table = el('table', { class: 'start-list-table' });
+      table.appendChild(el('colgroup', {}, [
+        el('col', { class: 'col-lane' }), el('col', { class: 'col-number' }), el('col'), el('col', { class: 'col-event' }),
+        el('col', { class: 'col-seed' }), showRequired ? el('col', { class: 'col-required' }) : null,
+        el('col', { class: 'col-result' }), el('col', { class: 'col-place' }), el('col', { class: 'col-actions' }),
+      ].filter(Boolean)));
       table.appendChild(el('thead', {}, el('tr', {}, [
         el('th', {}, t('competitions.colLane')), el('th', {}, t('competitions.colNumber')), el('th', {}, t('competitions.colAthlete')), el('th', {}, t('competitions.colEvent')),
         el('th', {}, t('competitions.colSeed')), showRequired ? el('th', {}, t('competitions.colRequiredTime')) : null, el('th', {}, t('competitions.colResultTime')), el('th', {}, t('competitions.placeHeader')), el('th', {}, ''),

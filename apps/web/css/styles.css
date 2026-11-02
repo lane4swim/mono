@@ -425,6 +425,18 @@ tr.live-row-done .live-set-desc{ text-decoration: line-through; color: var(--c-s
 .members-table .col-roles{ width: 22%; }
 .members-table .col-actions{ width: 28%; }
 .members-table .members-wrap{ flex-wrap: wrap; }
+/* Startliste eines Wettkampfs: je Lauf eine eigene Tabelle — feste
+   Spaltenbreiten, damit die Spalten über alle Läufe fluchten. */
+.start-list-table{ table-layout: fixed; min-width: 1040px; }
+.start-list-table td{ overflow-wrap: anywhere; }
+.start-list-table .col-lane{ width: 60px; }
+.start-list-table .col-number{ width: 70px; }
+.start-list-table .col-event{ width: 120px; }
+.start-list-table .col-seed{ width: 90px; }
+.start-list-table .col-required{ width: 110px; }
+.start-list-table .col-result{ width: 210px; }
+.start-list-table .col-place{ width: 80px; }
+.start-list-table .col-actions{ width: 330px; }
 
 /* Responsive */
 @media (max-width: 860px){
