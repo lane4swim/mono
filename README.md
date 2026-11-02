@@ -65,7 +65,9 @@ Routen und Services verwenden sie, statt sie selbst nachzubauen. Eine
 | `COMMENT_LOCATIONS`, `collectCommentArrays()`, `mapCommentArrays()` | `modules/shared/commentLocations.ts` | Welche Stores wo Kommentare tragen — eine Quelle für Autor:innen-Prüfung beim Sync und Anonymisierung beim DSGVO-Purge |
 | `ForbiddenError` | `modules/shared/errors.ts` | Basisklasse für jede 403-Antwort; modulspezifische Klassen leiten davon ab und erben die HTTP-Abbildung |
 | `requireAnyRole()` | `plugins/authorize.ts` | Rollen-Guard als Fastify-preHandler |
-| `parseInput()` | `plugins/parseInput.ts` | Zod-Validierung mit einheitlicher 400-Antwort |
+| `parseInput()`, `toDateOrNull()`, `toDatePatch()` | `plugins/parseInput.ts` | Zod-Validierung mit einheitlicher 400-Antwort; Umwandlung validierter ISO-Datumsstrings (beim PATCH bleibt „weggelassen“ von `null` unterscheidbar) |
+| `startOfUtcDay()` | `modules/shared/dates.ts` | Mitternacht (UTC) eines Kalendertags |
+| `applyDefinedPatch()`, `softDeleteRow()` | `db/inMemoryRows.ts` | Prisma-gleiches Update-/Soft-Delete-Verhalten der In-Memory-Testdoubles |
 | Fehler-Registry | `plugins/httpErrorHandler.ts` | Abbildung von Fehlerklassen auf HTTP-Status/-Code |
 
 ## Voraussetzungen

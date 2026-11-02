@@ -10,7 +10,7 @@ import type { FastifyInstance } from 'fastify';
 import { CreateRefereeAssignmentRequestSchema, UpdateRefereeAssignmentRequestSchema, RespondRefereeAssignmentRequestSchema } from '@lane1/shared-types';
 import type { RefereesService } from './referees.service.js';
 import { requireAnyRole } from '../../plugins/authorize.js';
-import { parseInput } from '../../plugins/parseInput.js';
+import { parseInput, toDatePatch } from '../../plugins/parseInput.js';
 import { requesterFrom } from '../../plugins/requester.js';
 import { requireClubModule, type ClubModulesResolver } from '../../plugins/clubModules.js';
 
@@ -49,12 +49,10 @@ function toUpdateInput(body: {
   return {
     competitionName: body.competitionName,
     competitionPlace: body.competitionPlace,
-    // `!== undefined` statt `?? undefined`: `competitionId: null`
-    // (Verknüpfung bewusst entfernen) muss vom Feld-Weglassen (unverändert
-    // lassen) unterscheidbar bleiben — analog UpdateUserQualificationInput
-    // in qualifications.route.ts.
-    competitionId: body.competitionId === undefined ? undefined : body.competitionId,
-    date: body.date ? new Date(body.date) : undefined,
+    // Unverändert durchgereicht: `null` (Verknüpfung entfernen) bleibt vom
+    // Weglassen (`undefined`, unverändert lassen) unterscheidbar.
+    competitionId: body.competitionId,
+    date: toDatePatch(body.date),
     function: body.function,
     note: body.note,
   };

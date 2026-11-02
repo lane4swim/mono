@@ -16,7 +16,7 @@ import {
 } from '@lane1/shared-types';
 import type { QualificationsService } from './qualifications.service.js';
 import { requireAnyRole } from '../../plugins/authorize.js';
-import { parseInput } from '../../plugins/parseInput.js';
+import { parseInput, toDateOrNull, toDatePatch } from '../../plugins/parseInput.js';
 import { requesterFrom } from '../../plugins/requester.js';
 import { requireClubModule, type ClubModulesResolver } from '../../plugins/clubModules.js';
 
@@ -66,8 +66,8 @@ export async function qualificationsRoutes(app: FastifyInstance, opts: Qualifica
           type: body.type,
           note: body.note,
           acquiredOn: new Date(body.acquiredOn),
-          expiresOn: body.expiresOn ? new Date(body.expiresOn) : null,
-          renewalCourseOrganizedOn: body.renewalCourseOrganizedOn ? new Date(body.renewalCourseOrganizedOn) : null,
+          expiresOn: toDateOrNull(body.expiresOn),
+          renewalCourseOrganizedOn: toDateOrNull(body.renewalCourseOrganizedOn),
         },
         requesterFrom(request),
       );
@@ -87,14 +87,11 @@ export async function qualificationsRoutes(app: FastifyInstance, opts: Qualifica
         {
           type: body.type,
           note: body.note,
-          acquiredOn: body.acquiredOn ? new Date(body.acquiredOn) : undefined,
-          // `!== undefined` statt `?? null`/Kurzschluss: `expiresOn: null`
-          // (Ablauf bewusst entfernen) muss vom Feld-Weglassen (unverändert
-          // lassen) unterscheidbar bleiben — dasselbe gilt für
-          // renewalCourseOrganizedOn unten.
-          expiresOn: body.expiresOn === undefined ? undefined : body.expiresOn ? new Date(body.expiresOn) : null,
-          renewalCourseOrganizedOn:
-            body.renewalCourseOrganizedOn === undefined ? undefined : body.renewalCourseOrganizedOn ? new Date(body.renewalCourseOrganizedOn) : null,
+          acquiredOn: toDatePatch(body.acquiredOn),
+          // `null` (Datum bewusst entfernen) bleibt vom Weglassen
+          // (unverändert lassen) unterscheidbar, siehe toDatePatch().
+          expiresOn: toDatePatch(body.expiresOn),
+          renewalCourseOrganizedOn: toDatePatch(body.renewalCourseOrganizedOn),
         },
         requesterFrom(request),
       );
