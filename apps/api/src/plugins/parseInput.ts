@@ -21,3 +21,22 @@ export function parseInput<T>(schema: ZodType<T>, data: unknown, reply: FastifyR
   reply.code(400).send({ error: 'validation_failed', issues: parsed.error.issues });
   return null;
 }
+
+// Zentrale Umwandlung der ISO-Datumsstrings aus validierten Request-Bodies
+// in `Date` — jede Route nutzt diese beiden Funktionen, statt die
+// Fallunterscheidung selbst auszuschreiben.
+//
+// Beim Anlegen: ein fehlendes oder `null` gesetztes optionales Datum wird
+// gespeichert als "kein Datum" (`null`).
+export function toDateOrNull(value: string | null | undefined): Date | null {
+  return value ? new Date(value) : null;
+}
+
+// Bei einem PATCH: `undefined` (Feld weggelassen) heißt "unverändert
+// lassen", `null` heißt "Datum entfernen" — beides muss erhalten bleiben.
+export function toDatePatch(value: string | undefined): Date | undefined;
+export function toDatePatch(value: string | null | undefined): Date | null | undefined;
+export function toDatePatch(value: string | null | undefined): Date | null | undefined {
+  if (value === undefined || value === null) return value;
+  return new Date(value);
+}

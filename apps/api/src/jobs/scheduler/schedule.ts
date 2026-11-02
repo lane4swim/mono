@@ -8,6 +8,7 @@
 // fällig ist. Ein verpasster Termin (Server aus, Neustart) wird dadurch beim
 // nächsten Takt nachgeholt statt bis zum Folgetag auszufallen.
 import type { JobStateRecord } from './jobState.repository.js';
+import { startOfUtcDay } from '../../modules/shared/dates.js';
 
 export type JobSchedule =
   // Einmal täglich, frühestens zur angegebenen UTC-Stunde.
@@ -43,7 +44,7 @@ export function periodMs(schedule: JobSchedule): number {
 // Letzter Tagestermin (UTC) zum Zeitpunkt `now`, also heute zur Zielstunde
 // oder — falls die noch nicht erreicht ist — gestern.
 function latestDailySlot(hourUtc: number, now: Date): Date {
-  const slot = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), hourUtc));
+  const slot = new Date(startOfUtcDay(now).getTime() + hourUtc * HOUR_MS);
   return slot.getTime() > now.getTime() ? new Date(slot.getTime() - DAY_MS) : slot;
 }
 

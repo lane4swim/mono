@@ -2,6 +2,7 @@
 // Autorisierungs-/Ablauflogik in referees.service.ts ohne Datenbank
 // (analog qualifications.repository.memory.ts).
 import { randomUUID } from 'node:crypto';
+import { applyDefinedPatch, softDeleteRow } from '../../db/inMemoryRows.js';
 import type {
   RefereeAssignmentRepository,
   RefereeAssignmentRecord,
@@ -41,14 +42,10 @@ export class InMemoryRefereeAssignmentRepository implements RefereeAssignmentRep
   async update(id: string, input: UpdateRefereeAssignmentInput): Promise<RefereeAssignmentRecord> {
     const row = this.rows.find((r) => r.id === id);
     if (!row) throw new Error(`RefereeAssignment ${id} nicht gefunden.`);
-    // Wie Prisma: ein `undefined`-Feld bedeutet "unverändert", nicht "leeren".
-    const defined = Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined));
-    Object.assign(row, defined, { updatedAt: new Date() });
-    return row;
+    return applyDefinedPatch(row, input);
   }
   async softDelete(id: string): Promise<void> {
-    const row = this.rows.find((r) => r.id === id);
-    if (row) row.deletedAt = new Date();
+    softDeleteRow(this.rows, id);
   }
 }
 
