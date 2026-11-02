@@ -194,14 +194,22 @@ function renderMembersGroupedByRole(members, onRolesChanged, onMfaReset = onRole
     const inRole = members.filter((m) => m.roles.includes(role));
     if (inRole.length === 0) return;
     wrap.appendChild(el('h4', { style: 'margin-bottom:8px' }, `${label} (${inRole.length})`));
-    const table = el('table');
+    // Jede Rollengruppe ist eine eigene Tabelle — mit automatischer
+    // Spaltenbreite hätte jede ihre eigenen Spalten, die untereinander nicht
+    // fluchten. Daher table-layout:fixed mit festen Anteilen per <colgroup>
+    // (siehe .members-table in styles.css).
+    const table = el('table', { class: 'members-table' });
+    table.appendChild(el('colgroup', {}, [
+      el('col', { class: 'col-name' }), el('col', { class: 'col-email' }),
+      el('col', { class: 'col-roles' }), el('col', { class: 'col-actions' }),
+    ]));
     table.appendChild(el('thead', {}, el('tr', {}, [el('th', {}, t('usermgmt.colName')), el('th', {}, t('usermgmt.colEmail')), el('th', {}, t('usermgmt.colRole')), el('th', {}, '')])));
     const tbody = el('tbody');
     inRole.forEach((member) => tbody.appendChild(el('tr', {}, [
       el('td', {}, member.name),
       el('td', {}, member.email),
-      el('td', {}, el('div', { class: 'flex gap-8' }, [...member.roles.map((r) => badge(t(`settings.role_${r}`), 'neutral')), mfaBadge(member)].filter(Boolean))),
-      el('td', {}, isAdmin() || canResetMemberMfa(member) ? el('div', { class: 'flex gap-8' }, [
+      el('td', {}, el('div', { class: 'flex gap-8 members-wrap' }, [...member.roles.map((r) => badge(t(`settings.role_${r}`), 'neutral')), mfaBadge(member)].filter(Boolean))),
+      el('td', {}, isAdmin() || canResetMemberMfa(member) ? el('div', { class: 'flex gap-8 members-wrap' }, [
         canResetMemberMfa(member) ? el('button', {
           class: 'btn btn-ghost btn-sm',
           onclick: () => openResetMemberMfaModal(member, onMfaReset),

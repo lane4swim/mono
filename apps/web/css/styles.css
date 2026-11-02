@@ -416,6 +416,15 @@ tr.live-row-done .live-set-desc{ text-decoration: line-through; color: var(--c-s
 .plan-sets-table .col-rest{ width: 80px; }
 .plan-sets-table .col-comments{ width: 150px; }
 .section-heading-view{ font-size: var(--fs-md); margin: 0 0 8px; }
+/* Mitgliederliste der Nutzerverwaltung: je Rolle eine eigene Tabelle —
+   feste Spaltenanteile, damit die Spalten über alle Gruppen fluchten. */
+.members-table{ table-layout: fixed; min-width: 640px; }
+.members-table td{ overflow-wrap: anywhere; }
+.members-table .col-name{ width: 22%; }
+.members-table .col-email{ width: 28%; }
+.members-table .col-roles{ width: 22%; }
+.members-table .col-actions{ width: 28%; }
+.members-table .members-wrap{ flex-wrap: wrap; }
 
 /* Responsive */
 @media (max-width: 860px){
