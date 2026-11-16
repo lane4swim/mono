@@ -1,5 +1,8 @@
 # Plan: Kampfrichter-Modul (Rolle, Qualifikationen, Wettkampfeinsätze)
 
+> **✅ Abgeschlossen** (geprüft gegen den Code, November 2026). Phasen A–C (Mehrfachrollen, Rolle `referee`, Kampfrichter-Modul mit Wettkampfeinsätzen) sind umgesetzt. Offen ist nur das spätere Entfernen der alten Spalte `User.role` (Abschnitt 7, Schritt 5).
+> Die umgesetzten Funktionen beschreibt das [Funktionshandbuch](../handbuch.md).
+
 Ziel: Kampfrichter:innen als eigene Personengruppe im System abbilden — mit
 eigener **Rolle** `referee`, ihren **Qualifikationen** (Kampfrichterschein,
 Protokollführer:in, Schiedsrichter:in, Startrichter:in, Zeitnehmer:in, …)
@@ -15,7 +18,7 @@ nicht möglich (`User.role` ist ein einzelner Wert) und muss als **Vorstufe**
 dieses Plans behandelt werden (Abschnitt 1). Alles Weitere in diesem Dokument
 baut darauf auf.
 
-Stand: Greenfield-Feature für Kampfrichter, aber auf bereits **produktivem
+Stand vor der Umsetzung: Greenfield-Feature für Kampfrichter, aber auf bereits **produktivem
 Code** aufbauend — anders als beim ursprünglichen
 `docs/Plans/nutzer-qualifikationen-plan.md` (der inzwischen vollständig umgesetzt
 ist, siehe `apps/api/src/modules/qualifications/`,
@@ -751,9 +754,9 @@ getroffen und oben in den jeweiligen Abschnitten bereits eingearbeitet:
     Verifikation: `shared-types` 194/194, `sync-protocol` 9/9, `apps/api`
     556/556 (inkl. Typecheck & Lint fehlerfrei), `apps/web` 228/228 (inkl.
     Lint fehlerfrei), Prisma-Schema valide.
-16. ⏳ `docs/Plans/backend-plan.md` Abschnitt „6 — Erweiterungen" um den
-    Umsetzungsstand ergänzen — bislang nicht nachgezogen, kein Blocker für
-    diese Umsetzung.
+16. ✅ `docs/Plans/backend-plan.md` Abschnitt „0 — Umsetzungsstand", Zeile
+    „6 — Erweiterungen", verweist auf die umgesetzten Erweiterungspläne
+    (nachgezogen im November 2026).
 
 **Nachgezogen — Rollenhandbuch (`docs/rollenhandbuch.html`): ✅ umgesetzt
 (2026-09-05)**

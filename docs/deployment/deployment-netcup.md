@@ -46,23 +46,27 @@ Am Ende gibt das Script eine Zusammenfassung aus — ausschließlich die Superad
 
 netcup bietet mehrere vServer-/Root-Server-Linien an. Für dieses Projekt reicht die **kleinste bis zweitkleinste vServer-Linie (VPS, KVM-virtualisiert)** — ein dedizierter **Root Server (RS)** ist für diesen Zweck überdimensioniert und deutlich teurer.
 
-### Empfehlung: **netcup VPS 1000 (aktuelle Generation, z. B. "G12")**
+### Empfehlung: **netcup VPS 500 (aktuelle Generation, z. B. "G12.5")**
 
 | Eigenschaft | Wert (Richtwert) |
 |---|---|
-| vCPU | 2–4 |
-| Arbeitsspeicher | 4–8 GB |
-| Festplatte | 128–256 GB NVMe SSD |
-| Preis (Stand Mitte 2026) | ca. **4–11 €/Monat**, je nach genauer Ausstattung |
+| vCPU | 2 |
+| Arbeitsspeicher | 4 GB |
+| Festplatte | 64 GB SSD |
+| Preis (Stand November 2026) | ca. **8,26 €/Monat** inkl. 19 % MwSt. bei 12 Monaten Laufzeit (ca. 6,94 € netto); bei 24 Monaten Laufzeit günstiger |
+| Vertragslaufzeit | feste Mindestlaufzeit (12 oder 24 Monate) — anders als bei Hetzner keine stündliche Abrechnung |
 | Standort | Nürnberg oder Karlsruhe (Deutschland) — Daten bleiben in der EU |
 | Betriebssystem | **Ubuntu 24.04 LTS** |
 
 **Warum genau dieses Produkt?**
-- Für einen Verein/ein Team mit einigen Dutzend bis wenigen hundert Nutzer:innen ist die Last gering — 2 vCPU/4 GB reichen für Node.js-API, PostgreSQL-Datenbank und das Ausliefern der Weboberfläche gleichzeitig.
+- Für einen Verein/ein Team mit einigen Dutzend bis wenigen hundert Nutzer:innen ist die Last gering — 2 vCPU/4 GB reichen für Node.js-API, PostgreSQL-Datenbank und das Ausliefern der Weboberfläche gleichzeitig. Der VPS 500 ist die kleinste netcup-Stufe, die diese Mindestausstattung erfüllt.
+- 64 GB reichen für Betriebssystem, Anwendung, Datenbank und einige Wochen lokaler SQL-Backups (Abschnitt 12.1); ältere Backups regelmäßig auslagern (Abschnitt 12.3).
 - Die VPS-Linie (vServer, KVM-virtualisiert, voller Root-Zugriff) bietet bei netcup das beste Preis-Leistungs-Verhältnis für diese Größenordnung — die separaten Root-Server-Produkte (RS-Linie, dedizierte Hardware) lohnen sich hier nicht.
 - Standort Deutschland/EU vereinfacht die DSGVO-Betrachtung, die im Backend-Plan (Abschnitt 12, Datenschutz) ohnehin als offener Punkt genannt wurde.
 
-> **Hinweis:** netcup benennt und bepreist seine VPS-Produkte immer wieder um (neue Generationen, z. B. "G11" → "G12"). Schau im Zweifel direkt im [netcup-Shop](https://www.netcup.com/en/server/vserver) nach dem aktuell kleinsten VPS mit ca. 2 vCPU/4 GB RAM und NVMe-SSD — die genaue Bezeichnung kann leicht abweichen, die Empfehlung bleibt dieselbe.
+**Mehr Reserve gewünscht?** Der **VPS 1000 G12.5** (4 vCPU/8 GB/128 GB SSD, ca. 14,50 €/Monat inkl. MwSt. bei 12 Monaten Laufzeit) bietet die doppelte Ausstattung — für die oben genannte Größenordnung nicht nötig. Bis zur Generation G12 war der VPS 1000 (damals 256 GB, ca. 10 €/Monat) die Empfehlung dieser Anleitung; mit G12.5 hat netcup die Preise erhöht und den Speicher halbiert, daher ist jetzt der VPS 500 die passende Wahl. Ein bestehender G12-Vertrag behält seinen Preis und kann weiterverwendet werden.
+
+> **Hinweis:** netcup benennt und bepreist seine VPS-Produkte immer wieder um (neue Generationen, z. B. "G12" → "G12.5"). Die Preise oben stammen aus Preisvergleichsseiten und können abweichen — schau vor der Bestellung direkt im [netcup-Shop](https://www.netcup.com/de/server/vps) nach dem aktuell kleinsten VPS mit mindestens 2 vCPU/4 GB RAM. Die genaue Bezeichnung kann leicht abweichen, die Empfehlung bleibt dieselbe.
 
 Reicht der Server später nicht mehr aus, lässt er sich im netcup-Kundenpanel mit wenigen Klicks upgraden, ohne den Server neu aufsetzen zu müssen.
 
@@ -1008,15 +1012,15 @@ sudo systemctl reload nginx
 
 ---
 
-## 15. Kostenübersicht (grobe Richtwerte, Stand 2026)
+## 15. Kostenübersicht (grobe Richtwerte, Stand November 2026)
 
 | Posten | Kosten |
 |---|---|
-| netcup VPS (2 vCPU/4 GB, kleinste passende Stufe) | ca. 4–11 €/Monat |
+| netcup VPS 500 G12.5 (2 vCPU/4 GB, kleinste passende Stufe) | ca. 8,26 €/Monat inkl. MwSt. (12 Monate Laufzeit; bei 24 Monaten günstiger) |
 | Domain (bei netcup oder anderem Registrar) | ca. 10–15 €/**Jahr** |
 | SSL-Zertifikat (Let's Encrypt) | kostenlos |
 | netcup-Firewall (SCP, ab Generation 12) | kostenlos |
-| **Gesamt** | **ca. 5–11 €/Monat** + Domain |
+| **Gesamt** | **ca. 7–9 €/Monat** + Domain |
 
 > Wie bei jedem Hoster ändern sich Produktnamen und Preise über die Zeit — im Zweifel im [netcup-Shop](https://www.netcup.com/en/server/vserver) nachsehen.
 

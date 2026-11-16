@@ -16,15 +16,17 @@ Laden keine Internetverbindung mehr.
 - **Einheiten-Tracking & Feedback** — Anwesenheit, RPE, Notizen
 - **Handlungsfelder** — dokumentierte Entwicklungsziele je Athlet:in mit Status
 - **Statistiken & Auswertungen** — Anwesenheitsquote, RPE-Trend, Leistungsentwicklung
-- **Sync-Warteschlange** — Event-Queue (Outbox-Pattern) zur Vorbereitung einer künftigen Backend-Synchronisation, inkl. simulierter Übertragung in der Demo
+- **Sync-Warteschlange** — Event-Queue (Outbox-Pattern), über die alle Offline-Änderungen mit dem Backend (`apps/api`) synchronisiert werden; in der Demo bleibt alles lokal
 - **Mehrsprachigkeit** — Deutsch (de-DE) und Englisch (en-US) von Anfang an, Sprachumschalter in der Kopfzeile, pro Nutzer:in gespeichert, leicht um weitere Sprachen erweiterbar
 - **Mein Profil** — jede:r Nutzer:in kann eigene Kontodaten (Name, E-Mail) sowie die bevorzugte Sprache selbst verwalten; zusätzlich Auskunft (JSON-Export) und Löschung des eigenen Kontos gemäß DSGVO (Art. 15 + 17) — ruft die echten Backend-Endpunkte auf, mit lokalem Export als Ausweichlösung bei fehlender Internetverbindung
-- **Nutzerverwaltung** — Superadministrator:innen legen Vereine an und laden deren ersten Admin per zeitlich befristetem Einladungslink ein (per echter E-Mail versendet); Admins laden Trainer:innen/Athlet:innen ihres Vereins ebenso ein. Zusätzlich: Anzeige bestehender Vereinsmitglieder, gruppiert nach Rolle (Admins/Trainer:innen/Athlet:innen) — für Admins automatisch der eigene Verein, für Superadministrator:innen je Verein über einen Button in der Vereinsliste.
+- **Nutzerverwaltung** — Superadministrator:innen legen Vereine an und laden deren ersten Admin per zeitlich befristetem Einladungslink ein (per echter E-Mail versendet); Admins laden Trainer:innen/Athlet:innen ihres Vereins ebenso ein. Admins laden außerdem Kampfrichter:innen und Erziehungsberechtigte ein, vergeben Rollen (mehrere je Konto möglich) und verknüpfen Eltern mit ihren Kindern. Zusätzlich: Anzeige bestehender Vereinsmitglieder, gruppiert nach Rolle (Admins/Trainer:innen/Kampfrichter:innen/Athlet:innen/Erziehungsberechtigte) — für Admins automatisch der eigene Verein, für Superadministrator:innen je Verein über einen Button in der Vereinsliste.
 
 - **Kalender** — fasst alle für die angemeldete Person relevanten Termine zusammen (`js/modules/calendar.js`, Logik in `js/modules/calendarEvents.js`): geplante Trainingstage aus Trainingsplänen, dokumentierte Einheiten, Wettkämpfe, Fristen offener Handlungsfelder, Ablauf/Verlängerungslehrgang eigener Qualifikationen und eigene Kampfrichtereinsätze (letztere beide per REST, daher nicht in `demo.html`). Ansichten Woche/Monat/Quartal/Jahr; Termintypen sind per Farbe UND Symbol unterscheidbar und über Filter-Chips ein-/ausblendbar. „Meine Termine“ = eigene Gruppe/Anwesenheit/Meldungen/Fristen (Athlet:innen) bzw. betreute Gruppen (`Group.trainerIds`, ohne Zuordnung: alle), eigene Trainer:innen-Anwesenheit und zugewiesene Fristen (Trainer:innen/Admins, umschaltbar auf „Ganzer Verein“). Kernmodul ohne eigenen Sync-Store — welche Termintypen erscheinen, folgt der Sichtbarkeit der jeweiligen Quelle (Rollen + gebuchte Pakete). Ansicht/Filter werden pro Person und Gerät gemerkt (localStorage)
 - **Ansichten** — die Navigation lässt sich nach Aufgabe bündeln: Verwaltung, Trainingsplanung, Wettkampfteilnahme und Wettkampforganisation (`js/views.js`). Angeboten werden nur Ansichten mit mindestens einem für die eigene Rolle sichtbaren Modul; bei mehreren fragt die App beim Start (abschaltbar per Häkchen „Immer in dieser Ansicht starten“), gewechselt wird jederzeit über die Schaltfläche neben dem Logo bzw. „Mehr“. Die Wahl gilt pro Gerät (localStorage) und ist reiner Navigationsfilter, keine Berechtigungsgrenze
 
-Drei Rollen: **Trainer**, **Athlet** und **Administrator** (siehe unten).
+Weitere Funktionen (Ankündigungen, Push, Eltern-Zugang, Qualifikationen, Kampfrichter-Modul, Vorlagen-Zyklen, Trainingsmodus, DSV-Import, Audit-Log u. a.) beschreibt das [Funktionshandbuch](../../docs/handbuch.md).
+
+Sechs Rollen: **Superadministrator:in**, **Administrator**, **Trainer:in**, **Athlet:in**, **Kampfrichter:in** und **Erziehungsberechtigte:r**; ein Konto kann mehrere Rollen gleichzeitig haben (siehe unten).
 
 ## Lokal ausführen
 
@@ -63,16 +65,20 @@ Registrierung. Um die App auszuprobieren, wird ein Backend
 2. Als Superadmin anmelden, unter „Nutzerverwaltung" einen Verein anlegen
    (erzeugt automatisch eine Admin-Einladung).
 3. Den angezeigten Einladungslink öffnen, um das Admin-Konto zu aktivieren.
-4. Als Admin weitere Trainer:innen/Athlet:innen einladen.
+4. Als Admin weitere Trainer:innen, Athlet:innen, Kampfrichter:innen oder Erziehungsberechtigte einladen.
 
 Rollen und ihre sichtbaren Bereiche:
 
 | Rolle | Sichtbare Bereiche |
 |---|---|
-| Superadministrator:in | Dashboard, Mein Profil, Nutzerverwaltung (Vereine anlegen, Admin-Einladungen) |
-| Administrator | Alle Bereiche inkl. Nutzerverwaltung (Team einladen) |
-| Trainer:in | Alle Bereiche außer Nutzerverwaltung |
-| Athlet:in | Dashboard, Zeiten, Trainingspläne, Einheiten, eigene Handlungsfelder, Mein Profil |
+| Superadministrator:in | Nutzerverwaltung (Vereine anlegen, Module, Admin-Einladungen, Hintergrundjobs), Audit-Log, Mein Profil — zusätzlich die Oberfläche unter `/admin` |
+| Administrator | Dashboard, Kalender, Ankündigungen, Athleten & Team, Wettkämpfe, Zeiten, Statistiken, Handlungsfelder, Anwesenheitsstatistik, Nutzerverwaltung, Audit-Log, Sync-Warteschlange, Qualifikationen\*, Kampfrichter\*, Mein Profil |
+| Trainer:in | Dashboard, Kalender, Ankündigungen, Athleten & Team, Trainingspläne, Vorlagen, Abschnitts-Vorlagen, Übungskatalog, Einheiten, Handlungsfelder, Wettkämpfe, Zeiten, Statistiken, Sync-Warteschlange, Qualifikationen\*, Mein Profil |
+| Athlet:in | Dashboard, Kalender, Ankündigungen, Trainingspläne, Einheiten, Zeiten, eigene Handlungsfelder, Qualifikationen\*, Mein Profil |
+| Kampfrichter:in | Kalender, Kampfrichter\*, Mein Profil |
+| Erziehungsberechtigte:r | Mein Kind, Kalender, Mein Profil |
+
+Alle Rollen sehen zusätzlich „Rechtliches & Datenschutz". \* zubuchbares Modul, nur sichtbar, wenn der Verein es gebucht hat. Bei mehreren Rollen ist die Vereinigung sichtbar.
 
 Fachliche Demo-Daten (Athlet:innen, Gruppen, ein Wettkampf, Übungen, ein
 Trainingsplan) werden weiterhin beim ersten Start lokal geseedet und
@@ -123,10 +129,16 @@ analog zu `apps/web/admin/` ein eigenständiger Ordner mit eigenem
 („Hilfe") in einem neuen Tab geöffnet wird:
 
 - **`help/index.html`** — Kurzanleitung (Zugang, Installation als App,
-  Offline-Nutzung & Synchronisierung, Überblick über die Module).
+  Offline-Nutzung & Synchronisierung, Überblick über die Module, Profil,
+  Benachrichtigungen, Ankündigungen, Eltern-Zugang).
+- **`help/training.html`** — Trainingsplanung (Pläne, Vorlagen, Zyklen,
+  Trainingsmodus, Einheiten, Handlungsfelder, Statistiken).
+- **`help/wettkampf.html`** — Wettkämpfe, Zeiten, Qualifikationen und
+  Kampfrichterwesen.
 - **`help/faq.html`** — häufige Fragen & Fehlerbehebung.
-- **`help/admin.html`** — Admin-Handbuch (Vereine anlegen, Trainer:innen/
-  Athlet:innen einladen, Rollen).
+- **`help/admin.html`** — Admin-Handbuch (Vereine anlegen, Einladungen,
+  Rollen, Eltern-Verknüpfung, Vereinsangaben, Qualifikationen verwalten,
+  Audit-Log, Module, Hintergrundjobs).
 - **`help/help.css`** — eigenes, schlankes Stylesheet für Lesetypografie;
   nutzt dieselben Design-Tokens wie `css/styles.css` (dort weiterhin
   eingebunden), duckt aber nicht darauf ab, dass die App-Shell geladen ist.
@@ -176,12 +188,8 @@ eigener Verlinkung ergänzen, ohne das bestehende Muster zu ändern.
 
 ### Ideen für künftige Erweiterungen
 
-- Server-Sync-Adapter (z. B. REST/GraphQL) ergänzen, der die gleichen
-  `db.js`-Funktionen im Hintergrund mit einem Server abgleicht
-  (Conflict-Resolution nach `updatedAt`).
-- Export/Import einzelner Bereiche (z. B. nur Übungskatalog) zum
-  Teilen zwischen Vereinen.
-- Push-Benachrichtigungen für anstehende Einheiten/Wettkämpfe.
+- Push-Benachrichtigungen auch für neue Kommentare und neue Startlisten
+  (zeitgesteuerte Erinnerungen und Ankündigungen sind bereits umgesetzt).
 - Weitere Sprachen über zusätzliche `js/i18n/<locale>.js`-Dateien (siehe unten).
 
 ### Sync-Warteschlange (Event Queue / Outbox-Pattern)

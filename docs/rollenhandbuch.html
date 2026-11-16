@@ -137,6 +137,7 @@
   .role-card.trainer{ --rail: var(--petrol); }
   .role-card.athlete{ --rail: var(--slate-2); }
   .role-card.referee{ --rail: var(--judge); }
+  .role-card.parent{ --rail: var(--slate-2); }
   .role-head{ display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
   .role-name{ font-family: var(--f-display); font-weight: 700; font-size: 1.22rem; }
   .role-slug{ font-family: var(--f-mono); font-size: .72rem; color: var(--text-dim); background: var(--surface-2); border: 1px solid var(--border); padding: 2px 8px; border-radius: 999px; }
@@ -238,9 +239,9 @@
   <div class="hero">
     <span class="eyebrow">Interne Referenz</span>
     <h1>Rollen, Rechte und Datenmodell von Lane 1</h1>
-    <p class="lede">Lane 1 ist eine offline-fähige Trainingsmanagement-App für Schwimmvereine. Der Zugriff ist über fünf Rollen gestaffelt, von denen ein Konto auch mehrere gleichzeitig innehaben kann, und über Vereine (Mandanten) strikt getrennt. Dieses Dokument fasst zusammen, wer was darf — in der App, in der API — und wie die zugrundeliegenden Daten zusammenhängen.</p>
+    <p class="lede">Lane 1 ist eine offline-fähige Trainingsmanagement-App für Schwimmvereine. Der Zugriff ist über sechs Rollen gestaffelt, von denen ein Konto auch mehrere gleichzeitig innehaben kann, und über Vereine (Mandanten) strikt getrennt. Dieses Dokument fasst zusammen, wer was darf — in der App, in der API — und wie die zugrundeliegenden Daten zusammenhängen.</p>
     <div class="meta">
-      <span><b>5</b> Rollen</span>
+      <span><b>6</b> Rollen</span>
       <span>Mehrfachrollen möglich</span>
       <span><b>1</b> Mandant je Konto (außer Superadmin)</span>
       <span><b>18</b> fachliche Tabellen</span>
@@ -252,7 +253,7 @@
   <section id="rollen">
     <div class="section-head">
       <span class="eyebrow">01 — Zugriffsmodell</span>
-      <h2>Fünf Rollen, ein Mandantenprinzip</h2>
+      <h2>Sechs Rollen, ein Mandantenprinzip</h2>
     </div>
     <p>Ein Konto trägt eine Menge von Rollen (<code class="mono">roles: string[]</code>) statt nur einer einzelnen — die eigentlich additive Fähigkeit, mehrere Rollen gleichzeitig zu haben (z. B. Trainer:in <em>und</em> Kampfrichter:in), ist unten unter „Mehrfachrollen" näher erläutert. Mit Ausnahme des Superadmin gehört jedes Konto genau einem Verein (<code>clubId</code>) an — Daten verschiedener Vereine sind für die App unsichtbar füreinander.</p>
 
@@ -314,18 +315,19 @@
         <div class="role-scope">Kein Verein zugeordnet · eigene Oberfläche unter <code class="mono">/admin</code></div>
         <dl>
           <div><dt>Aufgabe</dt><dd>Legt neue Vereine an und stellt für jeden die erste Admin-Einladung aus. Das ist die einzige Möglichkeit, wie ein Verein überhaupt entsteht.</dd></div>
-          <div><dt>Besonderheit</dt><dd>Wird nie per Einladung vergeben, sondern einmalig per Server-Skript erzeugt. Nutzt die Hauptanwendung nicht — nur ein schlankes, separates Verwaltungs-UI ohne Offline-/IndexedDB-Bezug.</dd></div>
+          <div><dt>Besonderheit</dt><dd>Wird nie per Einladung vergeben, sondern einmalig per Server-Skript erzeugt. Arbeitet vor allem im schlanken, separaten Verwaltungs-UI ohne Offline-/IndexedDB-Bezug. In der Hauptanwendung sieht er nur die Nutzerverwaltung (Vereine, Module, Hintergrundjobs), das Audit-Log und sein Profil.</dd></div>
           <div><dt>Geteilt mit Admin</dt><dd>Einladungen einsehen/ausstellen/widerrufen und Vereinsmitglieder auflisten — jeweils vereinsübergreifend, per <code class="mono">?clubId=</code>.</dd></div>
         </dl>
       </div>
 
       <div class="role-card admin">
         <div class="role-head"><span class="role-name">Admin</span><span class="role-slug">admin</span></div>
-        <div class="role-scope">Genau ein Verein · volle Hauptanwendung + Nutzerverwaltung</div>
+        <div class="role-scope">Genau ein Verein · Vereinsverwaltung, Wettkämpfe, Auswertungen</div>
         <dl>
-          <div><dt>Aufgabe</dt><dd>Verwaltet einen Verein operativ und lädt dessen Trainer:innen und Athlet:innen ein.</dd></div>
+          <div><dt>Aufgabe</dt><dd>Verwaltet einen Verein: lädt Trainer:innen, Athlet:innen, Kampfrichter:innen und Erziehungsberechtigte ein, vergibt Rollen, pflegt Athletenprofile, Vereins- und Rechtsangaben sowie Qualifikationen und teilt Kampfrichter:innen ein.</dd></div>
           <div><dt>Grenze</dt><dd>Die <code class="mono">clubId</code> einer ausgestellten Einladung wird serverseitig erzwungen — ein Admin kann nicht in einen fremden Verein einladen, selbst wenn er sie im Request angibt.</dd></div>
-          <div><dt>Zusatzrecht ggü. Trainer</dt><dd>Einziges Modul, das Trainer nicht sehen: <em>Nutzerverwaltung</em> (Einladungen, Mitgliederliste).</dd></div>
+          <div><dt>Zusatzrecht ggü. Trainer</dt><dd>Nur für Admins: <em>Nutzerverwaltung</em>, <em>Audit-Log</em>, <em>Anwesenheitsstatistik</em> und die Verwaltung im <em>Kampfrichter</em>-Modul.</dd></div>
+          <div><dt>Ohne Trainer-Rolle nicht sichtbar</dt><dd>Trainingspläne, Vorlagen, Abschnitts-Vorlagen, Übungskatalog, Einheiten &amp; Feedback — wer als Admin auch plant, braucht zusätzlich die Rolle Trainer.</dd></div>
         </dl>
       </div>
 
@@ -335,7 +337,7 @@
         <dl>
           <div><dt>Aufgabe</dt><dd>Trainingspläne und Übungskatalog pflegen, Anwesenheit &amp; Feedback erfassen, Wettkämpfe melden und Ergebnisse eintragen, Handlungsfelder je Athlet:in dokumentieren.</dd></div>
           <div><dt>Sichtbereich</dt><dd>Sieht alle Athlet:innen und Daten des eigenen Vereins — nicht auf einzelne Gruppen beschränkt.</dd></div>
-          <div><dt>Kein Zugriff auf</dt><dd>Nutzerverwaltung (Einladungen/Mitgliederliste).</dd></div>
+          <div><dt>Kein Zugriff auf</dt><dd>Nutzerverwaltung, Audit-Log, Anwesenheitsstatistik, Kampfrichter-Modul.</dd></div>
         </dl>
       </div>
 
@@ -356,6 +358,16 @@
           <div><dt>Aufgabe</dt><dd>Pflegt im zubuchbaren Kampfrichter-Modul die eigenen Wettkampfeinsätze (Funktion, Wettkampf, Datum, Notiz) und sieht dort den eigenen, auf Kampfrichter-Ämter gefilterten Qualifikationsstatus (lesend).</dd></div>
           <div><dt>Besonderheit</dt><dd>Hat <em>keinen</em> Zugriff auf die allgemeine Qualifikationsseite (deren Rollen-Gate bleibt bewusst auf admin/trainer/athlete beschränkt) — der eigene Qualifikationsstatus erscheint stattdessen im Kampfrichter-Modul selbst.</dd></div>
           <div><dt>Kein Zugriff auf</dt><dd>Alles außer dem Kampfrichter-Modul, sofern nicht zusätzlich eine weitere Rolle vorliegt.</dd></div>
+        </dl>
+      </div>
+
+      <div class="role-card parent">
+        <div class="role-head"><span class="role-name">Erziehungsberechtigte:r</span><span class="role-slug">parent</span></div>
+        <div class="role-scope">Genau ein Verein · mit einem oder mehreren Athletenprofilen verknüpft</div>
+        <dl>
+          <div><dt>Aufgabe</dt><dd>Sieht unter „Mein Kind" eine rein lesende Übersicht je verknüpftem Kind (bevorstehende Einheiten und Wettkämpfe, letzte Ergebnisse, Bestzeiten, Anwesenheit) sowie dessen Kalender.</dd></div>
+          <div><dt>Besonderheit</dt><dd>Kein Sync-Zugriff — die Daten kommen direkt per REST (<code class="mono">GET /api/parents/overview</code>, <code class="mono">/api/parents/calendar</code>). Die Verknüpfungen pflegt ein Admin in der Nutzerverwaltung („Kinder verwalten").</dd></div>
+          <div><dt>Kein Zugriff auf</dt><dd>Alles außer „Mein Kind", Kalender, Mein Profil und Rechtliches.</dd></div>
         </dl>
       </div>
     </div>
@@ -446,25 +458,31 @@
     <div class="table-wrap">
       <table>
         <thead>
-          <tr><th>Modul</th><th class="ctr">Admin</th><th class="ctr">Trainer</th><th class="ctr">Athlet</th><th class="ctr">Kampfrichter:in</th></tr>
+          <tr><th>Modul</th><th class="ctr">Admin</th><th class="ctr">Trainer</th><th class="ctr">Athlet</th><th class="ctr">Kampfrichter:in</th><th class="ctr">Eltern</th></tr>
         </thead>
         <tbody>
-          <tr><td class="mod-name">Dashboard<span class="id">dashboard</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr no">–</td></tr>
-          <tr><td class="mod-name">Athleten &amp; Team<span class="id">athletes</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr no">–</td><td class="ctr no">–</td></tr>
-          <tr><td class="mod-name">Übungskatalog<span class="id">catalog</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr no">–</td><td class="ctr no">–</td></tr>
-          <tr><td class="mod-name">Vorlagen<span class="id">templates</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr no">–</td><td class="ctr no">–</td></tr>
-          <tr><td class="mod-name">Trainingspläne<span class="id">plans</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr no">–</td></tr>
-          <tr><td class="mod-name">Einheiten &amp; Feedback<span class="id">sessions</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr no">–</td></tr>
-          <tr><td class="mod-name">Wettkämpfe<span class="id">competitions</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr no">–</td><td class="ctr no">–</td></tr>
-          <tr><td class="mod-name">Zeiten &amp; Leistung<span class="id">times</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr no">–</td></tr>
-          <tr><td class="mod-name">Statistiken<span class="id">stats</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr no">–</td><td class="ctr no">–</td></tr>
-          <tr><td class="mod-name">Handlungsfelder<span class="id">actionitems</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr no">–</td></tr>
-          <tr><td class="mod-name">Sync-Warteschlange<span class="id">syncqueue</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr no">–</td><td class="ctr no">–</td></tr>
-          <tr><td class="mod-name">Nutzerverwaltung<span class="id">usermgmt</span></td><td class="ctr yes">●</td><td class="ctr no">–</td><td class="ctr no">–</td><td class="ctr no">–</td></tr>
-          <tr><td class="mod-name">Qualifikationen*<span class="id">qualifications</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr no">–</td></tr>
-          <tr><td class="mod-name">Kampfrichter*<span class="id">kampfrichter</span></td><td class="ctr yes">●</td><td class="ctr no">–</td><td class="ctr no">–</td><td class="ctr yes">●</td></tr>
-          <tr><td class="mod-name">Mein Profil<span class="id">profile</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr yes">●</td></tr>
-          <tr><td class="mod-name">Rechtliches &amp; Datenschutz<span class="id">info</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr yes">●</td></tr>
+          <tr><td class="mod-name">Dashboard<span class="id">dashboard</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr no">–</td><td class="ctr no">–</td></tr>
+          <tr><td class="mod-name">Kalender<span class="id">calendar</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr yes">●</td></tr>
+          <tr><td class="mod-name">Ankündigungen<span class="id">announcements</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr no">–</td><td class="ctr no">–</td></tr>
+          <tr><td class="mod-name">Athleten &amp; Team<span class="id">athletes</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr no">–</td><td class="ctr no">–</td><td class="ctr no">–</td></tr>
+          <tr><td class="mod-name">Trainingspläne<span class="id">plans</span></td><td class="ctr no">–</td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr no">–</td><td class="ctr no">–</td></tr>
+          <tr><td class="mod-name">Vorlagen<span class="id">templates</span></td><td class="ctr no">–</td><td class="ctr yes">●</td><td class="ctr no">–</td><td class="ctr no">–</td><td class="ctr no">–</td></tr>
+          <tr><td class="mod-name">Abschnitts-Vorlagen<span class="id">sectionTemplates</span></td><td class="ctr no">–</td><td class="ctr yes">●</td><td class="ctr no">–</td><td class="ctr no">–</td><td class="ctr no">–</td></tr>
+          <tr><td class="mod-name">Übungskatalog<span class="id">catalog</span></td><td class="ctr no">–</td><td class="ctr yes">●</td><td class="ctr no">–</td><td class="ctr no">–</td><td class="ctr no">–</td></tr>
+          <tr><td class="mod-name">Einheiten &amp; Feedback<span class="id">sessions</span></td><td class="ctr no">–</td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr no">–</td><td class="ctr no">–</td></tr>
+          <tr><td class="mod-name">Handlungsfelder<span class="id">actionitems</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr no">–</td><td class="ctr no">–</td></tr>
+          <tr><td class="mod-name">Wettkämpfe<span class="id">competitions</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr no">–</td><td class="ctr no">–</td><td class="ctr no">–</td></tr>
+          <tr><td class="mod-name">Zeiten &amp; Leistung<span class="id">times</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr no">–</td><td class="ctr no">–</td></tr>
+          <tr><td class="mod-name">Statistiken<span class="id">stats</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr no">–</td><td class="ctr no">–</td><td class="ctr no">–</td></tr>
+          <tr><td class="mod-name">Anwesenheitsstatistik<span class="id">attendance</span></td><td class="ctr yes">●</td><td class="ctr no">–</td><td class="ctr no">–</td><td class="ctr no">–</td><td class="ctr no">–</td></tr>
+          <tr><td class="mod-name">Sync-Warteschlange<span class="id">syncqueue</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr no">–</td><td class="ctr no">–</td><td class="ctr no">–</td></tr>
+          <tr><td class="mod-name">Nutzerverwaltung<span class="id">usermgmt</span></td><td class="ctr yes">●</td><td class="ctr no">–</td><td class="ctr no">–</td><td class="ctr no">–</td><td class="ctr no">–</td></tr>
+          <tr><td class="mod-name">Audit-Log<span class="id">auditlog</span></td><td class="ctr yes">●</td><td class="ctr no">–</td><td class="ctr no">–</td><td class="ctr no">–</td><td class="ctr no">–</td></tr>
+          <tr><td class="mod-name">Qualifikationen*<span class="id">qualifications</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr no">–</td><td class="ctr no">–</td></tr>
+          <tr><td class="mod-name">Kampfrichter*<span class="id">kampfrichter</span></td><td class="ctr yes">●</td><td class="ctr no">–</td><td class="ctr no">–</td><td class="ctr yes">●</td><td class="ctr no">–</td></tr>
+          <tr><td class="mod-name">Mein Kind<span class="id">parent</span></td><td class="ctr no">–</td><td class="ctr no">–</td><td class="ctr no">–</td><td class="ctr no">–</td><td class="ctr yes">●</td></tr>
+          <tr><td class="mod-name">Mein Profil<span class="id">profile</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr yes">●</td></tr>
+          <tr><td class="mod-name">Rechtliches &amp; Datenschutz<span class="id">info</span></td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr yes">●</td><td class="ctr yes">●</td></tr>
         </tbody>
       </table>
     </div>
@@ -472,7 +490,7 @@
 
     <div class="callout">
       <h4>Wo bleibt der Superadmin?</h4>
-      <p>Der Superadmin ruft diese Hauptanwendung gar nicht auf. Er arbeitet in einer separaten, schlanken Oberfläche unter <code class="mono">/admin</code> — bewusst ohne IndexedDB/Offline-Anteil, da seine Aufgabe rein administrativ ist:</p>
+      <p>Der Superadmin steht in keiner Spalte dieser Tabelle. In der Hauptanwendung sieht er nur die Nutzerverwaltung (Vereine, Module, Hintergrundjobs), das Audit-Log und sein Profil. Vor allem arbeitet er in einer separaten, schlanken Oberfläche unter <code class="mono">/admin</code> — bewusst ohne IndexedDB/Offline-Anteil, da seine Aufgabe rein administrativ ist:</p>
       <ul>
         <li>Neue Vereine anlegen und deren erste Admin-Einladung ausstellen</li>
         <li>Liste aller Vereine samt Mitgliederzahl je Rolle einsehen</li>

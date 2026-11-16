@@ -1,5 +1,8 @@
 # Plan: Trainingsplanung — Phase 1 (Abschnitt 3 des Feature-Brainstorms)
 
+> **✅ Abgeschlossen** (geprüft gegen den Code, November 2026). Alle drei Teile (Vorlagen-Zyklen, Belastungssteuerung, Anwesenheitsstatistik) sind umgesetzt.
+> Die umgesetzten Funktionen beschreibt das [Funktionshandbuch](../handbuch.md).
+
 Detaillierter Umsetzungsplan für Phase 1 aus
 `docs/future-features-brainstorm.md` (Abschnitt „Priorisierung:
 Phasenplanung"): Abschnitt 3, bestehend aus drei Einzelfeatures —

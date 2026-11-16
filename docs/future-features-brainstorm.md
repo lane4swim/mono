@@ -13,7 +13,7 @@ Zu jedem Feature: kurze Beschreibung, Nutzen, grobe Einschätzung zum Bezug
 zur bestehenden Architektur (Sync-API, Rollen-/Mandantenmodell, zubuchbare
 Module).
 
-## Zusammenfassung: Umsetzungsstand (Stand Oktober 2026)
+## Zusammenfassung: Umsetzungsstand (Stand November 2026)
 
 Überblick über alle Ideen dieses Dokuments sowie die außerhalb davon
 umgesetzten Feature-Pläne aus `docs/Plans/`, gruppiert nach Status. Die
@@ -37,6 +37,8 @@ Nummern verweisen auf die Abschnitte unten.
 | Feature | Stand | Offen |
 |---|---|---|
 | 6.2 Mehrsprachigkeit | Deutsch und Englisch (`apps/web/js/i18n/`) | weitere Sprachen nach Bedarf |
+| 2.4 Pflicht-/Normzeiten | Pflichtzeiten aus der DSV7-/DSV8-Wettkampfdefinition werden geladen und in der Startliste geprüft (`apps/web/js/modules/requiredTimes.js`) | eigene Normzeiten-Tabellen je Altersklasse, Meldevorschläge |
+| 7.1 Kampfrichter-Einsatzplanung | Anzahl zu stellender Kampfrichter:innen je Wettkampf, manuelle Einteilung mit Zu-/Absage (`apps/web/js/modules/competitionReferees.js`) | automatische Vorschläge nach Qualifikation und Einsatzhäufigkeit |
 
 ### Als nächstes geplant (Phase 4)
 
@@ -49,12 +51,12 @@ Nummern verweisen auf die Abschnitte unten.
 
 | Bereich | Features |
 |---|---|
-| Wettkampf & Ergebnisse | 1.3 Lenex-Import, 2.1 Startlisten-Export, 2.3 Wettkampfmeldung als Workflow, 2.4 Pflicht-/Normzeiten, 2.5 World-Aquatics-Punkte, 2.6 Split-/Pacing-Analyse, 2.7 Staffel-Aufstellung |
+| Wettkampf & Ergebnisse | 1.3 Lenex-Import, 2.1 Startlisten-Export, 2.3 Wettkampfmeldung als Workflow, 2.5 World-Aquatics-Punkte, 2.6 Split-/Pacing-Analyse, 2.7 Staffel-Aufstellung |
 | Trainingsplanung | 3.4 Leistungstests und Trainingszonen, 3.5 Persönliche Ziele |
 | Kommunikation & Organisation | 4.3 Vorab-Abmeldung vom Training, 4.4 Kalender-Abo (iCal) |
 | Vereinsverwaltung | 1.1 Vereins-Branding |
 | Technik/Plattform | 6.1 Echtzeit-Sync, 6.5 Vereinsweiter Datenexport/Backup |
-| Kampfrichter-Modul | 7.1 Einsatzplanung, 7.2 Vereinsübergreifende Freigabe |
+| Kampfrichter-Modul | 7.2 Vereinsübergreifende Freigabe |
 
 Neu in der Ergänzung vom Oktober 2026 sind 2.4–2.7, 3.4–3.5, 4.3–4.4 und
 6.4–6.5. Empfehlung zur Priorisierung nach Phase 4 siehe Abschnitt

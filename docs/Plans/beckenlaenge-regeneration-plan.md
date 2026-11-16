@@ -1,5 +1,8 @@
 # Plan: Beckenlänge im Trainingsplan (#72) & Belastungsstufe „Regeneration" (#73)
 
+> **✅ Abgeschlossen** (geprüft gegen den Code, November 2026). Beide Issues (#72 Beckenlänge, #73 Regeneration) sind umgesetzt.
+> Die umgesetzten Funktionen beschreibt das [Funktionshandbuch](../handbuch.md).
+
 Umsetzungsplan für zwei kleine, unabhängige Issues aus dem Trainingsplanungs-
 Bereich — als Diskussionsgrundlage gedacht, analog zu den übrigen Plänen in
 `docs/Plans/` (z. B. `trainingsplanung-phase1-plan.md`), aber deutlich kleiner

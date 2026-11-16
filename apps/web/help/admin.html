@@ -24,6 +24,8 @@
 <div class="help-shell">
   <nav class="help-nav" aria-label="Hilfe-Bereiche">
     <a href="./index.html">Kurzanleitung</a>
+    <a href="./training.html">Training</a>
+    <a href="./wettkampf.html">Wettkämpfe</a>
     <a href="./faq.html">FAQ &amp; Fehlerbehebung</a>
     <a href="./admin.html" aria-current="page">Admin-Handbuch</a>
   </nav>
@@ -38,13 +40,18 @@
       <span class="badge badge-neutral">admin</span>
       <span class="badge badge-neutral">trainer</span>
       <span class="badge badge-neutral">athlete</span>
+      <span class="badge badge-neutral">referee</span>
+      <span class="badge badge-neutral">parent</span>
     </div>
     <ul>
       <li><strong>Superadmin</strong> — betreibt Lane 1 übergreifend, legt neue Vereine an. Zugang über die eigenständige Oberfläche unter <code>/admin</code> (bewusst getrennt von der normalen App, siehe unten).</li>
-      <li><strong>Admin</strong> (Vereinsverwaltung) — verwaltet den eigenen Verein: lädt Trainer:innen und Athlet:innen ein, verwaltet bestehende Zugänge. Zugriff über den Menüpunkt <strong>„Nutzerverwaltung“</strong> in der normalen App.</li>
-      <li><strong>Trainer:in</strong> — Zugriff auf Trainingsplanung, Athletendaten, Wettkämpfe, Statistiken (siehe Kurzanleitung).</li>
+      <li><strong>Admin</strong> (Vereinsverwaltung) — verwaltet den eigenen Verein: lädt Mitglieder ein, vergibt Rollen, pflegt Athletenprofile, Vereinsangaben und Qualifikationen. Zugriff über den Menüpunkt <strong>„Nutzerverwaltung“</strong> in der normalen App.</li>
+      <li><strong>Trainer:in</strong> — Zugriff auf Trainingsplanung, Athletendaten, Wettkämpfe, Statistiken (siehe <a href="./training.html">Training</a> und <a href="./wettkampf.html">Wettkämpfe</a>).</li>
       <li><strong>Athlet:in</strong> — eingeschränkter Zugriff auf eigene Zeiten, Pläne und Einheiten.</li>
+      <li><strong>Kampfrichter:in</strong> — pflegt eigene Wettkampfeinsätze und sieht den eigenen Kampfrichter-Qualifikationsstatus (Modul „Kampfrichter“).</li>
+      <li><strong>Erziehungsberechtigte:r</strong> — sieht eine rein lesende Übersicht der verknüpften Kinder (Menüpunkt „Mein Kind“).</li>
     </ul>
+    <p>Ein Konto kann <strong>mehrere Rollen gleichzeitig</strong> haben, z.&nbsp;B. Trainer:in und Kampfrichter:in — sichtbar sind dann alle zugehörigen Bereiche. Trainingspläne, Vorlagen, Übungskatalog sowie Einheiten &amp; Feedback sind der Rolle Trainer:in vorbehalten; wer als Admin auch plant, bekommt zusätzlich diese Rolle.</p>
 
     <h2>Neuen Verein anlegen (Superadmin)</h2>
     <p>Die Superadmin-Oberfläche ist bewusst von der normalen App getrennt und unter <code>/admin</code> erreichbar (eigene Anmeldung, eigenes Layout). Sie ist <strong>ausschließlich online</strong> nutzbar — anders als die restliche App gibt es hier keine Offline-Funktion, da Vereins- und Nutzerverwaltung ohne Backend-Verbindung ohnehin nicht sinnvoll sind.</p>
@@ -54,11 +61,11 @@
       <li>Lane 1 verschickt automatisch eine Einladungs-E-Mail an die angegebene Adresse; der Link wird zusätzlich direkt angezeigt (siehe „Einladungslinks weitergeben“ unten).</li>
     </ol>
 
-    <h2>Trainer:innen &amp; Athlet:innen einladen (Vereinsadministration)</h2>
+    <h2>Mitglieder einladen (Vereinsadministration)</h2>
     <p>Innerhalb der normalen App, Menüpunkt <strong>„Nutzerverwaltung“</strong>:</p>
     <ol>
-      <li>„Trainer:in/Athlet:in einladen“ wählen.</li>
-      <li>E-Mail-Adresse und Rolle (Trainer:in oder Athlet:in) eintragen; bei Athlet:innen zusätzlich das zugehörige Athletenprofil wählen.</li>
+      <li>Reiter <em>Einladungen</em> öffnen und <strong>„+ Trainer:in / Athlet:in / Kampfrichter:in einladen“</strong> wählen.</li>
+      <li>E-Mail-Adresse und Rolle eintragen (Admin, Trainer:in, Athlet:in, Kampfrichter:in oder Erziehungsberechtigte:r); bei Athlet:innen zusätzlich das zugehörige Athletenprofil wählen.</li>
       <li>Lane 1 verschickt automatisch eine Einladungs-E-Mail; der Link wird zusätzlich direkt angezeigt.</li>
     </ol>
     <h3>Athlet:innen mit und ohne eigenes Konto</h3>
@@ -78,19 +85,56 @@
     <h3>Einladungslinks weitergeben</h3>
     <p>Der Link wird nach dem Erstellen einer Einladung automatisch per E-Mail an die eingeladene Person verschickt. Zusätzlich zeigt Lane 1 den Link direkt in einem Fenster an — praktisch, um ihn z. B. bei einer falsch geschriebenen oder nicht erreichbaren E-Mail-Adresse manuell über einen anderen Kanal (Messenger, persönlich) weiterzugeben. Nach dem Öffnen des Links legt die eingeladene Person selbst ein Passwort fest.</p>
 
-    <h2>Zugänge verwalten</h2>
-    <p>Bestehende Mitglieder des Vereins werden in der Nutzerverwaltung nach Rolle gruppiert aufgelistet (Name, E-Mail-Adresse). Für den Entzug eines Zugangs oder eine Rollenänderung wenden sich Vereinsadministrationen an die Superadmin-Betreuung.</p>
+    <h2>Mitglieder und Rollen verwalten</h2>
+    <p>Im Reiter <em>Mitglieder</em> der Nutzerverwaltung stehen alle Konten des Vereins, nach Rolle gruppiert (Name, E-Mail-Adresse, Status der Zwei-Faktor-Anmeldung).</p>
+    <ul>
+      <li><strong>Rollen verwalten</strong> — Rollen eines Mitglieds hinzufügen oder entfernen. Mindestens eine Rolle ist nötig, und der Verein behält immer mindestens einen Admin. Die Person muss sich danach neu anmelden, damit die Änderung wirkt.</li>
+      <li><strong>Kinder verwalten</strong> <em>(nur bei Erziehungsberechtigten)</em> — die Athlet:innen auswählen, deren Daten die Person sehen darf.</li>
+      <li><strong>2FA zurücksetzen</strong> — siehe „Smartphone verloren?“ unten.</li>
+    </ul>
+    <p>Jede Rollenänderung und jede Elternverknüpfung erscheint im Audit-Log.</p>
+
+    <h2>Athletenprofile und Gruppen</h2>
+    <p>Unter <strong>„Athleten &amp; Team“</strong> legen Admins Athletenprofile an, ändern und löschen sie; Trainer:innen sehen den Bestand und arbeiten damit. Zum Profil gehören Name, Geburtsdatum, Geschlecht, Gruppe, Mitglied seit, Status und Notizen sowie optional die <strong>Athletenkennung</strong> (z.&nbsp;B. DSV-ID), die der Ergebnisimport für die automatische Zuordnung nutzt.</p>
+    <p>Im Reiter <em>Gruppen</em> lassen sich Trainingsgruppen anlegen und bearbeiten. Jede Gruppe kann <strong>mehrere zuständige Trainer:innen</strong> haben, z.&nbsp;B. für Vertretungen — sie sehen die Gruppe dann unter „Meine Termine“ im Kalender.</p>
+
+    <h2>Vereinsangaben</h2>
+    <p>Der Reiter <em>Vereinsangaben</em> der Nutzerverwaltung bündelt:</p>
+    <ul>
+      <li><strong>Zwei-Faktor-Pflicht für Admins</strong> (siehe unten).</li>
+      <li><strong>Vereinskennung</strong> — Format (z.&nbsp;B. „DSV“) und Vereinskennzahl; damit erkennt der Ergebnisimport den eigenen Verein automatisch.</li>
+      <li><strong>Rechtliche Angaben (Impressum &amp; Datenschutz)</strong> — Anschrift, vertretungsberechtigte Personen, Kontakt, Registerangaben, USt-IdNr., E-Mail für Datenschutzanfragen, zuständige Aufsichtsbehörde und ggf. Datenschutzbeauftragte:r. Alle Mitglieder sehen diese Angaben unter „Rechtliches &amp; Datenschutz“; noch nicht ausgefüllte Felder erscheinen dort als erkennbarer Platzhalter.</li>
+    </ul>
+
+    <h2>Qualifikationen verwalten</h2>
+    <p>Ist das Modul <strong>„Qualifikationen“</strong> gebucht, erfassen Admins im Reiter <em>Mitglieder</em> je Person Lizenzen und Nachweise: Art (z.&nbsp;B. Trainerlizenz, Rettungsschwimmschein, Erste Hilfe, Kinderschutz, Kampfrichter-Ämter), Erwerbsdatum, Ablaufdatum (leer = unbefristet), ein geplanter Verlängerungslehrgang und eine Notiz. Alle anderen sehen ihre eigenen Qualifikationen nur lesend.</p>
+    <p>Vor dem Ablauf schickt Lane 1 der Person und allen Admins des Vereins eine Erinnerung per E-Mail (und Push). Im Reiter <em>Einstellungen</em> legen Admins je Qualifikationsart fest, wie viele Tage vorher erinnert wird (mehrere Werte kommagetrennt, z.&nbsp;B. <code>60, 14</code>).</p>
+
+    <h2>Kampfrichter:innen verwalten</h2>
+    <p>Ist das Modul <strong>„Kampfrichter“</strong> gebucht, zeigt der Reiter <em>Kampfrichter:innen</em> alle Kampfrichter:innen des Vereins mit Qualifikationsstatus und Einsätzen. Über <strong>„Verwalten“</strong> erfassen Admins Einsätze im Namen einer Person. Wie Kampfrichter:innen einem Wettkampf zugeteilt werden, steht unter <a href="./wettkampf.html#kampfgericht">Wettkämpfe → Kampfgericht</a>.</p>
+
+    <h2>Anwesenheitsstatistik</h2>
+    <p>Die <strong>„Anwesenheitsstatistik“</strong> fasst für die Vereinsverwaltung zusammen, wer bei den erfassten Trainingseinheiten anwesend war — nach Gruppe und Zeitraum (letzte 4 Wochen, 12 Wochen, 12 Monate oder gesamt), mit den Reitern <em>Athlet:innen</em>, <em>Trainer:innen</em> und <em>Einheiten</em>. Belastungsangaben und Notizen der Trainer:innen erscheinen hier bewusst nicht.</p>
+
+    <h2>Audit-Log</h2>
+    <p>Das <strong>„Audit-Log“</strong> listet sicherheitsrelevante Aktionen des Vereins mit Zeitpunkt, ausführender und betroffener Person — u.&nbsp;a. Einladungen, Rollenänderungen, fehlgeschlagene Anmeldungen, Passwort- und E-Mail-Änderungen, Änderungen an Vereinsangaben und Modulen, Elternverknüpfungen, Qualifikationen, Kampfrichtereinsätze und alle Ereignisse der Zwei-Faktor-Anmeldung. Es ist rein lesend; ältere Einträge werden automatisch pseudonymisiert und später gelöscht.</p>
 
     <h2>Zwei-Faktor-Anmeldung</h2>
-    <p>Zusätzlich zum Passwort kann die Anmeldung einen 6-stelligen Code aus einer Authenticator-App verlangen (z.&nbsp;B. Google Authenticator, Microsoft Authenticator, Aegis, 2FAS oder Apple Passwörter). Jede Person richtet sie selbst unter <em>Mein Profil → Sicherheit</em> ein: QR-Code scannen, einen Code eingeben, die angezeigten Wiederherstellungscodes sicher aufbewahren.</p>
+    <p>Zusätzlich zum Passwort kann die Anmeldung einen 6-stelligen Code aus einer Authenticator-App verlangen (z.&nbsp;B. Google Authenticator, Microsoft Authenticator, Aegis, 2FAS oder Apple Passwörter). Jede Person richtet sie selbst unter <em>Mein Profil → Anmeldung &amp; Sicherheit</em> ein: QR-Code scannen, einen Code eingeben, die angezeigten Wiederherstellungscodes sicher aufbewahren.</p>
     <ul>
       <li><strong>Für Superadmins</strong> ist die Zwei-Faktor-Anmeldung vorgesehen und wird auf den meisten Servern vorgeschrieben.</li>
-      <li><strong>Für Admins</strong> kann die Vereinsadministration sie im Reiter <em>Verein</em> der Nutzerverwaltung vorschreiben. Dafür muss die einschaltende Person sie zuerst für ihr eigenes Konto eingerichtet haben.</li>
+      <li><strong>Für Admins</strong> kann die Vereinsadministration sie im Reiter <em>Vereinsangaben</em> der Nutzerverwaltung vorschreiben. Dafür muss die einschaltende Person sie zuerst für ihr eigenes Konto eingerichtet haben.</li>
       <li><strong>Alle anderen</strong> können sie freiwillig nutzen.</li>
     </ul>
-    <p>Ist die Zwei-Faktor-Anmeldung für ein Konto Pflicht, aber noch nicht eingerichtet, führt die nächste Anmeldung nach dem Passwort direkt zur Einrichtung — ohne sie geht es nicht weiter. Wer beim Einschalten der Vereinspflicht gerade angemeldet ist, wird spätestens nach 15 Minuten abgemeldet und richtet sie bei der nächsten Anmeldung ein. Solange sie Pflicht ist, lässt sie sich im Profil nicht abschalten. Im Reiter <em>Verein</em> steht, wie viele Admins sie noch einrichten müssen.</p>
+    <p>Ist die Zwei-Faktor-Anmeldung für ein Konto Pflicht, aber noch nicht eingerichtet, führt die nächste Anmeldung nach dem Passwort direkt zur Einrichtung — ohne sie geht es nicht weiter. Wer beim Einschalten der Vereinspflicht gerade angemeldet ist, wird spätestens nach 15 Minuten abgemeldet und richtet sie bei der nächsten Anmeldung ein. Solange sie Pflicht ist, lässt sie sich im Profil nicht abschalten. Im Reiter <em>Vereinsangaben</em> steht, wie viele Admins sie noch einrichten müssen.</p>
     <h3>Smartphone verloren?</h3>
     <p>Mit einem der Wiederherstellungscodes gelingt die Anmeldung einmalig auch ohne App; danach die Zwei-Faktor-Anmeldung im Profil neu einrichten. Ohne Wiederherstellungscodes kann eine Vereinsadministration die Zwei-Faktor-Anmeldung eines Mitglieds in der Nutzerverwaltung zurücksetzen (<em>2FA zurücksetzen</em>, mit eigenem Passwort bestätigt) — das gilt auch für andere Admins desselben Vereins. Die betroffene Person wird auf allen Geräten abgemeldet und per E-Mail informiert. Superadmins setzen Konten aller Vereine zurück. Das Konto eines Superadmins setzt nur der Serverbetrieb zurück (<code>npm run reset-mfa</code>, siehe Deployment-Anleitung).</p>
+
+    <h2>Module freischalten (Superadmin)</h2>
+    <p>Welche Funktionspakete ein Verein nutzt, legt der Superadmin beim Anlegen des Vereins fest und ändert es später über <strong>„Module bearbeiten“</strong> in der Vereinsliste. Zubuchbar sind u.&nbsp;a. Wettkämpfe, Trainingspläne, Vorlagen, Übungskatalog, Einheiten, Handlungsfelder, Ankündigungen, Statistiken, Qualifikationen und Kampfrichter. Nicht gebuchte Module verschwinden für alle Mitglieder des Vereins aus der Navigation.</p>
+
+    <h2>Hintergrundjobs (Superadmin)</h2>
+    <p>Der Server erledigt wiederkehrende Aufgaben selbst: die endgültige Löschung vorgemerkter Konten samt Bereinigung (täglich), Erinnerungen an ablaufende Qualifikationen (täglich) und Push-Erinnerungen an Trainingseinheiten (alle 6 Stunden). Den Stand — letzter Lauf, Ergebnis, Fehler, nächster Lauf — zeigt der Reiter <em>Hintergrundjobs</em> der Nutzerverwaltung bzw. die Oberfläche unter <code>/admin</code>. Eine Cron-Einrichtung ist nicht nötig.</p>
 
     <h2>Verwandte Themen</h2>
     <ul>

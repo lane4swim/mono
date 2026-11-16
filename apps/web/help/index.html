@@ -24,13 +24,15 @@
 <div class="help-shell">
   <nav class="help-nav" aria-label="Hilfe-Bereiche">
     <a href="./index.html" aria-current="page">Kurzanleitung</a>
+    <a href="./training.html">Training</a>
+    <a href="./wettkampf.html">Wettkämpfe</a>
     <a href="./faq.html">FAQ &amp; Fehlerbehebung</a>
     <a href="./admin.html">Admin-Handbuch</a>
   </nav>
 
   <article class="help-article">
     <h1>Kurzanleitung</h1>
-    <p class="help-lead">So funktioniert Lane 1 im Alltag — für Trainer:innen und Athlet:innen. Für die Vereins- und Nutzerverwaltung siehe das <a href="./admin.html">Admin-Handbuch</a>.</p>
+    <p class="help-lead">So funktioniert Lane 1 im Alltag — für Trainer:innen, Athlet:innen, Kampfrichter:innen und Eltern. Details zur Planung stehen unter <a href="./training.html">Training</a>, zu Wettkämpfen unter <a href="./wettkampf.html">Wettkämpfe</a>, zur Vereins- und Nutzerverwaltung im <a href="./admin.html">Admin-Handbuch</a>.</p>
 
     <h2>Zugang &amp; erste Anmeldung</h2>
     <p>Zugang zu Lane 1 erhält man ausschließlich per Einladungslink von der Vereinsverwaltung (Adresse endet auf <code>#/accept-invite/…</code>). Beim ersten Öffnen dieses Links wird ein Passwort festgelegt — danach ist die Anmeldung über die normale Login-Seite möglich. Es gibt keine offene Registrierung.</p>
@@ -38,6 +40,12 @@
       <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><circle cx="12" cy="16" r="0.5" fill="currentColor"/></svg>
       <p>Einladungslinks sind zeitlich begrenzt gültig. Ist der Link abgelaufen, muss die Vereinsverwaltung einen neuen erzeugen (siehe Admin-Handbuch).</p>
     </div>
+
+    <h3>Passwort vergessen</h3>
+    <p>Auf der Anmeldeseite auf <strong>„Passwort vergessen?“</strong> tippen und die E-Mail-Adresse eingeben. Lane 1 schickt einen Link, über den du ein neues Passwort festlegst.</p>
+
+    <h3>Zwei-Faktor-Anmeldung</h3>
+    <p>Auf Wunsch fragt die Anmeldung zusätzlich nach einem 6-stelligen Code aus einer Authenticator-App. Einrichten unter <em>Mein Profil → Anmeldung &amp; Sicherheit</em>. Für Admins kann sie vom Verein vorgeschrieben sein — Details im <a href="./admin.html">Admin-Handbuch</a>.</p>
 
     <h2>Als App installieren</h2>
     <p>Lane 1 ist eine <strong>Progressive Web App (PWA)</strong> — sie lässt sich wie eine normale App auf dem Startbildschirm installieren, ganz ohne App Store:</p>
@@ -58,36 +66,73 @@
     <p>Erledigte Einträge lassen sich über „Aufräumen“ aus der Liste entfernen. Bei einem Fehler (z. B. Konflikt mit einer Änderung von anderer Stelle) bleibt der Eintrag mit Fehlerstatus sichtbar und kann erneut angestoßen werden.</p>
 
     <h2>Die Bereiche der App</h2>
-    <p>Je nach Rolle (Trainer:in, Athlet:in) sind unterschiedliche Menüpunkte in der Seitenleiste sichtbar:</p>
+    <p>Je nach Rolle sind unterschiedliche Menüpunkte in der Seitenleiste sichtbar. Wer mehrere Rollen hat (z.&nbsp;B. Trainer:in und Kampfrichter:in), sieht alle zugehörigen Bereiche. Mit <em>*</em> markierte Bereiche erscheinen nur, wenn dein Verein das Modul gebucht hat.</p>
     <ul>
-      <li><strong>Dashboard</strong> — Überblick über anstehende Einheiten, Wettkämpfe und offene Punkte.</li>
-      <li><strong>Kalender</strong> — alle für dich relevanten Termine an einem Ort: geplante Trainings, Einheiten, Wettkämpfe, Fristen von Handlungsfeldern sowie Ablauf eigener Qualifikationen und eigene Kampfrichtereinsätze. Als Woche, Monat, Quartal oder Jahr; Termintypen sind farbig und mit eigenem Symbol markiert und lassen sich über die Filter oben ein- und ausblenden. Trainer:innen wechseln zwischen „Meine Termine“ (betreute Gruppen, zugewiesene Fristen) und „Ganzer Verein“.</li>
-      <li><strong>Athleten &amp; Team</strong> <em>(Trainer:innen)</em> — Stammdaten und Gruppen verwalten.</li>
-      <li><strong>Wettkämpfe</strong> <em>(Trainer:innen)</em> — Wettkämpfe, Meldungen und Ergebnisse.</li>
-      <li><strong>Zeiten &amp; Leistung</strong> — erfasste Zeiten und persönliche Bestleistungen.</li>
-      <li><strong>Trainingspläne</strong> — geplante Einheiten für Team oder Einzelperson.</li>
-      <li><strong>Vorlagen</strong> <em>(Trainer:innen)</em> — wiederverwendbare Trainingsbausteine.</li>
-      <li><strong>Übungskatalog</strong> <em>(Trainer:innen)</em> — Sammlung von Übungen für die Planerstellung.</li>
-      <li><strong>Einheiten &amp; Feedback</strong> — absolvierte Einheiten dokumentieren und kommentieren.</li>
-      <li><strong>Handlungsfelder</strong> — Beobachtungen und To-dos zu einzelnen Athlet:innen.</li>
-      <li><strong>Statistiken</strong> <em>(Trainer:innen)</em> — Auswertungen über Team und Zeitraum.</li>
-      <li><strong>Sync-Warteschlange</strong> <em>(Trainer:innen)</em> — siehe oben.</li>
-      <li><strong>Mein Profil</strong> — eigene Daten, Passwort, Spracheinstellung.</li>
+      <li><strong>Dashboard</strong> — Überblick über anstehende Einheiten, Wettkämpfe, offene Punkte und neue Ankündigungen; für Athlet:innen mit eigenen Bestzeiten.</li>
+      <li><strong>Kalender</strong> — alle für dich relevanten Termine an einem Ort (siehe unten).</li>
+      <li><strong>Ankündigungen</strong> — Mitteilungen an die Gruppe oder den ganzen Verein (siehe unten).</li>
+      <li><strong>Athleten &amp; Team</strong> <em>(Trainer:innen, Admins)</em> — Athletenprofile und Gruppen.</li>
+      <li><strong>Trainingspläne</strong>, <strong>Vorlagen</strong>, <strong>Abschnitts-Vorlagen</strong>, <strong>Übungskatalog</strong> — siehe <a href="./training.html">Training</a>.</li>
+      <li><strong>Einheiten &amp; Feedback</strong> — Anwesenheit und Belastung je Training; Athlet:innen sehen ihre eigenen Einheiten.</li>
+      <li><strong>Handlungsfelder</strong> — Beobachtungen und Entwicklungsziele je Athlet:in.</li>
+      <li><strong>Wettkämpfe</strong> <em>(Trainer:innen, Admins)</em> und <strong>Zeiten &amp; Leistung</strong> — siehe <a href="./wettkampf.html">Wettkämpfe</a>.</li>
+      <li><strong>Statistiken</strong> <em>(Trainer:innen, Admins)</em> — Anwesenheit, Belastung und Leistung.</li>
+      <li><strong>Qualifikationen*</strong> — eigene Lizenzen und Nachweise mit Ablaufdatum.</li>
+      <li><strong>Kampfrichter*</strong> <em>(Kampfrichter:innen, Admins)</em> — Einsätze und Kampfrichter-Qualifikationen.</li>
+      <li><strong>Mein Kind</strong> <em>(Eltern)</em> — Übersicht über verknüpfte Kinder (siehe unten).</li>
+      <li><strong>Nutzerverwaltung</strong>, <strong>Anwesenheitsstatistik</strong>, <strong>Audit-Log</strong> <em>(Admins)</em> — siehe <a href="./admin.html">Admin-Handbuch</a>.</li>
+      <li><strong>Sync-Warteschlange</strong> <em>(Trainer:innen, Admins)</em> — siehe oben.</li>
+      <li><strong>Rechtliches &amp; Datenschutz</strong> — Impressum und Datenschutzhinweis deines Vereins.</li>
+      <li><strong>Mein Profil</strong> — eigene Daten, Sicherheit, Benachrichtigungen (siehe unten).</li>
     </ul>
 
     <h2>Ansichten</h2>
     <p>Damit die Navigation übersichtlich bleibt, lassen sich die Bereiche nach Aufgabe bündeln. Jede Ansicht zeigt nur die dazu passenden Menüpunkte; Dashboard, Kalender, Ankündigungen, Sync-Warteschlange, Rechtliches und Mein Profil sind in jeder Ansicht dabei:</p>
     <ul>
       <li><strong>Verwaltung</strong> — Athleten &amp; Team, Nutzerverwaltung, Qualifikationen, Anwesenheitsstatistik, Audit-Log.</li>
-      <li><strong>Trainingsplanung</strong> — Trainingspläne, Einheiten &amp; Feedback, Handlungsfelder, Statistiken und Vorlagen.</li>
+      <li><strong>Trainingsplanung</strong> — Trainingspläne, Einheiten &amp; Feedback, Handlungsfelder, Statistiken, Anwesenheitsstatistik, Vorlagen, Übungskatalog und Abschnitts-Vorlagen.</li>
       <li><strong>Wettkampfteilnahme</strong> — Wettkämpfe, Zeiten &amp; Leistung, Statistiken.</li>
       <li><strong>Wettkampforganisation</strong> — Kampfrichterwesen.</li>
     </ul>
     <p>Angeboten werden nur Ansichten, in denen du mit deiner Rolle tatsächlich etwas sehen darfst. Gibt es mehrere, fragt die App beim Start, womit du beginnen möchtest. Mit dem Häkchen <em>„Immer in dieser Ansicht starten“</em> überspringst du diese Frage künftig auf diesem Gerät. Wechseln kannst du jederzeit über die Schaltfläche neben dem Logo (mobil unter <em>„Mehr“</em>); dort und unter <em>Einstellungen</em> lässt sich die Frage beim Start auch wieder einschalten.</p>
     <p>Ansichten schränken keine Rechte ein: Folgst du einem Link in einen Bereich einer anderen Ansicht, wechselt die App automatisch dorthin.</p>
 
+    <h2>Kalender</h2>
+    <p>Der Kalender sammelt geplante Trainings, erfasste Einheiten, Wettkämpfe (mit Meldeschluss und interner Startauswahl), Fristen von Handlungsfeldern, den Ablauf eigener Qualifikationen und eigene Kampfrichtereinsätze. Darstellung als Woche, Monat, Quartal oder Jahr; Termintypen sind farbig und mit eigenem Symbol markiert und lassen sich über die Filter oben ein- und ausblenden. Trainer:innen wechseln zwischen <em>„Meine Termine“</em> (betreute Gruppen, zugewiesene Fristen) und <em>„Ganzer Verein“</em>; der Team-Filter grenzt auf einzelne Gruppen ein.</p>
+    <h3>Saisonplanung</h3>
+    <p>Trainer:innen und Admins tragen unter <strong>„Saisonplanung“</strong> Schulferien, Feiertage, Hallenbadschließungen und Trainingslager ein — für den ganzen Verein oder eine Gruppe — sowie regelmäßige Trainingszeiten (Wochentage, Uhrzeit, Gültigkeitszeitraum). Trainingszeiten können während Ferien oder Schließungen automatisch ausfallen. Ein Trainingstag ohne Plan lässt sich direkt anklicken, um einen Plan anzulegen.</p>
+
+    <h2>Ankündigungen</h2>
+    <p>Trainer:innen und Admins schreiben unter <strong>„Ankündigungen“</strong> organisatorische Mitteilungen an eine Gruppe oder an den ganzen Verein. Alle Empfänger:innen sehen sie in der Liste und auf dem Dashboard; wer Push-Benachrichtigungen aktiviert hat, bekommt zusätzlich eine Nachricht aufs Gerät.</p>
+
+    <h2>Mein Profil</h2>
+    <ul>
+      <li><strong>Konto</strong> — Name und Sprache ändern.</li>
+      <li><strong>Anmeldung &amp; Sicherheit</strong> — Passwort und E-Mail-Adresse ändern (jeweils mit dem aktuellen Passwort bestätigt), Zwei-Faktor-Anmeldung einrichten oder neue Wiederherstellungscodes erzeugen.</li>
+      <li><strong>Benachrichtigungen</strong> — Push-Benachrichtigungen für dieses Gerät ein- oder ausschalten.</li>
+      <li><strong>Meine Daten</strong> — alle zu deinem Konto gespeicherten Daten als JSON-Datei herunterladen oder dein Konto dauerhaft löschen.</li>
+    </ul>
+
+    <h2>Push-Benachrichtigungen</h2>
+    <p>Unter <em>Mein Profil → Benachrichtigungen</em> auf <strong>„Push-Benachrichtigungen aktivieren“</strong> tippen und die Nachfrage des Browsers bestätigen. Die Einstellung gilt für das jeweilige Gerät. Lane 1 benachrichtigt dich</p>
+    <ul>
+      <li>vor bevorstehenden Trainingseinheiten,</li>
+      <li>bei neuen Ankündigungen für deine Gruppe oder den Verein,</li>
+      <li>vor dem Ablauf eigener Qualifikationen (zusätzlich zur E-Mail).</li>
+    </ul>
+    <div class="help-callout">
+      <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><circle cx="12" cy="16" r="0.5" fill="currentColor"/></svg>
+      <p>Auf dem iPhone/iPad funktionieren Push-Benachrichtigungen nur, wenn Lane 1 als App auf dem Home-Bildschirm installiert ist (siehe oben).</p>
+    </div>
+
+    <h2>Für Eltern: Mein Kind</h2>
+    <p>Erziehungsberechtigte erhalten ihren Zugang per Einladung des Vereins. Die Vereinsverwaltung verknüpft das Konto mit einem oder mehreren Kindern. Unter <strong>„Mein Kind“</strong> siehst du je Kind bevorstehende Trainingseinheiten und Wettkämpfe, die letzten Ergebnisse, Bestzeiten und die Anwesenheit; über <em>„Kalender anzeigen“</em> die Termine des Kindes. Alles ist rein lesend — Änderungen nimmt der Verein vor.</p>
+
+    <h2>Rechtliches &amp; Datenschutz</h2>
+    <p>Unter <strong>„Rechtliches &amp; Datenschutz“</strong> stehen Impressum und Datenschutzhinweis deines Vereins. Für Fragen zu deinen Daten ist der Verein zuständig; die Kontaktangaben stehen dort.</p>
+
     <h2>Sprache wechseln</h2>
-    <p>Oben rechts in der App lässt sich die Sprache umstellen. Die Einstellung wird auf dem Gerät gespeichert.</p>
+    <p>Oben rechts in der App oder unter <em>Mein Profil</em> lässt sich die Sprache zwischen Deutsch und Englisch umstellen. Die Einstellung wird für dein Konto gespeichert.</p>
 
     <p>Weitere Fragen? Siehe <a href="./faq.html">FAQ &amp; Fehlerbehebung</a>.</p>
   </article>

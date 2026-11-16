@@ -28,13 +28,14 @@
 - [ ] CD-fähig je Verein (Logo, Farben)
 - [x] Nutzer-Qualifikationen (Erwerbsdatum, Art, Ablaufdatum) — siehe
   `docs/Plans/nutzer-qualifikationen-plan.md`; umgesetzt als zubuchbares Modul
-  inkl. Ablauf-Erinnerungsjob. Offen: `npx prisma migrate dev` gegen eine
-  echte Datenbank ausführen (Migration liegt vor, aber ungeprüft gegen
-  Postgres — in dieser Sandbox ohne Docker-Zugriff nicht testbar), sowie
-  ein Cron-Eintrag für `npm run notify-expiring-qualifications` gemäß
-  Skript-Kommentar.
+  inkl. Ablauf-Erinnerungsjob. Der Job läuft im integrierten Scheduler des
+  Servers, ein Cron-Eintrag ist nicht mehr nötig (siehe README,
+  „Hintergrundjobs").
 
 ## Push Nachrichten
+- [x] Erinnerungen an Trainingseinheiten und ablaufende Qualifikationen, Push bei neuen Ankündigungen
+- [ ] Push bei neuen Kommentaren und neuen Startlisten (bewusst zurückgestellt, siehe `docs/Plans/phase2-plan.md` Abschnitt 5.1)
 
 ## Import von DSV7 Dateien
+- [x] DSV7-/DSV8-Ergebnisimport und Wettkampfdefinitionen mit Pflichtzeiten
 - [ ] Ergänzen um Lenex

@@ -1,5 +1,8 @@
 # Plan: Rechtliche Vereinsangaben (Impressum & Datenschutzhinweis) je Verein
 
+> **✅ Abgeschlossen** (geprüft gegen den Code, November 2026). Iteration 1 ist umgesetzt. Weitere Rechtsordnungen (Abschnitt 2) sind bewusst nicht Teil der Umsetzung.
+> Die umgesetzten Funktionen beschreibt das [Funktionshandbuch](../handbuch.md).
+
 Ziel: Die bislang statische, generische Platzhaltertext-Seite "Rechtliches &
 Datenschutz" (`apps/web/js/modules/info.js`, wiederverwendet vor dem Login in
 `authScreens.js`) durch tatsächliche, **pro Verein gepflegte** Angaben ersetzen.

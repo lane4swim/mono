@@ -1,5 +1,8 @@
 # Backend-Entwicklungs- und Integrationsplan — Lane 1
 
+> **✅ Abgeschlossen** (geprüft gegen den Code, November 2026). Phasen 0–4 und alle nachträglichen Ergänzungen (DSGVO, Superadmin-Oberfläche, Kommentare, Rechtliches) sind umgesetzt. Offen sind nur die Lasttests aus Phase 5 (Abschnitt 12). Erweiterungen (Phase 6) wurden über eigene Pläne in diesem Ordner umgesetzt.
+> Die umgesetzten Funktionen beschreibt das [Funktionshandbuch](../handbuch.md).
+
 **Stand:** Juli 2026 · **Status:** Phasen 0–4 vollständig umgesetzt, inkl. DSGVO-Auskunft/-Löschung (Art. 15 + 17), Superadmin-Oberfläche und einer nachträglichen, mehrstufigen Sicherheitshärtungs-Runde — siehe Abschnitt 0 · **Ausgangslage:** Offline-first PWA (IndexedDB, Outbox-Pattern) · **Ziel:** echtes Node.js-Backend zur Mehrgeräte-/Mehrbenutzer-Synchronisation, mit JWT-Authentifizierung, Deployment als Monorepo
 
 ---
@@ -26,7 +29,7 @@ Kommentarfunktion, eine mehrstufige nachträgliche Sicherheitsreview).
 | Kommentarfunktion (Trainingspläne, Übungen, Übungskatalog; nicht Teil der ursprünglichen Phasen 0–4) | ✅ Abgeschlossen (siehe Abschnitt 16) |
 | Info-/Rechtliches-Seite im Frontend (nicht Teil der ursprünglichen Phasen 0–4) | ✅ Abgeschlossen (siehe Abschnitt 17) |
 | 5 — Sicherheitshärtung & weitere Tests | ◐ Weitgehend abgeschlossen — mehrere gezielte Review-Runden mit konkreten Funden und Patches (siehe Abschnitt 15); nur Lasttests stehen noch aus (siehe Abschnitt 12) |
-| 6 — Erweiterungen (optional) | ○ Nicht begonnen |
+| 6 — Erweiterungen (optional) | ✅ Über eigene Pläne umgesetzt: Trainingsplanung Phase 1, Phase 2 (Push, Ankündigungen, Eltern), Vereinsverwaltung Phase 3, Nutzer-Qualifikationen, Kampfrichter-Modul mit Mehrfachrollen, DSV7-/DSV8-Import, Beckenlänge/Regeneration, rechtliche Vereinsangaben, Zwei-Faktor-Anmeldung — siehe die übrigen Dateien in `docs/Plans/` |
 
 Details je Abschnitt unten; Abschnitt 11 (Phasenplan) und Abschnitt 12
 (Offene Punkte) wurden komplett neu gefasst. Abschnitte 15–17 sind
