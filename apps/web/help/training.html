@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Training · Hilfe · Lane 1</title>
+<meta name="description" content="Trainingsplanung in Lane 1: Pläne, Vorlagen, Zyklen, Trainingsmodus, Einheiten und Statistiken">
+<link rel="icon" href="../icons/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../css/styles.css">
+<link rel="stylesheet" href="./help.css">
+</head>
+<body>
+
+<header class="help-topbar">
+  <div class="help-topbar-brand">
+    <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+      <path d="M2 22c3 0 3-3 6-3s3 3 6 3 3-3 6-3 3 3 6 3" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+    </svg>
+    <span class="brand-name">Lane 1 · Hilfe</span>
+  </div>
+  <a class="btn btn-ghost btn-sm" href="../index.html">Zur App</a>
+</header>
+
+<div class="help-shell">
+  <nav class="help-nav" aria-label="Hilfe-Bereiche">
+    <a href="./index.html">Kurzanleitung</a>
+    <a href="./training.html" aria-current="page">Training</a>
+    <a href="./wettkampf.html">Wettkämpfe</a>
+    <a href="./faq.html">FAQ &amp; Fehlerbehebung</a>
+    <a href="./admin.html">Admin-Handbuch</a>
+  </nav>
+
+  <article class="help-article">
+    <h1>Training</h1>
+    <p class="help-lead">Trainingspläne, Vorlagen und Übungen, das Training am Beckenrand, Einheiten und Auswertungen. Planen und Bearbeiten dürfen Trainer:innen; Athlet:innen sehen die Pläne ihrer Gruppe und ihre eigenen Einheiten.</p>
+
+    <h2>Trainingspläne</h2>
+    <p>Unter <strong>„Trainingspläne“</strong> mit <strong>„+ Plan erstellen“</strong> einen Wochenplan anlegen: Name, Wochenbeginn, Gruppe, Status (aktiv oder archiviert) und optional die <strong>Beckenlänge</strong> (25&nbsp;m oder 50&nbsp;m). Danach beliebig viele Trainingstage hinzufügen — leer oder aus einer Vorlage.</p>
+    <p>Ein Trainingstag besteht aus Einträgen:</p>
+    <ul>
+      <li><strong>Satz</strong> — Beschreibung, Distanz, Wiederholungen, Pause, Intensität und optional eine Übung aus dem Katalog.</li>
+      <li><strong>Wiederholungsblock</strong> — mehrere Sätze, die als Ganzes wiederholt werden, z.&nbsp;B. „3× [2×25 Sprint, 50 locker]“.</li>
+      <li><strong>Abschnitt</strong> — eine Überschrift wie „Einschwimmen“ oder „Hauptteil“, die Sätze und Blöcke gruppiert.</li>
+    </ul>
+    <p>Intensitätsstufen: Regeneration, Locker (GA2), Grundlage (GA1), Schwelle, Renntempo, Sprint/Maximal. Gesamtmeter und geplante Gesamtzeit berechnet Lane 1 automatisch. Übungen lassen sich direkt im Plan-Editor ansehen und bearbeiten, ohne den Übungskatalog zu öffnen.</p>
+    <h3>Kommentare</h3>
+    <p>Am ganzen Plan und an jedem einzelnen Satz lässt sich über <strong>„💬 Kommentieren“</strong> ein Gesprächsfaden führen — etwa für Rückfragen zu einer Übung.</p>
+    <h3>Drucken, Export und Import</h3>
+    <ul>
+      <li><strong>„🖨️ Plan drucken“</strong> bzw. <strong>„🖨️ Tag drucken“</strong> öffnet eine gut lesbare Druckansicht. Im Druckdialog „Als PDF speichern“ wählen, um eine PDF-Datei zu erhalten. Funktioniert auch offline.</li>
+      <li><strong>„Export (JSON)“</strong> speichert einen Plan als Datei, <strong>„Import (JSON)“</strong> legt daraus einen neuen Plan an — praktisch zum Austausch zwischen Trainer:innen oder Vereinen. Kommentare und Vereinsdaten werden nicht exportiert; fehlende Übungen legt der Import im Katalog an.</li>
+    </ul>
+
+    <h2>Trainingsmodus</h2>
+    <p>Für das Training am Beckenrand: im Plan auf <strong>„Trainingsmodus starten“</strong> tippen. Lane 1 zeigt Tag für Tag die Sätze groß an; erledigte Sätze lassen sich abhaken, mit <strong>„Nächster Tag →“</strong> geht es weiter. Der Bildschirm bleibt dabei eingeschaltet. Die Haken gelten nur für die laufende Sitzung und werden nicht gespeichert.</p>
+
+    <h2>Vorlagen-Zyklen</h2>
+    <p>Ein Zyklus bündelt mehrere Wochen aus Vorlagen, z.&nbsp;B. für eine Wettkampfvorbereitung. Unter <em>Trainingspläne → „Zyklen verwalten“</em>:</p>
+    <ol>
+      <li><strong>„+ Neuer Zyklus“</strong>: Name, Beschreibung und Wochen anlegen; je Wochentag eine Vorlage oder „kein Training“ wählen. Wochen lassen sich duplizieren und entfernen.</li>
+      <li><strong>„Anwenden“</strong>: Startdatum der ersten Woche und Zielgruppe wählen. Lane 1 erzeugt daraus die einzelnen Wochenpläne.</li>
+    </ol>
+    <p>Die erzeugten Pläne sind danach ganz normale Trainingspläne und lassen sich frei anpassen. Wer einen Zyklus löscht, behält die bereits erzeugten Pläne.</p>
+
+    <h2>Vorlagen, Abschnitts-Vorlagen und Übungskatalog</h2>
+    <ul>
+      <li><strong>Vorlagen</strong> — wiederverwendbare Trainingseinheiten (mit Sätzen, Blöcken und Abschnitten, Tags und optional Beckenlänge), die beim Erstellen eines Trainingstags übernommen und danach frei angepasst werden.</li>
+      <li><strong>Abschnitts-Vorlagen</strong> — wiederverwendbare Abschnitte wie „Einschwimmen“, die sich in Pläne und Vorlagen einfügen lassen.</li>
+      <li><strong>Übungskatalog</strong> — durchsuchbare Übungsbibliothek mit Kategorie, Schwimmlage, Standarddistanz und -dauer, Tags, Beschreibung, benötigter Ausrüstung und Kommentaren.</li>
+    </ul>
+    <p>Alle drei lassen sich als Karten oder Liste anzeigen und duplizieren. Über <strong>„Export (JSON)“</strong> und <strong>„Import (JSON)“</strong> werden Vorlagen, Abschnitts-Vorlagen und Übungen gemeinsam als eine Datei übertragen — ohne Kommentare und ohne persönliche Daten, also frei mit anderen Vereinen teilbar.</p>
+
+    <h2>Einheiten &amp; Feedback</h2>
+    <p>Nach dem Training unter <strong>„Einheiten &amp; Feedback“</strong> mit <strong>„+ Einheit erfassen“</strong> festhalten:</p>
+    <ul>
+      <li>Datum, Gruppe, zugrunde liegender Plan und eine Trainernotiz,</li>
+      <li>je Athlet:in anwesend oder abwesend (mit Fehlgrund), die empfundene Belastung <strong>RPE</strong> von 1 bis 10 und eine Notiz,</li>
+      <li>die anwesenden Trainer:innen,</li>
+      <li>den Umfang in Metern — bei verknüpftem Plan automatisch berechnet, sonst von Hand eingetragen.</li>
+    </ul>
+    <p>Athlet:innen sehen hier nur die Einheiten, bei denen sie anwesend waren.</p>
+
+    <h2>Handlungsfelder</h2>
+    <p>Beobachtungen und Entwicklungsziele je Athlet:in: Titel, Kategorie (Technik, Kondition, Mental/Wettkampf, Verhalten/Einstellung, Gesundheit/Belastung, Sonstiges), Status (offen, in Bearbeitung, erledigt), Fälligkeitsdatum, zuständige:r Trainer:in und Beschreibung. Fälligkeiten erscheinen im Kalender. Athlet:innen sehen ihre eigenen Handlungsfelder.</p>
+
+    <h2>Statistiken</h2>
+    <p>Unter <strong>„Statistiken“</strong> (Trainer:innen, Admins) gibt es drei Reiter:</p>
+    <ul>
+      <li><strong>Anwesenheit</strong> — Quote je Gruppe, Trend über die Zeit und ein <strong>Frühindikator</strong> für Athlet:innen, deren Anwesenheit zuletzt deutlich gesunken ist. Auffälligkeiten zeigt auch das Dashboard.</li>
+      <li><strong>Belastung</strong> — Trainingsumfang je Gruppe (Meter pro Kopf), Umfang im Vergleich zur empfundenen Belastung und RPE-Verlauf — für das Team oder eine einzelne Athlet:in.</li>
+      <li><strong>Leistung</strong> — erfasste Zeiten pro Monat und die Leistungsentwicklung je Athlet:in und Disziplin.</li>
+    </ul>
+    <div class="help-callout">
+      <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><circle cx="12" cy="16" r="0.5" fill="currentColor"/></svg>
+      <p>Die Auswertungen werden umso aussagekräftiger, je regelmäßiger Einheiten mit Anwesenheit und RPE erfasst werden.</p>
+    </div>
+
+    <p>Weitere Fragen? Siehe <a href="./faq.html">FAQ &amp; Fehlerbehebung</a>.</p>
+  </article>
+</div>
+
+</body>
+</html>

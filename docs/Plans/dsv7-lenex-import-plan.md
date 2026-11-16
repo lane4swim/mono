@@ -1,11 +1,14 @@
 # Plan: Wettkampfergebnis-Import via DSV7 / Lenex
 
+> **✅ Abgeschlossen** (geprüft gegen den Code, November 2026). Der Ergebnisimport für DSV7 und DSV8 ist umgesetzt, dazu das Laden von Wettkampfdefinitionen samt Pflichtzeiten. Der Lenex-Import ist wie in Abschnitt 1.5 entschieden zurückgestellt.
+> Die umgesetzten Funktionen beschreibt das [Funktionshandbuch](../handbuch.md).
+
 Ziel: In der Wettkampfansicht (`apps/web/js/modules/competitions.js`) eine DSV7- oder
 Lenex-Ergebnisdatei importieren können. Bestehende `Result`-Einträge (Zeit, Platz,
 Zwischenzeiten) werden dabei überschrieben, Kommentare und sonstige manuell gepflegte
 Metadaten bleiben erhalten.
 
-Stand: Greenfield-Feature, kein bestehender Code (`docs/todo.md:23` ist nur eine leere
+Stand vor der Umsetzung: Greenfield-Feature, kein bestehender Code (`docs/todo.md:23` ist nur eine leere
 Überschrift). Alle Angaben zu Architektur/Datenmodell beruhen auf einer Code-Recherche
 in `apps/api` und `apps/web` (Fastify/Prisma-Backend, Vanilla-JS-Frontend ohne Build-Schritt,
 Sync-API als einziger Schreibpfad).

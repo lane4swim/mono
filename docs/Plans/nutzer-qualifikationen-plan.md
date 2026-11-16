@@ -1,5 +1,8 @@
 # Plan: Erfassung von Nutzer-Qualifikationen
 
+> **✅ Abgeschlossen** (geprüft gegen den Code, November 2026). Das Qualifikationsmodul ist umgesetzt, inklusive Ablauf-Erinnerungen per E-Mail und Push. Der Erinnerungsjob läuft im integrierten Scheduler des Servers, ein Cron-Eintrag ist nicht nötig.
+> Die umgesetzten Funktionen beschreibt das [Funktionshandbuch](../handbuch.md).
+
 Ziel: Für jede Person mit Konto (insbesondere Trainer:innen, aber nicht auf diese Rolle
 beschränkt) erfassbar machen, welche Qualifikationen sie besitzt — z. B. Trainerlizenz
 (C-/B-/A-Trainerschein), Rettungsschwimmschein (DLRG Silber/Gold), Erste-Hilfe-Kurs,
@@ -11,7 +14,7 @@ eigenständiges, **je Verein zubuchbares Modul** ausgeliefert (siehe Abschnitt 1
 nicht jeder Verein braucht diese Verwaltung, analog zum bereits bestehenden
 Wettkampfmodul.
 
-Stand: Greenfield-Feature, kein bestehender Code. `docs/Plans/backend-plan.md` (Phasen 0–4)
+Stand vor der Umsetzung: Greenfield-Feature, kein bestehender Code. `docs/Plans/backend-plan.md` (Phasen 0–4)
 und eine Code-Recherche in `apps/api`/`apps/web`/`packages/*` bilden die Grundlage für
 die Architekturentscheidungen unten (Fastify/Prisma-Backend, Vanilla-JS-PWA-Frontend mit
 IndexedDB-Offline-Cache, Sync-API als Schreibpfad für die zehn fachlichen Stores unter

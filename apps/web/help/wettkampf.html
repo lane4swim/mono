@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wettkämpfe · Hilfe · Lane 1</title>
+<meta name="description" content="Wettkämpfe in Lane 1: Startlisten, Pflichtzeiten, Wettkampfmodus, Ergebnisimport, Kampfrichter und Qualifikationen">
+<link rel="icon" href="../icons/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../css/styles.css">
+<link rel="stylesheet" href="./help.css">
+</head>
+<body>
+
+<header class="help-topbar">
+  <div class="help-topbar-brand">
+    <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+      <path d="M2 22c3 0 3-3 6-3s3 3 6 3 3-3 6-3 3 3 6 3" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+    </svg>
+    <span class="brand-name">Lane 1 · Hilfe</span>
+  </div>
+  <a class="btn btn-ghost btn-sm" href="../index.html">Zur App</a>
+</header>
+
+<div class="help-shell">
+  <nav class="help-nav" aria-label="Hilfe-Bereiche">
+    <a href="./index.html">Kurzanleitung</a>
+    <a href="./training.html">Training</a>
+    <a href="./wettkampf.html" aria-current="page">Wettkämpfe</a>
+    <a href="./faq.html">FAQ &amp; Fehlerbehebung</a>
+    <a href="./admin.html">Admin-Handbuch</a>
+  </nav>
+
+  <article class="help-article">
+    <h1>Wettkämpfe</h1>
+    <p class="help-lead">Wettkämpfe anlegen, Startlisten und Pflichtzeiten, Zeitmessung am Beckenrand, Ergebnisimport, Zeiten, Qualifikationen und Kampfrichterwesen. Wettkämpfe verwalten Trainer:innen und Admins.</p>
+
+    <h2>Wettkampf anlegen</h2>
+    <p>Unter <strong>„Wettkämpfe“</strong> mit <strong>„+ Wettkampf anlegen“</strong>: Name, Datum, Ort, Bahnlänge und Notizen. Dazu zwei optionale Fristen, die auch im Kalender erscheinen:</p>
+    <ul>
+      <li><strong>Meldeschluss</strong> — die Frist des Veranstalters für die Abgabe der Startliste.</li>
+      <li><strong>Interne Startauswahl</strong> — bis wann vereinsintern feststehen soll, wer was schwimmt. Vorschlag: eine Woche vor dem Meldeschluss, ohne Meldeschluss drei Wochen vor dem Wettkampf.</li>
+    </ul>
+    <p>Liegt eine DSV7- oder DSV8-Datei des Veranstalters vor, legt <strong>„Aus DSV-Datei anlegen“</strong> den Wettkampf direkt daraus an.</p>
+
+    <h2>Startliste und Pflichtzeiten</h2>
+    <p>Mit <strong>„Wettkampfdefinition laden (DSV7/DSV8)“</strong> übernimmt Lane 1 alle Disziplinen des Wettkampfs samt Wettkampfnummern und Pflichtzeiten. Beim Anlegen eines Startlisteneintrags lässt sich die Disziplin dann aus dieser Liste wählen (passend zum Geschlecht gefiltert); Wettkampfnummer und Disziplin werden automatisch ausgefüllt. Ohne Definition werden die Angaben von Hand erfasst: Wettkampfnummer, Disziplin, Lauf, Startbahn und Meldezeit.</p>
+    <p>Hat eine Disziplin eine Pflichtzeit, zeigt die Startliste je Eintrag farbig, ob sie erfüllt ist:</p>
+    <ul>
+      <li><strong>grün</strong> — in einem Wettkampf erreicht,</li>
+      <li><strong>gelb</strong> — nur im Training erreicht,</li>
+      <li><strong>rot</strong> — noch nicht erreicht.</li>
+    </ul>
+    <p>Fehlen Geburtsdatum oder Altersklasse, kann Lane 1 die Pflichtzeit nicht prüfen und weist darauf hin.</p>
+
+    <h2>Zeitmessung und Ergebnisse</h2>
+    <p>In der Startliste hat jeder Eintrag eine <strong>Stoppuhr</strong> mit Rundenzeiten; <strong>„Zeit übernehmen“</strong> trägt die gemessene Zeit ein. Ergebnisse lassen sich auch von Hand erfassen (Zeit, Platz). Neue persönliche Bestzeiten erkennt Lane 1 automatisch.</p>
+    <h3>Wettkampfmodus</h3>
+    <p>Für den Beckenrand: <strong>„Wettkampfmodus starten“</strong> beginnt beim ersten gesetzten Lauf. Oben läuft eine gemeinsame Stoppuhr für den Lauf, darunter hat jede:r Athlet:in eine eigene Karte für Rundenzeiten und Zielzeit. Aus der Karte heraus lässt sich direkt ein Handlungsfeld anlegen. <strong>„Nächster Wettkampf/Lauf →“</strong> springt weiter. Der Bildschirm bleibt dabei eingeschaltet.</p>
+
+    <h2>Ergebnisse importieren (DSV7/DSV8)</h2>
+    <p>Nach dem Wettkampf die Ergebnisliste des Veranstalters über <strong>„Ergebnisse importieren (DSV7/DSV8)“</strong> einlesen:</p>
+    <ol>
+      <li>Datei wählen. Lane 1 erkennt den eigenen Verein über die Vereinskennung (siehe <a href="./admin.html">Admin-Handbuch → Vereinsangaben</a>); sonst den Verein aus der Liste auswählen.</li>
+      <li>Wettkämpfe, die Lane 1 nicht kennt, einer bekannten Disziplin zuordnen, neu anlegen oder ignorieren.</li>
+      <li>Die <strong>Vorschau</strong> prüfen: neue Ergebnisse, überschriebene Ergebnisse und übersprungene Zeilen (z.&nbsp;B. Athlet:in nicht zuordenbar).</li>
+      <li>Bestätigen.</li>
+    </ol>
+    <p>Übernommen werden Zeit, Platz, Zwischenzeiten und der Status (disqualifiziert, nicht angetreten, abgemeldet, aufgegeben, Zeitüberschreitung). Kommentare an bestehenden Ergebnissen bleiben erhalten. Athlet:innen werden über die <strong>Athletenkennung</strong> im Athletenprofil (z.&nbsp;B. DSV-ID) zugeordnet.</p>
+    <div class="help-callout">
+      <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><circle cx="12" cy="16" r="0.5" fill="currentColor"/></svg>
+      <p>Lenex-Dateien werden noch nicht unterstützt — bitte die DSV7- oder DSV8-Datei des Veranstalters verwenden.</p>
+    </div>
+
+    <h2>Zeiten &amp; Leistung</h2>
+    <p>Unter <strong>„Zeiten &amp; Leistung“</strong> stehen alle Zeiten aus Training und Wettkampf (Athlet:in, Disziplin, Zeit, Datum, Bahnlänge, Bestzeit), filterbar nach Athlet:in und Disziplin, mit Verlaufsdiagramm je Disziplin. Mit <strong>„+ Zeit erfassen“</strong> lassen sich auch Trainingszeiten eintragen — sie zählen für die Pflichtzeiten-Prüfung als „im Training erreicht“. Athlet:innen sehen ihre eigenen Zeiten und Bestzeiten.</p>
+
+    <h2 id="kampfgericht">Kampfgericht</h2>
+    <p>Viele Ausschreibungen verlangen, dass der Verein eine bestimmte Zahl an Kampfrichter:innen stellt. Diese Anzahl im Wettkampf unter <strong>„Zu stellende Kampfrichter:innen“</strong> eintragen (sie steht nicht in der DSV-Datei). Ist das Kampfrichter-Modul gebucht, teilen Admins dann über <strong>„+ Kampfrichter:in einteilen“</strong> Personen ein; diese erhalten eine Anfrage und sagen zu oder ab. Der Wettkampf zeigt den Stand, z.&nbsp;B. „2 von 3 zugesagt“, und wie viele noch fehlen.</p>
+
+    <h2>Kampfrichter-Modul</h2>
+    <p>Ist das Modul gebucht, finden Kampfrichter:innen unter <strong>„Kampfrichter“</strong>:</p>
+    <ul>
+      <li><strong>Meine Einsätze</strong> — eigene Wettkampfeinsätze (Datum, Wettkampf, Funktion, Notiz) erfassen und bearbeiten; offene Anfragen mit <strong>„Zusagen“</strong> oder <strong>„Absagen“</strong> beantworten, optional mit Kommentar. Offene Anfragen meldet auch der Kalender.</li>
+      <li><strong>Meine Qualifikationen</strong> — den eigenen Status der Kampfrichter-Ämter (nur lesend; erfasst werden sie von Admins).</li>
+    </ul>
+    <p>Funktionen: Kampfrichter:in, Schiedsrichter:in, Startrichter:in, Zeitnehmer:in, Bahnrichter:in, Wettkampfsekretär:in, Sonstige. Admins sehen zusätzlich den Reiter <em>Kampfrichter:innen</em> mit allen Personen des Vereins.</p>
+
+    <h2>Qualifikationen</h2>
+    <p>Ist das Modul gebucht, zeigt <strong>„Qualifikationen“</strong> jeder Person ihre eigenen Lizenzen und Nachweise — z.&nbsp;B. Trainerlizenz, Rettungsschwimmschein, Erste Hilfe, Kinderschutz — mit Erwerbs- und Ablaufdatum und einem Status: gültig, läuft bald ab, abgelaufen, unbefristet oder Verlängerung geplant. Vor dem Ablauf kommt eine Erinnerung per E-Mail (und Push, falls aktiviert); Ablauftermine stehen auch im Kalender. Erfasst und geändert werden Qualifikationen nur von Admins (siehe <a href="./admin.html">Admin-Handbuch</a>).</p>
+
+    <p>Weitere Fragen? Siehe <a href="./faq.html">FAQ &amp; Fehlerbehebung</a>.</p>
+  </article>
+</div>
+
+</body>
+</html>

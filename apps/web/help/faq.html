@@ -24,6 +24,8 @@
 <div class="help-shell">
   <nav class="help-nav" aria-label="Hilfe-Bereiche">
     <a href="./index.html">Kurzanleitung</a>
+    <a href="./training.html">Training</a>
+    <a href="./wettkampf.html">Wettkämpfe</a>
     <a href="./faq.html" aria-current="page">FAQ &amp; Fehlerbehebung</a>
     <a href="./admin.html">Admin-Handbuch</a>
   </nav>
@@ -44,14 +46,14 @@
     <details class="help-faq-item">
       <summary>Ich habe mein Passwort vergessen.</summary>
       <div class="help-faq-body">
-        <p>Bitte die Vereinsverwaltung kontaktieren, damit ein neuer Einladungs-/Zugangslink erzeugt wird.</p>
+        <p>Auf der Anmeldeseite auf <strong>„Passwort vergessen?“</strong> tippen und die E-Mail-Adresse des Kontos eingeben. Lane 1 schickt einen Link zum Zurücksetzen. Kommt keine E-Mail an, den Spam-Ordner prüfen und bei Bedarf die Vereinsverwaltung kontaktieren.</p>
       </div>
     </details>
 
     <details class="help-faq-item">
       <summary>Ich komme nicht an meine Authenticator-App (Zwei-Faktor-Anmeldung).</summary>
       <div class="help-faq-body">
-        <p>Bei der Code-Abfrage auf <em>Stattdessen einen Wiederherstellungscode verwenden</em> tippen und einen der bei der Einrichtung gespeicherten Codes eingeben — jeder funktioniert genau einmal. Danach unter <em>Mein Profil → Sicherheit</em> die Zwei-Faktor-Anmeldung neu einrichten. Ohne Wiederherstellungscodes kann die Vereinsverwaltung die Zwei-Faktor-Anmeldung zurücksetzen.</p>
+        <p>Bei der Code-Abfrage auf <em>Stattdessen einen Wiederherstellungscode verwenden</em> tippen und einen der bei der Einrichtung gespeicherten Codes eingeben — jeder funktioniert genau einmal. Danach unter <em>Mein Profil → Anmeldung &amp; Sicherheit</em> die Zwei-Faktor-Anmeldung neu einrichten. Ohne Wiederherstellungscodes kann die Vereinsverwaltung die Zwei-Faktor-Anmeldung zurücksetzen.</p>
         <p>Werden richtige Codes abgelehnt, bitte prüfen, ob Datum und Uhrzeit des Smartphones automatisch eingestellt sind.</p>
       </div>
     </details>
@@ -94,7 +96,40 @@
     <details class="help-faq-item">
       <summary>Mir fehlt ein Menüpunkt, den Kolleg:innen sehen.</summary>
       <div class="help-faq-body">
-        <p>Die sichtbaren Bereiche hängen von der zugewiesenen Rolle ab (Trainer:in oder Athlet:in). Wer der Meinung ist, die falsche Rolle zu haben, wendet sich an die Vereinsverwaltung — siehe <a href="./admin.html">Admin-Handbuch</a>.</p>
+        <p>Die sichtbaren Bereiche hängen von deinen Rollen ab (Admin, Trainer:in, Athlet:in, Kampfrichter:in, Erziehungsberechtigte:r) und davon, welche Module dein Verein gebucht hat. Außerdem zeigt jede <em>Ansicht</em> nur die zu ihr passenden Menüpunkte — über die Schaltfläche neben dem Logo lässt sich die Ansicht wechseln.</p>
+        <p>Fehlt dir trotzdem eine Rolle, kann die Vereinsverwaltung sie in der Nutzerverwaltung ergänzen — siehe <a href="./admin.html">Admin-Handbuch</a>. Nach einer Rollenänderung einmal ab- und wieder anmelden.</p>
+      </div>
+    </details>
+
+    <h2>Benachrichtigungen &amp; Daten</h2>
+
+    <details class="help-faq-item">
+      <summary>Ich bekomme keine Push-Benachrichtigungen.</summary>
+      <div class="help-faq-body">
+        <p>Push muss auf jedem Gerät einzeln aktiviert werden: <em>Mein Profil → Benachrichtigungen</em>. Wurde die Nachfrage des Browsers abgelehnt, die Benachrichtigungen in den Browser- bzw. Systemeinstellungen für Lane 1 wieder erlauben. Auf dem iPhone/iPad funktioniert Push nur, wenn Lane 1 als App auf dem Home-Bildschirm installiert ist.</p>
+      </div>
+    </details>
+
+    <details class="help-faq-item">
+      <summary>Wie bekomme ich eine Kopie meiner Daten, und wie lösche ich mein Konto?</summary>
+      <div class="help-faq-body">
+        <p>Unter <em>Mein Profil → Meine Daten</em>: <strong>„Alle meine Daten als JSON exportieren“</strong> lädt eine Datei mit allen zu deinem Konto gespeicherten Daten herunter. <strong>„Mein Konto und alle Daten dauerhaft löschen“</strong> sperrt das Konto sofort; endgültig gelöscht wird es nach einer Frist (standardmäßig 30 Tage). Das Löschen lässt sich nicht rückgängig machen.</p>
+      </div>
+    </details>
+
+    <h2>Training &amp; Wettkampf</h2>
+
+    <details class="help-faq-item">
+      <summary>Der Ergebnisimport ordnet Athlet:innen nicht zu.</summary>
+      <div class="help-faq-body">
+        <p>Die automatische Zuordnung nutzt die <strong>Athletenkennung</strong> (z.&nbsp;B. DSV-ID) im Athletenprofil und die <strong>Vereinskennung</strong> in der Nutzerverwaltung. Fehlen sie, im Athletenprofil bzw. unter <em>Nutzerverwaltung → Vereinsangaben</em> nachtragen und den Import wiederholen — bereits importierte Ergebnisse werden dabei aktualisiert, nicht doppelt angelegt. Details unter <a href="./wettkampf.html">Wettkämpfe</a>.</p>
+      </div>
+    </details>
+
+    <details class="help-faq-item">
+      <summary>Im Trainings- oder Wettkampfmodus geht der Bildschirm aus.</summary>
+      <div class="help-faq-body">
+        <p>Beide Modi halten den Bildschirm normalerweise wach. Das klappt nur in Browsern, die das unterstützen, und solange die App im Vordergrund ist. Nach dem Entsperren oder einem App-Wechsel wird die Sperre automatisch wieder aktiviert.</p>
       </div>
     </details>
 

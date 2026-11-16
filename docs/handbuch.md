@@ -475,7 +475,7 @@ Geprüft gegen den Code im November 2026.
 | [beckenlaenge-regeneration-plan.md](./Plans/beckenlaenge-regeneration-plan.md) — Beckenlänge, Regeneration | umgesetzt | — |
 | [club-legal-info-plan.md](./Plans/club-legal-info-plan.md) — Impressum/Datenschutz je Verein | umgesetzt (Iteration 1) | weitere Rechtsordnungen bewusst nicht umgesetzt |
 | [dsv7-lenex-import-plan.md](./Plans/dsv7-lenex-import-plan.md) — Ergebnisimport | DSV7/DSV8 umgesetzt | Lenex zurückgestellt |
-| [kampfrichter-modul-plan.md](./Plans/kampfrichter-modul-plan.md) — Mehrfachrollen, Kampfrichter | umgesetzt | alte Spalte `User.role` noch nicht entfernt; Nachtrag in `backend-plan.md` fehlt |
+| [kampfrichter-modul-plan.md](./Plans/kampfrichter-modul-plan.md) — Mehrfachrollen, Kampfrichter | umgesetzt | alte Spalte `User.role` noch nicht entfernt |
 | [nutzer-qualifikationen-plan.md](./Plans/nutzer-qualifikationen-plan.md) — Qualifikationen | umgesetzt | — |
 | [phase2-plan.md](./Plans/phase2-plan.md) — Push, Ankündigungen, Eltern | umgesetzt | ereignisgesteuerte Push-Auslöser zurückgestellt |
 | [trainingsplanung-phase1-plan.md](./Plans/trainingsplanung-phase1-plan.md) — Zyklen, Belastung, Anwesenheit | umgesetzt | — |

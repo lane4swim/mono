@@ -1,5 +1,8 @@
 # Zwei-Faktor-Anmeldung per TOTP (Issue #97)
 
+> **✅ Abgeschlossen** (geprüft gegen den Code, November 2026). Alle drei Teile (Backend, Oberfläche, Pflicht) sind umgesetzt.
+> Die umgesetzten Funktionen beschreibt das [Funktionshandbuch](../handbuch.md).
+
 Ergänzt die Passwortregeln aus Issue #97 (mind. 12 Zeichen für Admins und
 Superadmins, Abgleich gegen Leak-Passwörter) um einen zweiten Faktor:
 Einmalcodes aus einer Authenticator-App (TOTP nach RFC 6238).

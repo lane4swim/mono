@@ -1,5 +1,8 @@
 # Plan: Vereinsverwaltung — Phase 3 (Abschnitt 5 des Feature-Brainstorms)
 
+> **✅ Abgeschlossen** (geprüft gegen den Code, November 2026). Beide Teile (mehrere Gruppen-Trainer:innen, Audit-Log) sind umgesetzt. Offen ist nur die Bereinigung von `Group.trainerIds` beim endgültigen Löschen eines Kontos (Abschnitt 1.6); sie hat keine sichtbare Auswirkung.
+> Die umgesetzten Funktionen beschreibt das [Funktionshandbuch](../handbuch.md).
+
 Umsetzungsplan für Phase 3 aus `docs/future-features-brainstorm.md` (Abschnitt
 „Priorisierung: Phasenplanung"): Abschnitt 5, bestehend aus zwei
 Einzelfeatures — 5.1 Mehrere Gruppen-Trainer:innen/Vertretungsregelung,

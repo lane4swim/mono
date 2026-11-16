@@ -1,5 +1,8 @@
 # Plan: Phase 2 (Abschnitte 1.2 und 4 des Feature-Brainstorms)
 
+> **✅ Abgeschlossen** (geprüft gegen den Code, November 2026). Alle drei Teile (Push-Benachrichtigungen, Ankündigungen, Eltern-Zugang) sind umgesetzt. Push bei neuen Kommentaren und neuen Startlisten ist wie in Abschnitt 5.1 entschieden zurückgestellt.
+> Die umgesetzten Funktionen beschreibt das [Funktionshandbuch](../handbuch.md).
+
 Detaillierter Umsetzungsplan für Phase 2 aus
 `docs/future-features-brainstorm.md` (Abschnitt „Priorisierung:
 Phasenplanung"): 1.2 Push-Benachrichtigungen, 4.1 Vereinsinterne
