@@ -22,7 +22,7 @@ Am Ende dieser Anleitung ist unter einer eigenen Adresse (z. B. `https://trainin
 
 | Thema | Hetzner ([`deployment.md`](./deployment.md)) | netcup ([`deployment-netcup.md`](./deployment-netcup.md)) | Diese OVHcloud-Variante |
 |---|---|---|---|
-| Produkt | Cloud CX22 (2 vCPU/4 GB/40 GB) | VPS 1000 (2–4 vCPU/4–8 GB/128–256 GB) | **VPS-1** (aktuelle Reihe: 2 vCore/4 GB/40 GB NVMe) — siehe Abschnitt 1 |
+| Produkt | Cloud CX22 (2 vCPU/4 GB/40 GB) | VPS 500 G12.5 (2 vCPU/4 GB/64 GB) | **VPS-1** (aktuelle Reihe: 2 vCore/4 GB/40 GB NVMe) — siehe Abschnitt 1 |
 | Standort | Nürnberg/Falkenstein | Nürnberg/Karlsruhe | ein EU-Rechenzentrum, z. B. Gravelines/Straßburg (FR) oder — falls im Bestellprozess angeboten — Frankfurt (DE). Standort **aktiv wählen**, die Voreinstellung ist nicht immer ein EU-Rechenzentrum; **keinen „Local Zone"-VPS** (ohne Anti-DDoS) |
 | Verwaltungsoberfläche | Cloud Console | CCP (Bestellung) + SCP (Betrieb) | OVHcloud Control Panel → **Bare Metal Cloud → VPS** |
 | Erste Anmeldung | `ssh root@…` | `ssh root@…` | **`ssh ubuntu@…`** — `root`-Login ist im OVHcloud-Image bereits gesperrt (Abschnitt 3/4.2) |
@@ -35,7 +35,7 @@ Am Ende dieser Anleitung ist unter einer eigenen Adresse (z. B. `https://trainin
 | SMTP | Hetzner hat keinen Mailversand; Port 25/465 anfangs gesperrt | netcup-Postfächer | OVHcloud-Postfächer (z. B. MX Plan, `ssl0.ovh.net:465`); **Port 25 standardmäßig gesperrt**, 465/587 offen |
 | Monitoring | Cloud Console → Monitoring | SCP → Statistiken | Control Panel → VPS → Ressourcen-Graphen; Erreichbarkeit per externem Uptime-Dienst |
 | Setup-Script | — | `scripts/setup-netcup.sh` | `scripts/setup-ovhcloud.sh` (OVHcloud-Vorprüfungen, danach dieselben Schritte 6–9) |
-| Preis (Stand 2026) | ca. 5–6 €/Monat | ca. 5–11 €/Monat | ab ca. **5 €/Monat** (Richtwert, Preise im Shop meist **ohne** MwSt.; zum 1. April 2026 angehoben — im Shop prüfen) |
+| Preis (Stand 2026) | ca. 5–6 €/Monat | ca. 8 €/Monat inkl. MwSt. (12 Monate Laufzeit) | ab ca. **5 €/Monat** (Richtwert, Preise im Shop meist **ohne** MwSt.; zum 1. April 2026 angehoben — im Shop prüfen) |
 
 ### 0.2 Schritte 6–9 automatisiert per Script
 
