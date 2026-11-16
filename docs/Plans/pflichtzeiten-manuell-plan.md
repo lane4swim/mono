@@ -1,6 +1,6 @@
 # Plan: Pflichtzeiten von Hand erfassen und als Normtabellen wiederverwenden
 
-> **✅ Abgeschlossen** (November 2026). Schritt 1 (Pflichtzeiten je Wettkampf von Hand) und Schritt 2 (Normtabellen) sind umgesetzt.
+> **✅ Abgeschlossen** (November 2026). Schritt 1 (Pflichtzeiten je Wettkampf von Hand), Schritt 2 (Normtabellen) und Schritt 3 (Meldevorschläge, Übersicht je Athlet:in) sind umgesetzt.
 > Die umgesetzten Funktionen beschreibt das [Funktionshandbuch](../handbuch.md).
 
 Ziel: Pflichtzeiten, die nicht aus einer DSV7-/DSV8-Wettkampfdefinition
@@ -175,7 +175,7 @@ löschen.
 - API: Entity-Registry (15 Stores), Rechte und Paket-Zuordnung des neuen
   Stores.
 
-## 5. Umsetzungsstand
+## 5. Umsetzungsstand (Schritte 1 und 2)
 
 Umgesetzt wie oben beschrieben:
 
@@ -198,3 +198,45 @@ Umgesetzt wie oben beschrieben:
   eigener Dialog, sondern ein Hinweis im Editor; erneutes Speichern
   bestätigt. Ein zweiter Dialog würde das offene Modal schließen
   (`modal.js: openModal()` leert den Modal-Container).
+
+## 6. Schritt 3 — Meldevorschläge und Übersicht je Athlet:in
+
+Beides wertet ausschließlich über `evaluateRequiredTime()` aus — also nach
+denselben Regeln wie die Ampel der Startliste. Logik DOM-frei in
+`requiredTimeSuggestions.js`.
+
+### 6.1 Meldevorschläge
+
+Schaltfläche **„Meldevorschläge“** in der Karte „Pflichtzeiten“ (nur, wenn
+der Wettkampf Pflichtzeiten hat). Je Disziplin mit Pflichtzeiten — je
+Disziplin und Geschlecht einmal, Staffeln ausgenommen, manuelle Regeln
+ersetzen importierte wie in 2.3 — die **aktiven** Athlet:innen, die
+
+- die Pflichtzeit im Wettkampf (grün) oder nur im Training (gelb)
+  erfüllen, oder
+- sie um höchstens 3 % verfehlen („knapp verfehlt“, `NEAR_MISS_RATIO`),
+
+sortiert nach Status und Vorsprung. Importierte Disziplinen filtern
+zusätzlich nach ihrem Geschlecht (`disciplineMatchesAthlete()`).
+**„Melden“** legt einen Startlisten-Eintrag an (Wettkampfnummer der
+Disziplin, falls bekannt; Meldezeit = beste Wettkampfzeit, ersatzweise die
+beste Trainingszeit; Lauf und Bahn offen), **„Alle … Erfüllten melden“**
+alle noch nicht gemeldeten Erfüllten einer Disziplin. Bereits gemeldete
+Athlet:innen erscheinen mit „gemeldet“. Der Dialog bleibt nach jeder
+Meldung offen und aktualisiert sich.
+
+### 6.2 Übersicht je Athlet:in
+
+Karte **„Pflichtzeiten“** auf der Detailseite unter *Athleten & Team*
+(Trainer:innen, Admins), nur wenn irgendwo eine Regel für die Person gilt:
+
+- **Anstehende Wettkämpfe** (ab heute): je Wettkampf die Disziplinen mit
+  geltender Regel, Ampel, Pflichtzeit, Bestzeit, „gemeldet“ und „x von y
+  erfüllt“; der Name führt zum Wettkampf.
+- **Normtabellen:** jede Tabelle als gedachter Wettkampf mit Stichtag
+  morgen (heutige Zeiten zählen), Alter im laufenden Jahr und — ohne
+  Bahnvorgabe der Tabelle — jeder Bahn.
+
+Nicht umgesetzt: eine Ansicht für Athlet:innen selbst (z. B. auf dem
+Dashboard) — die Daten lägen bereits vor (`requiredTimeSets` lesen alle
+Team-Rollen).

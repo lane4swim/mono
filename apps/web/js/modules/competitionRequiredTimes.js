@@ -10,7 +10,11 @@ import { openModal, confirmAction } from '../modal.js';
 import { toast } from '../ui.js';
 import { navigate } from '../router.js';
 import { t } from '../i18n.js';
-import { manualRules } from './requiredTimes.js';
+import { manualRules, hasRequiredTimes, requiredTimeLight } from './requiredTimes.js';
+import { entrySuggestions, entryFromSuggestion, NEAR_MISS_RATIO } from './requiredTimeSuggestions.js';
+import { secToTime } from '../swimTime.js';
+import { fullName } from '../ui.js';
+import { trCode } from '../i18n.js';
 import { buildRequiredTimesEditor } from './requiredTimesEditor.js';
 
 const EMPTY_WINDOW = { from: null, to: null, course: null };
@@ -45,6 +49,7 @@ export function requiredTimesCard(comp, onChanged) {
     el('div', { class: 'flex justify-between items-center mb-16' }, [
       el('h3', { class: 'mt-0' }, t('requiredTimes.cardTitle')),
       el('div', { class: 'flex gap-8' }, [
+        hasRequiredTimes(comp) ? el('button', { class: 'btn btn-ghost btn-sm', onclick: () => openSuggestionsModal(comp, onChanged) }, t('requiredTimes.suggestButton')) : null,
         el('button', { class: 'btn btn-ghost btn-sm', onclick: () => openApplySetModal(comp, onChanged) }, t('requiredTimes.applySet')),
         el('button', { class: 'btn btn-accent btn-sm', onclick: () => openManualRequirementsModal(comp, onChanged) }, t('requiredTimes.edit')),
       ]),
@@ -121,4 +126,65 @@ export async function openApplySetModal(comp, onApplied) {
   }
   body.appendChild(el('div', { class: 'form-actions' }, [manage]));
   const { close } = openModal({ title: t('requiredTimes.applyTitle'), bodyNode: body });
+}
+
+function targetHeading(target) {
+  const parts = [trCode(target.event, 'events')];
+  if (target.gender === 'W' || target.gender === 'M') parts.push(t(`requiredTimes.gender${target.gender}`));
+  if (target.eventNumber) parts.push(t('requiredTimes.eventNumberLabel', { nr: target.eventNumber }));
+  return parts.join(' · ');
+}
+
+function marginText(margin) {
+  return margin >= 0 ? t('requiredTimes.suggestFaster', { delta: margin.toFixed(2) }) : t('requiredTimes.suggestMissing', { delta: (-margin).toFixed(2) });
+}
+
+// Meldevorschläge (Plan, Abschnitt 6.1): je Disziplin, wer die Pflichtzeit
+// erfüllt oder knapp verfehlt; "Melden" legt den Startlisten-Eintrag an.
+// Der Dialog bleibt offen und zeichnet sich nach jeder Meldung neu.
+export async function openSuggestionsModal(comp, onChanged) {
+  const body = el('div', { class: 'rt-suggest' });
+  const { close } = openModal({ title: t('requiredTimes.suggestTitle', { name: comp.name }), bodyNode: body, wide: true });
+
+  async function enter(target, list) {
+    for (const s of list) await put('entries', entryFromSuggestion(comp, target, s));
+    toast(list.length === 1
+      ? t('requiredTimes.suggestAdded', { name: fullName(list[0].athlete), event: trCode(target.event, 'events') })
+      : t('requiredTimes.suggestAddedAll', { count: list.length }));
+    onChanged?.();
+    await draw();
+  }
+
+  async function draw() {
+    const [athletes, results, entries] = await Promise.all([getAll('athletes'), getAll('results'), getAll('entries')]);
+    const groups = entrySuggestions({ comp, athletes, results, entries }).filter((g) => g.suggestions.length > 0);
+    body.replaceChildren();
+    body.appendChild(el('p', { class: 'hint' }, t('requiredTimes.suggestIntro', { percent: Math.round(NEAR_MISS_RATIO * 100) })));
+    if (groups.length === 0) { body.appendChild(el('p', {}, t('requiredTimes.suggestNone'))); return; }
+    for (const { target, suggestions } of groups) {
+      const open = suggestions.filter((s) => s.kind === 'met' && !s.entered);
+      body.appendChild(el('div', { class: 'flex justify-between items-center rt-suggest-head' }, [
+        el('h4', {}, targetHeading(target)),
+        open.length > 1 ? el('button', { class: 'btn btn-ghost btn-sm', onclick: () => enter(target, open) }, t('requiredTimes.suggestEnterAll', { count: open.length })) : null,
+      ]));
+      const tbody = el('tbody');
+      for (const s of suggestions) {
+        tbody.appendChild(el('tr', {}, [
+          el('td', {}, fullName(s.athlete)),
+          el('td', {}, requiredTimeLight(s.evaluation, comp)),
+          el('td', { class: 'data' }, secToTime(Number.isFinite(s.seedTime) ? s.seedTime : null)),
+          el('td', { class: 'text-sm' }, [marginText(s.margin), s.kind === 'near' ? ` · ${t('requiredTimes.suggestNear')}` : ''].join('')),
+          el('td', { class: 'rt-row-actions' }, s.entered
+            ? el('span', { class: 'badge badge-neutral' }, t('requiredTimes.suggestEntered'))
+            : el('button', { class: `btn btn-sm ${s.kind === 'met' ? 'btn-accent' : 'btn-ghost'}`, onclick: () => enter(target, [s]) }, t('requiredTimes.suggestEnter'))),
+        ]));
+      }
+      body.appendChild(el('div', { class: 'table-wrap' }, el('table', {}, [
+        el('thead', {}, el('tr', {}, [t('competitions.colAthlete'), t('requiredTimes.colRequired'), t('requiredTimes.colBest'), t('requiredTimes.colMargin'), ''].map((h) => el('th', {}, h)))),
+        tbody,
+      ])));
+    }
+    body.appendChild(el('div', { class: 'form-actions' }, el('button', { class: 'btn btn-ghost', onclick: () => close() }, t('common.close'))));
+  }
+  await draw();
 }

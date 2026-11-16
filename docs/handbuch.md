@@ -181,6 +181,9 @@ legt direkt einen Plan an.
   Status aktiv/inaktiv, Notizen, optionale Athletenkennung (z. B. DSV-ID für den
   Ergebnisimport). Die Detailseite zeigt Anwesenheit, Bestzeiten und
   Handlungsfelder. Anlegen, Umbenennen und Löschen ist Admins vorbehalten.
+- **Pflichtzeiten je Athlet:in:** die Detailseite zeigt für anstehende
+  Wettkämpfe und alle Normtabellen, welche Pflichtzeiten gelten und ob sie
+  erfüllt sind (gleiche Ampel wie in der Startliste).
 - **Eigenes Konto:** Je Profil wird festgelegt, ob die Person nur vom Verein
   verwaltet wird oder ein eigenes Konto bekommen kann. Die Spalte **Konto**
   zeigt den Stand: vom Verein verwaltet, noch nicht eingeladen, eingeladen (mit
@@ -280,6 +283,9 @@ Fälligkeitsdatum und zuständige:r Trainer:in. Athlet:innen sehen ihre eigenen.
 - **Normtabellen:** wiederverwendbare Pflichtzeiten (z. B.
   Bezirksmeisterschaften) unter *Wettkämpfe → Normtabellen*; „Normtabelle
   übernehmen“ kopiert sie in einen Wettkampf.
+- **Meldevorschläge:** je Disziplin, wer die Pflichtzeit erfüllt (im
+  Wettkampf oder nur im Training) oder um höchstens 3 % verfehlt; „Melden“
+  trägt die Person mit ihrer Bestzeit als Meldezeit in die Startliste ein.
 
 ### 8.3 Ergebnisse und Zeitmessung
 - Ergebnisse mit Zeit, Platz und PB-Kennzeichnung; automatische
@@ -469,7 +475,7 @@ Raspberry Pi, macOS oder GitHub Codespaces: siehe
 |---|---|
 | Lenex-Import | zurückgestellt; der Import ist formatunabhängig vorbereitet, es fehlt nur der Lenex-Parser |
 | Push bei neuen Kommentaren und neuen Startlisten | bewusst zurückgestellt (nur zeitgesteuerte Push-Auslöser umgesetzt) |
-| Normzeiten-Tracker | weitgehend: Pflichtzeiten aus DSV-Dateien, von Hand und aus Normtabellen werden in der Startliste geprüft; Meldevorschläge fehlen |
+| Normzeiten-Tracker | umgesetzt (Pflichtzeiten aus DSV-Dateien, von Hand und aus Normtabellen, Meldevorschläge, Übersicht je Athlet:in); offen: Ansicht für Athlet:innen selbst |
 | Kampfrichter-Einsatzplanung mit Vorschlägen | offen; manuelle Einteilung je Wettkampf ist umgesetzt |
 | Bestenlisten/Vereinsrekorde, CSV-/Excel-Export | als Nächstes geplant |
 | Vereins-Branding, Startlisten-Export, World-Aquatics-Punkte, Pacing-Analyse, Staffel-Aufstellung, Leistungstests, persönliche Ziele, Vorab-Abmeldung, Kalender-Abo (iCal), Echtzeit-Sync, Vereins-Backup, weitere Sprachen | Ideen, noch nicht terminiert — siehe [`future-features-brainstorm.md`](./future-features-brainstorm.md) |

@@ -37,7 +37,7 @@ Nummern verweisen auf die Abschnitte unten.
 | Feature | Stand | Offen |
 |---|---|---|
 | 6.2 Mehrsprachigkeit | Deutsch und Englisch (`apps/web/js/i18n/`) | weitere Sprachen nach Bedarf |
-| 2.4 Pflicht-/Normzeiten | Pflichtzeiten aus der DSV7-/DSV8-Wettkampfdefinition, von Hand je Wettkampf und aus wiederverwendbaren Normtabellen, geprüft in der Startliste (`apps/web/js/modules/requiredTimes.js`, `docs/Plans/pflichtzeiten-manuell-plan.md`) | Meldevorschläge, Übersicht „wer erfüllt welche Norm“ je Athlet:in |
+| 2.4 Pflicht-/Normzeiten | Pflichtzeiten aus der DSV7-/DSV8-Wettkampfdefinition, von Hand je Wettkampf und aus wiederverwendbaren Normtabellen, geprüft in der Startliste (`apps/web/js/modules/requiredTimes.js`, `docs/Plans/pflichtzeiten-manuell-plan.md`) | Ansicht für Athlet:innen selbst (Meldevorschläge und Übersicht je Athlet:in sind umgesetzt) |
 | 7.1 Kampfrichter-Einsatzplanung | Anzahl zu stellender Kampfrichter:innen je Wettkampf, manuelle Einteilung mit Zu-/Absage (`apps/web/js/modules/competitionReferees.js`) | automatische Vorschläge nach Qualifikation und Einsatzhäufigkeit |
 
 ### Als nächstes geplant (Phase 4)
