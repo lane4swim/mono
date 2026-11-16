@@ -9,6 +9,11 @@
 //   'unknown'         — nicht prüfbar (kein Geburtsdatum, unbekannte
 //                       Altersklasse).
 //
+// Zwei Quellen, eine Auswertung (docs/Plans/pflichtzeiten-manuell-plan.md):
+// von Hand erfasste Regeln (comp.manualRequirements, auch aus Normtabellen
+// übernommen) hängen am Disziplin-Label und ersetzen für ihre Disziplin die
+// importierten; sonst gelten die Regeln der importierten Disziplin.
+//
 // Das Alter zählt wie in den DSV-Wettkampfbestimmungen nach dem
 // Kalenderjahr des Wettkampfs (Wettkampfjahr minus Geburtsjahr), nicht
 // nach dem heutigen Datum.
@@ -50,6 +55,13 @@ export function requiredTimeApplies(rt, athlete, compDate) {
   if (!rt.classType || (!rt.min && !rt.max)) return true;
   const birthYear = athlete?.birthdate ? yearOf(athlete.birthdate) : null;
   if (birthYear == null) return null;
+  if (rt.classType === 'AL') {
+    // Alter im Wettkampfjahr, beide Grenzen inklusive — ohne die
+    // Masters-Aufweitung des DSV-Typs "AK" (von Hand erfasste Regeln).
+    if ((rt.min && !isNumber(rt.min)) || (rt.max && !isNumber(rt.max))) return null;
+    const age = competitionAge(athlete.birthdate, compDate);
+    return age >= (rt.min ? Number(rt.min) : -Infinity) && age <= (rt.max ? Number(rt.max) : Infinity);
+  }
   if (rt.classType === 'JG') {
     if ((rt.min && !isNumber(rt.min)) || (rt.max && !isNumber(rt.max))) return null;
     // JG-Grenzen sind Geburtsjahre (0–9999 = alle), unabhängig von der
@@ -84,34 +96,68 @@ export function bestQualifyingTimes(results, { athleteId, event, comp, window })
   return { official, training };
 }
 
-// Prüft einen Startlisten-Eintrag. null, wenn für ihn keine Pflichtzeit
-// hinterlegt ist (keine passende Disziplin, Staffel, keine Pflichtzeit
-// für Geschlecht/Alter).
-export function evaluateRequiredTime({ comp, entry, athlete, results }) {
+export const isRelayEvent = (event) => /^\d+\s*x/i.test(event || '');
+
+export function manualRules(comp) {
+  return comp?.manualRequirements?.rules || [];
+}
+
+// Nachweiszeitraum manueller Regeln in der Form von bestQualifyingTimes():
+// course null = Bahn des Wettkampfs, 'any' = jede Bahn. Ohne Angaben
+// undefined — dann gilt wie bisher die Bahn des Wettkampfs.
+export function manualWindow(comp) {
+  const w = comp?.manualRequirements?.qualifyingWindow;
+  if (!w || (!w.from && !w.to && !w.course)) return undefined;
+  return { from: w.from || null, to: w.to || null, course: w.course === 'any' ? null : (w.course || comp.course) };
+}
+
+// Regeln und Nachweiszeitraum, die für einen Startlisten-Eintrag gelten,
+// samt Quelle ('manual' | 'import'); null ohne Regeln oder bei Staffeln.
+export function rulesForEntry(comp, entry) {
+  if (isRelayEvent(entry?.event)) return null;
+  const manual = manualRules(comp).filter(r => r.event === entry.event);
+  if (manual.length > 0) return { rules: manual, window: manualWindow(comp), source: 'manual' };
   const disciplines = comp.disciplines || [];
   const d = disciplines[findDisciplineIndex(disciplines, entry)];
-  if (!d?.requiredTimes?.length || d.relaySize > 1 || !athlete) return null;
-  const matches = d.requiredTimes.map(rt => ({ rt, applies: requiredTimeApplies(rt, athlete, comp.date) }));
+  if (!d?.requiredTimes?.length || d.relaySize > 1) return null;
+  return { rules: d.requiredTimes, window: d.qualifyingWindow, source: 'import' };
+}
+
+// Prüft einen Startlisten-Eintrag. null, wenn für ihn keine Pflichtzeit
+// hinterlegt ist (keine Regel für die Disziplin, Staffel, keine Pflichtzeit
+// für Geschlecht/Alter).
+export function evaluateRequiredTime({ comp, entry, athlete, results }) {
+  const found = rulesForEntry(comp, entry);
+  if (!found || !athlete) return null;
+  const matches = found.rules.map(rt => ({ rt, applies: requiredTimeApplies(rt, athlete, comp.date) }));
   const rule = matches.find(m => m.applies === true)?.rt;
-  if (!rule) return matches.some(m => m.applies === null) ? { status: 'unknown' } : null;
-  const best = bestQualifyingTimes(results, { athleteId: athlete.id, event: entry.event, comp, window: d.qualifyingWindow });
+  if (!rule) return matches.some(m => m.applies === null) ? { status: 'unknown', source: found.source } : null;
+  const best = bestQualifyingTimes(results, { athleteId: athlete.id, event: entry.event, comp, window: found.window });
   const met = (time) => time != null && time <= rule.time;
   const status = met(best.official) ? 'official' : met(best.training) ? 'training' : 'missing';
-  return { status, required: rule.time, rule, ...best };
+  return { status, required: rule.time, rule, source: found.source, ...best };
 }
 
 const LIGHT_CLASS = { official: 'green', training: 'yellow', missing: 'red', unknown: 'grey' };
 
+function sourceLabel(evaluation, comp) {
+  if (evaluation.source === 'import') return t('requiredTimes.sourceImport');
+  const setName = comp?.manualRequirements?.sourceSetName;
+  return setName ? t('requiredTimes.sourceSet', { name: setName }) : t('requiredTimes.sourceManual');
+}
+
 // Ampel + Pflichtzeit für die Startlisten-Zeile; Details im Tooltip.
-export function requiredTimeLight(evaluation) {
+export function requiredTimeLight(evaluation, comp) {
   if (!evaluation) return '—';
   const label = t(`competitions.requiredTime_${evaluation.status}`);
-  const title = evaluation.status === 'unknown' ? label : [
+  const source = evaluation.source ? sourceLabel(evaluation, comp) : null;
+  const title = (evaluation.status === 'unknown' ? [label, source] : [
     label,
     t('competitions.requiredTimeValue', { time: secToTime(evaluation.required) }),
     t('competitions.requiredTimeBestOfficial', { time: secToTime(evaluation.official) }),
     t('competitions.requiredTimeBestTraining', { time: secToTime(evaluation.training) }),
-  ].join('\n');
+    source,
+  ]).filter(Boolean).join('\n');
   return el('span', { class: 'req-time', title }, [
     el('span', { class: `req-light req-light-${LIGHT_CLASS[evaluation.status]}`, role: 'img', 'aria-label': label }),
     evaluation.required ? el('span', { class: 'data' }, secToTime(evaluation.required)) : null,
@@ -119,5 +165,5 @@ export function requiredTimeLight(evaluation) {
 }
 
 export function hasRequiredTimes(comp) {
-  return (comp.disciplines || []).some(d => d.requiredTimes?.length > 0);
+  return manualRules(comp).length > 0 || (comp.disciplines || []).some(d => d.requiredTimes?.length > 0);
 }

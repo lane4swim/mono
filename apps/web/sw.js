@@ -15,7 +15,7 @@
 // bliebe beliebig lange auf dem alten Stand, ohne jeden Hinweis. app.js
 // meldet stattdessen, dass eine neue Fassung bereitsteht, und lässt die
 // Person entscheiden, wann neu geladen wird.
-const CACHE_VERSION = 'lane1-v100';
+const CACHE_VERSION = 'lane1-v101';
 const PRECACHE_URLS = [
   './',
   './index.html',
@@ -63,6 +63,10 @@ const PRECACHE_URLS = [
   './js/modules/calendar.js',
   './js/modules/competitionDeadlines.js',
   './js/modules/competitionReferees.js',
+  './js/modules/competitionRequiredTimes.js',
+  './js/modules/requiredTimeRules.js',
+  './js/modules/requiredTimeSets.js',
+  './js/modules/requiredTimesEditor.js',
   './js/modules/calendarEvents.js',
   './js/modules/calendarEntries.js',
   './js/modules/athletes.js',

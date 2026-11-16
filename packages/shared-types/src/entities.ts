@@ -164,6 +164,51 @@ export const CompetitionQualifyingWindowSchema = z.object({
   course: CourseSchema.nullable(),
 }).strict();
 
+// Von Hand erfasste Pflichtzeiten (docs/Plans/pflichtzeiten-manuell-plan.md)
+// — je Wettkampf (Competition.manualRequirements) und als wiederverwendbare
+// Normtabelle (Store "requiredTimeSets"). Anders als die importierten
+// Regeln hängen sie am Disziplin-Label statt an einer Wettkampfnummer.
+// classType: '' = alle Altersstufen, 'JG' = Jahrgänge (Geburtsjahre),
+// 'AL' = Alter im Wettkampfjahr (beide Grenzen inklusive, ohne die
+// Masters-Aufweitung des DSV-Typs "AK"). min/max: Ziffern oder leer (offen).
+const ruleBound = z.string().regex(/^\d{0,4}$/).default('');
+export const RequiredTimeRuleSchema = z.object({
+  event: z.string().min(1).max(200),
+  gender: z.enum(['', 'M', 'W']).default(''),
+  classType: z.enum(['', 'JG', 'AL']).default(''),
+  min: ruleBound,
+  max: ruleBound,
+  time: z.number().positive().max(36000),
+}).strict().superRefine((rule, ctx) => {
+  if (rule.classType === '' && (rule.min || rule.max)) {
+    ctx.addIssue({ code: 'custom', path: ['classType'], message: 'Grenzen ohne Altersangabe' });
+  }
+  if (rule.classType === 'AL' && rule.min && rule.max && Number(rule.min) > Number(rule.max)) {
+    ctx.addIssue({ code: 'custom', path: ['max'], message: 'max liegt unter min' });
+  }
+});
+export type RequiredTimeRule = z.infer<typeof RequiredTimeRuleSchema>;
+
+// Nachweiszeitraum manueller Pflichtzeiten. course: null = Bahn des
+// Wettkampfs, 'any' = jede Bahn. Alle Felder mit Default — `{}` ist gültig
+// (Default der Prisma-JSON-Spalte).
+export const ManualQualifyingWindowSchema = z.object({
+  from: isoDay.nullable().default(null),
+  to: isoDay.nullable().default(null),
+  course: z.enum(['LCM', 'SCM', 'any']).nullable().default(null),
+}).strict();
+export type ManualQualifyingWindow = z.infer<typeof ManualQualifyingWindowSchema>;
+
+export const ManualRequirementsSchema = z.object({
+  rules: z.array(RequiredTimeRuleSchema).max(500).default([]),
+  qualifyingWindow: ManualQualifyingWindowSchema.default({ from: null, to: null, course: null }),
+  // Gesetzt, wenn die Regeln aus einer Normtabelle übernommen (kopiert)
+  // wurden — nur ein Hinweis für die Anzeige, kein Fremdschlüssel.
+  sourceSetId: z.string().guid().nullable().default(null),
+  sourceSetName: z.string().max(200).default(''),
+}).strict();
+export type ManualRequirements = z.infer<typeof ManualRequirementsSchema>;
+
 export const CompetitionDisciplineSchema = z.object({
   number: z.string().min(1).max(50),
   round: z.string().max(5).default(''),
@@ -210,6 +255,9 @@ export const CompetitionSchema = z.object({
   // stellen hat. Immer von Hand erfasst — weder DSV7 noch DSV8 haben dafür
   // ein Element. Wie die Fristen OHNE .default(); null = keine Vorgabe.
   refereesRequired: z.number().int().min(0).max(99).nullable().optional(),
+  // Von Hand erfasste Pflichtzeiten (siehe ManualRequirementsSchema) — wie
+  // disciplines OHNE .default(), damit ein älterer Client sie nicht leert.
+  manualRequirements: ManualRequirementsSchema.optional(),
   createdAt: isoDate,
   updatedAt: isoDate,
 }).strict();
@@ -573,6 +621,21 @@ export const CalendarEntrySchema = z.object({
 });
 export type CalendarEntry = z.infer<typeof CalendarEntrySchema>;
 
+// Normtabelle: wiederverwendbarer Satz von Pflichtzeiten (z. B.
+// Bezirksmeisterschaften), der in einen Wettkampf kopiert wird
+// (docs/Plans/pflichtzeiten-manuell-plan.md, Abschnitt 3).
+export const RequiredTimeSetSchema = z.object({
+  id: z.string().guid(),
+  clubId: z.string().guid(),
+  name: z.string().min(1).max(200),
+  description: z.string().max(2000).default(''),
+  rules: z.array(RequiredTimeRuleSchema).max(500).default([]),
+  qualifyingWindow: ManualQualifyingWindowSchema.default({ from: null, to: null, course: null }),
+  createdAt: isoDate,
+  updatedAt: isoDate,
+}).strict();
+export type RequiredTimeSet = z.infer<typeof RequiredTimeSetSchema>;
+
 // ---- Registry: SyncStore -> Zod-Schema -------------------------------
 // Zentrale Zuordnung, welches Schema zu welchem Store-Namen gehört. Wird
 // in Phase 3 direkt von der generischen Sync-API (`POST /api/sync/push`)
@@ -595,6 +658,7 @@ export const ENTITY_SCHEMAS = {
   actionItems: ActionItemSchema,
   announcements: AnnouncementSchema,
   calendarEntries: CalendarEntrySchema,
+  requiredTimeSets: RequiredTimeSetSchema,
 } satisfies Partial<Record<z.infer<typeof SyncStoreSchema>, z.ZodTypeAny>>;
 
 export type EntityStoreName = keyof typeof ENTITY_SCHEMAS;

@@ -39,7 +39,7 @@ interface ModulePackage {
 
 export const MODULE_PACKAGES = {
   athletes: { routeIds: ['athletes'], stores: ['athletes', 'groups'] },
-  competitions: { routeIds: ['competitions'], stores: ['competitions', 'entries'] },
+  competitions: { routeIds: ['competitions'], stores: ['competitions', 'entries', 'requiredTimeSets'] },
   times: { routeIds: ['times'], stores: [] },
   // Vorlagen-Zyklen (Phase 1, Abschnitt 3.1) leben in derselben Route
   // 'plans' (siehe apps/web/js/modules/plans.js), kein eigenes Paket.

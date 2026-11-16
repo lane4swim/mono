@@ -101,6 +101,7 @@ model Club {
   plans                         Plan[]
   planCycles                    PlanCycle[]
   calendarEntries               CalendarEntry[]
+  requiredTimeSets              RequiredTimeSet[]
   sessions                      TrainingSession[]
   actionItems                   ActionItem[]
   qualificationReminderSettings ClubQualificationReminderSetting[]
@@ -423,6 +424,10 @@ model Competition {
   // stellen hat — optional und immer von Hand erfasst: weder DSV7 noch
   // DSV8 haben dafür ein Element (siehe dsv7DefinitionParser.js).
   refereesRequired  Int?
+  // Von Hand erfasste Pflichtzeiten samt Nachweiszeitraum — Struktur siehe
+  // ManualRequirementsSchema in packages/shared-types/src/entities.ts
+  // (docs/Plans/pflichtzeiten-manuell-plan.md). "{}" = keine.
+  manualRequirements Json  @default("{}")
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
@@ -1064,6 +1069,27 @@ model CalendarEntry {
 // atomare UPDATE in jobState.repository.ts (tryAcquire) braucht keine
 // Verbindungsbindung und gibt sich nach einem Absturz über lockedUntil
 // selbst wieder frei.
+// Normtabelle: wiederverwendbarer Satz von Pflichtzeiten, der in einen
+// Wettkampf kopiert wird (docs/Plans/pflichtzeiten-manuell-plan.md,
+// Abschnitt 3). rules/qualifyingWindow wie RequiredTimeSetSchema.
+model RequiredTimeSet {
+  id               String    @id @default(uuid())
+  clubId           String
+  club             Club      @relation(fields: [clubId], references: [id])
+  name             String
+  description      String    @default("")
+  rules            Json      @default("[]")
+  qualifyingWindow Json      @default("{}")
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  deletedAt        DateTime?
+
+  // [clubId, updatedAt] statt [clubId] — siehe Begründung bei Group oben
+  // (Sync-Pull-Zugriffsmuster).
+  @@index([clubId, updatedAt])
+  @@map("required_time_sets")
+}
+
 model ScheduledJobState {
   name         String    @id
   lockedBy     String?

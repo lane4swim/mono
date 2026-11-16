@@ -30,6 +30,8 @@ const STRATEGY_BY_STORE: Record<SyncStore, ConflictStrategy> = {
   // Saisonplanung im Kalender (Ferien, Trainingszeiten, Trainingslager,
   // Schließungen): flache Einträge ohne eingebettete Struktur.
   calendarEntries: 'last-write-wins',
+  // Normtabellen (Pflichtzeiten): ein Dokument, das als Ganzes gepflegt wird.
+  requiredTimeSets: 'last-write-wins',
 };
 
 export function strategyForStore(store: SyncStore): ConflictStrategy {

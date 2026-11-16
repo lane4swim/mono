@@ -52,6 +52,15 @@ describe('canRead()/canWrite() — Modul-Gating', () => {
     expect(canRead('sectionTemplates', ['athlete'], ['templates'])).toBe(false); // eigenes Paket, nicht in "templates" gebündelt
   });
 
+  it('"requiredTimeSets" (Normtabellen) hängt am Paket "competitions" — lesen alle Team-Rollen, pflegen trainer/admin', () => {
+    expect(canRead('requiredTimeSets', ['athlete'], ['competitions'])).toBe(true);
+    expect(canWrite('requiredTimeSets', ['trainer'], ['competitions'])).toBe(true);
+    expect(canWrite('requiredTimeSets', ['admin'], ['competitions'])).toBe(true);
+    expect(canWrite('requiredTimeSets', ['athlete'], ['competitions'])).toBe(false);
+    expect(canRead('requiredTimeSets', ['trainer'], ['plans'])).toBe(false); // Paket nicht gebucht
+    expect(canWrite('requiredTimeSets', ['trainer'], [])).toBe(false);
+  });
+
   it('"calendarEntries" gehört zum Kernmodul Kalender — ohne gebuchtes Paket freigeschaltet', () => {
     expect(canRead('calendarEntries', ['athlete'], [])).toBe(true);
     expect(canWrite('calendarEntries', ['trainer'], [])).toBe(true);

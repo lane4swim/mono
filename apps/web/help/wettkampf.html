@@ -52,6 +52,19 @@
     </ul>
     <p>Fehlen Geburtsdatum oder Altersklasse, kann Lane 1 die Pflichtzeit nicht prüfen und weist darauf hin.</p>
 
+    <h3>Pflichtzeiten von Hand erfassen</h3>
+    <p>Stehen die Pflichtzeiten nicht in einer DSV-Datei — etwa nur in der Ausschreibung als PDF —, in der Karte <strong>„Pflichtzeiten“</strong> des Wettkampfs auf <strong>„Pflichtzeiten erfassen“</strong> tippen. Je Zeile: Disziplin, Geschlecht, Altersangabe, von, bis und die Pflichtzeit.</p>
+    <ul>
+      <li><strong>Alter</strong> — das Alter im Wettkampfjahr (Wettkampfjahr minus Geburtsjahr), beide Grenzen inklusive, z.&nbsp;B. 11 bis 12.</li>
+      <li><strong>Jahrgang</strong> — Geburtsjahre, z.&nbsp;B. 2014 bis 2015.</li>
+      <li><strong>alle Altersstufen</strong> — „von“ und „bis“ bleiben leer. Eine leere Grenze heißt auch sonst „offen“.</li>
+    </ul>
+    <p>Unter <em>Nachweis</em> lässt sich festlegen, ab wann und bis wann Zeiten zählen und auf welcher Bahn (die des Wettkampfs, 25&nbsp;m, 50&nbsp;m oder beliebig). Mit <strong>„Aus Tabelle einfügen“</strong> übernimmst du ganze Tabellen aus einer Ausschreibung: je Zeile <code>Disziplin; Geschlecht; von; bis; Zeit</code>, getrennt durch Tab, Semikolon oder mehrere Leerzeichen.</p>
+    <p>Die Startliste prüft von Hand erfasste Pflichtzeiten genauso wie importierte — auch ohne Wettkampfnummer. Gibt es für eine Disziplin beides, gelten die von Hand erfassten. Überschneiden sich zwei Zeilen (z.&nbsp;B. Alter 10–12 und 12–14), weist Lane 1 vor dem Speichern darauf hin, denn es zählt immer nur die erste passende Zeile.</p>
+
+    <h3>Normtabellen</h3>
+    <p>Vorgaben, die für mehrere Wettkämpfe gelten — etwa Bezirks- oder Landesmeisterschaften —, einmal unter <em>Wettkämpfe → „Normtabellen“</em> anlegen. Im Wettkampf übernimmt <strong>„Normtabelle übernehmen“</strong> die Tabelle. Sie wird dabei kopiert: Spätere Änderungen an der Tabelle ändern bereits geplante Wettkämpfe nicht. Für Tabellen, die über mehrere Saisons gelten, ist die Altersangabe „Alter“ besser geeignet als „Jahrgang“.</p>
+
     <h2>Zeitmessung und Ergebnisse</h2>
     <p>In der Startliste hat jeder Eintrag eine <strong>Stoppuhr</strong> mit Rundenzeiten; <strong>„Zeit übernehmen“</strong> trägt die gemessene Zeit ein. Ergebnisse lassen sich auch von Hand erfassen (Zeit, Platz). Neue persönliche Bestzeiten erkennt Lane 1 automatisch.</p>
     <h3>Wettkampfmodus</h3>
