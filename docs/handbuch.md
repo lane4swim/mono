@@ -181,6 +181,9 @@ legt direkt einen Plan an.
   Status aktiv/inaktiv, Notizen, optionale Athletenkennung (z. B. DSV-ID für den
   Ergebnisimport). Die Detailseite zeigt Anwesenheit, Bestzeiten und
   Handlungsfelder. Anlegen, Umbenennen und Löschen ist Admins vorbehalten.
+- **Pflichtzeiten je Athlet:in:** die Detailseite zeigt für anstehende
+  Wettkämpfe und alle Normtabellen, welche Pflichtzeiten gelten und ob sie
+  erfüllt sind (gleiche Ampel wie in der Startliste).
 - **Eigenes Konto:** Je Profil wird festgelegt, ob die Person nur vom Verein
   verwaltet wird oder ein eigenes Konto bekommen kann. Die Spalte **Konto**
   zeigt den Stand: vom Verein verwaltet, noch nicht eingeladen, eingeladen (mit
@@ -271,6 +274,18 @@ Fälligkeitsdatum und zuständige:r Trainer:in. Athlet:innen sehen ihre eigenen.
   Geschlecht gefiltert).
 - **Pflichtzeiten-Prüfung:** je Eintrag farbig, ob die Pflichtzeit im
   Wettkampf (grün), nur im Training (gelb) oder noch nicht erreicht (rot) wurde.
+- **Pflichtzeiten von Hand:** Karte „Pflichtzeiten“ im Wettkampf — Regeln je
+  Disziplin, Geschlecht und Alter im Wettkampfjahr oder Jahrgang, mit
+  Nachweiszeitraum und Bahn; Einfügen aus einer kopierten Tabelle; Warnung
+  bei überlappenden Regeln. Von Hand erfasste Regeln ersetzen für ihre
+  Disziplin die importierten und werden nach derselben Logik geprüft, auch
+  ohne Wettkampfnummer.
+- **Normtabellen:** wiederverwendbare Pflichtzeiten (z. B.
+  Bezirksmeisterschaften) unter *Wettkämpfe → Normtabellen*; „Normtabelle
+  übernehmen“ kopiert sie in einen Wettkampf.
+- **Meldevorschläge:** je Disziplin, wer die Pflichtzeit erfüllt (im
+  Wettkampf oder nur im Training) oder um höchstens 3 % verfehlt; „Melden“
+  trägt die Person mit ihrer Bestzeit als Meldezeit in die Startliste ein.
 
 ### 8.3 Ergebnisse und Zeitmessung
 - Ergebnisse mit Zeit, Platz und PB-Kennzeichnung; automatische
@@ -460,7 +475,7 @@ Raspberry Pi, macOS oder GitHub Codespaces: siehe
 |---|---|
 | Lenex-Import | zurückgestellt; der Import ist formatunabhängig vorbereitet, es fehlt nur der Lenex-Parser |
 | Push bei neuen Kommentaren und neuen Startlisten | bewusst zurückgestellt (nur zeitgesteuerte Push-Auslöser umgesetzt) |
-| Normzeiten-Tracker | nur teilweise: Pflichtzeiten aus der DSV-Wettkampfdefinition werden geprüft; eigene Normzeiten-Tabellen je Altersklasse fehlen |
+| Normzeiten-Tracker | umgesetzt (Pflichtzeiten aus DSV-Dateien, von Hand und aus Normtabellen, Meldevorschläge, Übersicht je Athlet:in); offen: Ansicht für Athlet:innen selbst |
 | Kampfrichter-Einsatzplanung mit Vorschlägen | offen; manuelle Einteilung je Wettkampf ist umgesetzt |
 | Bestenlisten/Vereinsrekorde, CSV-/Excel-Export | als Nächstes geplant |
 | Vereins-Branding, Startlisten-Export, World-Aquatics-Punkte, Pacing-Analyse, Staffel-Aufstellung, Leistungstests, persönliche Ziele, Vorab-Abmeldung, Kalender-Abo (iCal), Echtzeit-Sync, Vereins-Backup, weitere Sprachen | Ideen, noch nicht terminiert — siehe [`future-features-brainstorm.md`](./future-features-brainstorm.md) |
@@ -477,6 +492,7 @@ Geprüft gegen den Code im November 2026.
 | [dsv7-lenex-import-plan.md](./Plans/dsv7-lenex-import-plan.md) — Ergebnisimport | DSV7/DSV8 umgesetzt | Lenex zurückgestellt |
 | [kampfrichter-modul-plan.md](./Plans/kampfrichter-modul-plan.md) — Mehrfachrollen, Kampfrichter | umgesetzt | alte Spalte `User.role` noch nicht entfernt |
 | [nutzer-qualifikationen-plan.md](./Plans/nutzer-qualifikationen-plan.md) — Qualifikationen | umgesetzt | — |
+| [pflichtzeiten-manuell-plan.md](./Plans/pflichtzeiten-manuell-plan.md) — Pflichtzeiten von Hand, Normtabellen | umgesetzt | — |
 | [phase2-plan.md](./Plans/phase2-plan.md) — Push, Ankündigungen, Eltern | umgesetzt | ereignisgesteuerte Push-Auslöser zurückgestellt |
 | [trainingsplanung-phase1-plan.md](./Plans/trainingsplanung-phase1-plan.md) — Zyklen, Belastung, Anwesenheit | umgesetzt | — |
 | [vereinsverwaltung-phase3-plan.md](./Plans/vereinsverwaltung-phase3-plan.md) — Gruppen-Trainer:innen, Audit-Log | umgesetzt | Bereinigung von `Group.trainerIds` beim endgültigen Löschen eines Kontos fehlt (ohne sichtbare Auswirkung) |

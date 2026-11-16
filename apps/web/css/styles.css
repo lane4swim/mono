@@ -269,6 +269,27 @@ tr.live-row-done .live-set-desc{ text-decoration: line-through; color: var(--c-s
 .badge-pb{ background: var(--c-chlorine); color: var(--c-deep-2); }
 /* Pflichtzeiten-Ampel in der Startliste (modules/requiredTimes.js) */
 .req-time{ display:inline-flex; align-items:center; gap:6px; white-space:nowrap; }
+/* Von Hand erfasste Pflichtzeiten / Normtabellen (requiredTimesEditor.js) */
+.rt-editor > .hint{ margin: 0 0 10px; }
+.rt-table td{ padding: 4px 6px 4px 0; vertical-align: middle; }
+.rt-table th{ padding: 0 6px 6px 0; }
+.rt-table select, .rt-table input{ width: 100%; min-width: 0; }
+.rt-table .rt-bound{ width: 5.5em; }
+.rt-table .rt-time{ width: 7em; }
+.rt-row-actions{ white-space: nowrap; }
+.rt-add{ margin: 8px 0 14px; }
+.rt-paste-box{ margin: 0 0 14px; }
+.rt-paste-box summary{ cursor: pointer; font-weight: 600; padding: 4px 0; }
+.rt-paste{ width: 100%; font-family: var(--f-mono, monospace); }
+.rt-paste-actions{ margin-top: 8px; flex-wrap: wrap; align-items: flex-end; }
+.rt-window{ border: 1px solid var(--c-line); border-radius: 10px; padding: 10px 14px 14px; margin: 0 0 14px; }
+.rt-window legend{ font-weight: 600; padding: 0 4px; }
+.rt-overlap{ border: 1px solid var(--c-amber); border-left-width: 4px; border-radius: 8px; padding: 10px 12px; margin: 0 0 14px; }
+.rt-summary p{ margin: 0 0 6px; }
+.rt-set-row td:first-child{ font-weight: 600; }
+.rt-suggest-head{ margin: 16px 0 6px; gap: 8px; flex-wrap: wrap; }
+.rt-suggest-head h4{ margin: 0; }
+.rt-athlete h4.text-slate{ margin: 18px 0 0; text-transform: uppercase; font-size: var(--fs-xs); letter-spacing: .05em; }
 .req-light{ display:inline-block; width:12px; height:12px; border-radius:50%; flex:none; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.15); }
 .req-light-green{ background:#2E9E6B; }
 .req-light-yellow{ background:#E8B425; }

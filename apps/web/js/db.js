@@ -31,11 +31,12 @@ const DB_NAME = IS_DEMO ? 'lane1-demo-db' : 'lane1-db';
 // v5: neuer Store 'announcements' (Phase 2, Abschnitt 4.1 — Ankündigungen).
 // v6: neuer Store 'sectionTemplates' (Abschnitts-Vorlagen-Katalog).
 // v7: neuer Store 'calendarEntries' (Saisonplanung im Kalender).
-const DB_VERSION = 7;
+// v8: neuer Store 'requiredTimeSets' (Normtabellen für Pflichtzeiten).
+const DB_VERSION = 8;
 
 export const STORES = [
   'users', 'athletes', 'groups', 'competitions', 'entries', 'results',
-  'exercises', 'templates', 'sectionTemplates', 'plans', 'planCycles', 'sessions', 'actionItems', 'announcements', 'calendarEntries', 'meta', 'syncQueue',
+  'exercises', 'templates', 'sectionTemplates', 'plans', 'planCycles', 'sessions', 'actionItems', 'announcements', 'calendarEntries', 'requiredTimeSets', 'meta', 'syncQueue',
   'clubs', 'invitations'
 ];
 
@@ -172,7 +173,7 @@ const SYNC_EXCLUDED = new Set(['syncQueue', 'meta']);
 // clubId (seine id IST die clubId).
 export const CLUB_SCOPED_STORES = new Set([
   'athletes', 'groups', 'competitions', 'entries', 'results',
-  'exercises', 'templates', 'sectionTemplates', 'plans', 'planCycles', 'sessions', 'actionItems', 'announcements', 'calendarEntries',
+  'exercises', 'templates', 'sectionTemplates', 'plans', 'planCycles', 'sessions', 'actionItems', 'announcements', 'calendarEntries', 'requiredTimeSets',
 ]);
 
 // Liefert die clubId der aktuell eingeloggten Person, für put() unten —

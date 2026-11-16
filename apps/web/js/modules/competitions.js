@@ -23,6 +23,8 @@ import { LIST_RESULTS } from '../resultsImport/dsv7DefinitionParser.js';
 import { defaultSelectionDeadline, validateDeadlines } from './competitionDeadlines.js';
 import { competitionRefereesCard, parseRefereesRequired, MAX_REFEREES_REQUIRED } from './competitionReferees.js';
 import { evaluateRequiredTime, requiredTimeLight, hasRequiredTimes } from './requiredTimes.js';
+import { requiredTimesCard } from './competitionRequiredTimes.js';
+import { renderRequiredTimeSets, REQUIRED_TIME_SETS_ROUTE } from './requiredTimeSets.js';
 import { getCurrentUser } from '../state.js';
 import { teamFilterChips, loadTeamSelection, saveTeamSelection, matchesTeams, competitionGroupIds, athleteGroupMap } from '../teamFilter.js';
 
@@ -35,6 +37,10 @@ export const competitionsModule = {
   async render(container, params) {
     const isCurrent = beginRender(container);
     clear(container);
+    // Normtabellen (Pflichtzeiten) — Unterseite dieser Route, siehe
+    // requiredTimeSets.js; vor der Detailansicht prüfen, deren erster
+    // Parameter eine Wettkampf-ID ist.
+    if (params[0] === REQUIRED_TIME_SETS_ROUTE) return renderRequiredTimeSets(container);
     if (params[0] && params[1] === 'live') {
       return renderLiveMode(container, params[0], parseInt(params[2], 10) || 0);
     }
@@ -53,6 +59,7 @@ function renderList(container, competitions, groups, entries, athletes) {
   wrap.appendChild(el('div', { class: 'page-head' }, [
     el('div', {}, [el('h1', { class: 'mt-0' }, t('competitions.title'))]),
     el('div', { class: 'page-actions' }, [
+      el('button', { class: 'btn btn-ghost', onclick: () => navigate('competitions', REQUIRED_TIME_SETS_ROUTE) }, t('requiredTimes.setsButton')),
       competitionFromFileButton(openCompFromFile),
       el('button', { class: 'btn btn-primary', onclick: () => openCompModal(null, () => refresh()) }, t('competitions.addComp')),
     ]),
@@ -204,7 +211,8 @@ async function renderDetail(container, compId) {
     const liveGroups = buildLiveGroups(compEntries);
     const liveIndexByKey = new Map(liveGroups.map((g, i) => [`${g.eventNumber}__${g.heat}`, i]));
 
-    // Pflichtzeiten-Ampel nur, wenn die Wettkampfdefinition welche enthält.
+    // Pflichtzeiten-Ampel nur, wenn importierte oder von Hand erfasste
+    // Pflichtzeiten vorliegen.
     const showRequired = hasRequiredTimes(comp);
     const groups = groupByHeat(compEntries);
     const heatKeys = Object.keys(groups).sort((a, b) => a === '__none__' ? 1 : b === '__none__' ? -1 : Number(a) - Number(b));
@@ -234,6 +242,7 @@ async function renderDetail(container, compId) {
     });
   }
   wrap.appendChild(startListCard);
+  wrap.appendChild(requiredTimesCard(comp, refreshDetail));
   if (refereesCard) wrap.appendChild(refereesCard);
 
   container.appendChild(wrap);
@@ -326,7 +335,7 @@ function appendEntryRows(tbody, entry, comp, athletes, athleteById, results, res
     el('td', {}, fullName(athlete)),
     el('td', {}, trCode(entry.event, 'events')),
     el('td', { class: 'data' }, entry.seedTime ? secToTime(entry.seedTime) : '—'),
-    showRequired ? el('td', {}, requiredTimeLight(evaluateRequiredTime({ comp, entry, athlete, results }))) : null,
+    showRequired ? el('td', {}, requiredTimeLight(evaluateRequiredTime({ comp, entry, athlete, results }), comp)) : null,
     el('td', {}, [timeInput, ' ', saveBtn, existingResult?.isPB ? ' ' : null, existingResult?.isPB ? badge('PB', 'pb') : null, recordedLaps.length > 0 ? ' ' : null, recordedLaps.length > 0 ? badge(t('competitions.stopwatchLapCount', { count: recordedLaps.length }), 'neutral') : null]),
     el('td', {}, placeInput),
     el('td', {}, [

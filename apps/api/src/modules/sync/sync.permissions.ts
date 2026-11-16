@@ -61,6 +61,9 @@ export const STORE_PERMISSIONS: Record<EntityStoreName, StoreAccess> = {
   // Saisonplanung im Kalender (Ferien, Feiertage, Trainingszeiten,
   // Trainingslager, Schließungen): alle lesen, trainer/admin pflegen.
   calendarEntries: coachManaged,
+  // Normtabellen für Pflichtzeiten (Paket "competitions"): alle lesen,
+  // trainer/admin pflegen — wie die Wettkämpfe selbst.
+  requiredTimeSets: coachManaged,
 };
 
 // Stores der Kernmodule (apps/web/js/router.js: CORE_MODULE_IDS) — an kein

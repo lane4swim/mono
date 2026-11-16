@@ -4,7 +4,7 @@ import { describe, it, expect, vi } from 'vitest';
 vi.mock('../js/demoMode.js', () => ({ IS_DEMO: false }));
 vi.mock('../js/db.js', () => ({ put: vi.fn(async () => {}) }));
 
-import { competitionAge, requiredTimeApplies, evaluateRequiredTime, requiredTimeLight } from '../js/modules/requiredTimes.js';
+import { competitionAge, requiredTimeApplies, evaluateRequiredTime, requiredTimeLight, hasRequiredTimes, manualWindow } from '../js/modules/requiredTimes.js';
 
 const COMP = {
   id: 'comp', date: '2026-11-14T00:00:00.000Z', course: 'LCM',
@@ -90,7 +90,7 @@ describe('evaluateRequiredTime', () => {
   it('null ohne Pflichtzeit, nicht prüfbar ohne Geburtsdatum', () => {
     expect(evaluate([], entry('3', '100 Brust'))).toBeNull();
     expect(evaluate([], entry('1', '100 Freistil'), { ...girl, gender: 'm' })).toBeNull();
-    expect(evaluate([], entry('1', '100 Freistil'), { ...girl, birthdate: null })).toEqual({ status: 'unknown' });
+    expect(evaluate([], entry('1', '100 Freistil'), { ...girl, birthdate: null })).toEqual({ status: 'unknown', source: 'import' });
   });
 });
 
@@ -99,5 +99,56 @@ describe('requiredTimeLight', () => {
     const node = requiredTimeLight({ status: 'training', required: 70, official: null, training: 69 });
     expect(node.querySelector('.req-light-yellow')).not.toBeNull();
     expect(node.textContent).toContain('1:10.00');
+  });
+});
+
+// Von Hand erfasste Pflichtzeiten (docs/Plans/pflichtzeiten-manuell-plan.md).
+describe('manuelle Pflichtzeiten', () => {
+  const manual = (rules, qualifyingWindow = {}) => ({ ...COMP, manualRequirements: { rules, qualifyingWindow, sourceSetId: null, sourceSetName: '' } });
+  const evalManual = (comp, results, e, athlete = girl) => evaluateRequiredTime({ comp, entry: e, athlete, results });
+
+  it('AL zählt das Alter im Wettkampfjahr ohne Masters-Aufweitung', () => {
+    const rt = { classType: 'AL', min: '18', max: '25', gender: '', time: 60 };
+    const born = (y) => ({ id: 'x', gender: 'm', birthdate: `${y}-06-01T00:00:00.000Z` });
+    expect(requiredTimeApplies(rt, born(2001), COMP.date)).toBe(true); // 25
+    expect(requiredTimeApplies(rt, born(2000), COMP.date)).toBe(false); // 26 — bei "AK" wäre es true
+    expect(requiredTimeApplies(rt, born(2008), COMP.date)).toBe(true); // 18
+    expect(requiredTimeApplies(rt, born(2009), COMP.date)).toBe(false); // 17
+    expect(requiredTimeApplies({ ...rt, max: '' }, born(1950), COMP.date)).toBe(true);
+    expect(requiredTimeApplies(rt, { id: 'x', gender: 'm', birthdate: null }, COMP.date)).toBeNull();
+  });
+
+  it('ersetzt die importierten Regeln für dieselbe Disziplin', () => {
+    // girl ist 2026 15 Jahre alt; importiert gälte 70 s (JG 2010–2011).
+    const comp = manual([{ event: '100 Freistil', gender: 'W', classType: 'AL', min: '15', max: '15', time: 72 }]);
+    const r = evalManual(comp, [result(71)], entry('1', '100 Freistil'));
+    expect(r).toMatchObject({ status: 'official', required: 72, source: 'manual' });
+    // Andere Disziplinen behalten ihre importierten Regeln.
+    expect(evalManual(comp, [], entry('2', '50 Rücken'), { id: 'a1', gender: 'm', birthdate: '1996-01-01T00:00:00.000Z' })).toMatchObject({ source: 'import' });
+  });
+
+  it('greift über den Disziplinnamen auch ohne Wettkampfnummer und ohne Definition', () => {
+    const comp = { id: 'comp', date: COMP.date, course: 'SCM', manualRequirements: { rules: [{ event: '50 Brust', gender: '', classType: '', min: '', max: '', time: 45 }] } };
+    const e = { competitionId: 'comp', athleteId: 'a1', eventNumber: '', event: '50 Brust' };
+    expect(evalManual(comp, [result(44, { event: '50 Brust', course: 'SCM', competitionId: null })], e).status).toBe('training');
+    // Bahn des Wettkampfs (SCM): eine 50-m-Bahn-Zeit zählt nicht.
+    expect(evalManual(comp, [result(44, { event: '50 Brust', course: 'LCM' })], e).status).toBe('missing');
+    expect(hasRequiredTimes(comp)).toBe(true);
+    expect(evalManual(comp, [], { ...e, event: '4x50 Freistil' })).toBeNull();
+  });
+
+  it('beachtet Nachweiszeitraum und Bahn "beliebig"', () => {
+    const rules = [{ event: '100 Freistil', gender: '', classType: '', min: '', max: '', time: 72 }];
+    const any = manual(rules, { from: '2026-05-01', to: null, course: 'any' });
+    expect(evalManual(any, [result(71, { course: 'SCM' })], entry('1', '100 Freistil')).status).toBe('official');
+    expect(evalManual(any, [result(71, { date: '2026-04-30T00:00:00.000Z' })], entry('1', '100 Freistil')).status).toBe('missing');
+    expect(manualWindow(manual(rules))).toBeUndefined();
+    expect(manualWindow(manual(rules, { from: null, to: '2026-10-01', course: null }))).toEqual({ from: null, to: '2026-10-01', course: 'LCM' });
+  });
+
+  it('nennt die Quelle im Tooltip', () => {
+    const comp = { ...manual([]), manualRequirements: { rules: [], sourceSetName: 'Bezirk 2027' } };
+    const node = requiredTimeLight({ status: 'missing', required: 70, official: null, training: null, source: 'manual' }, comp);
+    expect(node.getAttribute('title')).toContain('Bezirk 2027');
   });
 });

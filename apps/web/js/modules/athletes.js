@@ -14,6 +14,7 @@ import * as api from '../apiClient.js';
 import { describeError } from '../apiClient.js';
 import { accountStatus, canInviteAthlete, loadAccountIndex } from '../athleteAccount.js';
 import { showInviteLinkModal } from '../inviteLink.js';
+import { athleteRequiredTimesCard } from './athleteRequiredTimes.js';
 
 export const athletesModule = {
   id: 'athletes',
@@ -119,7 +120,7 @@ async function renderDetail(container, athleteId, athletes, groups) {
   const athlete = athletes.find(a => a.id === athleteId);
   if (!athlete) { container.appendChild(emptyState(t('common.notFoundTitle'), t('athletes.notFoundMsg'), el('button', { class: 'btn btn-primary', onclick: () => navigate('athletes') }, t('athletes.backToOverview')))); return; }
 
-  const [results, actionItems, sessions, accountIndex] = await Promise.all([getAll('results'), getAll('actionItems'), getAll('sessions'), loadAccountIndex()]);
+  const [results, actionItems, sessions, accountIndex, competitions, requiredTimeSets, entries] = await Promise.all([getAll('results'), getAll('actionItems'), getAll('sessions'), loadAccountIndex(), getAll('competitions'), getAll('requiredTimeSets'), getAll('entries')]);
   if (!isCurrent()) return;
   const group = groups.find(g => g.id === athlete.groupId);
   const myResults = results.filter(r => r.athleteId === athleteId);
@@ -184,6 +185,11 @@ async function renderDetail(container, athleteId, athletes, groups) {
   grid.appendChild(actionCard);
 
   wrap.appendChild(grid);
+  // Pflichtzeiten anstehender Wettkämpfe und der Normtabellen — leer, wenn
+  // der Verein das Wettkampf-Paket nicht gebucht hat (die Stores bleiben
+  // dann ungefüllt) oder nirgends eine Regel für die Athlet:in gilt.
+  const requiredCard = athleteRequiredTimesCard({ athlete, competitions, sets: requiredTimeSets, results, entries, today: todayISO() });
+  if (requiredCard) wrap.appendChild(el('div', { style: 'margin-top:16px' }, requiredCard));
   container.appendChild(wrap);
 }
 
