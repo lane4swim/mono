@@ -9,6 +9,8 @@ export default {
     all: 'All', optional: 'optional', notFoundTitle: 'Not found',
     nothingHereTitle: 'Nothing here', retry: 'Retry', close: 'Close',
     somethingWentWrong: 'Something went wrong', more: 'More',
+    errorUnknown: 'An unexpected error occurred.',
+    errorNetwork: 'Server unreachable. Please check your internet connection.',
     errorRateLimited: 'Too many requests from your network. Please try again in a minute.',
     updateAvailable: 'A new version is available.',
     updateReload: 'Reload',

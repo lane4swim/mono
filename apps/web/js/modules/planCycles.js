@@ -106,7 +106,7 @@ function renderCycleDetail(container, cycleId, cycles, templates, groups) {
       const list = el('ul');
       week.days.slice().sort((a, b) => a.dayOfWeek - b.dayOfWeek).forEach(d => {
         const tpl = templates.find(x => x.id === d.templateId);
-        list.appendChild(el('li', {}, `${t('weekdays.' + WEEKDAY_KEYS[d.dayOfWeek])}: ${tpl?.name || t('planCycles.unknownTemplate')}`));
+        list.appendChild(el('li', {}, `${t('refdata.weekdays.' + WEEKDAY_KEYS[d.dayOfWeek])}: ${tpl?.name || t('planCycles.unknownTemplate')}`));
       });
       box.appendChild(list);
     }
@@ -171,7 +171,7 @@ function openCycleModal(cycle, templates, onSaved) {
             }
           },
         });
-        dayGrid.appendChild(field(t('weekdays.' + key), sel));
+        dayGrid.appendChild(field(t('refdata.weekdays.' + key), sel));
       });
       block.appendChild(dayGrid);
       weeksHost.appendChild(block);
