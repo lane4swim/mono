@@ -14,6 +14,8 @@ export default {
     // Server-Fehlermeldung wie bei jedem anderen Fehler — für Nutzer:innen
     // ununterscheidbar von einem echten Problem, obwohl ein erneuter
     // Versuch nach kurzer Zeit funktionieren würde.
+    errorUnknown: 'Ein unerwarteter Fehler ist aufgetreten.',
+    errorNetwork: 'Server nicht erreichbar. Bitte Internetverbindung prüfen.',
     errorRateLimited: 'Zu viele Anfragen aus deinem Netzwerk. Bitte in einer Minute erneut versuchen.',
     // Review 30.08.2026, Befund U5: app.js zeigt dies, sobald sw.js einen
     // neuen, bereits installierten, aber noch nicht aktivierten Worker
@@ -361,6 +363,7 @@ export default {
     modalEdit: 'Plan bearbeiten', modalCreate: 'Trainingsplan erstellen',
     formName: 'Name', formWeekStart: 'Wochenbeginn', formGroup: 'Gruppe', formStatus: 'Status',
     formPoolLength: 'Beckenlänge', poolLengthNotSet: '— nicht festgelegt —',
+    expandDay: 'Einheit aufklappen', collapseDay: 'Einheit einklappen', 
     trainingDaysLabel: 'Trainingstage', dateLabel: 'Datum:', removeDay: 'Tag entfernen',
     emptyDayOption: '— leerer Tag —', addDayButton: '+ Trainingstag hinzufügen',
     validationName: 'Bitte einen Namen angeben.', savedEdit: 'Änderungen gespeichert', savedCreate: 'Plan angelegt',

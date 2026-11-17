@@ -404,6 +404,12 @@ tr.live-row-done .live-set-desc{ text-decoration: line-through; color: var(--c-s
 .add-controls{ display:flex; flex-direction:column; gap:8px; margin: 4px 0; }
 .day-block{ border: 1px solid var(--c-line); border-radius: var(--radius-md); padding: 14px 16px; margin-bottom: 12px; }
 .day-block-head{ display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
+/* Einklappbare Trainingseinheiten (plans.js collapseToggle) */
+.day-collapse-toggle{ min-width:32px; padding-left:6px; padding-right:6px; font-size:1rem; line-height:1; }
+.day-collapse-chevron{ display:inline-block; transition: transform .15s ease; }
+.day-collapse-toggle.is-expanded .day-collapse-chevron{ transform: rotate(90deg); }
+.day-title-toggle{ cursor:pointer; margin-bottom:0; }
+.is-collapsed > .day-block-head{ margin-bottom:0; }
 
 /* Verschachtelte Container im Editor (Wiederholungsblock, Abschnitt):
    Rahmen und Innenabstand ragen per negativem Außenabstand nach außen
