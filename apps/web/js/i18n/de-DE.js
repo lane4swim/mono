@@ -361,6 +361,7 @@ export default {
     modalEdit: 'Plan bearbeiten', modalCreate: 'Trainingsplan erstellen',
     formName: 'Name', formWeekStart: 'Wochenbeginn', formGroup: 'Gruppe', formStatus: 'Status',
     formPoolLength: 'Beckenlänge', poolLengthNotSet: '— nicht festgelegt —',
+    expandDay: 'Einheit aufklappen', collapseDay: 'Einheit einklappen', 
     trainingDaysLabel: 'Trainingstage', dateLabel: 'Datum:', removeDay: 'Tag entfernen',
     emptyDayOption: '— leerer Tag —', addDayButton: '+ Trainingstag hinzufügen',
     validationName: 'Bitte einen Namen angeben.', savedEdit: 'Änderungen gespeichert', savedCreate: 'Plan angelegt',

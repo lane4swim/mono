@@ -22,6 +22,40 @@ function poolLengthOptions() {
   return [{ value: '', label: t('plans.poolLengthNotSet') }, ...trOptions(COURSES, 'courses')];
 }
 
+// Einklappbare Trainingseinheiten (Detailansicht + Bearbeiten-Dialog):
+// Beim Öffnen eines Plans ist nur die NÄCHSTE Einheit aufgeklappt — die
+// früheste mit Datum ab heute; liegen alle in der Vergangenheit, die
+// zuletzt stattgefundene. Alle übrigen starten eingeklappt, um die
+// Ansicht bei langen Plänen übersichtlich zu halten.
+export function nextSessionDay(days, today = todayISO()) {
+  let next = null;
+  let last = null;
+  (days || []).forEach(d => {
+    const date = dateOnly(d.date);
+    if (date >= today && (!next || date < dateOnly(next.date))) next = d;
+    if (!last || date > dateOnly(last.date)) last = d;
+  });
+  return next || last;
+}
+
+// Auf-/Zuklapp-Schalter für den Kopf einer Einheit. Hält seinen Zustand
+// selbst (aria-expanded) und meldet jeden Wechsel an `onChange(expanded)`;
+// wird einmal initial mit dem Startzustand aufgerufen.
+function collapseToggle(initiallyExpanded, onChange) {
+  const btn = el('button', { type: 'button', class: 'btn btn-ghost btn-sm day-collapse-toggle' }, el('span', { class: 'day-collapse-chevron', 'aria-hidden': 'true' }, '▸'));
+  function apply(expanded) {
+    btn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+    btn.classList.toggle('is-expanded', expanded);
+    const label = expanded ? t('plans.collapseDay') : t('plans.expandDay');
+    btn.title = label;
+    btn.setAttribute('aria-label', label);
+    onChange(expanded);
+  }
+  btn.addEventListener('click', () => apply(btn.getAttribute('aria-expanded') !== 'true'));
+  apply(initiallyExpanded);
+  return btn;
+}
+
 // Baut eine unabhängige Kopie eines Trainingsplans für "Duplizieren" — id/
 // Zeitstempel übernimmt put() automatisch (siehe db.js). weekStart bleibt
 // unverändert (die Person passt das Datum bei Bedarf selbst über
@@ -145,11 +179,10 @@ async function renderDetail(container, planId) {
     await put('plans', { ...plan, comments: nextComments });
   });
 
+  const firstExpanded = nextSessionDay(plan.days);
   (plan.days || []).slice().sort((a, b) => a.date.localeCompare(b.date)).forEach((day, dayIndex) => {
     const dayEquipment = collectEquipment(day.sets || [], exercises);
-    const dayCard = el('div', { class: 'card' }, [
-      el('div', { class: 'day-block-head' }, [
-        el('h3', { class: 'mt-0' }, fmtDateLong(day.date)),
+    const headActions =
         el('div', { class: 'flex items-center gap-8' }, [
           day.poolLength ? badge(trLabel(COURSES, day.poolLength, 'courses'), 'neutral') : null,
           badge(dayTotalBadgeLabel(day.sets || []), 'neutral'),
@@ -158,14 +191,26 @@ async function renderDetail(container, planId) {
           // plansModule.roles), aber ohne diesen Einstieg.
           isTrainerOrAdmin() ? el('button', { class: 'btn btn-accent btn-sm', onclick: () => navigate('plans', plan.id, 'live', String(dayIndex)) }, t('plans.liveModeStart')) : null,
           el('button', { class: 'btn btn-ghost btn-sm', onclick: () => exportDayToPdf(plan, day, group, exercises) }, t('plans.exportDayPdf')),
-        ]),
+        ]);
+    const body = el('div', { class: 'day-body' });
+    const dayCard = el('div', { class: 'card' });
+    const toggle = collapseToggle(day === firstExpanded, (expanded) => {
+      body.hidden = !expanded;
+      dayCard.classList.toggle('is-collapsed', !expanded);
+    });
+    dayCard.appendChild(el('div', { class: 'day-block-head' }, [
+      el('div', { class: 'flex items-center gap-8' }, [
+        toggle,
+        el('h3', { class: 'mt-0 day-title-toggle', onclick: () => toggle.click() }, fmtDateLong(day.date)),
       ]),
-    ]);
-    dayCard.appendChild(el('p', { class: 'text-sm', style: 'margin-top:-8px' },
+      headActions,
+    ]));
+    dayCard.appendChild(body);
+    body.appendChild(el('p', { class: 'text-sm', style: 'margin-top:-8px' },
       dayEquipment.length > 0
         ? `${t('setEditor.equipmentSummary')} ${dayEquipment.map(eq => trLabel(EQUIPMENT_ITEMS, eq, 'equipment')).join(', ')}`
         : t('setEditor.equipmentNone')));
-    dayCard.appendChild(renderDayItems(day.sets || [], exercises, plan));
+    body.appendChild(renderDayItems(day.sets || [], exercises, plan));
     wrap.appendChild(dayCard);
   });
 
@@ -385,22 +430,47 @@ function openPlanModal(plan, groups, templates, exercises, sectionTemplates, onS
   daysWrap.appendChild(daysHost);
   form.appendChild(daysWrap);
 
+  // Aufgeklappte Tage, per Objekt-Identität gemerkt (nicht per Index —
+  // "Tag entfernen" verschiebt die Indizes). Neu hinzugefügte Tage werden
+  // beim Anlegen aufgeklappt (siehe addDayButton unten).
+  const expandedDays = new Set();
+  const initiallyExpanded = nextSessionDay(data.days);
+  if (initiallyExpanded) expandedDays.add(initiallyExpanded);
+
   function drawDays() {
     clear(daysHost);
     data.days.forEach((day, di) => {
-      const block = el('div', { class: 'day-block' });
+      const expanded = expandedDays.has(day);
+      const block = el('div', { class: `day-block${expanded ? '' : ' is-collapsed'}` });
       const dayDateInput = dateInput(day.date, { oninput: (e) => day.date = e.target.value });
       const dayPoolLengthInput = selectInput(poolLengthOptions(), day.poolLength ?? '', { onchange: (e) => day.poolLength = e.target.value || null });
+      // Erster Aufruf (Startzustand) ist ein No-op; jeder Klick zeichnet neu,
+      // damit der Satz-Editor nur für aufgeklappte Tage existiert.
+      const onToggle = (next) => {
+        if (next === expanded) return;
+        if (next) expandedDays.add(day); else expandedDays.delete(day);
+        drawDays();
+      };
       block.appendChild(el('div', { class: 'day-block-head' }, [
         el('div', { class: 'flex items-center gap-8' }, [
+          collapseToggle(expanded, onToggle),
           el('strong', {}, t('plans.dateLabel')), dayDateInput,
           el('strong', {}, t('plans.formPoolLength')), dayPoolLengthInput,
         ]),
-        el('button', { type: 'button', class: 'btn btn-danger btn-sm', onclick: () => { data.days.splice(di, 1); drawDays(); } }, t('plans.removeDay')),
+        el('div', { class: 'flex items-center gap-8' }, [
+          // Eingeklappt bleibt die Tagesgesamtdistanz sichtbar, damit man
+          // die Einheiten auch ohne Aufklappen unterscheiden kann.
+          expanded ? null : badge(dayTotalBadgeLabel(day.sets || []), 'neutral'),
+          el('button', { type: 'button', class: 'btn btn-danger btn-sm', onclick: () => { data.days.splice(di, 1); expandedDays.delete(day); drawDays(); } }, t('plans.removeDay')),
+        ]),
       ]));
-      const setsHost = el('div');
-      block.appendChild(setsHost);
-      renderSetEditor(setsHost, day.sets, exercises, { sectionTemplates });
+      // Der Satz-Editor wird nur für aufgeklappte Tage gerendert; day.sets
+      // bleibt dabei unverändert, eingeklappte Tage werden normal gespeichert.
+      if (expanded) {
+        const setsHost = el('div');
+        block.appendChild(setsHost);
+        renderSetEditor(setsHost, day.sets, exercises, { sectionTemplates });
+      }
       daysHost.appendChild(block);
     });
   }
@@ -412,7 +482,9 @@ function openPlanModal(plan, groups, templates, exercises, sectionTemplates, onS
   addRow.appendChild(el('button', { type: 'button', class: 'btn btn-accent btn-sm', onclick: () => {
     const tpl = templates.find(x => x.id === templateSel.value);
     const nextDate = data.days.length ? isoAddDays(data.days[data.days.length - 1].date, 1) : fWeek.value || todayISO();
-    data.days.push({ date: nextDate, poolLength: tpl?.poolLength ?? null, sets: tpl ? cloneItems(tpl.sets) : [] });
+    const newDay = { date: nextDate, poolLength: tpl?.poolLength ?? null, sets: tpl ? cloneItems(tpl.sets) : [] };
+    data.days.push(newDay);
+    expandedDays.add(newDay);
     drawDays();
   } }, t('plans.addDayButton')));
   daysWrap.appendChild(addRow);

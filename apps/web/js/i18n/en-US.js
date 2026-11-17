@@ -338,6 +338,7 @@ export default {
     modalEdit: 'Edit plan', modalCreate: 'Create training plan',
     formName: 'Name', formWeekStart: 'Week starting', formGroup: 'Group', formStatus: 'Status',
     formPoolLength: 'Pool length', poolLengthNotSet: '— not set —',
+    expandDay: 'Expand session', collapseDay: 'Collapse session', 
     trainingDaysLabel: 'Training Days', dateLabel: 'Date:', removeDay: 'Remove day',
     emptyDayOption: '— empty day —', addDayButton: '+ Add training day',
     validationName: 'Please enter a name.', savedEdit: 'Changes saved', savedCreate: 'Plan created',
