@@ -1,7 +1,7 @@
 // Nachverfolgung der Trainingseinheiten & Feedback
 import { getAll, put, remove } from '../db.js';
 import { el, clear, beginRender, redraw } from '../dom.js';
-import { fmtDateLong, todayISO, toIsoDateTime } from '../dates.js';
+import { fmtDateLong, todayISO, toIsoDateTime, dateOnly } from '../dates.js';
 import { badge, emptyState, laneWave, average, fullName, toast } from '../ui.js';
 import { openModal, confirmAction } from '../modal.js';
 import { field, selectInput, dateInput, formActions } from '../forms.js';
@@ -9,6 +9,7 @@ import { isAthleteScoped, getCurrentUser } from '../state.js';
 import { fetchAssignableTrainers } from './actionItems.js';
 import { navigate } from '../router.js';
 import { t } from '../i18n.js';
+import { totalDistance } from './setEditor.js';
 import { teamFilterChips, loadTeamSelection, saveTeamSelection, matchesTeams } from '../teamFilter.js';
 
 export const sessionsModule = {
@@ -24,17 +25,17 @@ export const sessionsModule = {
     // Detailansicht lädt ihre Daten selbst (siehe renderDetail()) — vor dem
     // Listenabruf verzweigen, sonst würde jeder Store doppelt gelesen.
     if (params[0]) return renderDetail(container, params[0]);
-    const [sessions, groups, athletes] = await Promise.all(['sessions', 'groups', 'athletes'].map(getAll));
+    const [sessions, groups, athletes, plans] = await Promise.all(['sessions', 'groups', 'athletes', 'plans'].map(getAll));
     if (!isCurrent()) return;
-    renderList(container, sessions, groups, athletes);
+    renderList(container, sessions, groups, athletes, plans);
   }
 };
 
-function renderList(container, sessions, groups, athletes) {
+function renderList(container, sessions, groups, athletes, plans) {
   const wrap = el('div');
   wrap.appendChild(el('div', { class: 'page-head' }, [
     el('div', {}, [el('h1', { class: 'mt-0' }, t('sessions.title'))]),
-    el('div', { class: 'page-actions' }, [el('button', { class: 'btn btn-primary', onclick: () => openSessionModal(null, groups, athletes, fetchAssignableTrainers(), refresh) }, t('sessions.addSession'))]),
+    el('div', { class: 'page-actions' }, [el('button', { class: 'btn btn-primary', onclick: () => openSessionModal(null, groups, athletes, fetchAssignableTrainers(), refresh, { plans }) }, t('sessions.addSession'))]),
   ]));
   wrap.appendChild(laneWave());
 
@@ -75,7 +76,7 @@ function renderList(container, sessions, groups, athletes) {
   }
 
   function refresh() {
-    return redraw(container, () => Promise.all(['sessions', 'groups', 'athletes'].map(getAll)), ([s2, g2, a2]) => renderList(container, s2, g2, a2));
+    return redraw(container, () => Promise.all(['sessions', 'groups', 'athletes', 'plans'].map(getAll)), ([s2, g2, a2, p2]) => renderList(container, s2, g2, a2, p2));
   }
 }
 
@@ -94,12 +95,18 @@ async function renderDetail(container, sessionId) {
   wrap.appendChild(el('div', { class: 'page-head' }, [
     el('div', {}, [el('div', { class: 'page-eyebrow' }, group?.name || t('plans.noGroup')), el('h1', { class: 'mt-0' }, fmtDateLong(session.date))]),
     el('div', { class: 'page-actions' }, [
-      el('button', { class: 'btn btn-ghost', onclick: () => openSessionModal(session, groups, athletes, trainers, () => renderDetail(container, sessionId)) }, t('common.edit')),
+      el('button', { class: 'btn btn-ghost', onclick: () => openSessionModal(session, groups, athletes, trainers, () => renderDetail(container, sessionId), { plans }) }, t('common.edit')),
       el('button', { class: 'btn btn-danger', onclick: () => confirmAction(t('sessions.deleteConfirm'), async () => { await remove('sessions', sessionId); toast(t('sessions.deleted')); navigate('sessions'); }) }, t('common.delete')),
     ]),
   ]));
   wrap.appendChild(laneWave());
-  if (plan) wrap.appendChild(el('p', {}, t('sessions.basedOnPlan', { name: plan.name })));
+  if (plan) {
+    const day = planDayOn(plan, session.date);
+    wrap.appendChild(el('p', { class: 'flex items-center gap-8', style: 'flex-wrap:wrap' }, [
+      el('span', {}, day ? t('sessions.basedOnPlanWithVolume', { name: plan.name, m: totalDistance(day.sets || []) }) : t('sessions.basedOnPlan', { name: plan.name })),
+      el('button', { class: 'btn btn-ghost btn-sm', onclick: () => navigate('plans', plan.id) }, t('sessions.openPlan')),
+    ]));
+  }
   else if (session.actualDistance != null) wrap.appendChild(el('p', {}, t('sessions.actualDistanceLine', { m: session.actualDistance })));
   if (session.trainerNote) wrap.appendChild(el('div', { class: 'card' }, [el('h3', { class: 'mt-0' }, t('sessions.trainerNoteTitle')), el('p', {}, session.trainerNote)]));
 
@@ -148,6 +155,40 @@ async function renderAthleteView(container, isCurrent) {
   container.appendChild(wrap);
 }
 
+// Der Tag eines Plans an einem Datum (Vergleich nur über das Datum, siehe
+// sessionVolume() in trainingLoad.js, das denselben Tag heranzieht).
+export function planDayOn(plan, date) {
+  const d = dateOnly(date);
+  return (plan?.days || []).find(day => dateOnly(day.date) === d) || null;
+}
+
+// Pläne, die mit einer Einheit am `date` verknüpft werden können: alle mit
+// einem Trainingstag an diesem Datum — Pläne der Gruppe zuerst, darin
+// aktive vor archivierten. Pläne anderer Gruppen bleiben wählbar (z. B.
+// gemeinsames Training zweier Gruppen).
+export function linkablePlans(plans, date, groupId) {
+  const rank = (p) => (p.groupId === groupId ? 0 : 2) + (p.status === 'aktiv' ? 0 : 1);
+  return (plans || [])
+    .filter(p => planDayOn(p, date))
+    .sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
+}
+
+// Vorschlag für eine NEUE Einheit: ein aktiver Plan der Gruppe mit einem
+// Tag an diesem Datum — sonst keiner (eine fremde Gruppe oder ein
+// archivierter Plan wird nie stillschweigend vorausgewählt).
+export function suggestPlanId(plans, date, groupId) {
+  const first = linkablePlans(plans, date, groupId)[0];
+  return first && first.groupId === groupId && first.status === 'aktiv' ? first.id : null;
+}
+
+// Neue Einheit mit Vorbelegung (z. B. aus dem Trainingsmodus eines Plans,
+// siehe planLive.js) — lädt die Auswahllisten selbst. `onSaved` erhält die
+// gespeicherte Einheit.
+export async function openNewSessionModal(prefill, onSaved) {
+  const [groups, athletes, plans] = await Promise.all(['groups', 'athletes', 'plans'].map(getAll));
+  openSessionModal(null, groups, athletes, fetchAssignableTrainers(), onSaved, { plans, prefill });
+}
+
 // Vorauswahl der anwesenden Trainer:innen einer NEUEN Einheit: die der
 // Gruppe zugeordneten, ohne Zuordnung die erfassende Person selbst.
 function defaultCoachIds(groups, groupId) {
@@ -158,11 +199,14 @@ function defaultCoachIds(groups, groupId) {
 
 // `trainers` darf ein Promise sein (Liste lädt über das Netz, siehe
 // fetchAssignableTrainers()) — die Checkboxen erscheinen, sobald sie da ist.
-function openSessionModal(session, groups, athletes, trainers, onSaved) {
+function openSessionModal(session, groups, athletes, trainers, onSaved, { plans = [], prefill = {} } = {}) {
   const isEdit = !!session;
+  const newDate = dateOnly(prefill.date) || todayISO();
+  // Ohne Vorgabe: die Gruppe, die an dem Tag nach Plan trainiert.
+  const newGroupId = prefill.groupId ?? (groups.find(g => suggestPlanId(plans, newDate, g.id)) || groups[0])?.id ?? '';
   const data = session
     ? { ...session, attendance: session.attendance.map(a => ({ ...a })), coachIds: [...(session.coachIds || [])] }
-    : { date: todayISO(), groupId: groups[0]?.id || '', planId: null, trainerNote: '', attendance: [], coachIds: defaultCoachIds(groups, groups[0]?.id) };
+    : { date: newDate, groupId: newGroupId, planId: prefill.planId !== undefined ? prefill.planId : suggestPlanId(plans, newDate, newGroupId), trainerNote: '', attendance: [], coachIds: defaultCoachIds(groups, newGroupId) };
   function attendanceFor(groupId) {
     return athletes.filter(a => a.groupId === groupId).map(a => {
       const existing = data.attendance.find(x => x.athleteId === a.id);
@@ -178,13 +222,57 @@ function openSessionModal(session, groups, athletes, trainers, onSaved) {
   form.appendChild(el('div', { class: 'form-grid' }, [field(t('sessions.formDate'), fDate), field(t('sessions.formGroup'), fGroup)]));
   form.appendChild(field(t('sessions.formTrainerNote'), fNote, { hint: t('sessions.formTrainerNoteHint') }));
 
-  // Nur ohne verknüpften Plan relevant — sonst wird der Umfang aus dem
+  // Verknüpfter Plan: zur Auswahl stehen Pläne mit einem Tag am gewählten
+  // Datum (siehe linkablePlans()). Bei einer NEUEN Einheit folgt die
+  // Vorauswahl Datum/Gruppe, bis die Person selbst etwas auswählt.
+  let planTouched = isEdit || prefill.planId !== undefined;
+  const fPlan = el('select');
+  const planHint = el('div', { class: 'hint' });
+  form.appendChild(el('div', { class: 'field' }, [el('label', { for: 'session-plan' }, t('sessions.formPlan')), fPlan, planHint]));
+  fPlan.id = 'session-plan';
+  fPlan.setAttribute('aria-describedby', 'session-plan-hint');
+  planHint.id = 'session-plan-hint';
+  const groupName = (id) => groups.find(g => g.id === id)?.name || t('plans.noGroup');
+
+  // Umfang von Hand — nur ohne verknüpften Plan; sonst wird er aus dem
   // Plan-Tag berechnet (siehe trainingLoad.js).
-  let fActualDistance = null;
-  if (!data.planId) {
-    fActualDistance = el('input', { type: 'number', min: '0', value: data.actualDistance ?? '' });
-    form.appendChild(field(t('sessions.formActualDistance'), fActualDistance, { hint: t('sessions.formActualDistanceHint') }));
+  const fActualDistance = el('input', { type: 'number', min: '0', value: data.actualDistance ?? '' });
+  const actualDistanceField = field(t('sessions.formActualDistance'), fActualDistance, { hint: t('sessions.formActualDistanceHint') });
+  form.appendChild(actualDistanceField);
+
+  function drawPlanOptions() {
+    const date = fDate.value;
+    const options = linkablePlans(plans, date, fGroup.value);
+    // Ein bereits verknüpfter Plan ohne Tag an diesem Datum (Datum
+    // geändert) bleibt sichtbar, statt stillschweigend zu verschwinden.
+    const linked = plans.find(p => p.id === data.planId);
+    if (linked && !options.includes(linked)) options.push(linked);
+    clear(fPlan);
+    fPlan.appendChild(el('option', { value: '' }, t('sessions.formPlanNone')));
+    options.forEach(p => {
+      const day = planDayOn(p, date);
+      const parts = [p.name, groupName(p.groupId), day ? t('plans.totalBadge', { m: totalDistance(day.sets || []) }) : t('sessions.formPlanNoDay')];
+      if (p.status !== 'aktiv') parts.push(t('plans.statusArchived'));
+      fPlan.appendChild(el('option', { value: p.id }, parts.join(' · ')));
+    });
+    fPlan.value = data.planId || '';
+    drawPlanState();
   }
+  function drawPlanState() {
+    const plan = plans.find(p => p.id === data.planId);
+    const day = plan ? planDayOn(plan, fDate.value) : null;
+    planHint.textContent = !plan
+      ? (linkablePlans(plans, fDate.value, fGroup.value).length ? t('sessions.formPlanHint') : t('sessions.formPlanNoneAvailable'))
+      : day ? t('sessions.formPlanVolume', { m: totalDistance(day.sets || []) }) : t('sessions.formPlanNoDayHint');
+    actualDistanceField.style.display = plan ? 'none' : '';
+  }
+  fPlan.addEventListener('change', () => { planTouched = true; data.planId = fPlan.value || null; drawPlanState(); });
+  function refreshSuggestion() {
+    if (!planTouched) data.planId = suggestPlanId(plans, fDate.value, fGroup.value);
+    drawPlanOptions();
+  }
+  fDate.addEventListener('change', refreshSuggestion);
+  drawPlanOptions();
 
   const coachWrap = el('div', { class: 'field' });
   coachWrap.appendChild(el('label', {}, t('sessions.coachesLabel')));
@@ -236,15 +324,18 @@ function openSessionModal(session, groups, athletes, trainers, onSaved) {
   fGroup.addEventListener('change', () => {
     data.groupId = fGroup.value; data.attendance = attendanceFor(fGroup.value); drawAttendance();
     if (!isEdit) { data.coachIds = defaultCoachIds(groups, fGroup.value); drawCoaches(); }
+    refreshSuggestion();
   });
 
   form.appendChild(formActions({ onCancel: () => close(), submitLabel: isEdit ? t('common.save') : t('sessions.addSession').replace('+ ', ''), spanFull: false }).row);
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const actualDistance = fActualDistance ? (fActualDistance.value ? parseInt(fActualDistance.value, 10) : null) : (data.actualDistance ?? null);
-    await put('sessions', { ...data, date: toIsoDateTime(fDate.value), groupId: fGroup.value, trainerNote: fNote.value.trim(), attendance: data.attendance, coachIds: data.coachIds, actualDistance });
+    // Mit Plan zählt der Umfang des Plan-Tages (trainingLoad.js bevorzugt
+    // sonst eine Handangabe) — daher dort keine Handangabe speichern.
+    const actualDistance = data.planId ? null : (fActualDistance.value ? parseInt(fActualDistance.value, 10) : null);
+    const saved = await put('sessions', { ...data, date: toIsoDateTime(fDate.value), groupId: fGroup.value, planId: data.planId || null, trainerNote: fNote.value.trim(), attendance: data.attendance, coachIds: data.coachIds, actualDistance });
     toast(isEdit ? t('sessions.savedEdit') : t('sessions.savedCreate'));
-    close(); onSaved?.();
+    close(); onSaved?.(saved);
   });
   const { close } = openModal({ title: isEdit ? t('sessions.modalEdit') : t('sessions.modalCreate'), bodyNode: form, wide: true });
 }

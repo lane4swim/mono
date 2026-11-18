@@ -9,14 +9,15 @@
 // Verlassen des Trainingsmodus — auch bei einem bloßen Reload — wieder
 // weg, wie in Issue #78 gefordert ("wird nicht dauerhaft gespeichert").
 import { getAll } from '../db.js';
-import { el, beginRender } from '../dom.js';
+import { el, clear, beginRender } from '../dom.js';
 import { badge, emptyState, laneWave } from '../ui.js';
-import { fmtDateLong } from '../dates.js';
+import { fmtDateLong, dateOnly } from '../dates.js';
 import { navigate } from '../router.js';
 import { t, trLabel } from '../i18n.js';
 import { EQUIPMENT_ITEMS, SET_INTENSITIES } from '../refdata.js';
 import { equipmentForEntry, formatDuration } from './setEditor.js';
 import { acquireWakeLock } from '../wakeLock.js';
+import { openNewSessionModal } from './sessions.js';
 
 // Flacht die (ggf. verschachtelten) Einträge eines Trainingstages auf eine
 // einfache Liste einzeln abhakbarer Sätze ab. Wiederholungsblöcke und
@@ -76,7 +77,7 @@ export async function renderLiveMode(container, planId, dayIndex) {
     return;
   }
 
-  const exercises = await getAll('exercises');
+  const [exercises, sessions] = await Promise.all([getAll('exercises'), getAll('sessions')]);
   if (!isCurrent()) return;
   const days = (plan.days || []).slice().sort((a, b) => a.date.localeCompare(b.date));
 
@@ -118,7 +119,20 @@ export async function renderLiveMode(container, planId, dayIndex) {
     appendChecklistGroups(wrap, rows, exercises, checkedIds);
   }
 
-  wrap.appendChild(el('button', { class: 'btn btn-ghost mt-16', onclick: () => navigate('plans', planId) }, t('plans.liveModeEnd')));
+  // Abschluss eines Trainingstages: Einheit erfassen, mit diesem Plan und
+  // Tag verknüpft (Datum/Gruppe vorbelegt, siehe openNewSessionModal()) —
+  // oder, wenn schon erfasst, die vorhandene Einheit öffnen.
+  const recorded = sessions.find(s => s.planId === plan.id && dateOnly(s.date) === dateOnly(day.date));
+  wrap.appendChild(el('div', { class: 'flex items-center gap-8', style: 'flex-wrap:wrap;margin-top:16px' }, [
+    recorded
+      ? el('button', { class: 'btn btn-accent', onclick: () => navigate('sessions', recorded.id) }, t('plans.liveModeOpenSession'))
+      : el('button', { class: 'btn btn-accent', onclick: () => openNewSessionModal(
+        { date: day.date, groupId: plan.groupId, planId: plan.id },
+        () => { clear(container); renderLiveMode(container, planId, idx); },
+      ) }, t('plans.liveModeRecordSession')),
+    recorded ? badge(t('plans.liveModeSessionRecorded'), 'done') : null,
+    el('button', { class: 'btn btn-ghost', onclick: () => navigate('plans', planId) }, t('plans.liveModeEnd')),
+  ]));
 
   container.appendChild(wrap);
 }
