@@ -465,6 +465,12 @@ Aggregationslogik und Rendering in `stats.js`.
   Fallback für einen Randfall. Eine Plan-Verknüpfung im Session-Modal
   nachzurüsten war nicht Teil dieses Plans und wurde bewusst nicht mit
   erledigt — separate Entscheidung, falls gewünscht.
+  **Nachtrag (11/2026):** inzwischen nachgerüstet — das Erfassen-Modal hat
+  ein Feld „Trainingsplan" (Pläne mit einem Tag am gewählten Datum,
+  Vorauswahl: aktiver Plan der Gruppe), und der Trainingsmodus bietet
+  „Einheit erfassen" mit vorbelegtem Plan/Datum/Gruppe. Bei verknüpftem
+  Plan wird keine Handangabe gespeichert (`actualDistance: null`), der
+  Umfang kommt aus dem Plan-Tag.
 - `apps/api/prisma/seed.ts` — `session2` (die bereits vorhandene
   Ad-hoc-Einheit ohne Plan) bekommt `actualDistance: 1800`, damit die
   Demo-Datenbank den neuen Fallback direkt zeigt.
