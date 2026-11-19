@@ -7,6 +7,20 @@ import type { ChangedRecord } from './sync.gateway.js';
 
 export const PULL_PAGE_SIZE = 200;
 
+// Wartezeit, bevor pull() eine Änderung ausliefert. Der Cursor ist ein
+// strikter `updatedAt > cursor`-Wasserstand, `updatedAt` wird aber VOR dem
+// Commit gestempelt (Prismas @updatedAt beim Bauen der Abfrage, `now()` =
+// Transaktionsbeginn im Hard-Purge). Eine Transaktion, die mit älterem
+// Stempel NACH einer neueren committet, läge sonst schon hinter dem Cursor
+// aller Geräte, die zwischendurch gepullt haben, und käme nie mehr an.
+// pull() liefert deshalb nur Zeilen bis `jetzt - PULL_SETTLE_MS`; alles
+// davor ist sicher committet oder zurückgerollt. Muss länger sein als die
+// längste schreibende Transaktion (Hard-Purge: Timeout 30 s, siehe
+// jobs/erasure.repository.ts) plus der Uhrabweichung zwischen API- und
+// Datenbank-Host. Preis: Änderungen erreichen andere Geräte entsprechend
+// später.
+export const PULL_SETTLE_MS = 60_000;
+
 // Sicherheitsnetz für den in splitAtSafeTimestampBoundary() beschriebenen
 // Extremfall (das GESAMTE Blickfenster von PULL_PAGE_SIZE+1 Zeilen teilt
 // sich einen einzigen Zeitstempel): eine gezielte Nachfrage GENAU dieses

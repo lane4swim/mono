@@ -109,7 +109,10 @@ export interface SyncGateway {
   // ohne das bewusst zu entscheiden. Ersetzt NICHT die anwendungsseitige
   // Rechteprüfung in pull() (`changes.filter(canRead)`), die unverändert
   // bestehen bleibt — reine zusätzliche Verengung der Abfrage selbst.
-  listChangedSince(clubId: string, since: Date | null, limit: number, stores: readonly EntityStoreName[]): Promise<ChangedRecord[]>;
+  //
+  // `until` ist die obere Grenze (inklusive) für `updatedAt`/`deletedAt`,
+  // siehe PULL_SETTLE_MS in sync.pagination.ts.
+  listChangedSince(clubId: string, since: Date | null, until: Date, limit: number, stores: readonly EntityStoreName[]): Promise<ChangedRecord[]>;
   // clubId-gescoped: eine Event-id ist zwar client-generiert und praktisch
   // garantiert global eindeutig (UUID), ein Abgleich ohne clubId würde
   // aber ein fremdes Event-ID-Ratespiel konsequenzlos mit "applied"
@@ -267,7 +270,7 @@ export class PrismaSyncGateway implements SyncGateway, SyncGatewayTestSurface {
   // die Zeile wird beim nächsten Zyklus redundant, aber korrekt erneut
   // ausgeliefert. Der umgekehrte Fall — Payload ÄLTER als der Zeitstempel,
   // also stiller Datenverlust — kann so nicht auftreten.
-  async listChangedSince(clubId: string, since: Date | null, limit: number, stores: readonly EntityStoreName[]): Promise<ChangedRecord[]> {
+  async listChangedSince(clubId: string, since: Date | null, until: Date, limit: number, stores: readonly EntityStoreName[]): Promise<ChangedRecord[]> {
     type Candidate = { store: EntityStoreName; id: string; updatedAt: Date; deleted: boolean };
 
     const [storeWatermarks, tombstones] = await Promise.all([
@@ -275,7 +278,7 @@ export class PrismaSyncGateway implements SyncGateway, SyncGatewayTestSurface {
         stores.map(async (store) => {
           const delegate = getEntityDelegate(this.prisma, store);
           const rows = (await delegate.findMany({
-            where: { clubId, ...(since ? { updatedAt: { gt: since } } : {}) },
+            where: { clubId, updatedAt: { ...(since ? { gt: since } : {}), lte: until } },
             orderBy: { updatedAt: 'asc' },
             take: limit,
             select: { id: true, updatedAt: true, deletedAt: true },
@@ -287,7 +290,7 @@ export class PrismaSyncGateway implements SyncGateway, SyncGatewayTestSurface {
       // eingegrenzt: ein Löschvermerk aus einem für die anfragende Rolle
       // nicht lesbaren Store würde sonst unnötig mitgeladen.
       this.prisma.syncTombstone.findMany({
-        where: { clubId, store: { in: [...stores] }, ...(since ? { deletedAt: { gt: since } } : {}) },
+        where: { clubId, store: { in: [...stores] }, deletedAt: { ...(since ? { gt: since } : {}), lte: until } },
         orderBy: { deletedAt: 'asc' },
         take: limit,
         select: { store: true, entityId: true, deletedAt: true },

@@ -66,7 +66,7 @@ async function buildTestApp() {
     auditLog,
   });
   const gateway = new InMemorySyncGateway();
-  const syncService = createSyncService({ gateway });
+  const syncService = createSyncService({ gateway, pullSettleMs: 0 });
   const app = await buildApp(testEnv, { authService, invitationsService, syncService, clubs, keyPair });
   return { app, gateway, keyPair, clubs };
 }

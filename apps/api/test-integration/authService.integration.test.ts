@@ -15,7 +15,7 @@
 //     Annehmen -> muss als AthleteAlreadyLinkedError (409) ankommen.
 import { describe, it, expect, afterEach, afterAll } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { createAuthService, EmailAlreadyRegisteredError, AthleteAlreadyLinkedError } from '../src/modules/auth/auth.service.js';
+import { createAuthService, EmailAlreadyRegisteredError, AthleteAlreadyLinkedError, LastAdminError } from '../src/modules/auth/auth.service.js';
 import { PrismaUserRepository, PrismaRefreshTokenRepository, PrismaPasswordResetTokenRepository } from '../src/modules/auth/auth.repository.js';
 import { createInvitationsService } from '../src/modules/invitations/invitations.service.js';
 import { PrismaClubRepository, PrismaInvitationRepository, PrismaAthleteRepository } from '../src/modules/invitations/invitations.repository.js';
@@ -175,5 +175,71 @@ describe('authService.changeEmail() — P2002-Regression (Sicherheitsreview 2026
     await expect(
       authService.changeEmail(user.id, 'ein-sicheres-passwort', 'lena.brandt@example.org'),
     ).rejects.toBeInstanceOf(EmailAlreadyRegisteredError);
+  });
+});
+
+describe('Kein Verein ohne Admin (Issue #132)', () => {
+  async function mkAdmin(clubId: string, label: string) {
+    return prisma.user.create({
+      data: { clubId, name: label, email: `${label}-${randomUUID()}@example.org`, passwordHash: 'hash', role: 'admin', roles: ['admin'] },
+    });
+  }
+  const activeAdmins = (clubId: string) => prisma.user.count({ where: { clubId, deletedAt: null, roles: { has: 'admin' } } });
+
+  it('lehnt die Selbstlöschung des einzigen Admins mit LastAdminError ab und lässt das Konto aktiv', async () => {
+    const { authService } = makeServices();
+    const club = await createTestClub();
+    const a = await mkAdmin(club.id, 'a');
+
+    await expect(authService.requestAccountDeletion(a.id)).rejects.toThrow(LastAdminError);
+
+    expect(await activeAdmins(club.id)).toBe(1);
+    expect(await prisma.dataDeletionRequest.count({ where: { userId: a.id } })).toBe(0);
+  });
+
+  it('erlaubt die Selbstlöschung eines Admins, wenn ein weiterer aktiver Admin verbleibt', async () => {
+    const { authService } = makeServices();
+    const club = await createTestClub();
+    const a = await mkAdmin(club.id, 'a');
+    await mkAdmin(club.id, 'b');
+
+    await authService.requestAccountDeletion(a.id);
+
+    expect(await activeAdmins(club.id)).toBe(1);
+  });
+
+  it('lässt bei gleichzeitigem gegenseitigem Entzug der admin-Rolle immer mindestens einen Admin übrig', async () => {
+    const { authService } = makeServices();
+    for (let run = 0; run < 20; run++) {
+      const club = await createTestClub();
+      const a = await mkAdmin(club.id, 'a');
+      const b = await mkAdmin(club.id, 'b');
+
+      const outcomes = await Promise.allSettled([
+        authService.updateUserRoles(b.id, ['trainer'], { id: a.id, clubId: club.id }),
+        authService.updateUserRoles(a.id, ['trainer'], { id: b.id, clubId: club.id }),
+      ]);
+
+      expect(await activeAdmins(club.id)).toBe(1);
+      const rejected = outcomes.filter((o): o is PromiseRejectedResult => o.status === 'rejected');
+      expect(rejected).toHaveLength(1);
+      expect(rejected[0]!.reason).toBeInstanceOf(LastAdminError);
+    }
+  });
+
+  it('lässt bei gleichzeitiger Selbstlöschung und Rollenentzug immer mindestens einen Admin übrig', async () => {
+    const { authService } = makeServices();
+    for (let run = 0; run < 20; run++) {
+      const club = await createTestClub();
+      const a = await mkAdmin(club.id, 'a');
+      const b = await mkAdmin(club.id, 'b');
+
+      await Promise.allSettled([
+        authService.requestAccountDeletion(a.id),
+        authService.updateUserRoles(b.id, ['trainer'], { id: a.id, clubId: club.id }),
+      ]);
+
+      expect(await activeAdmins(club.id)).toBe(1);
+    }
   });
 });

@@ -102,14 +102,7 @@ export class CannotAssignSuperadminError extends Error {
   }
 }
 
-// Verhindert, dass ein Verein durch eine Rollenänderung ohne jede
-// verbleibende admin-Rolle zurückbleibt — sonst könnte niemand mehr
-// Mitglieder verwalten/einladen oder weitere Rollenänderungen vornehmen.
-export class LastAdminError extends Error {
-  constructor() {
-    super('Diese Änderung würde den Verein ohne Administrator:in zurücklassen.');
-  }
-}
+export { LastAdminError } from '../shared/errors.js';
 
 export class InvalidCurrentPasswordError extends Error {
   constructor() {
@@ -980,17 +973,10 @@ export function createAuthService(deps: AuthServiceDeps) {
       if (target.clubId !== requester.clubId) throw new ForeignClubUserError();
       const oldRoles = target.roles;
 
-      // Entzieht diese Änderung der letzten "admin"-Rolle im Verein?
-      // Geprüft anhand des AKTUELLEN Bestands (vor dieser Änderung) — ein
-      // Verein mit z. B. zwei Admins darf einem von beiden die Rolle
-      // problemlos entziehen.
-      if (target.roles.includes('admin') && !roles.includes('admin')) {
-        const members = await deps.users.listByClub(requester.clubId);
-        const remainingAdmins = members.filter((m) => m.id !== targetUserId && m.roles.includes('admin'));
-        if (remainingAdmins.length === 0) throw new LastAdminError();
-      }
-
-      const updated = await deps.users.update(targetUserId, { roles });
+      // Wirft LastAdminError, wenn danach kein aktiver Admin im Verein
+      // bliebe — atomar im Repository, damit sich zwei Admins nicht
+      // gleichzeitig gegenseitig die Rolle entziehen können.
+      const updated = await deps.users.updateRolesKeepingAnAdmin(targetUserId, roles);
       await deps.refreshTokens.revokeAllForUser(targetUserId);
       const actor = await deps.users.findById(requester.id);
       await deps.auditLog.record({

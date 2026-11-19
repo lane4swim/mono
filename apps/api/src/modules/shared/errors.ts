@@ -12,3 +12,13 @@ export class ForbiddenError extends Error {
     super(message);
   }
 }
+
+// Ein Verein behält immer mindestens eine aktive Person mit der Rolle
+// "admin" — sonst könnte niemand mehr Mitglieder verwalten/einladen oder
+// Rollen ändern. Geworfen beim Entzug der Rolle und bei der
+// Selbstlöschung (HTTP 409, Code `last_admin`).
+export class LastAdminError extends Error {
+  constructor() {
+    super('Diese Änderung würde den Verein ohne Administrator:in zurücklassen.');
+  }
+}

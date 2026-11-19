@@ -378,7 +378,7 @@
       <ul>
         <li>Frontend: <code class="mono">isModuleVisible()</code>/<code class="mono">visibleModules()</code> (<code class="mono">router.js</code>) prüfen, ob <em>irgendeine</em> eigene Rolle im <code class="mono">roles</code>-Array eines Moduls vorkommt.</li>
         <li>Backend: <code class="mono">requireAnyRole(...erlaubte Rollen)</code> löst den früheren <code class="mono">requireRole()</code>-Guard mit fester Einzelrolle ab und prüft die Schnittmenge aus Token-Rollen und erlaubten Rollen.</li>
-        <li>Ein Admin vergibt/entzieht Rollen eines Vereinsmitglieds über <code class="mono">PATCH /api/users/:userId/roles</code> — mit „letzter Admin"-Schutz (409), damit ein Verein nie ohne Admin-Rolle zurückbleibt.</li>
+        <li>Ein Admin vergibt/entzieht Rollen eines Vereinsmitglieds über <code class="mono">PATCH /api/users/:userId/roles</code> — mit „letzter Admin"-Schutz (409), damit ein Verein nie ohne Admin-Rolle zurückbleibt. Derselbe Schutz gilt für die Selbstlöschung (<code class="mono">DELETE /api/me</code>): der einzige Admin eines Vereins muss die Rolle zuerst übertragen.</li>
       </ul>
     </div>
   </section>
@@ -523,7 +523,7 @@
           <tr><td class="path">POST /api/sync/push · pull</td><td><span class="roletag">trainer</span><span class="roletag">admin</span><span class="roletag">athlete</span></td><td>Fachliche Offline-Änderungen synchronisieren — Superadmin und ein reines Kampfrichter-Konto haben keine über Sync verwalteten Daten</td></tr>
           <tr><td class="path">GET · PATCH /api/me</td><td><span class="roletag pub">jede eingeloggte Rolle</span></td><td>Eigenes Profil ansehen/bearbeiten</td></tr>
           <tr><td class="path">GET /api/me/export</td><td><span class="roletag pub">jede eingeloggte Rolle</span></td><td>DSGVO-Datenexport der eigenen Person — inkl. Qualifikationen und Wettkampfeinsätzen, sofern vorhanden</td></tr>
-          <tr><td class="path">DELETE /api/me</td><td><span class="roletag pub">jede eingeloggte Rolle</span></td><td>DSGVO-Löschantrag — Konto sofort funktionslos, Hard-Purge nach Fristablauf</td></tr>
+          <tr><td class="path">DELETE /api/me</td><td><span class="roletag pub">jede eingeloggte Rolle</span></td><td>DSGVO-Löschantrag — Konto sofort funktionslos, Hard-Purge nach Fristablauf; 409 <code>last_admin</code> für den einzigen Admin eines Vereins</td></tr>
           <tr><td class="path">GET /api/me/qualifications</td><td><span class="roletag">admin</span><span class="roletag">trainer</span><span class="roletag">athlete</span></td><td>Eigene Qualifikationen einsehen — zubuchbares Modul; <code>referee</code> ist hier bewusst NICHT enthalten (siehe Kampfrichter-Modul)</td></tr>
           <tr><td class="path">POST · PATCH · DELETE /api/users/:userId/qualifications[/:id]</td><td><span class="roletag">admin</span></td><td>Qualifikationen eines Vereinsmitglieds erfassen/ändern/löschen (Soft-Delete)</td></tr>
           <tr><td class="path">GET · POST · PATCH · DELETE /api/me/referee-assignments[/:id]</td><td><span class="roletag">referee</span></td><td>Eigene Wettkampfeinsätze verwalten — zubuchbares Kampfrichter-Modul</td></tr>

@@ -198,7 +198,7 @@ export class InMemorySyncGateway implements SyncGateway {
 
   // `stores` (Review 30.08.2026, Befund E3): spiegelt PrismaSyncGateway —
   // nur die übergebenen Stores werden überhaupt betrachtet.
-  async listChangedSince(clubId: string, since: Date | null, limit: number, stores: readonly EntityStoreName[]): Promise<ChangedRecord[]> {
+  async listChangedSince(clubId: string, since: Date | null, until: Date, limit: number, stores: readonly EntityStoreName[]): Promise<ChangedRecord[]> {
     const readable = new Set(stores);
     const changes: ChangedRecord[] = [];
     for (const [store, records] of this.data.entries()) {
@@ -206,6 +206,7 @@ export class InMemorySyncGateway implements SyncGateway {
       for (const record of records.values()) {
         if (record.clubId !== clubId) continue;
         if (since && record.updatedAt.getTime() <= since.getTime()) continue;
+        if (record.updatedAt.getTime() > until.getTime()) continue;
         changes.push({
           store,
           entityId: record.id,
@@ -219,6 +220,7 @@ export class InMemorySyncGateway implements SyncGateway {
       if (t.clubId !== clubId) continue;
       if (!readable.has(t.store)) continue;
       if (since && t.deletedAt.getTime() <= since.getTime()) continue;
+      if (t.deletedAt.getTime() > until.getTime()) continue;
       changes.push({ store: t.store, entityId: t.entityId, action: 'delete', payload: null, updatedAt: t.deletedAt });
     }
     changes.sort((a, b) => a.updatedAt.getTime() - b.updatedAt.getTime());

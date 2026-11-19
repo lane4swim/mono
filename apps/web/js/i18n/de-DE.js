@@ -40,6 +40,7 @@ export default {
       invalid_current_password: 'Das aktuelle Passwort ist nicht korrekt.',
       invalid_reset_token: 'Dieser Link zum Zurücksetzen des Passworts ist ungültig, abgelaufen oder wurde bereits verwendet.',
       erasure_already_requested: 'Für dieses Konto liegt bereits eine Löschanfrage vor.',
+      last_admin: 'Der Verein braucht mindestens eine Person mit der Rolle Admin. Bitte die Admin-Rolle zuerst einer anderen Person übertragen.',
       forbidden: 'Für diese Aktion fehlt die Berechtigung.',
       club_not_found: 'Verein wurde nicht gefunden.',
       athlete_not_found: 'Das referenzierte Athletenprofil wurde nicht gefunden.',

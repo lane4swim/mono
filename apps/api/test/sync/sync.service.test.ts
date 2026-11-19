@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createSyncService } from '../../src/modules/sync/sync.service.js';
 import { describeSyncError } from '../../src/modules/sync/sync.errors.js';
-import { splitAtSafeTimestampBoundary } from '../../src/modules/sync/sync.pagination.js';
+import { PULL_SETTLE_MS, splitAtSafeTimestampBoundary } from '../../src/modules/sync/sync.pagination.js';
 import { InMemorySyncGateway } from '../../src/modules/sync/sync.gateway.memory.js';
 import type { ChangedRecord } from '../../src/modules/sync/sync.gateway.js';
 import { MODULE_KEYS, ENTITY_STORE_NAMES } from '@lane1/shared-types';
@@ -154,7 +154,7 @@ function makeAthletePayload(overrides: Partial<Record<string, unknown>> = {}) {
 
 function makeService() {
   const gateway = new InMemorySyncGateway();
-  const service = createSyncService({ gateway });
+  const service = createSyncService({ gateway, pullSettleMs: 0 });
   return { service, gateway };
 }
 
@@ -284,7 +284,7 @@ describe('syncService.push — Umgang mit einem gleichzeitig gewonnenen Ledger-E
       }
     }
     const gateway = new ForcedAlreadyProcessedGateway();
-    const service = createSyncService({ gateway });
+    const service = createSyncService({ gateway, pullSettleMs: 0 });
 
     const athlete = makeAthletePayload();
     gateway.seed('athletes', { ...athlete, birthdate: new Date(athlete.birthdate), joinDate: new Date(athlete.joinDate), updatedAt: new Date(athlete.updatedAt), createdAt: new Date(athlete.createdAt), deletedAt: null });
@@ -613,6 +613,59 @@ describe('syncService.pull', () => {
   });
 });
 
+describe('syncService.pull — Wartezeit bis zum sicheren Commit (PULL_SETTLE_MS, Issue #131)', () => {
+  const NOW = new Date('2026-11-19T12:00:00.000Z');
+  const at = (msBeforeNow: number) => new Date(NOW.getTime() - msBeforeNow);
+  function makeSettledService(tombstones: Array<{ clubId: string; store: 'athletes'; entityId: string; deletedAt: Date }> = []) {
+    const gateway = new InMemorySyncGateway(tombstones);
+    const service = createSyncService({ gateway, now: () => NOW });
+    return { gateway, service };
+  }
+
+  it('wartet standardmäßig PULL_SETTLE_MS', () => {
+    expect(PULL_SETTLE_MS).toBe(60_000);
+  });
+
+  it('liefert Zeilen jünger als PULL_SETTLE_MS noch nicht aus, ältere schon', async () => {
+    const { gateway, service } = makeSettledService();
+    gateway.seed('groups', { id: 'settled', clubId: CLUB_A, name: 'A', updatedAt: at(PULL_SETTLE_MS), deletedAt: null });
+    gateway.seed('groups', { id: 'fresh', clubId: CLUB_A, name: 'B', updatedAt: at(PULL_SETTLE_MS - 1), deletedAt: null });
+
+    const result = await service.pull({}, asTrainer(CLUB_A));
+    expect(result.changes.map((c) => c.entityId)).toEqual(['settled']);
+    expect(result.hasMore).toBe(false);
+    expect(result.nextCursor).toBe(at(PULL_SETTLE_MS).toISOString());
+  });
+
+  it('wendet die Grenze auch auf Tombstones an', async () => {
+    const { service } = makeSettledService([
+      { clubId: CLUB_A, store: 'athletes', entityId: 'settled', deletedAt: at(PULL_SETTLE_MS + 1) },
+      { clubId: CLUB_A, store: 'athletes', entityId: 'fresh', deletedAt: at(1000) },
+    ]);
+
+    const result = await service.pull({}, asTrainer(CLUB_A));
+    expect(result.changes.map((c) => c.entityId)).toEqual(['settled']);
+  });
+
+  it('liefert eine Zeile, die mit älterem Stempel nach einem bereits gepullten Commit hinzukommt, beim nächsten Pull aus', async () => {
+    let now = NOW;
+    const gateway = new InMemorySyncGateway();
+    const service = createSyncService({ gateway, now: () => now });
+    const t0 = new Date(NOW.getTime() - 10_000);
+    // B committet sofort mit Stempel t0 + 5 s, A ist mit t0 gestempelt,
+    // committet aber erst danach.
+    gateway.seed('groups', { id: 'B', clubId: CLUB_A, name: 'B', updatedAt: new Date(t0.getTime() + 5_000), deletedAt: null });
+
+    const first = await service.pull({}, asTrainer(CLUB_A));
+    expect(first.changes).toEqual([]);
+
+    gateway.seed('groups', { id: 'A', clubId: CLUB_A, name: 'A', updatedAt: t0, deletedAt: null });
+    now = new Date(NOW.getTime() + PULL_SETTLE_MS);
+    const second = await service.pull({}, asTrainer(CLUB_A));
+    expect(second.changes.map((c) => c.entityId)).toEqual(['A', 'B']);
+  });
+});
+
 describe('syncService.pull — Tombstones (Löschmarkierungen für endgültig entfernte Daten)', () => {
   it('meldet eine Löschung anhand eines Tombstones, obwohl die Zeile nie im Server-Stand existierte', async () => {
     // Simuliert genau den Grenzfall "Gerät war länger offline als die
@@ -620,7 +673,7 @@ describe('syncService.pull — Tombstones (Löschmarkierungen für endgültig en
     // (er wurde bereits endgültig gelöscht) — nur der Tombstone existiert.
     const tombstones = [{ clubId: CLUB_A, store: 'athletes' as const, entityId: 'ath-1', deletedAt: new Date('2026-07-01T00:00:00.000Z') }];
     const gateway = new InMemorySyncGateway(tombstones);
-    const service = createSyncService({ gateway });
+    const service = createSyncService({ gateway, pullSettleMs: 0 });
 
     const result = await service.pull({}, asTrainer(CLUB_A));
     expect(result.changes).toEqual([
@@ -634,7 +687,7 @@ describe('syncService.pull — Tombstones (Löschmarkierungen für endgültig en
       { clubId: CLUB_A, store: 'athletes' as const, entityId: 'neu', deletedAt: new Date('2026-06-01T00:00:00.000Z') },
     ];
     const gateway = new InMemorySyncGateway(tombstones);
-    const service = createSyncService({ gateway });
+    const service = createSyncService({ gateway, pullSettleMs: 0 });
 
     const result = await service.pull({ since: '2026-03-01T00:00:00.000Z' }, asTrainer(CLUB_A));
     expect(result.changes).toHaveLength(1);
@@ -647,7 +700,7 @@ describe('syncService.pull — Tombstones (Löschmarkierungen für endgültig en
       { clubId: CLUB_B, store: 'athletes' as const, entityId: 'b1', deletedAt: new Date() },
     ];
     const gateway = new InMemorySyncGateway(tombstones);
-    const service = createSyncService({ gateway });
+    const service = createSyncService({ gateway, pullSettleMs: 0 });
 
     const result = await service.pull({}, asTrainer(CLUB_A));
     expect(result.changes).toHaveLength(1);
@@ -660,7 +713,7 @@ describe('syncService.push — verständliche Fehlermeldung bei endgültig gelö
     const ATHLETE_ID = '55555555-5555-5555-5555-555555555555';
     const tombstones = [{ clubId: CLUB_A, store: 'athletes' as const, entityId: ATHLETE_ID, deletedAt: new Date() }];
     const gateway = new InMemorySyncGateway(tombstones);
-    const service = createSyncService({ gateway });
+    const service = createSyncService({ gateway, pullSettleMs: 0 });
 
     const now = new Date().toISOString();
     const payload = {
@@ -1334,7 +1387,7 @@ describe('syncService — Rollen-Scopierung für "athlete" (Sicherheitsregressio
   it('PULL für Rolle "athlete": Tombstones (Löschungen) werden unverändert durchgereicht', async () => {
     const tombstones = [{ clubId: CLUB_A, store: 'actionItems' as const, entityId: 'ai-deleted', deletedAt: new Date() }];
     const gateway = new InMemorySyncGateway(tombstones);
-    const service = createSyncService({ gateway });
+    const service = createSyncService({ gateway, pullSettleMs: 0 });
 
     const result = await service.pull({}, asAthlete(CLUB_A, '55555555-5555-5555-5555-555555555555'));
     expect(result.changes).toEqual([
@@ -2116,7 +2169,7 @@ describe('syncService.pull — Store-Vorauswahl nach gebuchten Modulen (Review 3
       { clubId: CLUB_A, store: 'plans' as const, entityId: 'plan-1', deletedAt: new Date('2026-07-02T00:00:00.000Z') },
     ];
     const gateway = new InMemorySyncGateway(tombstones);
-    const service = createSyncService({ gateway });
+    const service = createSyncService({ gateway, pullSettleMs: 0 });
 
     const result = await service.pull(
       {},
@@ -2208,7 +2261,7 @@ describe('syncService.push — Batch-Optimierung (Review 30.08.2026, Befund E2)'
       }
     }
     const gateway = new CountingGateway();
-    const service = createSyncService({ gateway });
+    const service = createSyncService({ gateway, pullSettleMs: 0 });
 
     const events = Array.from({ length: 20 }, (_, i) => {
       const payload = makeGroupPayload({ id: `dddddddd-dddd-dddd-dddd-${String(i).padStart(12, '0')}` });

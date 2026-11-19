@@ -6,6 +6,7 @@
 // böte (siehe auch Phase 2, die aus demselben Grund bewusst auf
 // Einzel-Repositories je fachlicher Tabelle verzichtet hat).
 import type { PrismaClient } from '@prisma/client';
+import { lockClubForAdminChange, assertAnotherAdminRemains, type ClubAdminTx } from '../../db/clubAdmins.js';
 
 export interface PersonalDataExport {
   exportedAt: string;
@@ -44,6 +45,8 @@ export interface ProfileDataGateway {
   // einträge/Handlungsfelder, plus Anlage eines DataDeletionRequest mit
   // `purgeAfter`. Der tatsächliche, unwiderrufliche Hard-Purge erfolgt
   // zeitversetzt über jobs/purgeExpiredDeletions.ts.
+  // Wirft LastAdminError, wenn die Person der letzte aktive Admin ihres
+  // Vereins ist (atomar mit dem Soft-Delete).
   requestErasure(userId: string, retentionDays: number): Promise<ErasureRequestRecord>;
 }
 
@@ -182,6 +185,11 @@ export class PrismaProfileDataGateway implements ProfileDataGateway {
     // Konto bleibt nutzbar und ein erneuter Versuch ist möglich.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const created = await this.prisma.$transaction(async (tx: any) => {
+      if (user.clubId) {
+        await lockClubForAdminChange(tx as ClubAdminTx, user.clubId);
+        const current = await tx.user.findUnique({ where: { id: userId }, select: { roles: true } });
+        if (current?.roles.includes('admin')) await assertAnotherAdminRemains(tx as ClubAdminTx, user.clubId, userId);
+      }
       await tx.user.update({ where: { id: userId }, data: { deletedAt: now } });
       if (user.athleteId) {
         // Trainer:innen-Notizen sofort löschen, nicht erst beim Hard-Purge

@@ -16,6 +16,8 @@ import type {
   PasswordResetTokenRecord,
   MfaRecoveryCodeRepository,
 } from './auth.repository.js';
+import { recordNotFoundForUpdate } from './auth.repository.js';
+import { LastAdminError } from '../shared/errors.js';
 
 export class InMemoryUserRepository implements UserRepository {
   private usersById = new Map<string, UserRecord>();
@@ -96,12 +98,24 @@ export class InMemoryUserRepository implements UserRepository {
 
   async update(id: string, input: UpdateUserInput): Promise<UserRecord> {
     const existing = this.usersById.get(id);
-    if (!existing || existing.deletedAt) {
-      const err = new Error('An operation failed because it depends on one or more records that were required but not found. No record was found for an update.') as Error & { code: string };
-      err.code = 'P2025';
-      throw err;
-    }
+    if (!existing || existing.deletedAt) throw recordNotFoundForUpdate();
     const updated: UserRecord = { ...existing, ...input, updatedAt: new Date() };
+    this.usersById.set(id, updated);
+    return { ...updated };
+  }
+
+  // Prüfung und Schreiben ohne await dazwischen: im Single-Thread-Modell
+  // von Node ist das ebenso atomar wie die Transaktion der Prisma-Variante.
+  async updateRolesKeepingAnAdmin(id: string, roles: string[]): Promise<UserRecord> {
+    const existing = this.usersById.get(id);
+    if (!existing || existing.deletedAt) throw recordNotFoundForUpdate();
+    if (existing.clubId && existing.roles.includes('admin') && !roles.includes('admin')) {
+      const others = [...this.usersById.values()].filter(
+        (u) => u.clubId === existing.clubId && !u.deletedAt && u.id !== id && u.roles.includes('admin'),
+      );
+      if (others.length === 0) throw new LastAdminError();
+    }
+    const updated: UserRecord = { ...existing, roles, updatedAt: new Date() };
     this.usersById.set(id, updated);
     return { ...updated };
   }
