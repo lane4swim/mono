@@ -8,7 +8,8 @@ vi.mock('../js/state.js', () => ({ getCurrentUser: vi.fn(() => ({ clubId: CLUB_I
 vi.mock('../js/demoMode.js', () => ({ IS_DEMO: false }));
 
 import * as db from '../js/db.js';
-import { importLibrary, LIBRARY_EXPORT_FORMAT } from '../js/modules/libraryTransfer.js';
+import { importLibrary, parseLibraryImport, buildLibraryExport, LIBRARY_EXPORT_FORMAT } from '../js/modules/libraryTransfer.js';
+import { ImportValidationError } from '../js/modules/importValidation.js';
 import { ExerciseSchema, TemplateSchema, SectionTemplateSchema } from '../../../packages/shared-types/src/entities.js';
 
 beforeEach(async () => {
@@ -116,16 +117,46 @@ describe('importLibrary()', () => {
     expect(queue.filter((e) => e.store === 'exercises').map((e) => e.entityId).sort()).toEqual(savedExerciseIds);
   });
 
-  it('ignoriert Einträge ohne Pflichtfelder (name/category bzw. name)', async () => {
-    const dump = {
-      format: LIBRARY_EXPORT_FORMAT,
-      exercises: [{ name: 'Ohne Kategorie' }, { category: 'Ohne Namen' }, { name: 'Gültig', category: 'Technik' }],
-      templates: [{ description: 'Ohne Namen' }],
-      sectionTemplates: [{ description: 'Ohne Namen' }],
-    };
+  // Issue #133: vormals wurden solche Einträge stillschweigend übergangen
+  // und der Rest importiert; jetzt scheitert die ganze Datei.
+  it.each([
+    ['Übung ohne Kategorie', { exercises: [{ name: 'Ohne Kategorie' }] }],
+    ['Übung ohne Namen', { exercises: [{ category: 'Ohne Namen' }] }],
+    ['Vorlage ohne Namen', { templates: [{ description: 'Ohne Namen' }] }],
+    ['Abschnitts-Vorlage ohne Namen', { sectionTemplates: [{ description: 'Ohne Namen' }] }],
+    ['Übungsname zu lang', { exercises: [{ name: 'y'.repeat(201), category: 'Technik' }] }],
+    ['Tags keine Strings', { exercises: [{ name: 'Ü', category: 'Technik', tags: [1, 2] }] }],
+    ['Kategorie kein String', { exercises: [{ name: 'Ü', category: 5 }] }],
+    ['Vorlagenbeschreibung zu lang', { templates: [{ name: 'V', description: 'x'.repeat(5001) }] }],
+    ['Satzbeschreibung kein String', { templates: [{ name: 'V', sets: [{ kind: 'set', description: 42 }] }] }],
+    ['Blockbezeichnung kein String', { templates: [{ name: 'V', sets: [{ kind: 'block', label: 7, sets: [] }] }] }],
+    ['zu viele Sätze in einer Vorlage', { templates: [{ name: 'V', sets: Array.from({ length: 201 }, () => ({ kind: 'set' })) }] }],
+    ['Abschnitt in einer Abschnitts-Vorlage', { sectionTemplates: [{ name: 'A', entries: [{ kind: 'section', entries: [] }] }] }],
+  ])('lehnt die ganze Datei ab und schreibt nichts: %s', async (_label, content) => {
+    const dump = { format: LIBRARY_EXPORT_FORMAT, exercises: [{ name: 'Gültig', category: 'Technik' }], ...content };
 
-    const result = await importLibrary(dump);
-    expect(result).toEqual({ exercises: 1, templates: 0, sectionTemplates: 0 });
+    expect(() => parseLibraryImport(JSON.stringify(dump))).toThrow(ImportValidationError);
+    await expect(importLibrary(dump)).rejects.toThrow(ImportValidationError);
+    expect(await db.getAll('exercises')).toEqual([]);
+    expect(await db.getAll('templates')).toEqual([]);
+    expect(await db.getAll('sectionTemplates')).toEqual([]);
+    expect(await db.getSyncQueue()).toEqual([]);
+  });
+
+  it('ein Export ist unverändert importierbar und ergibt schema-gültige Datensätze', async () => {
+    await importLibrary({
+      format: LIBRARY_EXPORT_FORMAT,
+      exercises: [{ id: 'e1', name: 'Kraul-Beinschlag', category: 'Technik', tags: ['Kraul'], equipment: ['Brett'], defaultDistance: 100 }],
+      templates: [{ id: 't1', name: 'Einschwimmen', tags: [], sets: [{ kind: 'block', label: 'Serie', repeatCount: 2, sets: [{ kind: 'set', description: 'Beine', reps: 4, distance: 50, exerciseId: 'e1' }] }] }],
+      sectionTemplates: [{ id: 's1', name: 'Hauptteil', tags: [], entries: [{ kind: 'set', description: 'Locker', reps: 1, distance: 200 }] }],
+    });
+    const raw = JSON.stringify(await buildLibraryExport());
+    await db.wipeAll();
+
+    await importLibrary(parseLibraryImport(raw));
+    for (const ex of await db.getAll('exercises')) expect(ExerciseSchema.safeParse(ex).success).toBe(true);
+    for (const tpl of await db.getAll('templates')) expect(TemplateSchema.safeParse(tpl).success).toBe(true);
+    for (const st of await db.getAll('sectionTemplates')) expect(SectionTemplateSchema.safeParse(st).success).toBe(true);
   });
 
   // Regressionstest für Befund P7 (Code-Review): put() pro Datensatz
