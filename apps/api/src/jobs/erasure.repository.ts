@@ -123,7 +123,7 @@ export class PrismaErasureJobGateway implements ErasureJobGateway {
         // Ergebnismenge `NULL` statt eines leeren Arrays — ohne COALESCE
         // würde die Spalte fälschlich auf SQL NULL gesetzt, obwohl
         // `attendance` laut Schema stets ein (ggf. leeres) Array ist.
-        // `"updatedAt" = now()` von Hand gesetzt, weil ein rohes SQL-UPDATE
+        // `"updatedAt"` von Hand gesetzt, weil ein rohes SQL-UPDATE
         // (anders als Prismas eigene update()-Methoden) das `@updatedAt`-
         // Verhalten aus schema.prisma NICHT automatisch auslöst — ohne
         // diese Zeile bliebe der Sync-Pull-Cursor (sync.gateway.ts:
@@ -131,6 +131,9 @@ export class PrismaErasureJobGateway implements ErasureJobGateway {
         // dem alten Stand, und Geräte, die die Einheit bereits vor dem
         // Purge gepullt hatten, bekämen die bereinigte Fassung nie
         // zugestellt — die gelöschte Person bliebe für sie sichtbar.
+        // clock_timestamp() statt now(): now() ist der Beginn dieser bis zu
+        // 30 s langen Transaktion, der Stempel läge so unnötig weit vor
+        // dem Commit (siehe PULL_SETTLE_MS in sync.pagination.ts).
         if (user.clubId) {
           await tx.$executeRaw`
             UPDATE "sessions"
@@ -143,7 +146,7 @@ export class PrismaErasureJobGateway implements ErasureJobGateway {
                 ),
                 '[]'::jsonb
               ),
-              "updatedAt" = now()
+              "updatedAt" = clock_timestamp()
             WHERE "clubId" = ${user.clubId}
               AND "attendance" @> ${JSON.stringify([{ athleteId: user.athleteId }])}::jsonb
           `;

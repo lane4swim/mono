@@ -322,7 +322,7 @@ describe('purgeExpiredDeletions — Tombstones (Verbesserung: Löschungen bleibe
     // Vor dem Purge: das (nie synchronisierte) Gerät hätte hier noch
     // nichts von der Löschung erfahren.
     const syncGateway = new InMemorySyncGateway(sharedTombstones);
-    const syncService = createSyncService({ gateway: syncGateway });
+    const syncService = createSyncService({ gateway: syncGateway, pullSettleMs: 0 });
 
     await purgeExpiredDeletions(erasureGateway, NOW);
 

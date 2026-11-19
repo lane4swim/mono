@@ -14,10 +14,13 @@ import { PrismaClient } from '@prisma/client';
 import { ENTITY_STORE_NAMES, MODULE_KEYS } from '@lane1/shared-types';
 import { PrismaSyncGateway } from '../src/modules/sync/sync.gateway.js';
 import { createSyncService } from '../src/modules/sync/sync.service.js';
+import { PULL_SETTLE_MS } from '../src/modules/sync/sync.pagination.js';
 import { getTestPrisma, closeTestPrisma, truncateAll, createTestClub } from './helpers.js';
 
 const prisma = getTestPrisma();
 const gateway = new PrismaSyncGateway(prisma);
+// Für Tests der Gateway-Abfrage selbst: keine Wartezeit (siehe PULL_SETTLE_MS).
+const NO_UPPER_BOUND = new Date('9999-12-31T00:00:00.000Z');
 
 afterEach(async () => {
   await truncateAll();
@@ -118,7 +121,7 @@ describe('PrismaSyncGateway.listChangedSince()', () => {
     const newer = await prisma.group.create({ data: { clubId: clubA.id, name: 'Neuer', updatedAt: new Date('2026-06-01T00:00:00.000Z') } });
     await prisma.group.create({ data: { clubId: clubB.id, name: 'Fremder Verein' } });
 
-    const changes = await gateway.listChangedSince(clubA.id, null, 100, ENTITY_STORE_NAMES);
+    const changes = await gateway.listChangedSince(clubA.id, null, NO_UPPER_BOUND, 100, ENTITY_STORE_NAMES);
     expect(changes.map((c) => c.entityId)).toEqual([older.id, newer.id]);
   });
 
@@ -127,7 +130,7 @@ describe('PrismaSyncGateway.listChangedSince()', () => {
     await prisma.group.create({ data: { clubId: club.id, name: 'Alt', updatedAt: new Date('2026-01-01T00:00:00.000Z') } });
     const recent = await prisma.group.create({ data: { clubId: club.id, name: 'Neu', updatedAt: new Date('2026-06-01T00:00:00.000Z') } });
 
-    const changes = await gateway.listChangedSince(club.id, new Date('2026-03-01T00:00:00.000Z'), 100, ENTITY_STORE_NAMES);
+    const changes = await gateway.listChangedSince(club.id, new Date('2026-03-01T00:00:00.000Z'), NO_UPPER_BOUND, 100, ENTITY_STORE_NAMES);
     expect(changes.map((c) => c.entityId)).toEqual([recent.id]);
   });
 
@@ -135,7 +138,7 @@ describe('PrismaSyncGateway.listChangedSince()', () => {
     const club = await createTestClub();
     const row = await prisma.group.create({ data: { clubId: club.id, name: 'Wird gelöscht', deletedAt: new Date() } });
 
-    const changes = await gateway.listChangedSince(club.id, null, 100, ENTITY_STORE_NAMES);
+    const changes = await gateway.listChangedSince(club.id, null, NO_UPPER_BOUND, 100, ENTITY_STORE_NAMES);
     expect(changes).toEqual([expect.objectContaining({ entityId: row.id, action: 'delete', payload: null })]);
   });
 
@@ -146,7 +149,7 @@ describe('PrismaSyncGateway.listChangedSince()', () => {
       data: { clubId: club.id, store: 'athletes', entityId: 'purged-athlete', deletedAt: new Date('2026-06-01T00:00:00.000Z') },
     });
 
-    const changes = await gateway.listChangedSince(club.id, null, 100, ENTITY_STORE_NAMES);
+    const changes = await gateway.listChangedSince(club.id, null, NO_UPPER_BOUND, 100, ENTITY_STORE_NAMES);
     expect(changes.map((c) => c.entityId)).toEqual([stillExisting.id, 'purged-athlete']);
     expect(changes[1]).toMatchObject({ store: 'athletes', action: 'delete', payload: null });
   });
@@ -184,7 +187,7 @@ describe('PrismaSyncGateway.listChangedSince()', () => {
       let changes;
       try {
         const instrumentedGateway = new PrismaSyncGateway(instrumented);
-        changes = await instrumentedGateway.listChangedSince(club.id, null, 5, ENTITY_STORE_NAMES);
+        changes = await instrumentedGateway.listChangedSince(club.id, null, NO_UPPER_BOUND, 5, ENTITY_STORE_NAMES);
       } finally {
         await instrumented.$disconnect();
       }
@@ -216,7 +219,7 @@ describe('PrismaSyncGateway.listChangedSince()', () => {
         data: { clubId: club.id, date: new Date(), attendance: [], updatedAt: new Date('2026-01-02') },
       });
 
-      const changes = await gateway.listChangedSince(club.id, null, 100, ENTITY_STORE_NAMES);
+      const changes = await gateway.listChangedSince(club.id, null, NO_UPPER_BOUND, 100, ENTITY_STORE_NAMES);
       expect(changes.map((c) => c.entityId)).toEqual([group.id, session.id]);
       expect(changes[0]?.payload).toMatchObject({ name: 'X' });
       expect(changes[1]?.payload).toMatchObject({ id: session.id });
@@ -489,5 +492,67 @@ describe('PrismaSyncGateway.findAthleteAccountState()', () => {
 
     await prisma.invitation.create({ data: invitation(club.id, athlete.id) });
     expect(await gateway.findAthleteAccountState(athlete.id, club.id)).toEqual({ hasLinkedUser: false, hasOpenInvitation: true });
+  });
+});
+
+// Issue #131: `updatedAt` wird vor dem Commit gestempelt. Eine Zeile, deren
+// Transaktion mit älterem Stempel NACH einer neueren committet, muss ein
+// späterer Pull trotzdem noch ausliefern.
+describe('syncService.pull() — später committete Zeile mit älterem Stempel (Issue #131)', () => {
+  function trainer(clubId: string) {
+    return { userId: randomUUID(), clubId, roles: ['trainer'] as const, athleteId: null, enabledModules: MODULE_KEYS };
+  }
+
+  it('liefert die Änderung nach ihrem Commit beim nächsten Pull aus', async () => {
+    let clockOffsetMs = 0;
+    const service = createSyncService({ gateway, now: () => new Date(Date.now() + clockOffsetMs) });
+    const club = await createTestClub();
+    const g1 = await prisma.group.create({ data: { clubId: club.id, name: 'G1' } });
+    const g2 = await prisma.group.create({ data: { clubId: club.id, name: 'G2' } });
+
+    clockOffsetMs = PULL_SETTLE_MS;
+    const initial = await service.pull({}, trainer(club.id));
+    expect(initial.changes.map((c) => c.entityId).sort()).toEqual([g1.id, g2.id].sort());
+    clockOffsetMs = 0;
+
+    // Zweite Verbindung hält eine Zeilensperre auf G1: Push A wird
+    // gestempelt, wartet dann aber auf die Sperre.
+    const locker = new PrismaClient();
+    let release!: () => void;
+    const held = new Promise<void>((r) => (release = r));
+    let lockTaken!: () => void;
+    const locked = new Promise<void>((r) => (lockTaken = r));
+    const lockTx = locker.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "groups" WHERE id = ${g1.id} FOR UPDATE`;
+      lockTaken();
+      await held;
+    }, { timeout: 20_000 });
+    await locked;
+
+    const pushA = gateway.applyAndMarkProcessed(
+      { kind: 'update', store: 'groups', id: g1.id, clubId: club.id, payload: { name: 'G1-late' } },
+      { id: randomUUID(), clubId: club.id, store: 'groups', action: 'update' },
+    );
+    await new Promise((r) => setTimeout(r, 300));
+    await gateway.applyAndMarkProcessed(
+      { kind: 'update', store: 'groups', id: g2.id, clubId: club.id, payload: { name: 'G2-early' } },
+      { id: randomUUID(), clubId: club.id, store: 'groups', action: 'update' },
+    );
+
+    // Pull, während A noch nicht committet ist.
+    const during = await service.pull({ cursor: initial.nextCursor! }, trainer(club.id));
+    const cursor = during.nextCursor ?? initial.nextCursor!;
+
+    release();
+    await lockTx;
+    await pushA;
+    await locker.$disconnect();
+
+    clockOffsetMs = PULL_SETTLE_MS + 1_000;
+    const after = await service.pull({ cursor }, trainer(club.id));
+    const delivered = [...during.changes, ...after.changes];
+    const g1Change = delivered.find((c) => c.entityId === g1.id);
+    expect(g1Change?.payload).toMatchObject({ name: 'G1-late' });
+    expect(delivered.some((c) => c.entityId === g2.id)).toBe(true);
   });
 });

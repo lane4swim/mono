@@ -23,7 +23,7 @@ import { isKnownStore, canRead, canWrite, isAthleteScoped } from './sync.permiss
 import { assertForeignKeysWithinClub, FOREIGN_ENTITY_ERROR_CODE } from './sync.foreignKeys.js';
 import { scopeChangeForAthlete } from './sync.athleteScope.js';
 import { assertCommentAuthorship, COMMENT_AUTHORSHIP_ERROR_CODE } from './sync.commentAuthorship.js';
-import { PULL_PAGE_SIZE, PULL_TIE_SAFETY_LIMIT, splitAtSafeTimestampBoundary } from './sync.pagination.js';
+import { PULL_PAGE_SIZE, PULL_SETTLE_MS, PULL_TIE_SAFETY_LIMIT, splitAtSafeTimestampBoundary } from './sync.pagination.js';
 import { describeSyncError } from './sync.errors.js';
 
 export interface SyncRequester {
@@ -253,7 +253,18 @@ export interface SyncPushOptions {
   onCreated?: (eventId: string) => void;
 }
 
-export function createSyncService(deps: { gateway: SyncGateway }) {
+export interface SyncServiceDeps {
+  gateway: SyncGateway;
+  // Standard PULL_SETTLE_MS; Tests, die direkt nach einem Push pullen,
+  // setzen 0.
+  pullSettleMs?: number;
+  now?: () => Date;
+}
+
+export function createSyncService(deps: SyncServiceDeps) {
+  const pullSettleMs = deps.pullSettleMs ?? PULL_SETTLE_MS;
+  const now = deps.now ?? (() => new Date());
+
   return {
     async push(events: unknown[], requester: SyncRequester, options: SyncPushOptions = {}): Promise<SyncEventResult[]> {
       const results: SyncEventResult[] = [];
@@ -560,7 +571,11 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
       // überhaupt sehen darf.
       const readableStores = ENTITY_STORE_NAMES.filter((store) => canRead(store, requester.roles, requester.enabledModules));
 
-      const rows = await deps.gateway.listChangedSince(requester.clubId, since, PULL_PAGE_SIZE + 1, readableStores);
+      // Nur Zeilen, deren Transaktion sicher abgeschlossen ist (siehe
+      // PULL_SETTLE_MS). `hasMore` bezieht sich ebenfalls nur auf diesen
+      // Bereich: jüngere Zeilen holt der nächste reguläre Sync-Zyklus.
+      const until = new Date(now().getTime() - pullSettleMs);
+      const rows = await deps.gateway.listChangedSince(requester.clubId, since, until, PULL_PAGE_SIZE + 1, readableStores);
       // Bleibt für den Rest der Funktion unverändert — auch im
       // Extremfall-Zweig unten (siehe dortiger Kommentar: dort wird
       // absichtlich weiterhin `true` angenommen, nicht neu berechnet).
@@ -580,7 +595,7 @@ export function createSyncService(deps: { gateway: SyncGateway }) {
       // Pull-Zyklus klärt das.
       if (hasMore && page.length === 0) {
         const tiedAt = rows[0]!.updatedAt;
-        const widened = await deps.gateway.listChangedSince(requester.clubId, new Date(tiedAt.getTime() - 1), PULL_TIE_SAFETY_LIMIT, readableStores);
+        const widened = await deps.gateway.listChangedSince(requester.clubId, new Date(tiedAt.getTime() - 1), until, PULL_TIE_SAFETY_LIMIT, readableStores);
         page = widened.filter((row) => row.updatedAt.getTime() === tiedAt.getTime());
       }
 
