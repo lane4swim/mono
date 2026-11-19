@@ -167,6 +167,14 @@ model User {
   totpSecretEnc                    String?
   totpEnabledAt                    DateTime?
   totpLastUsedStep                 Int?
+  // Kontoweite Sperre nach zu vielen falschen Codes (Issue #109, siehe
+  // src/modules/mfa/mfaLockout.ts): Fehlversuche im laufenden Zeitfenster,
+  // dessen Beginn, Ende der aktuellen Sperre und Zahl der Sperren seit dem
+  // letzten erfolgreichen zweiten Faktor (bestimmt die Sperrdauer).
+  mfaFailedCount                   Int                  @default(0)
+  mfaFailedWindowStart             DateTime?
+  mfaLockedUntil                   DateTime?
+  mfaLockoutCount                  Int                  @default(0)
   mfaRecoveryCodes                 MfaRecoveryCode[]
   refreshTokens                    RefreshToken[]
   sentInvitations                  Invitation[]         @relation("InvitationSender")

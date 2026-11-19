@@ -23,9 +23,10 @@ import type { ProfileDataGateway } from '../profile/profile.repository.js';
 import { hashPassword, verifyPassword } from '../../auth/password.js';
 import { assertPasswordPolicy } from '../../auth/passwordPolicy.js';
 import { signMfaToken, verifyMfaToken, InvalidMfaTokenError, signMfaSetupToken } from '../../auth/tokens.js';
-import { isMfaRequired, MfaNotConfiguredError, type MfaVerifier } from '../mfa/mfa.core.js';
+import { isMfaRequired, MfaNotConfiguredError, type MfaVerifier, type SecondFactorInput } from '../mfa/mfa.core.js';
+import { isMfaLocked } from '../mfa/mfaLockout.js';
 import type { MfaChallengeStore } from '../mfa/mfaChallenges.js';
-import { InvalidMfaCodeError, MfaSetupRequiredError } from '../mfa/mfaErrors.js';
+import { InvalidMfaCodeError, MfaCodeRequiredError, MfaLockedError, MfaSetupRequiredError } from '../mfa/mfaErrors.js';
 import { signAccessToken, generateRefreshToken, hashRefreshToken, generatePasswordResetToken, hashPasswordResetToken } from '../../auth/tokens.js';
 import type { KeyPair } from '../../auth/keys.js';
 import type { MailSender } from '../../mail/mailer.js';
@@ -205,13 +206,17 @@ function buildPasswordResetUrl(frontendBaseUrl: string, token: string): string {
   return `${frontendBaseUrl.replace(/\/+$/, '')}/#/reset-password/${token}`;
 }
 
-// Nur `mfaEnabled` verlässt den Server — Secret (auch verschlüsselt) und
-// letzter Zeitschritt nie (Issue #97).
+// Nur `mfaEnabled` verlässt den Server — Secret (auch verschlüsselt),
+// letzter Zeitschritt und Fehlversuchszähler nie (Issues #97, #109).
 export function toPublicUser(user: UserRecord) {
   const {
     passwordHash: _passwordHash,
     totpSecretEnc: _totpSecretEnc,
     totpLastUsedStep: _totpLastUsedStep,
+    mfaFailedCount: _mfaFailedCount,
+    mfaFailedWindowStart: _mfaFailedWindowStart,
+    mfaLockedUntil: _mfaLockedUntil,
+    mfaLockoutCount: _mfaLockoutCount,
     totpEnabledAt,
     ...publicUser
   } = user;
@@ -269,8 +274,40 @@ export function createAuthService(deps: AuthServiceDeps) {
 
   async function startMfaChallenge(user: UserRecord): Promise<MfaChallengeResponse> {
     if (!deps.mfa?.verifier.isAvailable()) throw new MfaNotConfiguredError();
+    // Gesperrt: kein neues mfaToken, sonst ließe sich die Sperre durch
+    // erneutes Anmelden umgehen (Issue #109).
+    if (isMfaLocked(user, new Date())) throw new MfaLockedError();
     const { token } = await signMfaToken(user.id, deps.keyPair);
     return { mfaRequired: true, mfaToken: token };
+  }
+
+  // Ein falscher zweiter Faktor (Anmeldung oder Passwort-Reset): zählt
+  // kontoweit mit (mfaLockout.ts) und meldet, ob dieser Versuch die Sperre
+  // ausgelöst hat. Audit-Einträge ohne await, wie auth.loginFailed.
+  async function recordSecondFactorFailure(user: UserRecord, metadata: Record<string, unknown>): Promise<boolean> {
+    const { lockedUntil, newlyLocked } = await deps.users.recordMfaFailure(user.id, new Date());
+    void deps.auditLog.record({
+      clubId: user.clubId,
+      actorId: null,
+      actorLabel: UNKNOWN_ACTOR_LABEL,
+      action: 'auth.mfaFailed',
+      targetId: user.id,
+      targetLabel: userLabel(user),
+      metadata: { ...metadata, accountLocked: newlyLocked },
+    });
+    if (newlyLocked) {
+      void deps.auditLog.record({
+        clubId: user.clubId,
+        actorId: null,
+        actorLabel: UNKNOWN_ACTOR_LABEL,
+        action: 'auth.mfaLocked',
+        targetId: user.id,
+        targetLabel: userLabel(user),
+        metadata: { lockedUntil: lockedUntil?.toISOString() ?? null },
+      });
+      void notifySecurityChange(deps.mailer, user, 'mfaLocked', 'auth');
+    }
+    return newlyLocked;
   }
 
   // Pflicht, aber noch nicht eingerichtet? Den Verein lädt nur, wer als Admin
@@ -493,23 +530,18 @@ export function createAuthService(deps: AuthServiceDeps) {
 
       const user = await deps.users.findById(challenge.userId);
       if (!user || !user.totpEnabledAt) throw new InvalidMfaTokenError();
+      // Während der Sperre wird kein Code geprüft, auch kein richtiger.
+      if (isMfaLocked(user, new Date())) throw new MfaLockedError();
 
       const method = await verifier.verifySecondFactor(user, { code: input.code, recoveryCode: input.recoveryCode });
       if (!method) {
         const exhausted = challenges.isExhausted(challenge.jti, challenge.expiresAt);
-        // Ohne await, wie auth.loginFailed.
-        void deps.auditLog.record({
-          clubId: user.clubId,
-          actorId: null,
-          actorLabel: UNKNOWN_ACTOR_LABEL,
-          action: 'auth.mfaFailed',
-          targetId: user.id,
-          targetLabel: userLabel(user),
-          metadata: { exhausted },
-        });
+        const locked = await recordSecondFactorFailure(user, { exhausted });
+        if (locked) throw new MfaLockedError();
         throw exhausted ? new InvalidMfaTokenError() : new InvalidMfaCodeError();
       }
       if (!challenges.consume(challenge.jti, challenge.expiresAt)) throw new InvalidMfaTokenError();
+      await deps.users.clearMfaFailures(user.id);
       if (method === 'recovery') {
         await deps.auditLog.record({ clubId: user.clubId, actorId: user.id, actorLabel: userLabel(user), action: 'auth.recoveryCodeUsed', targetId: user.id, targetLabel: userLabel(user) });
         // Ohne await, wie die übrigen Sicherheitshinweise: ein Mailfehler darf
@@ -692,7 +724,13 @@ export function createAuthService(deps: AuthServiceDeps) {
     // Passwort deutet typischerweise auf einen (vermuteten) Kontokompromiss
     // hin; jedes andere angemeldete Gerät muss sich danach mit dem neuen
     // Passwort neu anmelden, analog zur Reuse-Detection in refresh().
-    async resetPassword(plainToken: string, newPassword: string) {
+    //
+    // Mit aktivem TOTP ändert sich das Passwort erst nach einem gültigen
+    // zweiten Faktor (Issue #110): der Link belegt nur den Zugriff auf das
+    // Postfach. Ohne Code bleiben Passwort, Sitzungen und Link unangetastet
+    // (MfaCodeRequiredError); falsche Codes zählen wie bei der Anmeldung
+    // gegen die Kontosperre.
+    async resetPassword(plainToken: string, newPassword: string, secondFactor: SecondFactorInput = {}) {
       const tokenHash = hashPasswordResetToken(plainToken);
       const existing = await deps.passwordResetTokens.findByHash(tokenHash);
       if (!existing) throw new InvalidOrExpiredResetTokenError();
@@ -704,6 +742,21 @@ export function createAuthService(deps: AuthServiceDeps) {
 
       // Vor dem Einlösen: ein abgelehntes Passwort soll den Link nicht verbrauchen.
       assertPasswordPolicy(newPassword, user.roles);
+
+      let secondFactorMethod: 'totp' | 'recovery' | null = null;
+      if (user.totpEnabledAt) {
+        if (!deps.mfa?.verifier.isAvailable()) throw new MfaNotConfiguredError();
+        if (isMfaLocked(user, new Date())) throw new MfaLockedError();
+        if (!secondFactor.code && !secondFactor.recoveryCode) throw new MfaCodeRequiredError();
+        secondFactorMethod = await deps.mfa.verifier.verifySecondFactor(user, secondFactor);
+        if (!secondFactorMethod) {
+          const locked = await recordSecondFactorFailure(user, { context: 'passwordReset' });
+          if (locked) throw new MfaLockedError();
+          void notifySecurityChange(deps.mailer, user, 'passwordResetMfaFailed', 'auth');
+          throw new InvalidMfaCodeError();
+        }
+        await deps.users.clearMfaFailures(user.id);
+      }
       // Hashen VOR dem Einlösen: argon2id ist der langsame Schritt, und ein
       // bereits eingelöstes Token soll nicht an einem Fehler beim Hashen
       // verfallen.
@@ -730,10 +783,14 @@ export function createAuthService(deps: AuthServiceDeps) {
         targetLabel: userLabel(updated),
       });
 
-      // Mit aktivem TOTP keine direkte Anmeldung: der Reset-Link belegt nur
-      // den Zugriff auf das Postfach, nicht den zweiten Faktor.
-      // Ist TOTP Pflicht, aber nicht eingerichtet, folgt die erzwungene
-      // Einrichtung.
+      if (secondFactorMethod === 'recovery') {
+        await deps.auditLog.record({ clubId: updated.clubId, actorId: updated.id, actorLabel: userLabel(updated), action: 'auth.recoveryCodeUsed', targetId: updated.id, targetLabel: userLabel(updated) });
+        void notifySecurityChange(deps.mailer, updated, 'recoveryCodeUsed', 'auth');
+      }
+      // Beide Faktoren sind belegt: direkt anmelden. Ohne TOTP gilt dasselbe
+      // wie nach dem Passwort: ist TOTP Pflicht, aber nicht eingerichtet,
+      // folgt die erzwungene Einrichtung.
+      if (secondFactorMethod) return issueSession(updated);
       return completeFirstFactor(updated);
     },
 

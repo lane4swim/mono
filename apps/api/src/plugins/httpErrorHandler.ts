@@ -61,6 +61,7 @@ import { InvalidMfaTokenError, InvalidMfaSetupTokenError } from '../auth/tokens.
 import {
   InvalidMfaCodeError,
   MfaCodeRequiredError,
+  MfaLockedError,
   MfaAlreadyEnabledError,
   MfaSetupNotStartedError,
   MfaNotEnabledError,
@@ -150,6 +151,7 @@ const HTTP_ERROR_REGISTRY = new Map<abstract new (...args: never[]) => Error, Ht
   [InvalidMfaTokenError, { status: 401, code: 'invalid_mfa_token' }],
   [InvalidMfaCodeError, { status: 400, code: 'invalid_mfa_code' }],
   [MfaCodeRequiredError, { status: 400, code: 'mfa_code_required' }],
+  [MfaLockedError, { status: 423, code: 'mfa_locked' }],
   [MfaAlreadyEnabledError, { status: 409, code: 'mfa_already_enabled' }],
   [MfaSetupNotStartedError, { status: 409, code: 'mfa_setup_not_started' }],
   [MfaNotEnabledError, { status: 409, code: 'mfa_not_enabled' }],

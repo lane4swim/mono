@@ -221,6 +221,14 @@ describe('ForgotPasswordRequestSchema', () => {
 });
 
 describe('ResetPasswordRequestSchema', () => {
+  it('akzeptiert optional einen TOTP-Code oder einen Wiederherstellungscode, aber nicht beides', () => {
+    const base = { token: 'abc123', newPassword: 'ein-sicheres-passwort' };
+    expect(ResetPasswordRequestSchema.safeParse({ ...base, code: '123 456' }).success).toBe(true);
+    expect(ResetPasswordRequestSchema.safeParse({ ...base, recoveryCode: 'abcde-fghij' }).success).toBe(true);
+    expect(ResetPasswordRequestSchema.safeParse({ ...base, code: '123456', recoveryCode: 'abcde-fghij' }).success).toBe(false);
+    expect(ResetPasswordRequestSchema.safeParse({ ...base, code: '12345' }).success).toBe(false);
+  });
+
   it('akzeptiert Token + ein ausreichend langes neues Passwort', () => {
     expect(ResetPasswordRequestSchema.safeParse({ token: 'abc123', newPassword: 'ein-sicheres-passwort' }).success).toBe(true);
   });

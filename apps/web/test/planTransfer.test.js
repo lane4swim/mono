@@ -12,6 +12,7 @@ vi.mock('../js/demoMode.js', () => ({ IS_DEMO: false }));
 
 import * as db from '../js/db.js';
 import { buildPlanExport, parsePlanImport, importPlan, PLAN_EXPORT_FORMAT } from '../js/modules/planTransfer.js';
+import { ImportValidationError } from '../js/modules/importValidation.js';
 import { PlanSchema, ExerciseSchema } from '../../../packages/shared-types/src/entities.js';
 
 beforeEach(async () => {
@@ -116,22 +117,77 @@ describe('importPlan()', () => {
     expect(saved.days[0].sets[1].sets[0].exerciseId).toBe(local.id);
   });
 
-  it('bereinigt ungültige Werte aus einer handbearbeiteten Datei zu einem schema-gültigen Plan', async () => {
+  it('ergänzt fehlende optionale Felder und verwirft unbekannte Übungsverweise', async () => {
     const dump = {
       format: PLAN_EXPORT_FORMAT,
-      plan: {
-        name: '', weekStart: 'kaputt', status: 'unbekannt', groupName: 'Gibt es nicht',
-        days: [
-          { date: '2026-03-17', poolLength: 'XYZ', sets: [{ kind: 'set', reps: -2, distance: 'viel', exerciseId: 'nicht-im-dump' }] },
-          { date: 'kein Datum', sets: [] },
-        ],
-      },
+      plan: { name: '', groupName: 'Gibt es nicht', days: [{ date: '2026-03-17', sets: [{ kind: 'set', exerciseId: 'nicht-im-dump' }] }] },
     };
     const { plan: saved } = await importPlan(dump);
-    expect(saved.days).toHaveLength(1);
     expect(saved.days[0].poolLength).toBeNull();
     expect(saved.days[0].sets[0]).toMatchObject({ reps: 1, distance: null, exerciseId: null });
     expect(saved.status).toBe('aktiv');
+    expect(saved.groupId).toBeNull();
     expect(PlanSchema.safeParse(saved).success).toBe(true);
+  });
+});
+
+// Issue #133: eine Datei, die die Server-Schemas verletzt, wird als Ganzes
+// abgelehnt, statt Datensätze anzulegen, die nie synchronisieren.
+describe('Import schema-widriger Dateien', () => {
+  const validDay = { date: '2026-03-17', sets: [] };
+  const fileWith = (plan, exercises = []) => JSON.stringify({ format: PLAN_EXPORT_FORMAT, plan: { name: 'KW', weekStart: '2026-03-16', status: 'aktiv', days: [validDay], ...plan }, exercises });
+
+  it('lehnt die Datei aus Issue #133 ab und schreibt nichts', async () => {
+    const raw = JSON.stringify({ format: 'lane1-plan-export-v1',
+      plan: { name: 'x'.repeat(500), weekStart: '2026-03-16', status: 'aktiv',
+        days: [{ date: '2026-03-17', sets: [
+          { kind: 'set', description: 42, intensity: { a: 1 }, reps: 1 },
+          { kind: 'block', label: 7, sets: [] } ] }] },
+      exercises: [{ id: 'e1', name: 'y'.repeat(500), category: 'Technik', tags: [1, 2] }] });
+
+    expect(() => parsePlanImport(raw)).toThrow(ImportValidationError);
+    await expect(importPlan(JSON.parse(raw))).rejects.toThrow(ImportValidationError);
+    expect(await db.getAll('plans')).toEqual([]);
+    expect(await db.getAll('exercises')).toEqual([]);
+    expect(await db.getSyncQueue()).toEqual([]);
+  });
+
+  it.each([
+    ['falscher Typ (Beschreibung)', { days: [{ ...validDay, sets: [{ kind: 'set', description: 42 }] }] }],
+    ['falscher Typ (Intensität)', { days: [{ ...validDay, sets: [{ kind: 'set', intensity: { a: 1 } }] }] }],
+    ['zu langer Name', { name: 'x'.repeat(201) }],
+    ['zu lange Satzbeschreibung', { days: [{ ...validDay, sets: [{ kind: 'set', description: 'x'.repeat(2001) }] }] }],
+    ['zu viele Tage', { days: Array.from({ length: 61 }, () => validDay) }],
+    ['zu viele Sätze an einem Tag', { days: [{ ...validDay, sets: Array.from({ length: 201 }, () => ({ kind: 'set' })) }] }],
+    ['zu viele Sätze in einem Block', { days: [{ ...validDay, sets: [{ kind: 'block', sets: Array.from({ length: 51 }, () => ({ kind: 'set' })) }] }] }],
+    ['verschachtelter Block', { days: [{ ...validDay, sets: [{ kind: 'block', sets: [{ kind: 'block', sets: [] }] }] }] }],
+    ['Abschnitt im Abschnitt', { days: [{ ...validDay, sets: [{ kind: 'section', entries: [{ kind: 'section', entries: [] }] }] }] }],
+    ['unbekannte Satzart', { days: [{ ...validDay, sets: [{ kind: 'foo' }] }] }],
+    ['negative Wiederholungen', { days: [{ ...validDay, sets: [{ kind: 'set', reps: -2 }] }] }],
+    ['ungültiges Datum', { days: [{ date: 'kein Datum', sets: [] }] }],
+    ['ungültige Beckenlänge', { days: [{ ...validDay, poolLength: 'XYZ' }] }],
+    ['ungültiger Status', { status: 'unbekannt' }],
+    ['Material kein String', { days: [{ ...validDay, sets: [{ kind: 'set', equipment: [1] }] }] }],
+  ])('lehnt ab: %s', (_label, plan) => {
+    expect(() => parsePlanImport(fileWith(plan))).toThrow(ImportValidationError);
+  });
+
+  it.each([
+    ['Tags keine Strings', { id: 'e1', name: 'Ü', category: 'Technik', tags: [1] }],
+    ['zu langer Übungsname', { id: 'e1', name: 'y'.repeat(201), category: 'Technik' }],
+    ['zu viele Tags', { id: 'e1', name: 'Ü', category: 'Technik', tags: Array.from({ length: 51 }, () => 't') }],
+    ['Übung ohne id', { name: 'Ü', category: 'Technik' }],
+    ['Übung ohne Kategorie', { id: 'e1', name: 'Ü' }],
+  ])('lehnt eingebettete Übung ab: %s', (_label, exercise) => {
+    expect(() => parsePlanImport(fileWith({}, [exercise]))).toThrow(ImportValidationError);
+  });
+
+  it('ein Export ist unverändert importierbar und ergibt schema-gültige Datensätze', async () => {
+    await db.put('exercises', { ...exercise(), clubId: CLUB_ID });
+    const raw = JSON.stringify(buildPlanExport(plan(), { groups, exercises: [exercise()] }));
+    await db.wipeAll();
+    const { plan: saved } = await importPlan(parsePlanImport(raw));
+    expect(PlanSchema.safeParse(saved).success).toBe(true);
+    for (const ex of await db.getAll('exercises')) expect(ExerciseSchema.safeParse(ex).success).toBe(true);
   });
 });

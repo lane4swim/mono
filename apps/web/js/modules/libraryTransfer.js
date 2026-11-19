@@ -30,6 +30,7 @@ import { el, localId } from '../dom.js';
 import { toast } from '../ui.js';
 import { openModal } from '../modal.js';
 import { t } from '../i18n.js';
+import { validateLibraryFile } from './importValidation.js';
 
 export const LIBRARY_EXPORT_FORMAT = 'lane1-library-export-v1';
 
@@ -98,6 +99,8 @@ export function parseLibraryImport(raw) {
   let dump;
   try { dump = JSON.parse(raw); } catch { throw new Error('invalid-json'); }
   if (!dump || dump.format !== LIBRARY_EXPORT_FORMAT) throw new Error('invalid-format');
+  // Wirft ImportValidationError, bevor irgendetwas geschrieben wird.
+  validateLibraryFile(dump);
   return dump;
 }
 
@@ -151,6 +154,7 @@ function remapSetEntry(entry, idMap) {
 // selbst ein Sync-Event erzeugt, übernimmt importLibrary() diese beiden
 // Schritte jetzt explizit.
 export async function importLibrary(dump) {
+  validateLibraryFile(dump);
   const exercises = (Array.isArray(dump.exercises) ? dump.exercises : []).filter(ex => ex && ex.name && ex.category);
   const templates = (Array.isArray(dump.templates) ? dump.templates : []).filter(tpl => tpl && tpl.name);
   const sectionTemplates = (Array.isArray(dump.sectionTemplates) ? dump.sectionTemplates : []).filter(st => st && st.name);
@@ -236,9 +240,13 @@ function openImportConfirmModal(dump, onImported) {
         class: 'btn btn-primary',
         onclick: async () => {
           close();
-          const result = await importLibrary(dump);
-          toast(t('libraryTransfer.importDone', { exercises: result.exercises, templates: result.templates, sectionTemplates: result.sectionTemplates }));
-          onImported?.();
+          try {
+            const result = await importLibrary(dump);
+            toast(t('libraryTransfer.importDone', { exercises: result.exercises, templates: result.templates, sectionTemplates: result.sectionTemplates }));
+            onImported?.();
+          } catch {
+            toast(t('libraryTransfer.importError'), 'error');
+          }
         },
       }, t('libraryTransfer.importButton')),
     ]),
@@ -260,7 +268,8 @@ export function libraryTransferButtons({ onImported } = {}) {
       try {
         const dump = parseLibraryImport(await file.text());
         openImportConfirmModal(dump, onImported);
-      } catch {
+      } catch (err) {
+        console.warn('[libraryTransfer] Import abgelehnt:', err?.message);
         toast(t('libraryTransfer.importError'), 'error');
       }
     },

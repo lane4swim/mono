@@ -21,6 +21,12 @@ export class InvalidMfaCodeError extends Error {
     super('Der Code ist ungültig oder bereits verwendet.');
   }
 }
+// Zu viele falsche Codes für dieses Konto (Issue #109, mfaLockout.ts).
+export class MfaLockedError extends Error {
+  constructor() {
+    super('Nach zu vielen falschen Codes ist die Zwei-Faktor-Anmeldung für dieses Konto vorübergehend gesperrt. Bitte später erneut versuchen.');
+  }
+}
 // Wer selbst TOTP nutzt, bestätigt heikle Aktionen zusätzlich mit einem Code.
 export class MfaCodeRequiredError extends Error {
   constructor() {

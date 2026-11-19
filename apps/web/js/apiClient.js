@@ -242,9 +242,12 @@ export function forgotPassword(email) {
 // Löst das per E-Mail zugestellte Reset-Token ein — meldet bei Erfolg
 // direkt an, analog zu login()/acceptInvitation() oben (der serverseitige
 // Endpunkt liefert bereits ein volles Token-Paar, siehe
-// auth.service.ts: resetPassword()).
-export async function resetPassword({ token, newPassword }) {
-  const result = await postJson('/auth/reset-password', { token, newPassword }, { allowRefreshRetry: false });
+// auth.service.ts: resetPassword()). Mit aktiver Zwei-Faktor-Anmeldung
+// verlangt der Server zusätzlich `code` oder `recoveryCode`
+// (Fehlercode mfa_code_required).
+export async function resetPassword({ token, newPassword, code, recoveryCode }) {
+  const body = { token, newPassword, ...(code ? { code } : {}), ...(recoveryCode ? { recoveryCode } : {}) };
+  const result = await postJson('/auth/reset-password', body, { allowRefreshRetry: false });
   return sessionOrMfaChallenge(result);
 }
 

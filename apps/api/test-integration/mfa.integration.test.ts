@@ -96,3 +96,30 @@ describe('Vereinseinstellung und Datenexport', () => {
     expect(exported.user.totpEnabledAt).toBeTruthy();
   });
 });
+
+// Issue #109: kontoweiter Fehlversuchszähler.
+describe('PrismaUserRepository — Kontosperre des zweiten Faktors', () => {
+  it('zählt gleichzeitige Fehlversuche vollständig und sperrt genau einmal', async () => {
+    const club = await createTestClub();
+    const user = await seedUser(club.id);
+
+    const results = await Promise.all(Array.from({ length: 12 }, () => users.recordMfaFailure(user.id, new Date())));
+
+    expect(results.filter((r) => r.newlyLocked)).toHaveLength(1);
+    const stored = await users.findById(user.id);
+    expect(stored).toMatchObject({ mfaFailedCount: 0, mfaLockoutCount: 1 });
+    expect(stored!.mfaLockedUntil!.getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it('clearMfaFailures() und clearTotp() setzen Zähler und Sperre zurück', async () => {
+    const club = await createTestClub();
+    const user = await seedUser(club.id);
+    for (let i = 0; i < 10; i++) await users.recordMfaFailure(user.id, new Date());
+    await users.clearMfaFailures(user.id);
+    expect(await users.findById(user.id)).toMatchObject({ mfaFailedCount: 0, mfaLockedUntil: null, mfaLockoutCount: 0, mfaFailedWindowStart: null });
+
+    for (let i = 0; i < 3; i++) await users.recordMfaFailure(user.id, new Date());
+    await users.clearTotp(user.id);
+    expect(await users.findById(user.id)).toMatchObject({ mfaFailedCount: 0, mfaFailedWindowStart: null });
+  });
+});

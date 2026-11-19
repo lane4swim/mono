@@ -13,7 +13,9 @@ import {
   MfaSetupNotStartedError,
   MfaCodeRequiredError,
   MfaRequiredForActionError,
+  MfaLockedError,
 } from '../../src/modules/mfa/mfaErrors.js';
+import { MFA_LOCK_THRESHOLD, MFA_LOCK_BASE_MS } from '../../src/modules/mfa/mfaLockout.js';
 import { makeFixture, PASSWORD } from './fixture.js';
 
 const actions = async (entries: InMemoryAuditLogRepository) => (await entries.list({ limit: 100 })).map((e) => e.action);
@@ -120,13 +122,160 @@ describe('Zweiter Anmeldeschritt', () => {
     expect((await f.mfaService.status(f.trainer.id)).recoveryCodesRemaining).toBe(9);
   });
 
-  it('Passwort-Reset meldet mit aktivem TOTP nicht direkt an', async () => {
+});
+
+// Issue #109: kontoweite Grenze über alle mfaTokens hinweg.
+describe('Kontosperre nach zu vielen falschen Codes', () => {
+  let f: Awaited<ReturnType<typeof makeFixture>>;
+  beforeEach(async () => { f = await makeFixture(); });
+
+  // Meldet sich jeweils neu an (je mfaToken höchstens 5 Versuche) und gibt
+  // `count` falsche Codes ein. Liefert den Fehler des letzten Versuchs.
+  async function failCodes(secret: string, count: number): Promise<unknown> {
+    const wrong = totpAt(secret, totpStep() + 5);
+    let last: unknown;
+    let mfaToken = '';
+    for (let i = 0; i < count; i++) {
+      if (i % 4 === 0) mfaToken = ((await f.login('trainer@a.de')) as { mfaToken: string }).mfaToken;
+      last = await f.authService.loginWithSecondFactor({ mfaToken, code: wrong }).catch((err: unknown) => err);
+    }
+    return last;
+  }
+
+  it(`sperrt nach ${MFA_LOCK_THRESHOLD} Fehlversuchen über mehrere mfaTokens hinweg`, async () => {
+    const { secret } = await f.enableTotp(f.trainer.id);
+    expect(await failCodes(secret, MFA_LOCK_THRESHOLD - 1)).toBeInstanceOf(InvalidMfaCodeError);
+    expect(await failCodes(secret, 1)).toBeInstanceOf(MfaLockedError);
+
+    // Kein neues mfaToken mehr, auch mit richtigem Passwort.
+    await expect(f.login('trainer@a.de')).rejects.toThrow(MfaLockedError);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(await actions(f.auditLogEntries)).toContain('auth.mfaLocked');
+    expect(f.mailer.sentAccountSecurityChangeEmails.filter((m) => m.changeType === 'mfaLocked')).toHaveLength(1);
+  });
+
+  it('prüft während der Sperre auch einen richtigen Code nicht', async () => {
+    const { secret } = await f.enableTotp(f.trainer.id);
+    const { mfaToken } = (await f.login('trainer@a.de')) as { mfaToken: string };
+    for (let i = 0; i < MFA_LOCK_THRESHOLD; i++) await f.users.recordMfaFailure(f.trainer.id, new Date());
+    await expect(f.authService.loginWithSecondFactor({ mfaToken, code: f.nextCode(secret) })).rejects.toThrow(MfaLockedError);
+  });
+
+  it('ein erfolgreicher zweiter Faktor setzt den Zähler zurück', async () => {
+    const { secret } = await f.enableTotp(f.trainer.id);
+    await failCodes(secret, MFA_LOCK_THRESHOLD - 1);
+    const { mfaToken } = (await f.login('trainer@a.de')) as { mfaToken: string };
+    await f.authService.loginWithSecondFactor({ mfaToken, code: f.nextCode(secret) });
+    expect(await failCodes(secret, MFA_LOCK_THRESHOLD - 1)).toBeInstanceOf(InvalidMfaCodeError);
+  });
+
+  it('endet nach Ablauf der Sperrzeit', async () => {
     await f.enableTotp(f.trainer.id);
+    const past = new Date(Date.now() - MFA_LOCK_BASE_MS - 1000);
+    for (let i = 0; i < MFA_LOCK_THRESHOLD; i++) await f.users.recordMfaFailure(f.trainer.id, past);
+    await expect(f.login('trainer@a.de')).resolves.toHaveProperty('mfaRequired', true);
+  });
+
+  it('das Zurücksetzen durch einen Admin hebt die Sperre auf', async () => {
+    await f.enableTotp(f.trainer.id);
+    for (let i = 0; i < MFA_LOCK_THRESHOLD; i++) await f.users.recordMfaFailure(f.trainer.id, new Date());
+    await expect(f.login('trainer@a.de')).rejects.toThrow(MfaLockedError);
+
+    await f.mfaService.resetForUser(f.trainer.id, { id: f.admin.id, roles: f.admin.roles, clubId: f.admin.clubId }, PASSWORD, {});
+
+    expect(await f.login('trainer@a.de')).toHaveProperty('accessToken');
+    expect(await f.users.findById(f.trainer.id)).toMatchObject({ mfaFailedCount: 0, mfaLockedUntil: null, mfaLockoutCount: 0 });
+  });
+
+  it('gibt die Sperrfelder nie nach außen', async () => {
+    const { secret } = await f.enableTotp(f.trainer.id);
+    await failCodes(secret, 1);
+    const { mfaToken } = (await f.login('trainer@a.de')) as { mfaToken: string };
+    const session = await f.authService.loginWithSecondFactor({ mfaToken, code: f.nextCode(secret) });
+    expect(Object.keys(session.user).filter((k) => k.startsWith('mfaF') || k.startsWith('mfaL'))).toEqual([]);
+  });
+});
+
+// Issue #110: mit aktivem TOTP ändert der Reset-Link das Passwort erst nach
+// einem gültigen zweiten Faktor.
+describe('Passwort-Reset mit aktivem TOTP', () => {
+  let f: Awaited<ReturnType<typeof makeFixture>>;
+  beforeEach(async () => { f = await makeFixture(); });
+  const NEW_PASSWORD = 'ein-ganz-neues-passwort';
+
+  async function resetToken(): Promise<string> {
     await f.authService.requestPasswordReset('trainer@a.de');
     await new Promise((r) => setTimeout(r, 0));
-    const token = f.mailer.sentPasswordResetEmails.at(-1)!.resetUrl.split('/reset-password/')[1]!;
-    const result = await f.authService.resetPassword(token, 'ein-ganz-neues-passwort');
-    expect(result).toEqual({ mfaRequired: true, mfaToken: expect.any(String) });
+    return f.mailer.sentPasswordResetEmails.at(-1)!.resetUrl.split('/reset-password/')[1]!;
+  }
+  async function passwordUnchanged() {
+    expect(await f.login('trainer@a.de')).toHaveProperty('mfaRequired', true);
+  }
+
+  it('ohne Code: Passwort, Sitzungen und Link bleiben unangetastet', async () => {
+    const { secret } = await f.enableTotp(f.trainer.id);
+    const session = await f.authService.issueSessionFor(f.trainer.id);
+    const token = await resetToken();
+
+    await expect(f.authService.resetPassword(token, NEW_PASSWORD)).rejects.toThrow(MfaCodeRequiredError);
+
+    await passwordUnchanged();
+    await expect(f.authService.refresh(session.refreshToken)).resolves.toHaveProperty('accessToken');
+    // Der Link ist noch gültig.
+    await expect(f.authService.resetPassword(token, NEW_PASSWORD, { code: f.nextCode(secret) })).resolves.toHaveProperty('accessToken');
+  });
+
+  it('falscher Code: nichts ändert sich, der Versuch zählt und löst einen Sicherheitshinweis aus', async () => {
+    const { secret } = await f.enableTotp(f.trainer.id);
+    const session = await f.authService.issueSessionFor(f.trainer.id);
+    const token = await resetToken();
+
+    await expect(f.authService.resetPassword(token, NEW_PASSWORD, { code: totpAt(secret, totpStep() + 5) })).rejects.toThrow(InvalidMfaCodeError);
+
+    await passwordUnchanged();
+    await expect(f.authService.refresh(session.refreshToken)).resolves.toHaveProperty('accessToken');
+    expect((await f.users.findById(f.trainer.id))!.mfaFailedCount).toBe(1);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(f.mailer.sentAccountSecurityChangeEmails.at(-1)).toMatchObject({ to: 'trainer@a.de', changeType: 'passwordResetMfaFailed' });
+    const failed = (await f.auditLogEntries.list({ limit: 100 })).find((e) => e.action === 'auth.mfaFailed');
+    expect(failed?.metadata).toMatchObject({ context: 'passwordReset' });
+  });
+
+  it('richtiger Code: Passwort geändert, alte Sitzungen beendet, direkt angemeldet', async () => {
+    const { secret } = await f.enableTotp(f.trainer.id);
+    const session = await f.authService.issueSessionFor(f.trainer.id);
+    const token = await resetToken();
+
+    const result = await f.authService.resetPassword(token, NEW_PASSWORD, { code: f.nextCode(secret) });
+
+    expect(result).toHaveProperty('accessToken');
+    await expect(f.authService.refresh(session.refreshToken)).rejects.toThrow(InvalidRefreshTokenError);
+    await expect(f.authService.resetPassword(token, NEW_PASSWORD, { code: f.nextCode(secret) })).rejects.toThrow();
+  });
+
+  it('Wiederherstellungscode: funktioniert und wird protokolliert', async () => {
+    const { recoveryCodes } = await f.enableTotp(f.trainer.id);
+    const token = await resetToken();
+
+    await expect(f.authService.resetPassword(token, NEW_PASSWORD, { recoveryCode: recoveryCodes[0]! })).resolves.toHaveProperty('accessToken');
+    expect(await actions(f.auditLogEntries)).toContain('auth.recoveryCodeUsed');
+  });
+
+  it('teilt sich die Kontosperre mit der Anmeldung', async () => {
+    const { secret } = await f.enableTotp(f.trainer.id);
+    const token = await resetToken();
+    const wrong = totpAt(secret, totpStep() + 5);
+    for (let i = 0; i < MFA_LOCK_THRESHOLD - 1; i++) {
+      await expect(f.authService.resetPassword(token, NEW_PASSWORD, { code: wrong })).rejects.toThrow(InvalidMfaCodeError);
+    }
+    await expect(f.authService.resetPassword(token, NEW_PASSWORD, { code: wrong })).rejects.toThrow(MfaLockedError);
+    await expect(f.authService.resetPassword(token, NEW_PASSWORD, { code: f.nextCode(secret) })).rejects.toThrow(MfaLockedError);
+    await expect(f.login('trainer@a.de')).rejects.toThrow(MfaLockedError);
+  });
+
+  it('ohne TOTP: Reset wie bisher, ein Code wird nicht verlangt', async () => {
+    const token = await resetToken();
+    await expect(f.authService.resetPassword(token, NEW_PASSWORD)).resolves.toHaveProperty('accessToken');
   });
 });
 

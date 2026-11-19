@@ -30,6 +30,7 @@ import { dateOnly, toIsoDateTime, startOfWeek, todayISO } from '../dates.js';
 import { COURSES } from '../refdata.js';
 import { t } from '../i18n.js';
 import { downloadJSON } from './libraryTransfer.js';
+import { validatePlanFile } from './importValidation.js';
 
 export const PLAN_EXPORT_FORMAT = 'lane1-plan-export-v1';
 
@@ -111,6 +112,8 @@ export function parsePlanImport(raw) {
   let dump;
   try { dump = JSON.parse(raw); } catch { throw new Error('invalid-json'); }
   if (!dump || dump.format !== PLAN_EXPORT_FORMAT || !dump.plan || typeof dump.plan !== 'object') throw new Error('invalid-format');
+  // Wirft ImportValidationError, bevor irgendetwas geschrieben wird.
+  validatePlanFile(dump);
   return dump;
 }
 
@@ -162,6 +165,7 @@ const exerciseKey = (ex) => `${String(ex.name).trim().toLowerCase()}\u0000${Stri
 // Person an (clubId/Zeitstempel/Sync-Event übernimmt put(), siehe db.js).
 // Gibt den gespeicherten Plan sowie die Zahl neu angelegter Übungen zurück.
 export async function importPlan(dump) {
+  validatePlanFile(dump);
   const src = dump.plan;
   const [existingExercises, groups] = await Promise.all([getAll('exercises'), getAll('groups')]);
   const byId = new Map(existingExercises.map(ex => [ex.id, ex]));
@@ -262,7 +266,8 @@ export function planImportButton() {
       if (!file) return;
       try {
         openImportConfirmModal(parsePlanImport(await file.text()));
-      } catch {
+      } catch (err) {
+        console.warn('[planTransfer] Import abgelehnt:', err?.message);
         toast(t('planTransfer.importError'), 'error');
       }
     },

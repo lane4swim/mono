@@ -55,6 +55,7 @@ export default {
       mfa_setup_not_started: 'Please start the setup again.',
       mfa_not_enabled: 'Two-factor sign-in is not set up for this account.',
       mfa_required_for_action: 'This requires two-factor sign-in on your own account.',
+      mfa_locked: 'Two-factor sign-in for your account is temporarily locked after too many wrong codes. Please try again later or contact your club administration.',
     },
     // See the matching comment in de-DE.js — keep both files' syncErrors
     // in sync with apps/api/src/modules/sync/sync.service.ts.
@@ -100,6 +101,7 @@ export default {
     forgotPasswordSentMessage: "If an account with this email address exists, we've just sent a password reset link. Please check your inbox (and spam folder).",
     resetPasswordTitle: 'Choose a new password',
     resetPasswordIntro: 'Please choose a new password for your account.',
+    resetPasswordMfaHint: 'Two-factor sign-in is set up for your account. Please confirm the new password with a code from your authenticator app or a recovery code.',
     confirmNewPassword: 'Confirm new password',
     resetPasswordButton: 'Set password',
     resetPasswordSuccess: "Password changed successfully — you're now signed in.",
@@ -923,6 +925,8 @@ export default {
       clubMfaPolicyOff: 'Two-factor sign-in no longer required for admins',
       mfaFailed: 'Wrong verification code at sign-in',
       mfaFailedLocked: 'Wrong verification code — sign-in attempt locked',
+      mfaFailedPasswordReset: 'Wrong verification code while resetting the password',
+      mfaLocked: 'Two-factor sign-in locked after too many wrong codes',
       recoveryCodeUsed: 'Signed in with a recovery code',
     },
   },

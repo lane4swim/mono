@@ -984,6 +984,30 @@ Ihr Lane-1-Team",
 }
 `;
 
+exports[`E-Mail-Schnappschüsse > Sicherheitshinweis — default / mit Name / mfaLocked 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hallo Mara &lt;Vogel&gt; &amp; &quot;Co&quot;,</p>
+    <p>Bei der Anmeldung an Ihrem Lane-1-Konto wurden mehrfach falsche Codes der Zwei-Faktor-Anmeldung eingegeben; sie ist deshalb vorübergehend gesperrt. Wer sich bis zu diesem Schritt angemeldet hat, kannte Ihr Passwort (oder hatte Zugriff auf Ihr E-Mail-Postfach) — falls Sie das nicht selbst waren, ändern Sie bitte umgehend Ihr Passwort.</p>
+    <p>Wenn Sie diese Änderung selbst vorgenommen haben, können Sie diese E-Mail ignorieren.</p>
+    <p style="color:#B3261E;font-weight:bold">Falls Sie diese Änderung NICHT vorgenommen haben, könnte Ihr Konto
+       kompromittiert sein: Bitte wenden Sie sich umgehend an Ihre Vereinsleitung.</p>
+    <p>Sportliche Grüße,<br>Ihr Lane-1-Team</p>",
+  "subject": "Ihr Lane-1-Konto wurde geändert",
+  "text": "Hallo Mara <Vogel> & "Co",
+
+Bei der Anmeldung an Ihrem Lane-1-Konto wurden mehrfach falsche Codes der Zwei-Faktor-Anmeldung eingegeben; sie ist deshalb vorübergehend gesperrt. Wer sich bis zu diesem Schritt angemeldet hat, kannte Ihr Passwort (oder hatte Zugriff auf Ihr E-Mail-Postfach) — falls Sie das nicht selbst waren, ändern Sie bitte umgehend Ihr Passwort.
+
+Wenn Sie diese Änderung selbst vorgenommen haben, können Sie diese E-Mail ignorieren — es ist nichts weiter zu tun.
+
+Falls Sie diese Änderung NICHT vorgenommen haben, könnte Ihr Konto kompromittiert sein: Bitte wenden Sie sich umgehend an Ihre Vereinsleitung.
+
+Sportliche Grüße,
+Ihr Lane-1-Team",
+  "to": "mara@example.org",
+}
+`;
+
 exports[`E-Mail-Schnappschüsse > Sicherheitshinweis — default / mit Name / password 1`] = `
 {
   "from": ""Lane 1" <noreply@example.org>",
@@ -997,6 +1021,30 @@ exports[`E-Mail-Schnappschüsse > Sicherheitshinweis — default / mit Name / pa
   "text": "Hallo Mara <Vogel> & "Co",
 
 Das Passwort Ihres Lane-1-Kontos wurde soeben geändert.
+
+Wenn Sie diese Änderung selbst vorgenommen haben, können Sie diese E-Mail ignorieren — es ist nichts weiter zu tun.
+
+Falls Sie diese Änderung NICHT vorgenommen haben, könnte Ihr Konto kompromittiert sein: Bitte wenden Sie sich umgehend an Ihre Vereinsleitung.
+
+Sportliche Grüße,
+Ihr Lane-1-Team",
+  "to": "mara@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Sicherheitshinweis — default / mit Name / passwordResetMfaFailed 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hallo Mara &lt;Vogel&gt; &amp; &quot;Co&quot;,</p>
+    <p>Soeben ist ein Versuch gescheitert, das Passwort Ihres Lane-1-Kontos zurückzusetzen: der Code der Zwei-Faktor-Anmeldung war falsch. Ihr Passwort ist unverändert.</p>
+    <p>Wenn Sie diese Änderung selbst vorgenommen haben, können Sie diese E-Mail ignorieren.</p>
+    <p style="color:#B3261E;font-weight:bold">Falls Sie diese Änderung NICHT vorgenommen haben, könnte Ihr Konto
+       kompromittiert sein: Bitte wenden Sie sich umgehend an Ihre Vereinsleitung.</p>
+    <p>Sportliche Grüße,<br>Ihr Lane-1-Team</p>",
+  "subject": "Ihr Lane-1-Konto wurde geändert",
+  "text": "Hallo Mara <Vogel> & "Co",
+
+Soeben ist ein Versuch gescheitert, das Passwort Ihres Lane-1-Kontos zurückzusetzen: der Code der Zwei-Faktor-Anmeldung war falsch. Ihr Passwort ist unverändert.
 
 Wenn Sie diese Änderung selbst vorgenommen haben, können Sie diese E-Mail ignorieren — es ist nichts weiter zu tun.
 
@@ -1104,6 +1152,30 @@ Ihr Lane-1-Team",
 }
 `;
 
+exports[`E-Mail-Schnappschüsse > Sicherheitshinweis — default / ohne Name / mfaLocked 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hallo,</p>
+    <p>Bei der Anmeldung an Ihrem Lane-1-Konto wurden mehrfach falsche Codes der Zwei-Faktor-Anmeldung eingegeben; sie ist deshalb vorübergehend gesperrt. Wer sich bis zu diesem Schritt angemeldet hat, kannte Ihr Passwort (oder hatte Zugriff auf Ihr E-Mail-Postfach) — falls Sie das nicht selbst waren, ändern Sie bitte umgehend Ihr Passwort.</p>
+    <p>Wenn Sie diese Änderung selbst vorgenommen haben, können Sie diese E-Mail ignorieren.</p>
+    <p style="color:#B3261E;font-weight:bold">Falls Sie diese Änderung NICHT vorgenommen haben, könnte Ihr Konto
+       kompromittiert sein: Bitte wenden Sie sich umgehend an Ihre Vereinsleitung.</p>
+    <p>Sportliche Grüße,<br>Ihr Lane-1-Team</p>",
+  "subject": "Ihr Lane-1-Konto wurde geändert",
+  "text": "Hallo,
+
+Bei der Anmeldung an Ihrem Lane-1-Konto wurden mehrfach falsche Codes der Zwei-Faktor-Anmeldung eingegeben; sie ist deshalb vorübergehend gesperrt. Wer sich bis zu diesem Schritt angemeldet hat, kannte Ihr Passwort (oder hatte Zugriff auf Ihr E-Mail-Postfach) — falls Sie das nicht selbst waren, ändern Sie bitte umgehend Ihr Passwort.
+
+Wenn Sie diese Änderung selbst vorgenommen haben, können Sie diese E-Mail ignorieren — es ist nichts weiter zu tun.
+
+Falls Sie diese Änderung NICHT vorgenommen haben, könnte Ihr Konto kompromittiert sein: Bitte wenden Sie sich umgehend an Ihre Vereinsleitung.
+
+Sportliche Grüße,
+Ihr Lane-1-Team",
+  "to": "mara@example.org",
+}
+`;
+
 exports[`E-Mail-Schnappschüsse > Sicherheitshinweis — default / ohne Name / password 1`] = `
 {
   "from": ""Lane 1" <noreply@example.org>",
@@ -1117,6 +1189,30 @@ exports[`E-Mail-Schnappschüsse > Sicherheitshinweis — default / ohne Name / p
   "text": "Hallo,
 
 Das Passwort Ihres Lane-1-Kontos wurde soeben geändert.
+
+Wenn Sie diese Änderung selbst vorgenommen haben, können Sie diese E-Mail ignorieren — es ist nichts weiter zu tun.
+
+Falls Sie diese Änderung NICHT vorgenommen haben, könnte Ihr Konto kompromittiert sein: Bitte wenden Sie sich umgehend an Ihre Vereinsleitung.
+
+Sportliche Grüße,
+Ihr Lane-1-Team",
+  "to": "mara@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Sicherheitshinweis — default / ohne Name / passwordResetMfaFailed 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hallo,</p>
+    <p>Soeben ist ein Versuch gescheitert, das Passwort Ihres Lane-1-Kontos zurückzusetzen: der Code der Zwei-Faktor-Anmeldung war falsch. Ihr Passwort ist unverändert.</p>
+    <p>Wenn Sie diese Änderung selbst vorgenommen haben, können Sie diese E-Mail ignorieren.</p>
+    <p style="color:#B3261E;font-weight:bold">Falls Sie diese Änderung NICHT vorgenommen haben, könnte Ihr Konto
+       kompromittiert sein: Bitte wenden Sie sich umgehend an Ihre Vereinsleitung.</p>
+    <p>Sportliche Grüße,<br>Ihr Lane-1-Team</p>",
+  "subject": "Ihr Lane-1-Konto wurde geändert",
+  "text": "Hallo,
+
+Soeben ist ein Versuch gescheitert, das Passwort Ihres Lane-1-Kontos zurückzusetzen: der Code der Zwei-Faktor-Anmeldung war falsch. Ihr Passwort ist unverändert.
 
 Wenn Sie diese Änderung selbst vorgenommen haben, können Sie diese E-Mail ignorieren — es ist nichts weiter zu tun.
 
@@ -1224,6 +1320,30 @@ The Lane 1 team",
 }
 `;
 
+exports[`E-Mail-Schnappschüsse > Sicherheitshinweis — en-US / mit Name / mfaLocked 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hi Mara &lt;Vogel&gt; &amp; &quot;Co&quot;,</p>
+      <p>Wrong two-factor codes were entered several times while signing in to your Lane 1 account, so two-factor sign-in is temporarily locked. Whoever got this far knew your password (or had access to your mailbox) — if that was not you, please change your password right away.</p>
+      <p>If you made this change yourself, you can ignore this email.</p>
+      <p style="color:#B3261E;font-weight:bold">If you did NOT make this change, your account may be compromised:
+         please contact your club's administrator immediately.</p>
+      <p>Best regards,<br>The Lane 1 team</p>",
+  "subject": "Your Lane 1 account was changed",
+  "text": "Hi Mara <Vogel> & "Co",
+
+Wrong two-factor codes were entered several times while signing in to your Lane 1 account, so two-factor sign-in is temporarily locked. Whoever got this far knew your password (or had access to your mailbox) — if that was not you, please change your password right away.
+
+If you made this change yourself, you can ignore this email — nothing further to do.
+
+If you did NOT make this change, your account may be compromised: please contact your club's administrator immediately.
+
+Best regards,
+The Lane 1 team",
+  "to": "mara@example.org",
+}
+`;
+
 exports[`E-Mail-Schnappschüsse > Sicherheitshinweis — en-US / mit Name / password 1`] = `
 {
   "from": ""Lane 1" <noreply@example.org>",
@@ -1237,6 +1357,30 @@ exports[`E-Mail-Schnappschüsse > Sicherheitshinweis — en-US / mit Name / pass
   "text": "Hi Mara <Vogel> & "Co",
 
 The password for your Lane 1 account was just changed.
+
+If you made this change yourself, you can ignore this email — nothing further to do.
+
+If you did NOT make this change, your account may be compromised: please contact your club's administrator immediately.
+
+Best regards,
+The Lane 1 team",
+  "to": "mara@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Sicherheitshinweis — en-US / mit Name / passwordResetMfaFailed 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hi Mara &lt;Vogel&gt; &amp; &quot;Co&quot;,</p>
+      <p>An attempt to reset the password for your Lane 1 account just failed because the two-factor code was wrong. Your password has not changed.</p>
+      <p>If you made this change yourself, you can ignore this email.</p>
+      <p style="color:#B3261E;font-weight:bold">If you did NOT make this change, your account may be compromised:
+         please contact your club's administrator immediately.</p>
+      <p>Best regards,<br>The Lane 1 team</p>",
+  "subject": "Your Lane 1 account was changed",
+  "text": "Hi Mara <Vogel> & "Co",
+
+An attempt to reset the password for your Lane 1 account just failed because the two-factor code was wrong. Your password has not changed.
 
 If you made this change yourself, you can ignore this email — nothing further to do.
 
@@ -1344,6 +1488,30 @@ The Lane 1 team",
 }
 `;
 
+exports[`E-Mail-Schnappschüsse > Sicherheitshinweis — en-US / ohne Name / mfaLocked 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hi,</p>
+      <p>Wrong two-factor codes were entered several times while signing in to your Lane 1 account, so two-factor sign-in is temporarily locked. Whoever got this far knew your password (or had access to your mailbox) — if that was not you, please change your password right away.</p>
+      <p>If you made this change yourself, you can ignore this email.</p>
+      <p style="color:#B3261E;font-weight:bold">If you did NOT make this change, your account may be compromised:
+         please contact your club's administrator immediately.</p>
+      <p>Best regards,<br>The Lane 1 team</p>",
+  "subject": "Your Lane 1 account was changed",
+  "text": "Hi,
+
+Wrong two-factor codes were entered several times while signing in to your Lane 1 account, so two-factor sign-in is temporarily locked. Whoever got this far knew your password (or had access to your mailbox) — if that was not you, please change your password right away.
+
+If you made this change yourself, you can ignore this email — nothing further to do.
+
+If you did NOT make this change, your account may be compromised: please contact your club's administrator immediately.
+
+Best regards,
+The Lane 1 team",
+  "to": "mara@example.org",
+}
+`;
+
 exports[`E-Mail-Schnappschüsse > Sicherheitshinweis — en-US / ohne Name / password 1`] = `
 {
   "from": ""Lane 1" <noreply@example.org>",
@@ -1357,6 +1525,30 @@ exports[`E-Mail-Schnappschüsse > Sicherheitshinweis — en-US / ohne Name / pas
   "text": "Hi,
 
 The password for your Lane 1 account was just changed.
+
+If you made this change yourself, you can ignore this email — nothing further to do.
+
+If you did NOT make this change, your account may be compromised: please contact your club's administrator immediately.
+
+Best regards,
+The Lane 1 team",
+  "to": "mara@example.org",
+}
+`;
+
+exports[`E-Mail-Schnappschüsse > Sicherheitshinweis — en-US / ohne Name / passwordResetMfaFailed 1`] = `
+{
+  "from": ""Lane 1" <noreply@example.org>",
+  "html": "<p>Hi,</p>
+      <p>An attempt to reset the password for your Lane 1 account just failed because the two-factor code was wrong. Your password has not changed.</p>
+      <p>If you made this change yourself, you can ignore this email.</p>
+      <p style="color:#B3261E;font-weight:bold">If you did NOT make this change, your account may be compromised:
+         please contact your club's administrator immediately.</p>
+      <p>Best regards,<br>The Lane 1 team</p>",
+  "subject": "Your Lane 1 account was changed",
+  "text": "Hi,
+
+An attempt to reset the password for your Lane 1 account just failed because the two-factor code was wrong. Your password has not changed.
 
 If you made this change yourself, you can ignore this email — nothing further to do.
 

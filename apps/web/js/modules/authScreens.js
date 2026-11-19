@@ -16,7 +16,7 @@ import {
   resetPassword as resetPasswordRequest,
   CURRENT_CONSENT_VERSION,
 } from '../state.js';
-import { renderMfaStep, renderForcedMfaSetup } from './mfa.js';
+import { renderMfaStep, renderForcedMfaSetup, secondFactorField, describeMfaError } from './mfa.js';
 import * as api from '../apiClient.js';
 import { t } from '../i18n.js';
 import { buildLegalContent } from './info.js';
@@ -213,6 +213,17 @@ export function renderResetPasswordScreen(container, token, onSuccess) {
   const submitBtn = el('button', { type: 'submit', class: 'btn btn-primary', style: 'grid-column:1/-1' }, t('auth.resetPasswordButton'));
   form.appendChild(submitBtn);
 
+  // Erst eingeblendet, wenn der Server für dieses Konto einen zweiten
+  // Faktor verlangt (mfa_code_required): mit aktivem TOTP ändert sich das
+  // Passwort erst nach einem gültigen Code (Issue #110).
+  let secondFactor = null;
+  function showSecondFactor() {
+    secondFactor = secondFactorField();
+    form.insertBefore(el('p', { class: 'hint', style: 'grid-column:1/-1' }, t('auth.resetPasswordMfaHint')), errorBox);
+    form.insertBefore(secondFactor.node, errorBox);
+    secondFactor.focus();
+  }
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     errorBox.style.display = 'none';
@@ -223,7 +234,7 @@ export function renderResetPasswordScreen(container, token, onSuccess) {
     }
     submitBtn.disabled = true;
     try {
-      const result = await resetPasswordRequest(token, fPassword.value);
+      const result = await resetPasswordRequest(token, fPassword.value, secondFactor ? secondFactor.value() : {});
       toast(t('auth.resetPasswordSuccess'));
       // Mit aktiver Zwei-Faktor-Anmeldung meldet der Reset nicht direkt an:
       // das Passwort ist geändert, der Code folgt.
@@ -237,7 +248,13 @@ export function renderResetPasswordScreen(container, token, onSuccess) {
       }
       onSuccess();
     } catch (err) {
-      errorBox.textContent = describeAuthError(err, { on410Message: t('auth.errorResetTokenExpired') });
+      if (!secondFactor && err?.body?.error === 'mfa_code_required') {
+        showSecondFactor();
+        return;
+      }
+      errorBox.textContent = secondFactor
+        ? describeMfaError(err)
+        : describeAuthError(err, { on410Message: t('auth.errorResetTokenExpired') });
       errorBox.style.display = 'block';
     } finally {
       submitBtn.disabled = false;
