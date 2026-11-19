@@ -5,6 +5,11 @@ import type {
   ErasureRequestRecord,
 } from './profile.repository.js';
 import { UserNotFoundForExportError, ErasureAlreadyRequestedError, withoutCoachNotes } from './profile.repository.js';
+import { LastAdminError } from '../shared/errors.js';
+
+function isAdmin(user: InMemoryUserRow): boolean {
+  return Array.isArray(user.roles) && user.roles.includes('admin');
+}
 
 export interface InMemoryUserRow {
   id: string;
@@ -112,6 +117,10 @@ export class InMemoryProfileDataGateway implements ProfileDataGateway {
     const user = this.db.users.find((u) => u.id === userId);
     if (!user) throw new UserNotFoundForExportError();
     if (this.erasureRequests.has(userId)) throw new ErasureAlreadyRequestedError();
+    if (user.clubId && isAdmin(user)) {
+      const others = this.db.users.filter((u) => u.clubId === user.clubId && !u.deletedAt && u.id !== userId && isAdmin(u));
+      if (others.length === 0) throw new LastAdminError();
+    }
 
     const now = new Date();
     const purgeAfter = new Date(now.getTime() + retentionDays * 24 * 60 * 60 * 1000);

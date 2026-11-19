@@ -856,6 +856,22 @@ describe('DELETE /api/me (Art. 17 DSGVO)', () => {
     expect(second.statusCode).toBe(409);
     await app.close();
   });
+
+  it('liefert 409 last_admin, wenn der einzige Admin des Vereins sein Konto löschen will', async () => {
+    const { app, invitations, profileDb } = await buildTestApp();
+    const token = await seedInvitationToken(invitations, { email: 'sole-admin@example.org', role: 'admin' });
+    const registerResponse = await app.inject({ method: 'POST', url: '/auth/register', payload: { token, name: 'X', password: 'ein-sicheres-passwort', consent: true } });
+    const { accessToken, refreshToken: rt, user } = registerResponse.json();
+    profileDb.users.push({ id: user.id, clubId: user.clubId, athleteId: null, deletedAt: null, roles: user.roles, name: user.name, email: user.email });
+
+    const response = await app.inject({ method: 'DELETE', url: '/api/me', headers: { authorization: `Bearer ${accessToken}` } });
+    expect(response.statusCode).toBe(409);
+    expect(response.json().error).toBe('last_admin');
+    expect(profileDb.users[0].deletedAt).toBeNull();
+    const refreshResponse = await app.inject({ method: 'POST', url: '/auth/refresh', payload: { refreshToken: rt } });
+    expect(refreshResponse.statusCode).toBe(200);
+    await app.close();
+  });
 });
 
 describe('GET /api/users (Nutzerverwaltung: bestehende Vereinsmitglieder)', () => {

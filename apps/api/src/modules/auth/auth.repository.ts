@@ -4,6 +4,7 @@
 // vollständig ohne Datenbank testen, (2) ein späterer Wechsel der
 // Persistenzschicht bliebe auf diese Datei begrenzt.
 import type { PrismaClient } from '@prisma/client';
+import { lockClubForAdminChange, assertAnotherAdminRemains, type ClubAdminTx } from '../../db/clubAdmins.js';
 
 export interface UserRecord {
   id: string;
@@ -72,6 +73,10 @@ export interface UserRepository {
   findById(id: string): Promise<UserRecord | null>;
   create(input: CreateUserInput): Promise<UserRecord>;
   update(id: string, input: UpdateUserInput): Promise<UserRecord>;
+  // Ersetzt die Rollen einer Person. Würde das dem Verein die letzte
+  // aktive admin-Rolle nehmen, wirft es LastAdminError; Prüfung und
+  // Schreiben sind atomar, auch bei gleichzeitigen Aufrufen.
+  updateRolesKeepingAnAdmin(id: string, roles: string[]): Promise<UserRecord>;
   // Für die Nutzerverwaltung ("GET /api/users"): alle aktiven (nicht
   // gelöschten) Mitglieder eines Vereins.
   listByClub(clubId: string): Promise<UserRecord[]>;
@@ -150,6 +155,14 @@ export interface PasswordResetTokenRepository {
 
 // ---- Prisma-Implementierungen (Produktionsbetrieb) ------------------------
 
+// Gleiche Form wie Prismas eigener Fehler für ein Update ohne Treffer, damit
+// Aufrufer beide Fälle einheitlich über `code === 'P2025'` erkennen.
+export function recordNotFoundForUpdate(): Error & { code: string } {
+  const err = new Error('An operation failed because it depends on one or more records that were required but not found. No record was found for an update.') as Error & { code: string };
+  err.code = 'P2025';
+  return err;
+}
+
 export class PrismaUserRepository implements UserRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
@@ -222,11 +235,28 @@ export class PrismaUserRepository implements UserRepository {
     // explizite Ergänzung dient nur der Lesbarkeit).
     const data = input.roles ? { ...input, role: input.roles[0]! } : input;
     const result = await this.prisma.user.updateMany({ where: { id, deletedAt: null }, data });
-    if (result.count === 0) {
-      const err = new Error('An operation failed because it depends on one or more records that were required but not found. No record was found for an update.') as Error & { code: string };
-      err.code = 'P2025';
-      throw err;
-    }
+    if (result.count === 0) throw recordNotFoundForUpdate();
+    return (await this.findById(id))!;
+  }
+  async updateRolesKeepingAnAdmin(id: string, roles: string[]): Promise<UserRecord> {
+    const current = await this.findById(id);
+    if (!current) throw recordNotFoundForUpdate();
+    const clubId = current.clubId;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await this.prisma.$transaction(async (tx: any) => {
+      if (clubId) {
+        await lockClubForAdminChange(tx as ClubAdminTx, clubId);
+        // Nach der Sperre neu gelesen: die Rollen können sich seit dem
+        // Lesen oben geändert haben.
+        const target = await tx.user.findFirst({ where: { id, deletedAt: null }, select: { roles: true } });
+        if (!target) throw recordNotFoundForUpdate();
+        if (target.roles.includes('admin') && !roles.includes('admin')) {
+          await assertAnotherAdminRemains(tx as ClubAdminTx, clubId, id);
+        }
+      }
+      const result = await tx.user.updateMany({ where: { id, deletedAt: null }, data: { roles, role: roles[0]! } });
+      if (result.count === 0) throw recordNotFoundForUpdate();
+    });
     return (await this.findById(id))!;
   }
   async setPendingTotpSecret(id: string, secretEnc: string): Promise<boolean> {

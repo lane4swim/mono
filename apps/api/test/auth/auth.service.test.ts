@@ -616,6 +616,42 @@ describe('authService.exportMyData / requestAccountDeletion', () => {
     expect(entries[0]).toMatchObject({ actorId: user.id, targetId: user.id, action: 'user.deletionRequested' });
     expect(entries[0]!.actorLabel).toContain('delete3@example.org');
   });
+
+  it('requestAccountDeletion() lehnt die Löschung des einzigen Admins eines Vereins mit LastAdminError ab', async () => {
+    const { service, invitations, profileDb, refreshTokens, auditLogEntries } = makeService();
+    const { user, refreshToken } = await registerViaInvitation(service, invitations, { email: 'sole-admin@example.org', role: 'admin' });
+    profileDb.users.push({ id: user.id, clubId: CLUB_ID, athleteId: null, deletedAt: null, roles: ['admin'], name: user.name, email: user.email });
+
+    await expect(service.requestAccountDeletion(user.id)).rejects.toThrow(LastAdminError);
+
+    expect(profileDb.users[0].deletedAt).toBeNull();
+    const stored = await refreshTokens.findByHash(hashRefreshToken(refreshToken));
+    expect(stored!.revokedAt).toBeNull();
+    expect(await auditLogEntries.list({ clubId: CLUB_ID, limit: 10 })).toHaveLength(0);
+  });
+
+  it('requestAccountDeletion() erlaubt die Löschung eines Admins, wenn ein anderer aktiver Admin verbleibt', async () => {
+    const { service, invitations, profileDb } = makeService();
+    const { user } = await registerViaInvitation(service, invitations, { email: 'admin-a@example.org', role: 'admin' });
+    profileDb.users.push(
+      { id: user.id, clubId: CLUB_ID, athleteId: null, deletedAt: null, roles: ['admin'], name: user.name, email: user.email },
+      { id: 'other-admin', clubId: CLUB_ID, athleteId: null, deletedAt: null, roles: ['trainer', 'admin'] },
+    );
+
+    await expect(service.requestAccountDeletion(user.id)).resolves.toHaveProperty('purgeAfter');
+  });
+
+  it('requestAccountDeletion() zählt einen bereits gelöschten oder vereinsfremden Admin nicht als verbleibend', async () => {
+    const { service, invitations, profileDb } = makeService();
+    const { user } = await registerViaInvitation(service, invitations, { email: 'admin-b@example.org', role: 'admin' });
+    profileDb.users.push(
+      { id: user.id, clubId: CLUB_ID, athleteId: null, deletedAt: null, roles: ['admin'] },
+      { id: 'deleted-admin', clubId: CLUB_ID, athleteId: null, deletedAt: new Date(), roles: ['admin'] },
+      { id: 'foreign-admin', clubId: '99999999-9999-9999-9999-999999999998', athleteId: null, deletedAt: null, roles: ['admin'] },
+    );
+
+    await expect(service.requestAccountDeletion(user.id)).rejects.toThrow(LastAdminError);
+  });
 });
 
 // Sicherheitsreview 2026-08, Befund M5 ("Passwort vergessen").
@@ -1159,6 +1195,23 @@ describe('authService.updateUserRoles', () => {
 
     const updated = await service.updateUserRoles(adminOne.user.id, ['trainer'], { id: 'admin-actor', clubId: CLUB_ID });
     expect(updated.roles).toEqual(['trainer']);
+  });
+
+  it('lässt bei gleichzeitigem gegenseitigem Entzug der admin-Rolle mindestens einen Admin übrig', async () => {
+    const { service, invitations, users } = makeService();
+    const a = await registerViaInvitation(service, invitations, { email: 'admin-a@example.org', role: 'admin' });
+    const b = await registerViaInvitation(service, invitations, { email: 'admin-b@example.org', role: 'admin' });
+
+    const outcomes = await Promise.allSettled([
+      service.updateUserRoles(b.user.id, ['trainer'], { id: a.user.id, clubId: CLUB_ID }),
+      service.updateUserRoles(a.user.id, ['trainer'], { id: b.user.id, clubId: CLUB_ID }),
+    ]);
+
+    expect(outcomes.filter((o) => o.status === 'fulfilled')).toHaveLength(1);
+    const rejected = outcomes.find((o) => o.status === 'rejected') as PromiseRejectedResult;
+    expect(rejected.reason).toBeInstanceOf(LastAdminError);
+    const admins = (await users.listByClub(CLUB_ID)).filter((u) => u.roles.includes('admin'));
+    expect(admins).toHaveLength(1);
   });
 });
 

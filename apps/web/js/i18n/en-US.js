@@ -27,6 +27,7 @@ export default {
       invalid_current_password: 'The current password is incorrect.',
       invalid_reset_token: 'This password reset link is invalid, expired, or has already been used.',
       erasure_already_requested: 'A deletion request already exists for this account.',
+      last_admin: 'The club needs at least one person with the admin role. Please hand over the admin role to someone else first.',
       forbidden: 'You do not have permission to do this.',
       club_not_found: 'Club not found.',
       athlete_not_found: 'The referenced athlete profile was not found.',
