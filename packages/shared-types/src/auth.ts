@@ -131,14 +131,6 @@ export const ForgotPasswordRequestSchema = z.object({
 });
 export type ForgotPasswordRequest = z.infer<typeof ForgotPasswordRequestSchema>;
 
-// POST /auth/reset-password — öffentlich, aber nur mit einem gültigen,
-// per E-Mail zugestellten Token nutzbar (siehe auth/tokens.ts:
-// generatePasswordResetToken()).
-export const ResetPasswordRequestSchema = z.object({
-  token: z.string().min(1),
-  newPassword: newPasswordField,
-});
-export type ResetPasswordRequest = z.infer<typeof ResetPasswordRequestSchema>;
 
 // POST /api/me/password — authentifiziert, verlangt zusätzlich das
 // aktuelle Passwort (verhindert, dass ein kurzzeitig entwendeter Access
@@ -226,6 +218,20 @@ const currentPasswordField = z.string().min(1).max(200);
 const exactlyOneSecondFactor = (v: { code?: string; recoveryCode?: string }) => Boolean(v.code) !== Boolean(v.recoveryCode);
 const atMostOneSecondFactor = (v: { code?: string; recoveryCode?: string }) => !(v.code && v.recoveryCode);
 const SECOND_FACTOR_MESSAGE = 'Bitte genau einen Code angeben: aus der Authenticator-App oder einen Wiederherstellungscode.';
+
+// POST /auth/reset-password — öffentlich, aber nur mit einem gültigen,
+// per E-Mail zugestellten Token nutzbar (siehe auth/tokens.ts:
+// generatePasswordResetToken()). Für ein Konto mit aktivem TOTP zusätzlich
+// ein Code: der Link belegt nur den Zugriff auf das Postfach (Issue #110).
+export const ResetPasswordRequestSchema = z
+  .object({
+    token: z.string().min(1),
+    newPassword: newPasswordField,
+    code: totpCodeField.optional(),
+    recoveryCode: recoveryCodeField.optional(),
+  })
+  .refine(atMostOneSecondFactor, SECOND_FACTOR_MESSAGE);
+export type ResetPasswordRequest = z.infer<typeof ResetPasswordRequestSchema>;
 
 // POST /auth/login/mfa — zweiter Anmeldeschritt.
 export const LoginMfaRequestSchema = z

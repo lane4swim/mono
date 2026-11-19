@@ -64,6 +64,8 @@ Routen und Services verwenden sie, statt sie selbst nachzubauen. Eine
 | `forEachPlainSet()`, `mapPlainSets()`, `isRecord()` | `modules/shared/setEntries.ts` | Durchlaufen der SetEntry-Struktur (Sätze, Blöcke, Abschnitte) in Vorlagen und Plan-Tagen |
 | `COMMENT_LOCATIONS`, `collectCommentArrays()`, `mapCommentArrays()` | `modules/shared/commentLocations.ts` | Welche Stores wo Kommentare tragen — eine Quelle für Autor:innen-Prüfung beim Sync und Anonymisierung beim DSGVO-Purge |
 | `ForbiddenError` | `modules/shared/errors.ts` | Basisklasse für jede 403-Antwort; modulspezifische Klassen leiten davon ab und erben die HTTP-Abbildung |
+| `lockClubForAdminChange()`, `assertAnotherAdminRemains()` | `db/clubAdmins.ts` | „Kein Verein ohne Admin": Sperre je Verein und Prüfung innerhalb der schreibenden Transaktion (409 `last_admin`) |
+| `nextMfaFailureState()`, `isMfaLocked()` | `modules/mfa/mfaLockout.ts` | Kontoweite Sperre des zweiten Faktors nach zu vielen falschen Codes (Anmeldung und Passwort-Reset) |
 | `requireAnyRole()` | `plugins/authorize.ts` | Rollen-Guard als Fastify-preHandler |
 | `parseInput()`, `toDateOrNull()`, `toDatePatch()` | `plugins/parseInput.ts` | Zod-Validierung mit einheitlicher 400-Antwort; Umwandlung validierter ISO-Datumsstrings (beim PATCH bleibt „weggelassen“ von `null` unterscheidbar) |
 | `startOfUtcDay()` | `modules/shared/dates.ts` | Mitternacht (UTC) eines Kalendertags |

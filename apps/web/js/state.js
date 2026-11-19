@@ -273,8 +273,8 @@ export async function acceptInvitation(token, name, password, consent) {
 // apiClient.js: resetPassword()).
 // Mit aktiver Zwei-Faktor-Anmeldung meldet der Reset nicht direkt an, sondern
 // liefert wie login() { mfaRequired, mfaToken }.
-export async function resetPassword(token, newPassword) {
-  const result = await api.resetPassword({ token, newPassword });
+export async function resetPassword(token, newPassword, secondFactor = {}) {
+  const result = await api.resetPassword({ token, newPassword, ...secondFactor });
   if (result.mfaRequired || result.mfaSetupRequired) return result;
   return startSession(result);
 }

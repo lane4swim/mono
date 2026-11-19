@@ -78,6 +78,6 @@ export async function makeFixture(options: { enforce?: boolean; encryptionKey?: 
     return authService.login({ email, password: PASSWORD, consent: true, consentVersion: CURRENT_CONSENT_VERSION });
   }
 
-  return { keyPair, users, refreshTokens, recoveryCodes, clubs, auditLogEntries, mailer, authService, mfaService, clubA, clubB, admin, trainer, otherAdmin, foreignTrainer, superadmin, enableTotp, nextCode, login };
+  return { keyPair, users, refreshTokens, passwordResetTokens, recoveryCodes, clubs, auditLogEntries, mailer, authService, mfaService, clubA, clubB, admin, trainer, otherAdmin, foreignTrainer, superadmin, enableTotp, nextCode, login };
 }
 

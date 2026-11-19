@@ -5,6 +5,7 @@
 // Persistenzschicht bliebe auf diese Datei begrenzt.
 import type { PrismaClient } from '@prisma/client';
 import { lockClubForAdminChange, assertAnotherAdminRemains, type ClubAdminTx } from '../../db/clubAdmins.js';
+import { CLEARED_MFA_FAILURE_STATE, nextMfaFailureState, type MfaFailureState } from '../mfa/mfaLockout.js';
 
 export interface UserRecord {
   id: string;
@@ -33,6 +34,12 @@ export interface UserRecord {
   totpSecretEnc?: string | null;
   totpEnabledAt?: Date | null;
   totpLastUsedStep?: number | null;
+  // Kontoweite Sperre des zweiten Faktors (Issue #109), siehe
+  // modules/mfa/mfaLockout.ts. Ebenso optional und ebenso intern.
+  mfaFailedCount?: number;
+  mfaFailedWindowStart?: Date | null;
+  mfaLockedUntil?: Date | null;
+  mfaLockoutCount?: number;
 }
 
 export interface CreateUserInput {
@@ -93,8 +100,15 @@ export interface UserRepository {
   // Nimmt einen Code an: nur, wenn sein Zeitschritt NACH dem zuletzt
   // angenommenen liegt (keine Wiederverwendung desselben Codes).
   recordTotpStep(id: string, step: number): Promise<boolean>;
-  // Entfernt Secret und Status (Abschalten, Zurücksetzen).
+  // Entfernt Secret und Status (Abschalten, Zurücksetzen), samt
+  // Fehlversuchszähler und Sperre.
   clearTotp(id: string): Promise<void>;
+
+  // Kontoweite Fehlversuche des zweiten Faktors (Issue #109). Zählt atomar
+  // einen weiteren Fehlversuch (mfaLockout.ts: nextMfaFailureState()).
+  recordMfaFailure(id: string, now: Date): Promise<{ lockedUntil: Date | null; newlyLocked: boolean }>;
+  // Nach einem erfolgreichen zweiten Faktor.
+  clearMfaFailures(id: string): Promise<void>;
 }
 
 export interface MfaRecoveryCodeRepository {
@@ -281,7 +295,28 @@ export class PrismaUserRepository implements UserRepository {
     return count === 1;
   }
   async clearTotp(id: string): Promise<void> {
-    await this.prisma.user.update({ where: { id }, data: { totpSecretEnc: null, totpEnabledAt: null, totpLastUsedStep: null } });
+    await this.prisma.user.update({ where: { id }, data: { totpSecretEnc: null, totpEnabledAt: null, totpLastUsedStep: null, ...CLEARED_MFA_FAILURE_STATE } });
+  }
+  async recordMfaFailure(id: string, now: Date): Promise<{ lockedUntil: Date | null; newlyLocked: boolean }> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return this.prisma.$transaction(async (tx: any) => {
+      // Zeilensperre: gleichzeitige Fehlversuche zählen nacheinander.
+      const rows = (await tx.$queryRaw`
+        SELECT "mfaFailedCount", "mfaFailedWindowStart", "mfaLockedUntil", "mfaLockoutCount"
+        FROM "users" WHERE id = ${id} FOR UPDATE
+      `) as MfaFailureState[];
+      const current = rows[0];
+      if (!current) return { lockedUntil: null, newlyLocked: false };
+      const { state, newlyLocked } = nextMfaFailureState(current, now);
+      await tx.user.update({ where: { id }, data: state });
+      return { lockedUntil: state.mfaLockedUntil, newlyLocked };
+    });
+  }
+  async clearMfaFailures(id: string): Promise<void> {
+    await this.prisma.user.updateMany({
+      where: { id, OR: [{ mfaFailedCount: { gt: 0 } }, { mfaLockoutCount: { gt: 0 } }, { mfaLockedUntil: { not: null } }] },
+      data: CLEARED_MFA_FAILURE_STATE,
+    });
   }
   async listByClub(clubId: string): Promise<UserRecord[]> {
     return this.prisma.user.findMany({ where: { clubId, deletedAt: null } });

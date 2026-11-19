@@ -124,7 +124,10 @@ function describeEntry(entry) {
     case 'club.mfaPolicyChanged':
       return meta.requiredForAdmins ? t('auditLog.action.clubMfaPolicyOn') : t('auditLog.action.clubMfaPolicyOff');
     case 'auth.mfaFailed':
+      if (meta.context === 'passwordReset') return t('auditLog.action.mfaFailedPasswordReset');
       return meta.exhausted ? t('auditLog.action.mfaFailedLocked') : t('auditLog.action.mfaFailed');
+    case 'auth.mfaLocked':
+      return t('auditLog.action.mfaLocked');
     case 'auth.recoveryCodeUsed':
       return t('auditLog.action.recoveryCodeUsed');
     default:

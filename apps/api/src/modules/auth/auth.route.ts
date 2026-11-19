@@ -274,9 +274,10 @@ export async function authRoutes(app: FastifyInstance, opts: { authService: Auth
       const body = parseInput(ResetPasswordRequestSchema, request.body, reply);
       if (!body) return;
 
-      // InvalidOrExpiredResetTokenError: über die zentrale Fehler-Registry
+      // InvalidOrExpiredResetTokenError, MfaCodeRequiredError,
+      // InvalidMfaCodeError, MfaLockedError: über die zentrale Fehler-Registry
       // abgedeckt (siehe plugins/httpErrorHandler.ts).
-      const result = await authService.resetPassword(body.token, body.newPassword);
+      const result = await authService.resetPassword(body.token, body.newPassword, { code: body.code, recoveryCode: body.recoveryCode });
       return reply.code(200).send(result);
     },
   );

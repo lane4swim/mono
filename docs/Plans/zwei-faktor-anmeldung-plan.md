@@ -68,9 +68,24 @@ Codespaces). Fehlt der Wert, gilt `true`.
    der Prüfung, parallele Anfragen umgehen die Grenze also nicht
    (`modules/mfa/mfaChallenges.ts`, im Prozessspeicher — jedes Deployment
    betreibt genau eine API-Instanz), zusätzlich 10 Versuche je Minute und IP.
-3. Passwort zurücksetzen meldet bei aktivem TOTP nicht direkt an, sondern
-   antwortet ebenfalls mit `mfaRequired` — der Reset-Link belegt nur den
-   Zugriff auf das Postfach.
+3. **Kontosperre (Issue #109):** Fehlversuche zählen zusätzlich je Konto in
+   der Datenbank, über alle `mfaToken`s hinweg
+   (`modules/mfa/mfaLockout.ts`). Nach 10 Fehlversuchen innerhalb von 15
+   Minuten ist der zweite Faktor gesperrt: `POST /auth/login` gibt kein
+   `mfaToken` mehr aus, und kein Code wird mehr geprüft (423
+   `mfa_locked`). Die erste Sperre dauert 15 Minuten, jede weitere ohne
+   zwischenzeitlichen Erfolg doppelt so lange, höchstens 24 Stunden. Ein
+   erfolgreicher zweiter Faktor sowie jedes Zurücksetzen oder Abschalten
+   von TOTP (auch durch Admin oder `reset-mfa`) heben Zähler und Sperre
+   auf. Bei einer Sperre: Sicherheitshinweis per Mail (mit dem Rat, das
+   Passwort zu ändern) und `auth.mfaLocked` im Audit-Log.
+4. **Passwort zurücksetzen (Issue #110):** Mit aktivem TOTP verlangt
+   `POST /auth/reset-password` zusätzlich `code` oder `recoveryCode`. Ohne
+   Code antwortet der Server mit 400 `mfa_code_required`, ohne Passwort,
+   Sitzungen oder Link anzutasten; der Reset-Bildschirm blendet daraufhin
+   das Codefeld ein. Falsche Codes zählen gegen dieselbe Kontosperre und
+   lösen einen Sicherheitshinweis aus. Mit gültigem Code ändert sich das
+   Passwort, alle Sitzungen enden, und die Person ist direkt angemeldet.
 
 ## Pflicht (PR 3)
 
@@ -138,7 +153,8 @@ Codespaces). Fehlt der Wert, gilt `true`.
 
 `mfa.enabled`, `mfa.disabled`, `mfa.reset`, `mfa.recoveryCodesRegenerated`,
 `club.mfaPolicyChanged`, `auth.mfaFailed` (ohne `await`, wie
-`auth.loginFailed`), `auth.recoveryCodeUsed`. Anzeigetexte im Frontend
+`auth.loginFailed`; beim Passwort-Reset mit `context: 'passwordReset'`),
+`auth.mfaLocked`, `auth.recoveryCodeUsed`. Anzeigetexte im Frontend
 folgen mit PR 2.
 
 ## Oberfläche (PR 2)

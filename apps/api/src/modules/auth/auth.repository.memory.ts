@@ -18,6 +18,17 @@ import type {
 } from './auth.repository.js';
 import { recordNotFoundForUpdate } from './auth.repository.js';
 import { LastAdminError } from '../shared/errors.js';
+import { CLEARED_MFA_FAILURE_STATE, nextMfaFailureState, type MfaFailureState } from '../mfa/mfaLockout.js';
+
+// Test-Fixtures legen Konten oft ohne die Sperrfelder an.
+function definedFailureFields(user: UserRecord): Partial<MfaFailureState> {
+  const fields: Partial<MfaFailureState> = {};
+  if (user.mfaFailedCount !== undefined) fields.mfaFailedCount = user.mfaFailedCount;
+  if (user.mfaFailedWindowStart !== undefined) fields.mfaFailedWindowStart = user.mfaFailedWindowStart;
+  if (user.mfaLockedUntil !== undefined) fields.mfaLockedUntil = user.mfaLockedUntil;
+  if (user.mfaLockoutCount !== undefined) fields.mfaLockoutCount = user.mfaLockoutCount;
+  return fields;
+}
 
 export class InMemoryUserRepository implements UserRepository {
   private usersById = new Map<string, UserRecord>();
@@ -93,7 +104,18 @@ export class InMemoryUserRepository implements UserRepository {
   }
   async clearTotp(id: string): Promise<void> {
     const user = this.usersById.get(id);
-    if (user) this.usersById.set(id, { ...user, totpSecretEnc: null, totpEnabledAt: null, totpLastUsedStep: null });
+    if (user) this.usersById.set(id, { ...user, totpSecretEnc: null, totpEnabledAt: null, totpLastUsedStep: null, ...CLEARED_MFA_FAILURE_STATE });
+  }
+  async recordMfaFailure(id: string, now: Date): Promise<{ lockedUntil: Date | null; newlyLocked: boolean }> {
+    const user = this.usersById.get(id);
+    if (!user) return { lockedUntil: null, newlyLocked: false };
+    const { state, newlyLocked } = nextMfaFailureState({ ...CLEARED_MFA_FAILURE_STATE, ...definedFailureFields(user) }, now);
+    this.usersById.set(id, { ...user, ...state });
+    return { lockedUntil: state.mfaLockedUntil, newlyLocked };
+  }
+  async clearMfaFailures(id: string): Promise<void> {
+    const user = this.usersById.get(id);
+    if (user) this.usersById.set(id, { ...user, ...CLEARED_MFA_FAILURE_STATE });
   }
 
   async update(id: string, input: UpdateUserInput): Promise<UserRecord> {

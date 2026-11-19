@@ -161,3 +161,36 @@ describe('Geänderter TOTP_ENCRYPTION_KEY', () => {
     consoleError.mockRestore();
   });
 });
+
+// Issues #109 und #110.
+describe('Kontosperre und Passwort-Reset mit TOTP über HTTP', () => {
+  it('liefert 423 mfa_locked bei gesperrtem zweiten Faktor', async () => {
+    const { f, app } = await setup();
+    await f.enableTotp(f.trainer.id);
+    for (let i = 0; i < 10; i++) await f.users.recordMfaFailure(f.trainer.id, new Date());
+
+    const res = await app.inject({ method: 'POST', url: '/auth/login', payload: { email: 'trainer@a.de', password: PASSWORD, consent: true, consentVersion: f.trainer.consentVersion } });
+    expect(res.statusCode).toBe(423);
+    expect(res.json().error).toBe('mfa_locked');
+  });
+
+  it('Reset ohne Code: 400 mfa_code_required; mit Code: 200 samt Sitzung', async () => {
+    const { f, app } = await setup();
+    const { secret } = await f.enableTotp(f.trainer.id);
+    await f.authService.requestPasswordReset('trainer@a.de');
+    await new Promise((r) => setTimeout(r, 0));
+    const token = f.mailer.sentPasswordResetEmails.at(-1)!.resetUrl.split('/reset-password/')[1]!;
+
+    const without = await app.inject({ method: 'POST', url: '/auth/reset-password', payload: { token, newPassword: 'ein-ganz-neues-passwort' } });
+    expect(without.statusCode).toBe(400);
+    expect(without.json().error).toBe('mfa_code_required');
+
+    const wrong = await app.inject({ method: 'POST', url: '/auth/reset-password', payload: { token, newPassword: 'ein-ganz-neues-passwort', code: totpAt(secret, totpStep() + 5) } });
+    expect(wrong.statusCode).toBe(400);
+    expect(wrong.json().error).toBe('invalid_mfa_code');
+
+    const ok = await app.inject({ method: 'POST', url: '/auth/reset-password', payload: { token, newPassword: 'ein-ganz-neues-passwort', code: f.nextCode(secret) } });
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json().accessToken).toBeTruthy();
+  });
+});

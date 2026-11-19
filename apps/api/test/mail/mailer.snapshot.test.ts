@@ -32,7 +32,7 @@ const mailer = new SmtpMailSender({
 const LOCALES = [undefined, 'en-US'] as const;
 const NAMES = ['Mara <Vogel> & "Co"', null] as const;
 const ROLES: InvitationMailPayload['role'][] = ['admin', 'trainer', 'athlete', 'referee', 'parent'];
-const CHANGE_TYPES: AccountSecurityChangeMailPayload['changeType'][] = ['email', 'password', 'mfa', 'recoveryCodeUsed', 'recoveryCodesRegenerated'];
+const CHANGE_TYPES: AccountSecurityChangeMailPayload['changeType'][] = ['email', 'password', 'mfa', 'recoveryCodeUsed', 'recoveryCodesRegenerated', 'mfaLocked', 'passwordResetMfaFailed'];
 
 async function lastSentMail(send: () => Promise<void>) {
   sendMailMock.mockClear();

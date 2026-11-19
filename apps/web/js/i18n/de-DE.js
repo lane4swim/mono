@@ -68,6 +68,7 @@ export default {
       mfa_setup_not_started: 'Bitte die Einrichtung erneut starten.',
       mfa_not_enabled: 'Für dieses Konto ist keine Zwei-Faktor-Anmeldung eingerichtet.',
       mfa_required_for_action: 'Dafür muss die Zwei-Faktor-Anmeldung für dein eigenes Konto eingerichtet sein.',
+      mfa_locked: 'Nach zu vielen falschen Codes ist die Zwei-Faktor-Anmeldung für dein Konto vorübergehend gesperrt. Bitte versuche es später erneut oder wende dich an deine Vereinsverwaltung.',
     },
     // Übersetzung der stabilen `code`-Werte einzelner Sync-Push-Ergebnisse
     // (status: 'error', siehe packages/shared-types/src/syncEvent.ts:
@@ -123,6 +124,7 @@ export default {
     forgotPasswordSentMessage: 'Falls ein Konto mit dieser E-Mail-Adresse existiert, wurde soeben eine E-Mail mit einem Link zum Zurücksetzen versendet. Bitte prüfe dein Postfach (ggf. auch den Spam-Ordner).',
     resetPasswordTitle: 'Neues Passwort vergeben',
     resetPasswordIntro: 'Bitte lege ein neues Passwort für dein Konto fest.',
+    resetPasswordMfaHint: 'Für dein Konto ist die Zwei-Faktor-Anmeldung eingerichtet. Bitte bestätige das neue Passwort mit einem Code aus deiner Authenticator-App oder einem Wiederherstellungscode.',
     confirmNewPassword: 'Neues Passwort bestätigen',
     resetPasswordButton: 'Passwort setzen',
     resetPasswordSuccess: 'Passwort erfolgreich geändert — du bist jetzt angemeldet.',
@@ -947,6 +949,8 @@ export default {
       clubMfaPolicyOff: 'Zwei-Faktor-Anmeldung für Admins nicht mehr vorgeschrieben',
       mfaFailed: 'Falscher Bestätigungscode bei der Anmeldung',
       mfaFailedLocked: 'Falscher Bestätigungscode — Anmeldeversuch gesperrt',
+      mfaFailedPasswordReset: 'Falscher Bestätigungscode beim Zurücksetzen des Passworts',
+      mfaLocked: 'Zwei-Faktor-Anmeldung nach zu vielen falschen Codes gesperrt',
       recoveryCodeUsed: 'Anmeldung mit Wiederherstellungscode',
     },
   },

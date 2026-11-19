@@ -52,7 +52,10 @@ export interface AccountSecurityChangeMailPayload {
   // 'recoveryCodeUsed' / 'recoveryCodesRegenerated': Wiederherstellungscodes
   // benutzt bzw. neu erzeugt — ein typisches Zeichen, falls jemand anderes
   // an die Codes gekommen ist.
-  changeType: 'email' | 'password' | 'mfa' | 'recoveryCodeUsed' | 'recoveryCodesRegenerated';
+  // 'mfaLocked': zweiter Faktor nach zu vielen falschen Codes gesperrt
+  // (Issue #109). 'passwordResetMfaFailed': Passwort-Reset an einem falschen
+  // Code gescheitert (Issue #110).
+  changeType: 'email' | 'password' | 'mfa' | 'recoveryCodeUsed' | 'recoveryCodesRegenerated' | 'mfaLocked' | 'passwordResetMfaFailed';
   locale?: string;
 }
 
@@ -276,6 +279,8 @@ const CHANGE_SENTENCE: Record<SupportedLocale, Record<AccountSecurityChangeMailP
     mfa: 'Die Zwei-Faktor-Anmeldung Ihres Lane-1-Kontos wurde soeben geändert (eingerichtet, abgeschaltet oder zurückgesetzt).',
     recoveryCodeUsed: 'Soeben hat sich jemand mit einem Wiederherstellungscode der Zwei-Faktor-Anmeldung bei Ihrem Lane-1-Konto angemeldet.',
     recoveryCodesRegenerated: 'Für Ihr Lane-1-Konto wurden soeben neue Wiederherstellungscodes der Zwei-Faktor-Anmeldung erzeugt; die bisherigen gelten nicht mehr.',
+    mfaLocked: 'Bei der Anmeldung an Ihrem Lane-1-Konto wurden mehrfach falsche Codes der Zwei-Faktor-Anmeldung eingegeben; sie ist deshalb vorübergehend gesperrt. Wer sich bis zu diesem Schritt angemeldet hat, kannte Ihr Passwort (oder hatte Zugriff auf Ihr E-Mail-Postfach) — falls Sie das nicht selbst waren, ändern Sie bitte umgehend Ihr Passwort.',
+    passwordResetMfaFailed: 'Soeben ist ein Versuch gescheitert, das Passwort Ihres Lane-1-Kontos zurückzusetzen: der Code der Zwei-Faktor-Anmeldung war falsch. Ihr Passwort ist unverändert.',
   },
   'en-US': {
     email: 'The email address for your Lane 1 account was just changed. This message went to your PREVIOUS address on file, independent of the change itself.',
@@ -283,6 +288,8 @@ const CHANGE_SENTENCE: Record<SupportedLocale, Record<AccountSecurityChangeMailP
     mfa: 'Two-factor sign-in for your Lane 1 account was just changed (set up, turned off or reset).',
     recoveryCodeUsed: 'Someone just signed in to your Lane 1 account using a two-factor recovery code.',
     recoveryCodesRegenerated: 'New two-factor recovery codes were just generated for your Lane 1 account; the previous ones no longer work.',
+    mfaLocked: 'Wrong two-factor codes were entered several times while signing in to your Lane 1 account, so two-factor sign-in is temporarily locked. Whoever got this far knew your password (or had access to your mailbox) — if that was not you, please change your password right away.',
+    passwordResetMfaFailed: 'An attempt to reset the password for your Lane 1 account just failed because the two-factor code was wrong. Your password has not changed.',
   },
 };
 

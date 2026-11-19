@@ -47,6 +47,7 @@ export type AuditLogAction =
   | 'mfa.recoveryCodesRegenerated'
   | 'club.mfaPolicyChanged'
   | 'auth.mfaFailed'
+  | 'auth.mfaLocked'
   | 'auth.recoveryCodeUsed';
 
 // Akteur:innen-Label für Einträge ohne angemeldete Person (Fehlversuch mit
