@@ -29,6 +29,7 @@ registerModule({ id: 'dashboard', roles: ['trainer', 'admin', 'athlete'] });
 registerModule({ id: 'profile', roles: undefined });
 registerModule({ id: 'kampfrichter', roles: ['admin', 'referee'] });
 registerModule({ id: 'usermgmt', roles: ['superadmin', 'admin'] });
+registerModule({ id: 'parent', roles: ['parent'] });
 
 describe('defaultModuleFor()', () => {
   it('ein reines Kampfrichter-Konto landet im Kampfrichter-Modul, nicht im ersten rollenoffenen Modul (Profil)', () => {
@@ -37,6 +38,16 @@ describe('defaultModuleFor()', () => {
 
   it('trägt das Konto zusätzlich eine andere Rolle, bleibt deren reguläre Startseite maßgeblich', () => {
     expect(defaultModuleFor(['trainer', 'referee'])).toMatchObject({ id: 'dashboard' });
+  });
+
+  it('ein reines Eltern-Konto landet in der Eltern-Übersicht', () => {
+    expect(defaultModuleFor(['parent'])).toMatchObject({ id: 'parent' });
+  });
+
+  // Issue #144: Eltern, die Kampfrichter:in sind, tragen beide Rollen.
+  it('Elternteil mit zusätzlicher Rolle "referee" landet in der Eltern-Übersicht', () => {
+    expect(defaultModuleFor(['parent', 'referee'])).toMatchObject({ id: 'parent' });
+    expect(defaultModuleFor(['referee', 'parent'])).toMatchObject({ id: 'parent' });
   });
 
   it('superadmin landet unverändert in der Nutzerverwaltung (bestehendes Verhalten, Regressionsschutz)', () => {
