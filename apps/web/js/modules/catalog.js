@@ -39,14 +39,12 @@ export const catalogModule = {
 };
 
 // Baut eine unabhängige Kopie einer Katalog-Übung für "Duplizieren" — id/
-// Zeitstempel übernimmt put() automatisch (siehe db.js), Kommentare werden
-// NICHT übernommen: sync.commentAuthorship.ts kennt für eine neue id
-// keinen bestehenden Datensatz und würde einen fremdautorisierten
-// Kommentar beim Push ablehnen (siehe auch importLibrary() in
-// libraryTransfer.js, das aus demselben Grund zurücksetzt).
+// Zeitstempel übernimmt put() automatisch (siehe db.js). Kommentare liegen
+// im eigenen Store und bleiben an der Original-Übung (Issue #141); ein
+// noch eingebettetes Alt-Feld `comments` fällt weg.
 export function duplicateExercise(exercise) {
   const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, deletedAt: _deletedAt, comments: _comments, ...rest } = exercise;
-  return { ...rest, name: t('common.copyOf', { name: exercise.name }), comments: [] };
+  return { ...rest, name: t('common.copyOf', { name: exercise.name }) };
 }
 
 function renderList(container, exercises) {
@@ -170,7 +168,10 @@ function renderList(container, exercises) {
 
 function openExerciseModal(exercise, onSaved) {
   const isEdit = !!exercise;
-  const data = exercise ? { ...exercise } : { name: '', category: 'technik', stroke: '', description: '', defaultDistance: '', defaultDurationSec: '', tags: [], equipment: [], comments: [] };
+  // Ein noch eingebettetes Alt-Feld `comments` (vor Issue #141) nicht
+  // wieder mitspeichern — Kommentare liegen im eigenen Store.
+  const { comments: _legacyComments, ...existing } = exercise || {};
+  const data = exercise ? existing : { name: '', category: 'technik', stroke: '', description: '', defaultDistance: '', defaultDurationSec: '', tags: [], equipment: [] };
   const form = el('form', { class: 'form-grid' });
   const fName = textInput(data.name, { required: true });
   const fCat = selectInput(trOptions(EXERCISE_CATEGORIES, 'exerciseCategories'), data.category);
@@ -211,16 +212,10 @@ function openExerciseModal(exercise, onSaved) {
     const commentsHost = el('div');
     commentsWrap.appendChild(commentsHost);
     form.appendChild(commentsWrap);
-    // Kommentare speichern sofort (unabhängig vom "Speichern"-Klick des
-    // restlichen Formulars) — `data` hält bis zum eigentlichen Submit nur
-    // die unveränderten Ausgangswerte der anderen Felder (siehe unten:
-    // fName/fCat/... werden erst beim Submit zusammengeführt), ein
-    // Zwischenspeichern hier überschreibt also keine unbestätigten Edits.
-    renderCommentThread(commentsHost, data.comments, async (nextComments) => {
-      data.comments = nextComments;
-      await put('exercises', { ...data, comments: nextComments });
-      onSaved?.();
-    });
+    // Kommentare speichern sofort im eigenen Store (unabhängig vom
+    // "Speichern"-Klick des restlichen Formulars) und ändern die Übung
+    // selbst nicht.
+    renderCommentThread(commentsHost, { targetStore: 'exercises', targetId: exercise.id });
   }
 
   form.appendChild(formActions({ onCancel: () => close(), submitLabel: isEdit ? t('common.save') : t('common.create') }).row);

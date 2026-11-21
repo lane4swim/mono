@@ -45,7 +45,7 @@ const CATEGORY_DEFAULTS = {
 };
 
 function newBlankSet() {
-  return { kind: 'set', id: localId('set'), description: '', distance: 100, durationSec: null, reps: 1, intensity: 'ga1', restSec: 20, equipment: [], comments: [] };
+  return { kind: 'set', id: localId('set'), description: '', distance: 100, durationSec: null, reps: 1, intensity: 'ga1', restSec: 20, equipment: [] };
 }
 
 function newBlock() {
@@ -84,7 +84,6 @@ function setFromExercise(exercise) {
     // editierbar (siehe equipmentForEntry() unten) — Ändern hier wirkt
     // sich NICHT auf den Katalogeintrag aus.
     equipment: [...(exercise.equipment || [])],
-    comments: [],
   };
 }
 
@@ -283,27 +282,24 @@ export function formatQuantity(entry) {
 // template's sets into a new plan day, so editing the plan can never
 // mutate the original template (or another day) via shared references.
 //
-// `resetComments` (used when duplicating a whole Plan/Template — see
-// duplicatePlan()/duplicateTemplate()/duplicateSectionTemplate()): clears
-// each plain set's `comments` instead of carrying the source's over.
-// Required, not just tidy — sync.commentAuthorship.ts (apps/api) only
-// allows a pushed comment to keep a foreign authorId when it already
-// exists on the server record with the SAME id; a duplicate always has a
-// brand-new id, so any carried-over foreign-authored comment would be
-// rejected by the push (see also importLibrary() in libraryTransfer.js,
-// which resets comments for the same reason).
-export function cloneItems(items, { resetComments = false } = {}) {
+// Comments live in their own store (Issue #141) and point at a set by its
+// id, so a copy with fresh ids starts without comments by construction. A
+// set still carrying an embedded `comments` array from before that change
+// (local data not yet re-pulled) drops it here.
+function cloneSet(set) {
+  const { comments: _comments, ...rest } = set;
+  return { ...rest, id: localId('set') };
+}
+
+export function cloneItems(items) {
   return (items || []).map(entry => {
     if (entry.kind === 'block') {
-      return {
-        ...entry, id: localId('block'),
-        sets: (entry.sets || []).map(s => resetComments ? { ...s, id: localId('set'), comments: [] } : { ...s, id: localId('set') }),
-      };
+      return { ...entry, id: localId('block'), sets: (entry.sets || []).map(cloneSet) };
     }
     if (entry.kind === 'section') {
-      return { ...entry, id: localId('section'), entries: cloneItems(entry.entries || [], { resetComments }) };
+      return { ...entry, id: localId('section'), entries: cloneItems(entry.entries || []) };
     }
-    return resetComments ? { ...entry, id: localId('set'), comments: [] } : { ...entry, id: localId('set') };
+    return cloneSet(entry);
   });
 }
 

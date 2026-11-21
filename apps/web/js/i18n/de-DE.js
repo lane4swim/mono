@@ -87,7 +87,7 @@ export default {
       foreign_entity_missing: 'Die referenzierte Person oder der referenzierte Datensatz existiert nicht mehr (wurde vermutlich zwischenzeitlich endgültig gelöscht).',
       results_own_only: 'Du darfst nur eigene Ergebnisse bearbeiten.',
       athlete_has_account: 'Ein Athletenprofil mit Konto oder offener Einladung kann nicht auf „nur vom Verein verwaltet“ umgestellt werden.',
-      comment_authorship_invalid: 'Fremde Kommentare können nur unverändert übernommen werden; neue Kommentare müssen dir selbst zugeordnet sein.',
+      comment_not_permitted: 'Diesen Kommentar kannst du nicht ändern oder löschen: Bearbeiten darf nur die Autor:in, löschen zusätzlich Trainer:innen und Admins.',
       sync_internal_error: 'Der Vorgang konnte nicht angewendet werden (interner Fehler).',
     },
   },
@@ -485,7 +485,7 @@ export default {
     rowNew: 'Neu', rowUpdate: 'Überschreiben',
     rowUnmatchedAthlete: 'Athlet:in nicht zuordenbar',
     rowUnmatchedEvent: 'Event nicht zugeordnet',
-    rowCommentsKept: '{count} Kommentar(e) bleiben erhalten',
+   
     statusDS: 'Disqualifiziert', statusNA: 'Nicht angetreten', statusAB: 'Abgemeldet', statusAU: 'Aufgegeben', statusZU: 'Zeitüberschreitung',
     confirmButton: '{count} Ergebnis(se) importieren',
     importDone: 'Import abgeschlossen: {new} neu, {update} überschrieben.',
@@ -493,6 +493,7 @@ export default {
   },
   comments: {
     title: 'Kommentare', empty: 'Noch keine Kommentare.',
+    edited: 'bearbeitet', updated: 'Kommentar aktualisiert',
     placeholder: 'Kommentar schreiben…', add: 'Kommentieren',
     deleteConfirm: 'Diesen Kommentar löschen?', deleted: 'Kommentar gelöscht', added: 'Kommentar hinzugefügt',
     countButton: '💬 {count}', countButtonEmpty: '💬 Kommentieren',

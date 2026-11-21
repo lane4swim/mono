@@ -40,11 +40,10 @@ export const sectionTemplatesModule = {
 };
 
 // Baut eine unabhängige Kopie einer Abschnitts-Vorlage für "Duplizieren" —
-// analog zu duplicateTemplate() in templates.js (siehe dortiger
-// Kommentar zur Kommentar-Autorenschaft).
+// analog zu duplicateTemplate() in templates.js.
 export function duplicateSectionTemplate(sectionTemplate) {
   const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, deletedAt: _deletedAt, ...rest } = sectionTemplate;
-  return { ...rest, name: t('common.copyOf', { name: sectionTemplate.name }), entries: cloneItems(sectionTemplate.entries || [], { resetComments: true }) };
+  return { ...rest, name: t('common.copyOf', { name: sectionTemplate.name }), entries: cloneItems(sectionTemplate.entries || []) };
 }
 
 function renderList(container, sectionTemplates, exercises) {

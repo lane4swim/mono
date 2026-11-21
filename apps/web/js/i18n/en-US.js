@@ -68,7 +68,7 @@ export default {
       foreign_entity_missing: 'The referenced person or record no longer exists (it was likely permanently deleted in the meantime).',
       results_own_only: 'You may only edit your own results.',
       athlete_has_account: 'An athlete profile with an account or an open invitation cannot be switched to "managed by the club only".',
-      comment_authorship_invalid: 'Other people\'s comments can only be carried over unchanged; new comments must be attributed to you.',
+      comment_not_permitted: 'You can\'t change or delete this comment: only its author can edit it, and only its author or a coach or admin can delete it.',
       sync_internal_error: 'The operation could not be applied (internal error).',
     },
   },
@@ -462,7 +462,7 @@ export default {
     rowNew: 'New', rowUpdate: 'Overwrite',
     rowUnmatchedAthlete: 'Athlete not matched',
     rowUnmatchedEvent: 'Event not assigned',
-    rowCommentsKept: '{count} comment(s) kept',
+   
     statusDS: 'Disqualified', statusNA: 'Did not start', statusAB: 'Withdrawn', statusAU: 'Did not finish', statusZU: 'Time limit exceeded',
     confirmButton: 'Import {count} result(s)',
     importDone: 'Import complete: {new} new, {update} overwritten.',
@@ -470,6 +470,7 @@ export default {
   },
   comments: {
     title: 'Comments', empty: 'No comments yet.',
+    edited: 'edited', updated: 'Comment updated',
     placeholder: 'Write a comment…', add: 'Comment',
     deleteConfirm: 'Delete this comment?', deleted: 'Comment deleted', added: 'Comment added',
     countButton: '💬 {count}', countButtonEmpty: '💬 Comment',

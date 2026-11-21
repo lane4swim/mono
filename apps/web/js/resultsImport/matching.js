@@ -98,8 +98,9 @@ function roundRank(round) {
 //
 // `proposed` ist ein vollständiger Result-Datensatz-Entwurf (siehe Plan
 // Abschnitt 5.5/5.6): time/place/status/statusNote/splits/date/course
-// werden aus der Datei übernommen, `comments`/`id`/`createdAt` eines
-// bestehenden Treffers bleiben unangetastet erhalten. `isPB` wird bewusst
+// werden aus der Datei übernommen, `id`/`createdAt` eines bestehenden
+// Treffers bleiben unangetastet erhalten. Kommentare liegen im eigenen
+// Store und hängen an der Ergebnis-id (Issue #141), bleiben also ohnehin. `isPB` wird bewusst
 // NICHT hier gesetzt (hängt von der gesamten lokalen Ergebnis-Historie ab,
 // nicht nur vom Importplan) — importRunner.js berechnet es nach dem
 // Schreiben neu, siehe dortiger Kommentar.
@@ -156,13 +157,12 @@ export function buildImportPlan({
       status: imported.status,
       statusNote: imported.statusNote ?? null,
       splits: imported.splits.length ? imported.splits : null,
-      // Erhalten: bestehende Kommentare/isPB/createdAt bleiben unangetastet
+      // Erhalten: isPB/createdAt bleiben unangetastet
       // (siehe Plan Abschnitt 5.6/5.7). isPB wird nach dem Schreiben neu
       // berechnet (siehe buildImportPlan()-Kommentar oben), hier nur der
       // bisherige Wert als Platzhalter, damit `proposed` bereits vor dem
       // Schreiben ein vollständiger Result-Entwurf ist.
       isPB: existingResult?.isPB ?? false,
-      comments: existingResult?.comments ?? [],
       createdAt: existingResult?.createdAt,
     };
     rows.push({ kind: existingResult ? 'update' : 'new', imported, athlete, eventLabel, existingResult, proposed });

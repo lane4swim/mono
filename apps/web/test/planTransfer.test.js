@@ -85,7 +85,7 @@ describe('importPlan()', () => {
     expect(saved.id).not.toBe(plan().id);
     expect(saved.clubId).toBe(CLUB_ID);
     expect(saved.groupId).toBe(GROUP_ID);
-    expect(saved.comments).toEqual([]);
+    expect(saved).not.toHaveProperty('comments');
     expect(saved.days[0].sets[1].sets[0].exerciseId).toBe(EXERCISE_ID);
     expect(saved.days[0].sets[2].entries[0].exerciseId).toBe(EXERCISE_ID);
     expect(PlanSchema.safeParse(saved).success).toBe(true);
@@ -98,7 +98,7 @@ describe('importPlan()', () => {
     expect(createdExercises).toBe(1);
     const [newExercise] = await db.getAll('exercises');
     expect(newExercise.id).not.toBe(EXERCISE_ID);
-    expect(newExercise.comments).toEqual([]);
+    expect(newExercise).not.toHaveProperty('comments');
     expect(ExerciseSchema.safeParse(newExercise).success).toBe(true);
     expect(saved.groupId).toBeNull();
     expect(saved.days[0].sets[1].sets[0].exerciseId).toBe(newExercise.id);

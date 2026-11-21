@@ -345,7 +345,7 @@
         <div class="role-head"><span class="role-name">Athlet</span><span class="role-slug">athlete</span></div>
         <div class="role-scope">Genau ein Verein · optional an ein Athletenprofil geknüpft</div>
         <dl>
-          <div><dt>Aufgabe</dt><dd>Eigene Einheiten, Trainingspläne der eigenen Gruppe, eigene Zeiten und eigene Handlungsfelder einsehen.</dd></div>
+          <div><dt>Aufgabe</dt><dd>Eigene Einheiten, Trainingspläne der eigenen Gruppe, eigene Zeiten und eigene Handlungsfelder einsehen. Pläne und Sätze kommentieren (eigene Kommentare bearbeiten und löschen), Pläne selbst aber nicht anlegen oder ändern.</dd></div>
           <div><dt>Datenfilterung</dt><dd>Das Frontend filtert clientseitig auf <code class="mono">user.athleteId</code> — z. B. zeigt „Einheiten &amp; Feedback" nur Termine, an denen genau dieser Athlet in der Anwesenheitsliste steht.</dd></div>
           <div><dt>Kein Zugriff auf</dt><dd>Athleten- &amp; Teamverwaltung, Übungskatalog, Vorlagen, Wettkampfverwaltung, Statistiken, Nutzerverwaltung.</dd></div>
         </dl>
@@ -541,7 +541,7 @@
       <span class="eyebrow">05 — Struktur</span>
       <h2>Das Datenmodell</h2>
     </div>
-    <p>Jede fachliche Zeile trägt eine <code class="mono">clubId</code> — das ist die gesamte Mandantentrennung. Löschungen sind grundsätzlich Soft-Deletes (<code class="mono">deletedAt</code>), damit sie sich später korrekt auf andere Geräte synchronisieren. Verschachtelte, variable Strukturen (Sätze, Wochentage, Anwesenheitslisten, Kommentare) liegen als JSON, damit beim Sync kein verlustbehaftetes Mapping zum Offline-Frontend entsteht.</p>
+    <p>Jede fachliche Zeile trägt eine <code class="mono">clubId</code> — das ist die gesamte Mandantentrennung. Löschungen sind grundsätzlich Soft-Deletes (<code class="mono">deletedAt</code>), damit sie sich später korrekt auf andere Geräte synchronisieren. Verschachtelte, variable Strukturen (Sätze, Wochentage, Anwesenheitslisten) liegen als JSON, damit beim Sync kein verlustbehaftetes Mapping zum Offline-Frontend entsteht.</p>
 
     <div class="glossary-group">
       <h3>Konten &amp; Zugriff</h3>
@@ -594,9 +594,10 @@ erDiagram
       <div class="entity-grid">
         <div class="entity"><div class="ename">Group</div><div class="edesc">Trainingsgruppe innerhalb eines Vereins.</div></div>
         <div class="entity"><div class="ename">Athlete</div><div class="edesc">Athlet:innen-Stammdatensatz (Name, Geburtsdatum, Gruppe, Status). Unabhängig vom optionalen <code>User</code>-Konto.</div></div>
-        <div class="entity"><div class="ename">Exercise</div><div class="edesc">Übungskatalog-Eintrag; <code>comments</code> als eingebettetes JSON-Array.</div></div>
+        <div class="entity"><div class="ename">Exercise</div><div class="edesc">Übungskatalog-Eintrag (Kategorie, Lage, Standarddistanz, Ausrüstung).</div></div>
         <div class="entity"><div class="ename">Template</div><div class="edesc">Wiederverwendbare Vorlage; <code>sets</code> als JSON — Mix aus Einzelsätzen und Wiederholungsblöcken, keine eigene Kopie beim Einsatz in einem Plan.</div></div>
-        <div class="entity"><div class="ename">Plan</div><div class="edesc">Wochenplan je Gruppe; <code>days</code> als JSON-Array (Datum + Sets), plus planweite <code>comments</code>.</div></div>
+        <div class="entity"><div class="ename">Plan</div><div class="edesc">Wochenplan je Gruppe; <code>days</code> als JSON-Array (Datum + Sets). Schreiben nur trainer/admin.</div></div>
+        <div class="entity"><div class="ename">Comment</div><div class="edesc">Kommentar als eigener Datensatz (Issue #141) mit Ziel <code>targetStore</code>/<code>targetId</code> (Plan, Übung, Vorlage, Abschnitts-Vorlage, Ergebnis), bei Sätzen zusätzlich <code>entryId</code>. Anlegen jede Team-Rolle im eigenen Namen, bearbeiten nur die Autor:in, löschen die Autor:in oder trainer/admin.</div></div>
         <div class="entity"><div class="ename">TrainingSession</div><div class="edesc">Durchgeführte Einheit; <code>attendance</code> als JSON-Array — ein Eintrag je Athlet:in mit Anwesenheit, RPE und Notiz.</div></div>
         <div class="entity"><div class="ename">Competition</div><div class="edesc">Wettkampf: Ort, Datum, Bahnlänge (<code>LCM</code>/<code>SCM</code>).</div></div>
         <div class="entity"><div class="ename">StartlistEntry</div><div class="edesc">Meldung zu einem Wettkampf: Strecke, Lauf, Bahn, Meldezeit.</div></div>
