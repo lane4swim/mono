@@ -101,6 +101,31 @@ describe('Push-Abos — REST-Endpunkte', () => {
     await app.close();
   });
 
+  // Issue #143: ein reines Kampfrichter-Konto muss Push abonnieren können.
+  it('erlaubt einem reinen Kampfrichter-Konto Schlüsselabruf und Abo', async () => {
+    const { app, keyPair, club, pushSubscriptions } = await buildTestApp();
+    const token = await tokenFor(keyPair, 'referee-user', 'referee', club.id);
+    const key = await app.inject({ method: 'GET', url: '/api/push/public-key', headers: { authorization: `Bearer ${token}` } });
+    expect(key.statusCode).toBe(200);
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/push/subscriptions',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { endpoint: 'https://fcm.googleapis.com/fcm/send/ref', keys: { p256dh: 'p', auth: 'a' } },
+    });
+    expect(response.statusCode).toBe(204);
+    expect(await pushSubscriptions.listByUserId('referee-user')).toHaveLength(1);
+    await app.close();
+  });
+
+  it('lehnt superadmin ab (kein Verein, keine Push-Auslöser)', async () => {
+    const { app, keyPair } = await buildTestApp();
+    const token = await tokenFor(keyPair, 'super-user', 'superadmin', null);
+    const response = await app.inject({ method: 'GET', url: '/api/push/public-key', headers: { authorization: `Bearer ${token}` } });
+    expect(response.statusCode).toBe(403);
+    await app.close();
+  });
+
   it('lehnt eine unauthentifizierte Anfrage ab', async () => {
     const { app } = await buildTestApp();
     const response = await app.inject({ method: 'GET', url: '/api/push/public-key' });

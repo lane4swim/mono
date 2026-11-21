@@ -493,6 +493,13 @@ model ParentLink {
   reguläre Team-Sicht). Keine harte Schema-Sperre eingeführt (YAGNI —
   ein `admin`, der zusätzlich `parent` bekommt, ist kein
   Sicherheitsproblem, nur ungenutzt); nur redaktionell dokumentiert.
+  **Ausnahme `referee` (Issue #144):** Eltern, die ein Amt mit
+  Qualifikationsnachweis übernehmen (Kampfrichter:in, Zeitnehmer:in),
+  bekommen `referee` zusätzlich — `parent` selbst erhält keinen Zugriff
+  auf Qualifikationen. Ein Konto mit `parent` + `referee` bleibt im
+  Eltern-Modus (kein Sync), der Kalender ergänzt die eigenen Einsätze und
+  Qualifikationsfristen (`calendar.js: ownRemoteTypes()`), Startseite ist
+  „Mein Kind" (`shell.js: defaultModuleFor()`).
 - `Invitation.role` akzeptiert `'parent'`; `Invitation.athleteId`
   (bereits vorhanden, siehe Abschnitt 0) verknüpft das **erste** Kind
   direkt bei Registrierung — `acceptInvitation()` legt bei

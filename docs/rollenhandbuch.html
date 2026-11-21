@@ -356,7 +356,7 @@
         <div class="role-scope">Genau ein Verein · üblicherweise zusätzlich zu einer anderen Rolle</div>
         <dl>
           <div><dt>Aufgabe</dt><dd>Pflegt im zubuchbaren Kampfrichter-Modul die eigenen Wettkampfeinsätze (Funktion, Wettkampf, Datum, Notiz) und sieht dort den eigenen, auf Kampfrichter-Ämter gefilterten Qualifikationsstatus (lesend).</dd></div>
-          <div><dt>Besonderheit</dt><dd>Hat <em>keinen</em> Zugriff auf die allgemeine Qualifikationsseite (deren Rollen-Gate bleibt bewusst auf admin/trainer/athlete beschränkt) — der eigene Qualifikationsstatus erscheint stattdessen im Kampfrichter-Modul selbst.</dd></div>
+          <div><dt>Besonderheit</dt><dd>Hat <em>keinen</em> Zugriff auf die allgemeine Qualifikationsseite (deren Rollen-Gate bleibt bewusst auf admin/trainer/athlete beschränkt) — der eigene Qualifikationsstatus erscheint stattdessen im Kampfrichter-Modul selbst. Ablauf- und Verlängerungsfristen stehen zusätzlich im Kalender, sofern das Qualifikationspaket gebucht ist.</dd></div>
           <div><dt>Kein Zugriff auf</dt><dd>Alles außer dem Kampfrichter-Modul, sofern nicht zusätzlich eine weitere Rolle vorliegt.</dd></div>
         </dl>
       </div>
@@ -367,7 +367,8 @@
         <dl>
           <div><dt>Aufgabe</dt><dd>Sieht unter „Mein Kind" eine rein lesende Übersicht je verknüpftem Kind (bevorstehende Einheiten und Wettkämpfe, letzte Ergebnisse, Bestzeiten, Anwesenheit) sowie dessen Kalender.</dd></div>
           <div><dt>Besonderheit</dt><dd>Kein Sync-Zugriff — die Daten kommen direkt per REST (<code class="mono">GET /api/parents/overview</code>, <code class="mono">/api/parents/calendar</code>). Die Verknüpfungen pflegt ein Admin in der Nutzerverwaltung („Kinder verwalten").</dd></div>
-          <div><dt>Kein Zugriff auf</dt><dd>Alles außer „Mein Kind", Kalender, Mein Profil und Rechtliches.</dd></div>
+          <div><dt>Zusätzliche Rolle</dt><dd>Eltern, die im Verein ein Amt mit Qualifikationsnachweis übernehmen (z. B. Kampfrichter:in, Zeitnehmer:in), bekommen zusätzlich die Rolle <code>referee</code> — die Rolle <code>parent</code> selbst erhält bewusst keinen Zugriff auf Qualifikationen, da sie eine reine Sicht auf die Daten der Kinder ist. Mit beiden Rollen zeigt der Kalender neben den Terminen der Kinder auch die eigenen Einsätze und Qualifikationsfristen; Startseite bleibt „Mein Kind".</dd></div>
+          <div><dt>Kein Zugriff auf</dt><dd>Alles außer „Mein Kind", Kalender, Mein Profil und Rechtliches (mit Rolle <code>referee</code> zusätzlich das Kampfrichter-Modul).</dd></div>
         </dl>
       </div>
     </div>
@@ -524,7 +525,8 @@
           <tr><td class="path">GET · PATCH /api/me</td><td><span class="roletag pub">jede eingeloggte Rolle</span></td><td>Eigenes Profil ansehen/bearbeiten</td></tr>
           <tr><td class="path">GET /api/me/export</td><td><span class="roletag pub">jede eingeloggte Rolle</span></td><td>DSGVO-Datenexport der eigenen Person — inkl. Qualifikationen und Wettkampfeinsätzen, sofern vorhanden</td></tr>
           <tr><td class="path">DELETE /api/me</td><td><span class="roletag pub">jede eingeloggte Rolle</span></td><td>DSGVO-Löschantrag — Konto sofort funktionslos, Hard-Purge nach Fristablauf; 409 <code>last_admin</code> für den einzigen Admin eines Vereins</td></tr>
-          <tr><td class="path">GET /api/me/qualifications</td><td><span class="roletag">admin</span><span class="roletag">trainer</span><span class="roletag">athlete</span></td><td>Eigene Qualifikationen einsehen — zubuchbares Modul; <code>referee</code> ist hier bewusst NICHT enthalten (siehe Kampfrichter-Modul)</td></tr>
+          <tr><td class="path">GET /api/me/qualifications</td><td><span class="roletag">admin</span><span class="roletag">trainer</span><span class="roletag">athlete</span><span class="roletag">referee</span></td><td>Eigene Qualifikationen einsehen — zubuchbares Modul; <code>referee</code> sieht sie in der Oberfläche im Kampfrichter-Modul, nicht auf der allgemeinen Qualifikationsseite. <code>parent</code> bewusst nicht enthalten (siehe Rolle Erziehungsberechtigte:r)</td></tr>
+          <tr><td class="path">GET /api/push/public-key · POST · DELETE /api/push/subscriptions</td><td><span class="roletag">trainer</span><span class="roletag">admin</span><span class="roletag">athlete</span><span class="roletag">referee</span><span class="roletag">parent</span></td><td>Push-Benachrichtigungen für das eigene Gerät abonnieren — jede Vereinsrolle; Kampfrichter:innen erhalten darüber neue/geänderte Einsätze und Erinnerungen an ablaufende Qualifikationen</td></tr>
           <tr><td class="path">POST · PATCH · DELETE /api/users/:userId/qualifications[/:id]</td><td><span class="roletag">admin</span></td><td>Qualifikationen eines Vereinsmitglieds erfassen/ändern/löschen (Soft-Delete)</td></tr>
           <tr><td class="path">GET · POST · PATCH · DELETE /api/me/referee-assignments[/:id]</td><td><span class="roletag">referee</span></td><td>Eigene Wettkampfeinsätze verwalten — zubuchbares Kampfrichter-Modul</td></tr>
           <tr><td class="path">GET · POST · PATCH · DELETE /api/users/:userId/referee-assignments[/:id]</td><td><span class="roletag">admin</span></td><td>Wettkampfeinsätze einer Kampfrichter:in „im Namen von" verwalten (eigener Verein)</td></tr>
