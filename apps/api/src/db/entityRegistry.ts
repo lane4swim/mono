@@ -50,6 +50,7 @@ export function getEntityDelegate(prisma: PrismaClient, store: EntityStoreName):
     case 'announcements': return prisma.announcement;
     case 'calendarEntries': return prisma.calendarEntry;
     case 'requiredTimeSets': return prisma.requiredTimeSet;
+    case 'comments': return prisma.comment;
     default: {
       const _exhaustive: never = store;
       throw new Error(`Kein Prisma-Delegate für Store "${_exhaustive}" registriert.`);

@@ -18,102 +18,78 @@ function makeDb(overrides: Partial<InMemoryErasureDatabase> = {}): InMemoryErasu
   };
 }
 
-// Sicherheitsreview 2026-08, Befund N5: Comment.authorName (eingebettet in
-// plans/exercises/templates) wurde vom Purge bislang gar nicht erfasst.
-describe('purgeExpiredDeletions — Comment.authorName-Anonymisierung (Befund N5)', () => {
-  it('anonymisiert Plan-, verschachtelte Set- und Übungskatalog-Kommentare der gelöschten Person, lässt den Kommentartext erhalten', async () => {
+// Kommentare (Store "comments", Issue #141): Name und Zuordnung der
+// gelöschten Person werden entfernt, der Text bleibt erhalten.
+function comment(overrides: Record<string, unknown>) {
+  return { id: 'c1', clubId: 'club-1', targetStore: 'plans', targetId: 'p1', entryId: null, authorId: 'u1', authorName: 'Mara Vogel', text: 'Guter Plan', ...overrides };
+}
+
+describe('purgeExpiredDeletions — Kommentar-Anonymisierung', () => {
+  it('anonymisiert die Kommentare der gelöschten Person an jedem Ziel und lässt den Text erhalten', async () => {
     const db = makeDb({
       users: [{ id: 'u1', clubId: 'club-1', athleteId: null, name: 'Mara Vogel' }],
       deletionRequests: [{ id: 'req1', userId: 'u1', purgeAfter: PAST }],
-      plans: [
-        {
-          id: 'p1',
-          clubId: 'club-1',
-          comments: [{ id: 'c1', authorId: 'u1', authorName: 'Mara Vogel', text: 'Guter Plan', createdAt: NOW.toISOString() }],
-          days: [
-            {
-              date: NOW.toISOString(),
-              sets: [{ kind: 'set', id: 's1', comments: [{ id: 'c2', authorId: 'u1', authorName: 'Mara Vogel', text: 'Harte Serie', createdAt: NOW.toISOString() }] }],
-            },
-          ],
-        },
-      ],
-      exercises: [
-        { id: 'ex1', clubId: 'club-1', comments: [{ id: 'c3', authorId: 'u1', authorName: 'Mara Vogel', text: 'Technik-Hinweis', createdAt: NOW.toISOString() }] },
-      ],
-      templates: [
-        { id: 't1', clubId: 'club-1', sets: [{ kind: 'set', id: 's2', comments: [{ id: 'c4', authorId: 'u1', authorName: 'Mara Vogel', text: 'Vorlagen-Hinweis', createdAt: NOW.toISOString() }] }] },
-      ],
-      sectionTemplates: [
-        { id: 'st1', clubId: 'club-1', entries: [{ kind: 'set', id: 's3', comments: [{ id: 'c5', authorId: 'u1', authorName: 'Mara Vogel', text: 'Abschnitts-Hinweis', createdAt: NOW.toISOString() }] }] },
+      comments: [
+        comment({ id: 'c1' }),
+        comment({ id: 'c2', entryId: 's1', text: 'Harte Serie' }),
+        comment({ id: 'c3', targetStore: 'exercises', targetId: 'ex1', text: 'Technik-Hinweis' }),
       ],
     });
-    const gateway = new InMemoryErasureJobGateway(db);
-    await purgeExpiredDeletions(gateway, NOW);
+    await purgeExpiredDeletions(new InMemoryErasureJobGateway(db), NOW);
 
-    const plan = db.plans![0]!;
-    expect((plan.comments as Array<{ authorName: string; text: string }>)[0]).toMatchObject({ authorName: ANONYMIZED_COMMENT_AUTHOR, text: 'Guter Plan' });
-    const day = (plan.days as Array<{ sets: Array<{ comments: Array<{ authorName: string; text: string }> }> }>)[0]!;
-    expect(day.sets[0]!.comments[0]).toMatchObject({ authorName: ANONYMIZED_COMMENT_AUTHOR, text: 'Harte Serie' });
-
-    const exercise = db.exercises![0]!;
-    expect((exercise.comments as Array<{ authorName: string; text: string }>)[0]).toMatchObject({ authorName: ANONYMIZED_COMMENT_AUTHOR, text: 'Technik-Hinweis' });
-
-    const template = db.templates![0]!;
-    expect((template.sets as Array<{ comments: Array<{ authorName: string; text: string }> }>)[0]!.comments[0]).toMatchObject({ authorName: ANONYMIZED_COMMENT_AUTHOR, text: 'Vorlagen-Hinweis' });
-
-    const sectionTemplate = db.sectionTemplates![0]!;
-    expect((sectionTemplate.entries as Array<{ comments: Array<{ authorName: string; text: string }> }>)[0]!.comments[0]).toMatchObject({ authorName: ANONYMIZED_COMMENT_AUTHOR, text: 'Abschnitts-Hinweis' });
+    for (const c of db.comments!) {
+      expect(c).toMatchObject({ authorId: null, authorName: ANONYMIZED_COMMENT_AUTHOR });
+    }
+    expect(db.comments!.map((c) => c.text)).toEqual(['Guter Plan', 'Harte Serie', 'Technik-Hinweis']);
   });
 
   it('lässt Kommentare ANDERER Personen und eines ANDEREN Vereins unangetastet', async () => {
     const db = makeDb({
       users: [{ id: 'u1', clubId: 'club-1', athleteId: null, name: 'Mara Vogel' }],
       deletionRequests: [{ id: 'req1', userId: 'u1', purgeAfter: PAST }],
-      plans: [
-        { id: 'p1', clubId: 'club-1', comments: [{ id: 'c1', authorId: 'u2', authorName: 'Jens Bauer', text: 'Nicht meins', createdAt: NOW.toISOString() }], days: [] },
-        { id: 'p2', clubId: 'club-2', comments: [{ id: 'c2', authorId: 'u1', authorName: 'Mara Vogel', text: 'Anderer Verein', createdAt: NOW.toISOString() }], days: [] },
+      comments: [
+        comment({ id: 'c1', authorId: 'u2', authorName: 'Jens Bauer' }),
+        comment({ id: 'c2', clubId: 'club-2' }),
       ],
     });
-    const gateway = new InMemoryErasureJobGateway(db);
-    await purgeExpiredDeletions(gateway, NOW);
+    await purgeExpiredDeletions(new InMemoryErasureJobGateway(db), NOW);
 
-    expect((db.plans!.find((p) => p.id === 'p1')!.comments as Array<{ authorName: string }>)[0]!.authorName).toBe('Jens Bauer');
-    expect((db.plans!.find((p) => p.id === 'p2')!.comments as Array<{ authorName: string }>)[0]!.authorName).toBe('Mara Vogel');
+    expect(db.comments!.find((c) => c.id === 'c1')).toMatchObject({ authorId: 'u2', authorName: 'Jens Bauer' });
+    expect(db.comments!.find((c) => c.id === 'c2')).toMatchObject({ authorId: 'u1', authorName: 'Mara Vogel' });
   });
 
-  // Kommentare stammen ebenso von Trainer:innen/Admins ohne athleteId —
-  // die Anonymisierung darf NICHT an ein verknüpftes Athletenprofil
-  // gekoppelt sein (anders als die Ergebnisse/Einträge/Handlungsfelder
-  // oben, die athleteId voraussetzen).
-  it('funktioniert auch für ein Konto OHNE verknüpftes Athletenprofil (z. B. Trainer:in/Admin)', async () => {
+  it('erkennt Altbestand ohne Zuordnung am Namen, aber nicht bei fremder authorId', async () => {
     const db = makeDb({
-      users: [{ id: 'u1', clubId: 'club-1', athleteId: null, name: 'Coach Nina' }],
+      users: [{ id: 'u1', clubId: 'club-1', athleteId: null, name: 'Mara Vogel' }],
       deletionRequests: [{ id: 'req1', userId: 'u1', purgeAfter: PAST }],
-      exercises: [{ id: 'ex1', clubId: 'club-1', comments: [{ id: 'c1', authorId: 'u1', authorName: 'Coach Nina', text: 'Trainer-Hinweis', createdAt: NOW.toISOString() }] }],
-    });
-    const gateway = new InMemoryErasureJobGateway(db);
-    await purgeExpiredDeletions(gateway, NOW);
-
-    expect((db.exercises![0]!.comments as Array<{ authorName: string }>)[0]!.authorName).toBe(ANONYMIZED_COMMENT_AUTHOR);
-  });
-
-  // Issue #151 — siehe Prisma-Pendant in profileErasure.integration.test.ts.
-  it('anonymisiert Kommentare an Ergebnissen anderer Athlet:innen, nur im eigenen Verein', async () => {
-    const comment = { id: 'c1', authorId: 'u1', authorName: 'Coach Nina', text: 'Starke Wende', createdAt: NOW.toISOString() };
-    const db = makeDb({
-      users: [{ id: 'u1', clubId: 'club-1', athleteId: null, name: 'Coach Nina' }],
-      deletionRequests: [{ id: 'req1', userId: 'u1', purgeAfter: PAST }],
-      results: [
-        { id: 'r1', athleteId: 'a-other', clubId: 'club-1', comments: [comment] },
-        { id: 'r2', athleteId: 'a-foreign', clubId: 'club-2', comments: [comment] },
+      comments: [
+        comment({ id: 'c1', authorId: null }),
+        comment({ id: 'c2', authorId: 'u2' }),
       ],
     });
-    const gateway = new InMemoryErasureJobGateway(db);
-    await purgeExpiredDeletions(gateway, NOW);
+    await purgeExpiredDeletions(new InMemoryErasureJobGateway(db), NOW);
 
-    expect((db.results[0]!.comments as Array<{ authorName: string }>)[0]!.authorName).toBe(ANONYMIZED_COMMENT_AUTHOR);
-    expect((db.results[1]!.comments as Array<{ authorName: string }>)[0]!.authorName).toBe('Coach Nina');
+    expect(db.comments!.find((c) => c.id === 'c1')!.authorName).toBe(ANONYMIZED_COMMENT_AUTHOR);
+    expect(db.comments!.find((c) => c.id === 'c2')!.authorName).toBe('Mara Vogel');
+  });
+
+  it('löscht Kommentare an den gelöschten Ergebnissen der Person samt Löschmarkierung', async () => {
+    const tombstones: NonNullable<InMemoryErasureDatabase['tombstones']> = [];
+    const db = makeDb({
+      users: [{ id: 'u1', clubId: 'club-1', athleteId: 'a1', name: 'Mara Vogel' }],
+      athletes: [{ id: 'a1' }],
+      results: [{ id: 'r1', athleteId: 'a1' }, { id: 'r2', athleteId: 'a-other' }],
+      deletionRequests: [{ id: 'req1', userId: 'u1', purgeAfter: PAST }],
+      tombstones,
+      comments: [
+        comment({ id: 'c1', targetStore: 'results', targetId: 'r1', authorId: 'u-coach', authorName: 'Coach Nina' }),
+        comment({ id: 'c2', targetStore: 'results', targetId: 'r2', authorId: 'u-coach', authorName: 'Coach Nina' }),
+      ],
+    });
+    await purgeExpiredDeletions(new InMemoryErasureJobGateway(db), NOW);
+
+    expect(db.comments!.map((c) => c.id)).toEqual(['c2']);
+    expect(tombstones).toContainEqual(expect.objectContaining({ store: 'comments', entityId: 'c1' }));
   });
 });
 

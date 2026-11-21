@@ -7,19 +7,7 @@
 // orchestriert von jobs/purgeExpiredDeletions.ts.
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { newAuditPseudonym, pseudonymizeAuditEntry } from './auditLogPseudonymization.js';
-import { anonymizeCommentAuthors } from './commentAnonymization.js';
-import { COMMENT_LOCATIONS, type CommentBearingStore, type CommentLocation } from '../modules/shared/commentLocations.js';
-
-// Tabelle und Prisma-Model je Store mit Kommentaren. `satisfies` erzwingt
-// einen Eintrag für JEDEN Store aus COMMENT_LOCATIONS — ein neuer Store mit
-// Kommentaren lässt sich nicht hinzufügen, ohne dass der Purge ihn erfasst.
-const COMMENT_PURGE_TABLES = {
-  exercises: { table: 'exercises', delegate: 'exercise' },
-  plans: { table: 'plans', delegate: 'plan' },
-  templates: { table: 'templates', delegate: 'template' },
-  sectionTemplates: { table: 'section_templates', delegate: 'sectionTemplate' },
-  results: { table: 'results', delegate: 'result' },
-} as const satisfies Record<CommentBearingStore, { table: string; delegate: string }>;
+import { ANONYMIZED_COMMENT_FIELDS } from './commentAnonymization.js';
 
 // Platzhalter, auf den `Invitation.email` beim Hard-Purge gesetzt wird
 // (purgeUserAndDependents() unten); Gegenstück zu ANONYMIZED_COMMENT_AUTHOR
@@ -80,6 +68,12 @@ export class PrismaErasureJobGateway implements ErasureJobGateway {
           tx.startlistEntry.findMany({ where: { athleteId: user.athleteId }, select: { id: true } }),
           tx.actionItem.findMany({ where: { athleteId: user.athleteId }, select: { id: true } }),
         ]);
+        // Kommentare an den gelöschten Ergebnissen verlieren ihr Ziel und
+        // werden mit gelöscht (Issue #141).
+        const resultIds = results.map((r: { id: string }) => r.id);
+        const resultComments: Array<{ id: string }> = resultIds.length > 0
+          ? await tx.comment.findMany({ where: { targetStore: 'results', targetId: { in: resultIds } }, select: { id: true } })
+          : [];
 
         // Verbesserung "Tombstones": bevor die Zeilen unwiderruflich
         // gelöscht werden, je eine schlanke Löschmarkierung (nur id +
@@ -93,10 +87,12 @@ export class PrismaErasureJobGateway implements ErasureJobGateway {
           ...results.map((r: { id: string }) => ({ clubId: user.clubId!, store: 'results', entityId: r.id, deletedAt: now })),
           ...entries.map((e: { id: string }) => ({ clubId: user.clubId!, store: 'entries', entityId: e.id, deletedAt: now })),
           ...actionItems.map((a: { id: string }) => ({ clubId: user.clubId!, store: 'actionItems', entityId: a.id, deletedAt: now })),
+          ...resultComments.map((c) => ({ clubId: user.clubId!, store: 'comments', entityId: c.id, deletedAt: now })),
           { clubId: user.clubId!, store: 'athletes', entityId: user.athleteId, deletedAt: now },
         ];
         await tx.syncTombstone.createMany({ data: tombstones, skipDuplicates: true });
 
+        if (resultComments.length > 0) await tx.comment.deleteMany({ where: { id: { in: resultComments.map((c) => c.id) } } });
         await tx.result.deleteMany({ where: { athleteId: user.athleteId } });
         await tx.startlistEntry.deleteMany({ where: { athleteId: user.athleteId } });
         await tx.actionItem.deleteMany({ where: { athleteId: user.athleteId } });
@@ -155,73 +151,21 @@ export class PrismaErasureJobGateway implements ErasureJobGateway {
         await tx.athlete.delete({ where: { id: user.athleteId } });
       }
 
-      // Comment.authorName ist ein freier, beim Anlegen aus dem eingeloggten
-      // Konto übernommener Klarname — eingebettet in "plans.comments",
-      // "exercises.comments", "results.comments", "plans.days[].sets[].comments",
-      // "templates.sets[].comments" und "section_templates.entries[].comments"
-      // (welche Stores und Felder, legt modules/shared/commentLocations.ts
-      // fest).
-      // Bewusst NICHT an `user.athleteId` gekoppelt: Kommentare stammen auch
-      // von Trainer:innen/Admins ohne athleteId, deren Klarnamen ein
-      // athletengebundener Filter unangetastet ließe. Gescoped auf
-      // `user.clubId`, damit ein Konto ohne Verein keinen club-weiten Scan
-      // auslöst.
-      //
-      // Abgeglichen wird über `authorId`, nicht über den frei wählbaren
-      // `authorName`: die serverseitig durchgesetzte User-ID (siehe
-      // sync.commentAuthorship.ts) hält auch bei Namensgleichheit,
-      // Umbenennung oder absichtlich abweichendem Namen.
-      //
-      // Wie bei der Anwesenheits-Bereinigung oben: erst per
-      // gezielter SQL-Bedingung nur die TATSÄCHLICH betroffenen Zeilen
-      // laden (Containment `@>` für die flache oberste Ebene,
-      // `jsonb_path_exists(..., '$.**.comments[*] ? (...)')` für die
-      // beliebig tief verschachtelten Sets/Blöcke — der `..`-Operator
-      // durchsucht dafür rekursiv JEDE Tiefe, unabhängig von der
-      // Block-/Set-Verschachtelung), statt alle Pläne/Übungen/Vorlagen des
-      // Vereins zu laden und in JS zu filtern.
+      // Kommentare der Person (Store "comments", Issue #141): Name und
+      // Zuordnung werden entfernt, der Text bleibt als Teil der Diskussion.
+      // Bewusst NICHT an `user.athleteId` gekoppelt — Kommentare stammen
+      // auch von Trainer:innen/Admins ohne Athletenprofil. Abgleich über
+      // `authorId`; Altbestand ohne Zuordnung über den Namen (siehe
+      // commentAnonymization.ts: isCommentByAuthor()). updateMany setzt
+      // updatedAt, damit jedes Gerät die anonymisierte Fassung pullt.
       if (user.clubId) {
-        // Die SQL-Bedingungen unten sind bewusst ETWAS breiter als die
-        // eigentliche Trefferregel: sie holen zusätzlich Zeilen, die den
-        // NAMEN der Person tragen (Altbestand ohne `authorId`, siehe
-        // commentAnonymization.ts). Welche Kommentare tatsächlich
-        // anonymisiert werden, entscheidet allein die dortige Funktion —
-        // eine zu viel geladene Zeile ergibt schlicht `changed: false`
-        // und wird nicht geschrieben — deshalb wird hier gefiltert statt
-        // exakt selektiert.
-        const author = { id: user.id, name: user.name };
-        const authorIdContainment = JSON.stringify([{ authorId: user.id }]);
-        const authorNameContainment = JSON.stringify([{ authorName: user.name }]);
-        const pathVars = JSON.stringify({ id: user.id, name: user.name });
-
-        // Jeder Store mit Kommentaren (COMMENT_LOCATIONS), jeweils mit dem
-        // Vorfilter seiner Kommentar-Felder: `@>` für ein flaches
-        // Kommentar-Array, `jsonb_path_exists` für verschachtelte Sätze.
-        // Die Ergebnisse der EIGENEN Athlet:innen-Person sind oben bereits
-        // gelöscht; bei "results" bleiben nur Kommentare an Ergebnissen
-        // anderer Athlet:innen übrig.
-        for (const store of Object.keys(COMMENT_LOCATIONS) as CommentBearingStore[]) {
-          const locations: readonly CommentLocation[] = COMMENT_LOCATIONS[store];
-          const { table, delegate } = COMMENT_PURGE_TABLES[store];
-          const columns = locations.map((location) => Prisma.raw(`"${location.field}"`));
-          const conditions = locations.map((location) => {
-            const column = Prisma.raw(`"${location.field}"`);
-            return location.kind === 'comments'
-              ? Prisma.sql`${column} @> ${authorIdContainment}::jsonb OR ${column} @> ${authorNameContainment}::jsonb`
-              : Prisma.sql`jsonb_path_exists(${column}, '$.**.comments[*] ? (@.authorId == $id || @.authorName == $name)', ${pathVars}::jsonb)`;
-          });
-          const rows = await tx.$queryRaw<Array<{ id: string } & Record<string, unknown>>>`
-            SELECT id, ${Prisma.join(columns, ', ')} FROM ${Prisma.raw(`"${table}"`)}
-            WHERE "clubId" = ${user.clubId}
-              AND (${Prisma.join(conditions, ' OR ')})
-          `;
-          for (const row of rows) {
-            const { changed, fields } = anonymizeCommentAuthors(store, row, author);
-            if (changed) {
-              await tx[delegate].update({ where: { id: row.id }, data: fields as Record<string, Prisma.InputJsonValue> });
-            }
-          }
-        }
+        await tx.comment.updateMany({
+          where: {
+            clubId: user.clubId,
+            OR: [{ authorId: user.id }, ...(user.name ? [{ authorId: null, authorName: user.name }] : [])],
+          },
+          data: ANONYMIZED_COMMENT_FIELDS,
+        });
       }
 
       // Ohne diesen Schritt überlebte die E-Mail-Adresse der gelöschten

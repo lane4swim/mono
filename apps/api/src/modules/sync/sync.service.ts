@@ -22,14 +22,14 @@ import type { SyncGateway, SyncRecord } from './sync.gateway.js';
 import { isKnownStore, canRead, canWrite, isAthleteScoped } from './sync.permissions.js';
 import { assertForeignKeysWithinClub, FOREIGN_ENTITY_ERROR_CODE } from './sync.foreignKeys.js';
 import { scopeChangeForAthlete } from './sync.athleteScope.js';
-import { assertCommentAuthorship, COMMENT_AUTHORSHIP_ERROR_CODE } from './sync.commentAuthorship.js';
+import { assertCommentWrite, isCommentReadable, stripLegacyEmbeddedComments, COMMENT_NOT_PERMITTED_CODE } from './sync.comments.js';
 import { PULL_PAGE_SIZE, PULL_SETTLE_MS, PULL_TIE_SAFETY_LIMIT, splitAtSafeTimestampBoundary } from './sync.pagination.js';
 import { describeSyncError } from './sync.errors.js';
 
 export interface SyncRequester {
   // User-ID der anfragenden Person (request.user.sub), gebraucht für die
-  // Autor:innen-Prüfung eingebetteter Kommentare (sync.commentAuthorship.ts:
-  // ein neuer Kommentar muss userId === requester.userId tragen).
+  // Autor:innen-Prüfung im Store "comments" (sync.comments.ts) und bei
+  // Ankündigungen.
   userId: string;
   clubId: string; // Superadmin (clubId: null) darf nicht synchronisieren — siehe sync.route.ts (requireAnyRole).
   // Für die Rollen-Scopierung unten — clubId allein reicht nicht: ein
@@ -169,7 +169,7 @@ function validatePayload(ctx: PushCtx): SyncEventResult | null {
     return null;
   }
   const entitySchema = ENTITY_SCHEMAS[store];
-  const parsedPayload = entitySchema.safeParse(event.payload);
+  const parsedPayload = entitySchema.safeParse(stripLegacyEmbeddedComments(store, event.payload));
   if (!parsedPayload.success) {
     return { eventId: event.id, status: 'error', message: `Payload entspricht nicht dem Schema für "${store}".`, code: 'invalid_payload' };
   }
@@ -395,29 +395,25 @@ export function createSyncService(deps: SyncServiceDeps) {
           }
         }
 
-        // Analog zur "results"-Prüfung oben, aber auf die eingebetteten
-        // Kommentar-Arrays verengt (Begründung in
-        // sync.commentAuthorship.ts) — ein NEU hinzugefügter Kommentar muss
-        // der eigenen Identität zugeordnet sein, ein BESTEHENDER
-        // Kommentar behält seine ursprüngliche Autor:innen-Zuordnung,
-        // unabhängig davon, wer den umgebenden Datensatz gerade
-        // bearbeitet. Braucht `existing` (oben bereits geladen) — deshalb
-        // hier inline statt als PUSH_GUARDS-Eintrag, analog zur
-        // "results"-Prüfung.
-        if (event.action !== 'delete') {
-          const authorshipError = assertCommentAuthorship(
-            store,
-            validatedPayload as Record<string, unknown>,
+        // Kommentare (Issue #141): Rechte hängen am Kommentar selbst —
+        // anlegen im eigenen Namen, ändern nur durch die Autor:in, löschen
+        // durch die Autor:in oder moderierend durch trainer/admin (Regeln in
+        // sync.comments.ts). Braucht `existing`, daher inline wie die
+        // "results"-Prüfung oben.
+        if (store === 'comments') {
+          const commentError = assertCommentWrite(
+            event.action === 'delete' ? 'delete' : existing ? 'update' : 'create',
+            validatedPayload as Record<string, unknown> | null,
             existing as Record<string, unknown> | null,
-            requester.userId,
+            requester,
           );
-          if (authorshipError) {
-            results.push({ eventId: event.id, status: 'error', message: authorshipError, code: COMMENT_AUTHORSHIP_ERROR_CODE });
+          if (commentError) {
+            results.push({ eventId: event.id, status: 'error', message: commentError, code: COMMENT_NOT_PERMITTED_CODE });
             continue;
           }
         }
 
-        // Analog zur Kommentar-Autor:innen-Prüfung oben, aber für das
+        // Analog zur Kommentar-Prüfung oben, aber für das
         // Top-Level-Feld "authorId" von Announcement (Phase 2, Abschnitt
         // 4.1 — docs/Plans/phase2-plan.md): eine NEU angelegte Ankündigung
         // muss der eigenen Identität zugeordnet sein (verhindert, dass
@@ -624,6 +620,13 @@ export function createSyncService(deps: SyncServiceDeps) {
       // falls eine künftige Gateway-Implementierung `stores` einmal nicht
       // respektiert. Im Normalfall ein No-Op.
       changes = changes.filter((change) => canRead(change.store, requester.roles, requester.enabledModules));
+
+      // Kommentare folgen der Sichtbarkeit ihres Ziels (sync.comments.ts):
+      // ein Kommentar an einen Plan erreicht nur, wer Pläne lesen darf und
+      // deren Paket gebucht hat. Löschungen tragen kein Ziel und bleiben.
+      changes = changes.filter((change) =>
+        change.store !== 'comments' || change.action === 'delete' ||
+        isCommentReadable(change.payload as Record<string, unknown> | null, requester.roles, requester.enabledModules));
 
       // Rollen-Scopierung beim Lesen, Zeilen-/Feld-Ebene (siehe
       // sync.athleteScope.ts): WICHTIG — die Filterung erfolgt NACH der

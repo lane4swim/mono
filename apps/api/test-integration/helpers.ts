@@ -33,7 +33,7 @@ export async function closeTestPrisma(): Promise<void> {
 export async function truncateAll(client: PrismaClient = getTestPrisma()): Promise<void> {
   await client.$executeRawUnsafe(`
     TRUNCATE TABLE
-      "action_items", "sessions", "plans", "templates", "exercises", "results",
+      "comments", "action_items", "sessions", "plans", "templates", "exercises", "results",
       "startlist_entries", "competitions", "athletes", "groups",
       "sync_tombstones", "synced_events",
       "data_deletion_requests", "refresh_tokens", "invitations",

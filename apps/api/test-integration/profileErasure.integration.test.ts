@@ -417,177 +417,62 @@ describe('PrismaErasureJobGateway.purgeUserAndDependents()', () => {
   });
 });
 
-// Sicherheitsreview 2026-08, Befund N5: Comment.authorName (eingebettet in
-// plans/exercises/templates) wurde vom Purge bislang gar nicht erfasst.
-// Läuft bewusst gegen eine ECHTE Datenbank — die Anonymisierung stützt
-// sich auf `@>`-Containment sowie `jsonb_path_exists(..., '$..comments[*]
-// ? (...)')` (rekursiver Abstieg durch beliebig tief verschachtelte
-// Sets/Blöcke), beides Postgres-JSONB-Operatoren, die sich gegen die
-// InMemory-Testdouble (siehe purgeExpiredDeletions.test.ts) nicht
-// verlässlich mitprüfen lassen.
-describe('PrismaErasureJobGateway.purgeUserAndDependents() — Comment.authorName-Anonymisierung (Befund N5)', () => {
-  it('anonymisiert Plan-, verschachtelte Set-/Block-, Übungskatalog- und Vorlagen-Kommentare, lässt den Kommentartext erhalten', async () => {
-    const club = await createTestClub();
-    const { user } = await seedAthleteUser(club.id);
-    const now = new Date();
-
-    const plan = await prisma.plan.create({
-      data: {
-        clubId: club.id,
-        name: 'Wochenplan',
-        weekStart: now,
-        comments: [{ id: 'c1', authorId: user.id, authorName: user.name, text: 'Guter Plan', createdAt: now.toISOString() }],
-        days: [
-          {
-            date: now.toISOString(),
-            sets: [
-              { kind: 'set', id: 's1', description: '', distance: 100, reps: 4, intensity: 'GA1', restSec: 30, comments: [{ id: 'c2', authorId: user.id, authorName: user.name, text: 'Harte Serie', createdAt: now.toISOString() }] },
-              // Verschachtelt in einem Block — der rekursive
-              // jsonb_path_exists-Abstieg (`$..comments`) muss auch hier
-              // treffen, nicht nur auf der obersten Set-Ebene.
-              {
-                kind: 'block', id: 'b1', label: '', repeatCount: 3,
-                sets: [{ kind: 'set', id: 's2', description: '', distance: 50, reps: 8, intensity: 'GA2', restSec: 15, comments: [{ id: 'c3', authorId: user.id, authorName: user.name, text: 'Im Block', createdAt: now.toISOString() }] }],
-              },
-            ],
-          },
-        ],
-      },
+// Kommentare (Store "comments", Issue #141) gegen eine echte Datenbank:
+// Anonymisierung beim Purge (updateMany inkl. Altbestand per Namen),
+// Löschen der Kommentare an gelöschten Ergebnissen, und der Export.
+describe('Kommentare beim Purge und im Export (Issue #141)', () => {
+  async function seedComment(clubId: string, overrides: Record<string, unknown> = {}) {
+    const plan = await prisma.plan.create({ data: { clubId, name: 'Wochenplan', weekStart: new Date(), days: [] } });
+    return prisma.comment.create({
+      data: { clubId, targetStore: 'plans', targetId: plan.id, authorName: 'Jemand', text: 'Text', ...overrides },
     });
-    const exercise = await prisma.exercise.create({
-      data: { clubId: club.id, name: 'Kraulbeine', category: 'kick', comments: [{ id: 'c4', authorId: user.id, authorName: user.name, text: 'Technik-Hinweis', createdAt: now.toISOString() }] },
-    });
-    const template = await prisma.template.create({
-      data: { clubId: club.id, name: 'Standard-Vorlage', sets: [{ kind: 'set', id: 's3', description: '', distance: 200, reps: 1, intensity: 'GA1', restSec: 0, comments: [{ id: 'c5', authorId: user.id, authorName: user.name, text: 'Vorlagen-Hinweis', createdAt: now.toISOString() }] }] },
-    });
+  }
 
-    await erasureGateway.purgeUserAndDependents(user.id);
-
-    const updatedPlan = await prisma.plan.findUnique({ where: { id: plan.id } });
-    expect(updatedPlan?.comments).toMatchObject([{ authorName: ANONYMIZED_COMMENT_AUTHOR, text: 'Guter Plan' }]);
-    const days = updatedPlan?.days as Array<{ sets: Array<Record<string, unknown>> }>;
-    expect(days[0]!.sets[0]).toMatchObject({ comments: [{ authorName: ANONYMIZED_COMMENT_AUTHOR, text: 'Harte Serie' }] });
-    const block = days[0]!.sets[1] as { sets: Array<Record<string, unknown>> };
-    expect(block.sets[0]).toMatchObject({ comments: [{ authorName: ANONYMIZED_COMMENT_AUTHOR, text: 'Im Block' }] });
-
-    const updatedExercise = await prisma.exercise.findUnique({ where: { id: exercise.id } });
-    expect(updatedExercise?.comments).toMatchObject([{ authorName: ANONYMIZED_COMMENT_AUTHOR, text: 'Technik-Hinweis' }]);
-
-    const updatedTemplate = await prisma.template.findUnique({ where: { id: template.id } });
-    expect((updatedTemplate?.sets as Array<Record<string, unknown>>)[0]).toMatchObject({ comments: [{ authorName: ANONYMIZED_COMMENT_AUTHOR, text: 'Vorlagen-Hinweis' }] });
-
-    // Nachreview zu M2: `authorId` muss VOLLSTÄNDIG verschwinden, nicht
-    // nur der Anzeigename überschrieben werden — sonst überlebte den
-    // Art.-17-Purge ein stabiler personenbezogener Schlüssel, über den
-    // sich alle Kommentare derselben gelöschten Person wieder verketten
-    // ließen. toMatchObject() oben prüft nur die genannten Felder und
-    // würde ein zurückgebliebenes authorId nicht bemerken.
-    const remainingAuthorIds = JSON.stringify([updatedPlan?.comments, updatedPlan?.days, updatedExercise?.comments, updatedTemplate?.sets]);
-    expect(remainingAuthorIds).not.toContain(user.id);
-    expect(remainingAuthorIds).not.toContain('authorId');
-  });
-
-  it('lässt Kommentare ANDERER Personen und eines ANDEREN Vereins unangetastet', async () => {
+  it('anonymisiert die Kommentare der Person (auch Altbestand per Namen), lässt Text und fremde Kommentare unverändert', async () => {
     const club = await createTestClub();
     const otherClub = await createTestClub(prisma, 'Anderer Verein');
     const { user } = await seedAthleteUser(club.id);
-    const now = new Date();
+    const own = await seedComment(club.id, { authorId: user.id, authorName: user.name, text: 'Guter Plan' });
+    const legacy = await seedComment(club.id, { authorId: null, authorName: user.name, text: 'Alt' });
+    const foreign = await seedComment(club.id, { authorId: randomUUID(), authorName: user.name, text: 'Gleicher Name, andere Person' });
+    const otherClubComment = await seedComment(otherClub.id, { authorId: user.id, authorName: user.name });
+    const before = own.updatedAt;
 
-    const foreignAuthorPlan = await prisma.plan.create({
-      data: { clubId: club.id, name: 'Plan A', weekStart: now, comments: [{ id: 'c1', authorId: randomUUID(), authorName: 'Jens Bauer', text: 'Nicht meins', createdAt: now.toISOString() }], days: [] },
-    });
-    const otherClubPlan = await prisma.plan.create({
-      data: { clubId: otherClub.id, name: 'Plan B', weekStart: now, comments: [{ id: 'c2', authorId: user.id, authorName: user.name, text: 'Anderer Verein', createdAt: now.toISOString() }], days: [] },
+    await erasureGateway.purgeUserAndDependents(user.id);
+
+    const rows = await prisma.comment.findMany();
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    expect(byId.get(own.id)).toMatchObject({ authorId: null, authorName: ANONYMIZED_COMMENT_AUTHOR, text: 'Guter Plan' });
+    expect(byId.get(own.id)!.updatedAt.getTime()).toBeGreaterThanOrEqual(before.getTime());
+    expect(byId.get(legacy.id)).toMatchObject({ authorId: null, authorName: ANONYMIZED_COMMENT_AUTHOR });
+    expect(byId.get(foreign.id)).toMatchObject({ authorName: user.name });
+    expect(byId.get(otherClubComment.id)).toMatchObject({ authorId: user.id, authorName: user.name });
+  });
+
+  it('löscht Kommentare an den gelöschten Ergebnissen der Person und legt Löschmarkierungen an', async () => {
+    const club = await createTestClub();
+    const { user, athlete } = await seedAthleteUser(club.id);
+    const result = await prisma.result.create({ data: { clubId: club.id, athleteId: athlete!.id, event: '100F', time: 61.2, date: new Date() } });
+    const comment = await prisma.comment.create({
+      data: { clubId: club.id, targetStore: 'results', targetId: result.id, authorId: randomUUID(), authorName: 'Coach Nina', text: 'Starke Wende' },
     });
 
     await erasureGateway.purgeUserAndDependents(user.id);
 
-    const unaffectedA = await prisma.plan.findUnique({ where: { id: foreignAuthorPlan.id } });
-    expect(unaffectedA?.comments).toMatchObject([{ authorName: 'Jens Bauer' }]);
-    const unaffectedB = await prisma.plan.findUnique({ where: { id: otherClubPlan.id } });
-    expect(unaffectedB?.comments).toMatchObject([{ authorName: user.name }]);
+    expect(await prisma.comment.findUnique({ where: { id: comment.id } })).toBeNull();
+    expect(await prisma.syncTombstone.findMany({ where: { store: 'comments' } })).toMatchObject([{ entityId: comment.id }]);
   });
 
-  // Kommentare stammen ebenso von Trainer:innen/Admins ohne athleteId —
-  // die Anonymisierung darf nicht an ein verknüpftes Athletenprofil
-  // gekoppelt sein.
-  it('funktioniert auch für ein Konto OHNE verknüpftes Athletenprofil', async () => {
-    const club = await createTestClub();
-    const now = new Date();
-    const trainer = await prisma.user.create({
-      data: { clubId: club.id, name: 'Coach Nina', email: `nina-${randomUUID()}@example.org`, passwordHash: 'hash', role: 'trainer', roles: ['trainer'], athleteId: null },
-    });
-    const exercise = await prisma.exercise.create({
-      data: { clubId: club.id, name: 'Beinschlag', category: 'kick', comments: [{ id: 'c1', authorId: trainer.id, authorName: 'Coach Nina', text: 'Trainer-Hinweis', createdAt: now.toISOString() }] },
-    });
-
-    await erasureGateway.purgeUserAndDependents(trainer.id);
-
-    const updated = await prisma.exercise.findUnique({ where: { id: exercise.id } });
-    expect(updated?.comments).toMatchObject([{ authorName: ANONYMIZED_COMMENT_AUTHOR, text: 'Trainer-Hinweis' }]);
-  });
-
-  // Issue #151: Ergebnisse tragen seit dem DSV7/Lenex-Import ebenfalls
-  // Kommentare (ResultSchema.comments). Gelöscht werden beim Purge nur die
-  // Ergebnisse der EIGENEN Athlet:innen-Person — ein Kommentar der
-  // gelöschten Person am Ergebnis einer ANDEREN Athlet:in bleibt stehen und
-  // muss deshalb anonymisiert werden.
-  it('anonymisiert Kommentare an Ergebnissen anderer Athlet:innen', async () => {
-    const club = await createTestClub();
-    const now = new Date();
-    const trainer = await prisma.user.create({
-      data: { clubId: club.id, name: 'Coach Nina', email: `nina-${randomUUID()}@example.org`, passwordHash: 'hash', role: 'trainer', roles: ['trainer'], athleteId: null },
-    });
-    const otherAthlete = await prisma.athlete.create({ data: { clubId: club.id, firstName: 'Tim', lastName: 'Sommer' } });
-    const result = await prisma.result.create({
-      data: {
-        clubId: club.id,
-        athleteId: otherAthlete.id,
-        event: '100F',
-        time: 61.2,
-        date: now,
-        comments: [
-          { id: 'c1', authorId: trainer.id, authorName: 'Coach Nina', text: 'Starke Wende', createdAt: now.toISOString() },
-          { id: 'c2', authorId: randomUUID(), authorName: 'Jens Bauer', text: 'Nicht meins', createdAt: now.toISOString() },
-        ],
-      },
-    });
-
-    await erasureGateway.purgeUserAndDependents(trainer.id);
-
-    const updated = await prisma.result.findUnique({ where: { id: result.id } });
-    expect(updated?.comments).toMatchObject([
-      { authorName: ANONYMIZED_COMMENT_AUTHOR, text: 'Starke Wende' },
-      { authorName: 'Jens Bauer', text: 'Nicht meins' },
-    ]);
-    expect(JSON.stringify(updated?.comments)).not.toContain(trainer.id);
-  });
-
-  // Abschnittsvorlagen tragen dieselbe SetEntry-Struktur wie Vorlagen; der
-  // Kommentar steckt hier in einem Satz innerhalb eines Blocks.
-  it('anonymisiert verschachtelte Kommentare in Abschnittsvorlagen', async () => {
+  it('exportUserData() enthält die eigenen Kommentare, auch gelöschte, aber keine fremden', async () => {
     const club = await createTestClub();
     const { user } = await seedAthleteUser(club.id);
-    const now = new Date();
-    const sectionTemplate = await prisma.sectionTemplate.create({
-      data: {
-        clubId: club.id,
-        name: 'Einschwimmen',
-        entries: [
-          {
-            kind: 'block', id: 'b1', label: '', repeatCount: 2,
-            sets: [{ kind: 'set', id: 's1', description: '', distance: 100, reps: 1, intensity: 'GA1', restSec: 0, comments: [{ id: 'c1', authorId: user.id, authorName: user.name, text: 'Locker', createdAt: now.toISOString() }] }],
-          },
-        ],
-      },
-    });
+    const own = await seedComment(club.id, { authorId: user.id, authorName: user.name });
+    const deleted = await seedComment(club.id, { authorId: user.id, authorName: user.name, deletedAt: new Date() });
+    await seedComment(club.id, { authorId: randomUUID() });
 
-    await erasureGateway.purgeUserAndDependents(user.id);
+    const data = await profileGateway.exportUserData(user.id);
 
-    const updated = await prisma.sectionTemplate.findUnique({ where: { id: sectionTemplate.id } });
-    const block = (updated?.entries as Array<{ sets: Array<Record<string, unknown>> }>)[0]!;
-    expect(block.sets[0]).toMatchObject({ comments: [{ authorName: ANONYMIZED_COMMENT_AUTHOR, text: 'Locker' }] });
-    expect(JSON.stringify(updated?.entries)).not.toContain(user.id);
+    expect(data.comments.map((c) => c.id).sort()).toEqual([own.id, deleted.id].sort());
   });
 });
 

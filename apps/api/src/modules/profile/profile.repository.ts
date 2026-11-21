@@ -26,6 +26,12 @@ export interface PersonalDataExport {
   // ebenfalls an `userId` gehängt, aus demselben Grund wie qualifications
   // oben.
   refereeAssignments: Array<Record<string, unknown>>;
+  // Eigene Kommentare (Store "comments", Issue #141) — an `authorId`
+  // gehängt, samt der von der Person oder moderierend gelöschten (sie
+  // liegen bis zur Bereinigung weiter in der Datenbank). Altbestand ohne
+  // Zuordnung fehlt: er ließe sich nur über den Namen erkennen und könnte
+  // dann Kommentare einer anderen Person gleichen Namens enthalten.
+  comments: Array<Record<string, unknown>>;
 }
 
 // Code-Review, Befund R8: `purgedAt`/`status` gestrichen — siehe
@@ -96,6 +102,10 @@ export class PrismaProfileDataGateway implements ProfileDataGateway {
     const refereeAssignments = await this.prisma.refereeAssignment.findMany({
       where: { userId, deletedAt: null },
     });
+    const comments = await this.prisma.comment.findMany({
+      where: { authorId: userId },
+      orderBy: { createdAt: 'asc' },
+    });
 
     let athlete: Record<string, unknown> | null = null;
     let results: Array<Record<string, unknown>> = [];
@@ -161,6 +171,7 @@ export class PrismaProfileDataGateway implements ProfileDataGateway {
       attendance,
       qualifications,
       refereeAssignments,
+      comments,
     };
   }
 

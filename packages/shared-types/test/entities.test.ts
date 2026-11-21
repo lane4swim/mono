@@ -192,33 +192,44 @@ describe('ResultSchema', () => {
   });
 });
 
-describe('CommentSchema', () => {
-  const valid = { id: 'c1', authorId: TRAINER_ID, authorName: 'Sabine Reuter', text: 'Bitte auf die Wende achten.', createdAt: now };
+describe('CommentSchema (Store "comments", Issue #141)', () => {
+  const PLAN_ID = '99999999-6666-6666-6666-666666666661';
+  const valid = {
+    id: '99999999-5555-5555-5555-555555555551', clubId: CLUB_ID, targetStore: 'plans', targetId: PLAN_ID, entryId: null,
+    authorId: TRAINER_ID, authorName: 'Sabine Reuter', text: 'Bitte auf die Wende achten.', editedAt: null, createdAt: now, updatedAt: now,
+  };
   it('akzeptiert einen gültigen Kommentar', () => {
     expect(CommentSchema.safeParse(valid).success).toBe(true);
   });
-  it('lehnt einen leeren Text ab', () => {
+  it('lehnt einen leeren oder nur aus Leerzeichen bestehenden Text ab', () => {
     expect(CommentSchema.safeParse({ ...valid, text: '' }).success).toBe(false);
+    expect(CommentSchema.safeParse({ ...valid, text: '   ' }).success).toBe(false);
   });
   it('lehnt einen leeren Autorennamen ab', () => {
     expect(CommentSchema.safeParse({ ...valid, authorName: '' }).success).toBe(false);
   });
-  // Befund M2 (Sicherheitsreview 2026-08-27): authorId muss, wenn
-  // vorhanden, eine gültige User-ID (UUID) sein. Ein FEHLENDES authorId
-  // ist auf Schema-Ebene bewusst erlaubt — Kommentare liegen als
-  // eingebettetes JSONB vor, ein Pflichtfeld hätte jeden vor der Änderung
-  // gespeicherten Kommentar dauerhaft unspeicherbar gemacht (siehe
-  // Kommentar an CommentSchema). Die eigentliche Sperre sitzt eine Ebene
-  // höher in assertCommentAuthorship(): dort muss jeder NEUE Kommentar
-  // die eigene authorId tragen, und ein Kommentar ohne authorId kommt nur
-  // unverändert aus dem Altbestand durch (regressionsgetestet in
-  // apps/api/test/sync/sync.service.test.ts).
-  it('lässt einen Kommentar ohne authorId zu (Altbestand — Durchsetzung erfolgt beim Sync-Push)', () => {
-    const { authorId: _authorId, ...withoutAuthorId } = valid;
-    expect(CommentSchema.safeParse(withoutAuthorId).success).toBe(true);
+  it('lässt authorId null zu (Altbestand ohne Zuordnung, anonymisiert)', () => {
+    expect(CommentSchema.safeParse({ ...valid, authorId: null }).success).toBe(true);
   });
   it('lehnt eine ungültige authorId ab', () => {
     expect(CommentSchema.safeParse({ ...valid, authorId: 'not-a-uuid' }).success).toBe(false);
+  });
+  it('akzeptiert nur kommentierbare Ziele', () => {
+    for (const targetStore of ['plans', 'exercises', 'templates', 'sectionTemplates', 'results']) {
+      expect(CommentSchema.safeParse({ ...valid, targetStore }).success).toBe(true);
+    }
+    expect(CommentSchema.safeParse({ ...valid, targetStore: 'sessions' }).success).toBe(false);
+  });
+  it('erlaubt eine entryId nur bei Zielen mit Sätzen', () => {
+    expect(CommentSchema.safeParse({ ...valid, entryId: 'set-1' }).success).toBe(true);
+    expect(CommentSchema.safeParse({ ...valid, targetStore: 'templates', entryId: 'set-1' }).success).toBe(true);
+    expect(CommentSchema.safeParse({ ...valid, targetStore: 'exercises', entryId: 'set-1' }).success).toBe(false);
+    expect(CommentSchema.safeParse({ ...valid, targetStore: 'results', entryId: 'set-1' }).success).toBe(false);
+  });
+  it('setzt fehlende entryId/editedAt auf null', () => {
+    const { entryId: _e, editedAt: _d, ...minimal } = valid;
+    const parsed = CommentSchema.safeParse(minimal);
+    expect(parsed.success && parsed.data.entryId === null && parsed.data.editedAt === null).toBe(true);
   });
   it('lehnt unbekannte Zusatzfelder ab (.strict())', () => {
     expect(CommentSchema.safeParse({ ...valid, authorUserId: '123' }).success).toBe(false);
@@ -226,34 +237,21 @@ describe('CommentSchema', () => {
 });
 
 describe('ExerciseSchema', () => {
-  const valid = { id: ATHLETE_ID, clubId: CLUB_ID, name: 'Kraulbeine mit Brett', category: 'kick', stroke: 'Freistil', description: '', defaultDistance: 200, tags: ['aufwärmen'], equipment: ['brett'], comments: [], createdAt: now, updatedAt: now };
+  const valid = { id: ATHLETE_ID, clubId: CLUB_ID, name: 'Kraulbeine mit Brett', category: 'kick', stroke: 'Freistil', description: '', defaultDistance: 200, tags: ['aufwärmen'], equipment: ['brett'], createdAt: now, updatedAt: now };
   it('akzeptiert eine vollständige Übung', () => {
     expect(ExerciseSchema.safeParse(valid).success).toBe(true);
   });
   it('akzeptiert stroke: null (schwimmlagen-unabhängig, z. B. Trockentraining)', () => {
     expect(ExerciseSchema.safeParse({ ...valid, stroke: null }).success).toBe(true);
   });
-  it('fehlt "comments" ganz, wird ein leeres Array angenommen (Rückwärtskompatibilität mit älteren Datensätzen)', () => {
-    const { comments: _comments, ...withoutComments } = valid;
-    const parsed = ExerciseSchema.safeParse(withoutComments);
-    expect(parsed.success).toBe(true);
-    if (parsed.success) expect(parsed.data.comments).toEqual([]);
-  });
-  it('akzeptiert Kommentare im Übungskatalog', () => {
-    const withComment = { ...valid, comments: [{ id: 'c1', authorId: TRAINER_ID, authorName: 'Jonas Beck', text: 'Auf Handstellung achten.', createdAt: now }] };
-    expect(ExerciseSchema.safeParse(withComment).success).toBe(true);
-  });
-  it('lehnt einen fehlerhaften Kommentar ab (leerer Text)', () => {
-    const withBadComment = { ...valid, comments: [{ id: 'c1', authorId: TRAINER_ID, authorName: 'Jonas Beck', text: '', createdAt: now }] };
-    expect(ExerciseSchema.safeParse(withBadComment).success).toBe(false);
+  it('lehnt eingebettete Kommentare ab — sie liegen im Store "comments"', () => {
+    expect(ExerciseSchema.safeParse({ ...valid, comments: [] }).success).toBe(false);
   });
 
   // Regressionstest für Befund S7 (Code-Review).
-  it('lehnt mehr als 50 Tags/Ausrüstungsgegenstände sowie mehr als 500 Kommentare ab', () => {
+  it('lehnt mehr als 50 Tags/Ausrüstungsgegenstände ab', () => {
     expect(ExerciseSchema.safeParse({ ...valid, tags: Array(51).fill('x') }).success).toBe(false);
     expect(ExerciseSchema.safeParse({ ...valid, equipment: Array(51).fill('x') }).success).toBe(false);
-    const manyComments = Array.from({ length: 501 }, (_, i) => ({ id: `c${i}`, authorId: TRAINER_ID, authorName: 'X', text: 'x', createdAt: now }));
-    expect(ExerciseSchema.safeParse({ ...valid, comments: manyComments }).success).toBe(false);
   });
   it('fehlt "defaultDurationSec" ganz, wird null angenommen (Rückwärtskompatibilität mit älteren Datensätzen)', () => {
     const parsed = ExerciseSchema.safeParse(valid);
@@ -299,22 +297,8 @@ describe('SetEntrySchema (Sätze & Wiederholungsblöcke)', () => {
     const both = { kind: 'set', id: 's2', description: '100 Freistil mit Zielzeit', distance: 100, durationSec: 90, reps: 4, intensity: 'schwelle', restSec: 20 };
     expect(SetEntrySchema.safeParse(both).success).toBe(true);
   });
-  it('akzeptiert Kommentare an einem einzelnen Satz (auch innerhalb eines Blocks)', () => {
-    const set = { kind: 'set', id: 's1', description: '8x100 Freistil', distance: 100, reps: 8, intensity: 'ga1', restSec: 20, comments: [{ id: 'c1', authorId: TRAINER_ID, authorName: 'Mara Vogel', text: 'War heute sehr anstrengend.', createdAt: now }] };
-    expect(SetEntrySchema.safeParse(set).success).toBe(true);
-    const block = {
-      kind: 'block', id: 'b1', label: 'Hauptserie', repeatCount: 3,
-      sets: [{ kind: 'set', id: 's1', description: 'Sprint', distance: 25, reps: 2, intensity: 'sprint', restSec: 30, comments: [{ id: 'c2', authorId: TRAINER_ID, authorName: 'Trainer X', text: 'Guter Antritt.', createdAt: now }] }],
-    };
-    expect(SetEntrySchema.safeParse(block).success).toBe(true);
-  });
-
   // Regressionstest für Befund S7 (Code-Review).
-  it('lehnt mehr als 200 Kommentare an einem Satz sowie mehr als 50 Sätze in einem Block ab', () => {
-    const manyComments = Array.from({ length: 201 }, (_, i) => ({ id: `c${i}`, authorId: TRAINER_ID, authorName: 'X', text: 'x', createdAt: now }));
-    const setWithTooManyComments = { kind: 'set', id: 's1', description: 'X', distance: 100, reps: 1, intensity: 'ga1', restSec: 0, comments: manyComments };
-    expect(SetEntrySchema.safeParse(setWithTooManyComments).success).toBe(false);
-
+  it('lehnt mehr als 50 Sätze in einem Block ab', () => {
     const oneSet = { kind: 'set', id: 's1', description: 'X', distance: 100, reps: 1, intensity: 'ga1', restSec: 0 };
     const blockWithTooManySets = { kind: 'block', id: 'b1', label: 'X', repeatCount: 1, sets: Array(51).fill(oneSet) };
     expect(SetEntrySchema.safeParse(blockWithTooManySets).success).toBe(false);
@@ -439,41 +423,30 @@ describe('PlanSchema', () => {
   it('akzeptiert einen Trainingsplan mit mehreren Tagen', () => {
     const plan = {
       id: ATHLETE_ID, clubId: CLUB_ID, name: 'Trainingswoche', weekStart: now, groupId: null, status: 'aktiv',
-      days: [{ date: now, sets: [] }], comments: [],
+      days: [{ date: now, sets: [] }],
       createdAt: now, updatedAt: now,
     };
     expect(PlanSchema.safeParse(plan).success).toBe(true);
   });
   it('lehnt einen ungültigen Status ab', () => {
-    const plan = { id: ATHLETE_ID, clubId: CLUB_ID, name: 'X', weekStart: now, groupId: null, status: 'gelöscht', days: [], comments: [], createdAt: now, updatedAt: now };
+    const plan = { id: ATHLETE_ID, clubId: CLUB_ID, name: 'X', weekStart: now, groupId: null, status: 'gelöscht', days: [], createdAt: now, updatedAt: now };
     expect(PlanSchema.safeParse(plan).success).toBe(false);
   });
-  it('akzeptiert Kommentare auf Planebene', () => {
-    const plan = {
-      id: ATHLETE_ID, clubId: CLUB_ID, name: 'Trainingswoche', weekStart: now, groupId: null, status: 'aktiv',
-      days: [], comments: [{ id: 'c1', authorId: TRAINER_ID, authorName: 'Trainer X', text: 'Guter Wochenaufbau.', createdAt: now }],
-      createdAt: now, updatedAt: now,
-    };
-    expect(PlanSchema.safeParse(plan).success).toBe(true);
-  });
-
   // Regressionstest für Befund S7 (Code-Review): "days" trägt trotz des
   // Feldnamens "weekStart" bewusst ein großzügigeres Limit als 7 — die
   // Oberfläche begrenzt die Anzahl der Tage selbst nicht hart (siehe
   // apps/web/js/modules/plans.js), ein mehrwöchiger Plan bleibt also gültig.
-  it('lehnt mehr als 60 Tage sowie mehr als 500 Kommentare ab', () => {
+  it('lehnt mehr als 60 Tage ab', () => {
     const base = { id: ATHLETE_ID, clubId: CLUB_ID, name: 'X', weekStart: now, groupId: null, status: 'aktiv', createdAt: now, updatedAt: now };
     const oneDay = { date: now, sets: [] };
-    expect(PlanSchema.safeParse({ ...base, days: Array(61).fill(oneDay), comments: [] }).success).toBe(false);
-    expect(PlanSchema.safeParse({ ...base, days: Array(60).fill(oneDay), comments: [] }).success).toBe(true);
-    const manyComments = Array.from({ length: 501 }, (_, i) => ({ id: `c${i}`, authorId: TRAINER_ID, authorName: 'X', text: 'x', createdAt: now }));
-    expect(PlanSchema.safeParse({ ...base, days: [], comments: manyComments }).success).toBe(false);
+    expect(PlanSchema.safeParse({ ...base, days: Array(61).fill(oneDay) }).success).toBe(false);
+    expect(PlanSchema.safeParse({ ...base, days: Array(60).fill(oneDay) }).success).toBe(true);
   });
 
   // Issue #72 (docs/Plans/beckenlaenge-regeneration-plan.md): Beckenlänge
   // je Trainingstag, unabhängig zwischen Tagen desselben Plans wählbar.
   it('akzeptiert je Trainingstag eine eigene poolLength, Alt-Tage ohne Feld bleiben gültig', () => {
-    const base = { id: ATHLETE_ID, clubId: CLUB_ID, name: 'X', weekStart: now, groupId: null, status: 'aktiv', comments: [], createdAt: now, updatedAt: now };
+    const base = { id: ATHLETE_ID, clubId: CLUB_ID, name: 'X', weekStart: now, groupId: null, status: 'aktiv', createdAt: now, updatedAt: now };
     const plan = {
       ...base,
       days: [
@@ -492,7 +465,7 @@ describe('PlanSchema', () => {
   });
 
   it('lehnt einen ungültigen poolLength-Wert bei einem Trainingstag ab', () => {
-    const base = { id: ATHLETE_ID, clubId: CLUB_ID, name: 'X', weekStart: now, groupId: null, status: 'aktiv', comments: [], createdAt: now, updatedAt: now };
+    const base = { id: ATHLETE_ID, clubId: CLUB_ID, name: 'X', weekStart: now, groupId: null, status: 'aktiv', createdAt: now, updatedAt: now };
     expect(PlanSchema.safeParse({ ...base, days: [{ date: now, poolLength: '25yd', sets: [] }] }).success).toBe(false);
   });
 });

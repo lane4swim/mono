@@ -35,7 +35,8 @@ export type ForeignKeyRef =
   | { kind: 'entity'; field: string; store: EntityStoreName } // referenziert einen der zehn fachlichen Sync-Stores
   | { kind: 'user'; field: string } // referenziert users.id (kein Sync-Store, siehe findClubIdForUser())
   | { kind: 'userList'; field: string } // wie 'user', aber ein Array von users.id (z. B. Group.trainerIds)
-  | { kind: 'nested'; store: EntityStoreName; extract: (payload: Record<string, unknown>) => string[] }; // mehrere Referenzen verschachtelt im Payload, siehe collectSetExerciseIds() unten
+  | { kind: 'nested'; store: EntityStoreName; extract: (payload: Record<string, unknown>) => string[] } // mehrere Referenzen verschachtelt im Payload, siehe collectSetExerciseIds() unten
+  | { kind: 'polymorphic'; storeField: string; idField: string }; // Ziel-Store steht selbst im Payload (Comment.targetStore/targetId)
 
 // Anders als athleteId/groupId/competitionId/assignedTrainerId ist
 // exerciseId NICHT top-level, sondern steckt in jedem einzelnen Satz einer
@@ -99,6 +100,11 @@ const FOREIGN_KEY_REFS: Partial<Record<EntityStoreName, ForeignKeyRef[]>> = {
   ],
   calendarEntries: [
     { kind: 'entity', field: 'groupId', store: 'groups' },
+  ],
+  // Das kommentierte Ziel muss im eigenen Verein existieren. Welche Stores
+  // als Ziel zulässig sind, legt CommentSchema.targetStore fest.
+  comments: [
+    { kind: 'polymorphic', storeField: 'targetStore', idField: 'targetId' },
   ],
 };
 
@@ -171,6 +177,12 @@ export async function assertForeignKeysWithinClub(
   for (const ref of refs) {
     if (ref.kind === 'nested') {
       for (const value of ref.extract(payload)) addEntityId(ref.store, value);
+      continue;
+    }
+    if (ref.kind === 'polymorphic') {
+      const targetStore = payload[ref.storeField];
+      const targetId = payload[ref.idField];
+      if (typeof targetStore === 'string' && typeof targetId === 'string') addEntityId(targetStore as EntityStoreName, targetId);
       continue;
     }
     if (ref.kind === 'userList') {

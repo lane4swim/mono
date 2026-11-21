@@ -459,6 +459,35 @@ describe('syncService.push() mit PrismaSyncGateway (Issue #93)', () => {
   });
 });
 
+describe('syncService mit PrismaSyncGateway — Store "comments" (Issue #141)', () => {
+  const service = createSyncService({ gateway, pullSettleMs: 0 });
+
+  it('Athlet:in kommentiert einen Plan, bearbeitet den Kommentar, Trainer:in löscht ihn moderierend', async () => {
+    const club = await createTestClub();
+    const plan = await prisma.plan.create({ data: { clubId: club.id, name: 'Woche', weekStart: new Date(), days: [] } });
+    const athlete = { userId: randomUUID(), clubId: club.id, roles: ['athlete'] as const, athleteId: null, enabledModules: MODULE_KEYS };
+    const coach = { userId: randomUUID(), clubId: club.id, roles: ['trainer'] as const, athleteId: null, enabledModules: MODULE_KEYS };
+    const id = randomUUID();
+    const event = (action: 'create' | 'update' | 'delete', payload: Record<string, unknown> | null) => {
+      const now = new Date().toISOString();
+      return { id: randomUUID(), store: 'comments', entityId: id, action, payload: payload && { ...payload, createdAt: now, updatedAt: now }, clientUpdatedAt: now };
+    };
+    const comment = { id, clubId: club.id, targetStore: 'plans', targetId: plan.id, entryId: 'set-1', authorId: athlete.userId, authorName: 'Mara', text: 'Zu kurz', editedAt: null };
+
+    expect((await service.push([event('create', comment)], athlete))[0]!.status).toBe('applied');
+    const editedAt = new Date().toISOString();
+    expect((await service.push([event('update', { ...comment, text: 'Doch gut', editedAt })], athlete))[0]!.status).toBe('applied');
+    expect(await prisma.comment.findUnique({ where: { id } })).toMatchObject({ text: 'Doch gut', entryId: 'set-1', editedAt: new Date(editedAt) });
+    expect((await service.push([event('update', { ...comment, text: 'Fremd' })], coach))[0]).toMatchObject({ status: 'error', code: 'comment_not_permitted' });
+
+    const pulled = await service.pull({}, athlete);
+    expect(pulled.changes.filter((c) => c.store === 'comments').map((c) => c.entityId)).toEqual([id]);
+
+    expect((await service.push([event('delete', null)], coach))[0]!.status).toBe('applied');
+    expect((await prisma.comment.findUnique({ where: { id } }))?.deletedAt).not.toBeNull();
+  });
+});
+
 describe('PrismaSyncGateway.findAthleteAccountState()', () => {
   async function seedAthlete() {
     const club = await createTestClub(prisma);
