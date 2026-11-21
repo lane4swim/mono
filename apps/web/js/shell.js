@@ -314,12 +314,17 @@ const DEFAULT_ROUTE_BY_ROLE = { superadmin: 'usermgmt', referee: 'kampfrichter',
 // dem Kampfrichter-Modul. Trägt das Konto zusätzlich eine andere Rolle
 // (z. B. ['trainer','referee']), bleibt regulär deren Startseite
 // maßgeblich (visibleModules()[0] liefert dann bereits das Dashboard).
+//
+// "parent" ebenso, auch zusammen mit "referee" (Issue #144: Eltern, die
+// Kampfrichter:in sind, bekommen die Rolle zusätzlich) — beide Rollen
+// haben kein Dashboard, die Übersicht der Kinder ist dann die Startseite.
 export function defaultModuleFor(roles) {
   const enabledModules = getEnabledModules();
+  const parentStart = roles.includes('parent') && roles.every((r) => r === 'parent' || r === 'referee');
   const preferredRole = roles.includes('superadmin')
     ? 'superadmin'
     : (roles.length === 1 && roles[0] === 'referee' ? 'referee'
-      : (roles.length === 1 && roles[0] === 'parent' ? 'parent' : ''));
+      : (parentStart ? 'parent' : ''));
   const preferred = getModule(DEFAULT_ROUTE_BY_ROLE[preferredRole] || '');
   if (preferred && isModuleVisible(preferred, roles, enabledModules)) return preferred;
   // Mit gewählter Ansicht (views.js) deren Startseite statt des ersten

@@ -18,9 +18,10 @@
 //                 Übersicht (siehe modules/parents). Technisch mit jeder
 //                 anderen Nicht-superadmin-Rolle kombinierbar (keine
 //                 harte Schema-Sperre, siehe Plan Abschnitt 3.3), in der
-//                 Praxis aber eigenständig (wer bereits trainer/admin
-//                 ist, sieht die Daten des eigenen Kindes ohnehin über
-//                 die reguläre Team-Sicht).
+//                 Praxis eigenständig (wer bereits trainer/admin ist,
+//                 sieht die Daten des eigenen Kindes ohnehin über die
+//                 reguläre Team-Sicht) oder zusammen mit "referee" für
+//                 Eltern mit Kampfrichter-Amt (Issue #144).
 import { z } from 'zod';
 
 export const RoleSchema = z.enum(['superadmin', 'admin', 'trainer', 'athlete', 'referee', 'parent']);

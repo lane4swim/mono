@@ -26,7 +26,11 @@ export interface PushRoutesOptions {
 // eingeschränkten) Datenzugriff dieser Rolle. Kein aktiver Push-Auslöser
 // für "parent" in Phase 2 (siehe Plan Abschnitt 3.6), aber die
 // Abo-Infrastruktur selbst bleibt rollenoffen für eine spätere Erweiterung.
-const PUSH_ROLES = ['trainer', 'admin', 'athlete', 'parent'] as const;
+// "referee" ist Hauptempfänger:in der Einsatz-Benachrichtigungen
+// (referees.notify.ts) und der Erinnerungen an ablaufende Qualifikationen
+// (jobs/notifyExpiringQualifications.ts), siehe Issue #143. Ausgeschlossen
+// bleibt nur "superadmin" (kein Verein, keine Auslöser).
+const PUSH_ROLES = ['trainer', 'admin', 'athlete', 'parent', 'referee'] as const;
 
 export async function pushRoutes(app: FastifyInstance, opts: PushRoutesOptions) {
   const { subscriptions, vapidPublicKey } = opts;

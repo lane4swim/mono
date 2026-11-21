@@ -85,15 +85,19 @@ export const calendarModule = {
     const user = getCurrentUser();
     const types = availableTypes();
     if (isParentMode()) return renderParent(container, isCurrent, user, types, params);
-    const [data, remote] = await Promise.all([loadLocal(types), loadRemote(types)]);
-    if (!isCurrent()) return;
-    const staff = isTrainerOrAdmin();
-    const ctx = personalContext({ user, staff, athletes: data.athletes, groups: data.groups });
-    const state = initialState(user, types, params, staff);
-    const reload = () => calendarModule.render(container, [state.view, state.anchor]);
-    renderPage(container, { data: { ...data, ...remote.data }, remoteFailed: remote.failed, types, ctx, state, staff, reload });
+    return renderOwn(container, isCurrent, user, types, params);
   },
 };
+
+async function renderOwn(container, isCurrent, user, types, params) {
+  const [data, remote] = await Promise.all([loadLocal(types), loadRemote(types)]);
+  if (!isCurrent()) return;
+  const staff = isTrainerOrAdmin();
+  const ctx = personalContext({ user, staff, athletes: data.athletes, groups: data.groups });
+  const state = initialState(user, types, params, staff);
+  const reload = () => calendarModule.render(container, [state.view, state.anchor]);
+  renderPage(container, { data: { ...data, ...remote.data }, remoteFailed: remote.failed, types, ctx, state, staff, reload });
+}
 
 // ---- Verfügbare Termintypen ------------------------------------------------
 
@@ -113,19 +117,39 @@ export function isParentMode() {
 // oder Kampfrichtereinsätze).
 const PARENT_TYPES = [...ENTRY_KINDS, 'competition', 'training', 'session'];
 
+// Eigene Qualifikationen und Kampfrichtereinsätze — beide über REST
+// ("listMy…"), unabhängig vom Sync. Gilt auch im Eltern-Modus: ein
+// Elternteil mit zusätzlicher Rolle "referee" (Issue #144) sieht neben den
+// Terminen der Kinder seine eigenen Einsätze und Qualifikationsfristen.
+function ownRemoteTypes() {
+  // demo.html hat kein Backend dahinter (Issue #56).
+  if (IS_DEMO) return [];
+  const out = [];
+  const referee = routeVisible('kampfrichter') && hasRole('referee');
+  // Kampfrichter:innen sehen die allgemeine Qualifikationsseite nicht
+  // (Rollen-Gate admin/trainer/athlete), ihre eigenen Qualifikationen aber
+  // im Kampfrichter-Modul — deren Fristen gehören daher auch in den
+  // Kalender, sofern das Qualifikationspaket gebucht ist (die API prüft das
+  // ebenfalls, qualifications.route.ts: requireQualificationsModule).
+  if (routeVisible('qualifications') || (referee && getEnabledModules().includes('qualifications'))) out.push('qualification');
+  if (referee) out.push('referee');
+  return out;
+}
+
 export function availableTypes() {
   const roles = getRoles();
   const has = (...r) => r.some((x) => roles.includes(x));
-  if (isParentMode()) return EVENT_TYPES.filter((type) => PARENT_TYPES.includes(type));
+  if (isParentMode()) {
+    const own = ownRemoteTypes();
+    return EVENT_TYPES.filter((type) => PARENT_TYPES.includes(type) || own.includes(type));
+  }
   const out = [];
   // Wettkämpfe sind für Athlet:innen kein eigener Menüpunkt, ihre
   // Meldungen gehören aber in den Kalender — daher Paket statt Route
   // prüfen; der Termin erscheint dann ohne Sprung ins Fachmodul.
   if (getEnabledModules().includes('competitions') && has('trainer', 'admin', 'athlete')) out.push('competition');
   if (routeVisible('actionitems')) out.push('deadline');
-  // Beide über REST — demo.html hat kein Backend dahinter (Issue #56).
-  if (!IS_DEMO && routeVisible('qualifications')) out.push('qualification');
-  if (!IS_DEMO && routeVisible('kampfrichter') && hasRole('referee')) out.push('referee');
+  out.push(...ownRemoteTypes());
   if (routeVisible('plans')) out.push('training');
   if (routeVisible('sessions') || routeVisible('attendance')) out.push('session');
   // Saisonplanung: an kein Paket gebunden, aber nur für Rollen mit Sync-
@@ -161,6 +185,8 @@ function openRouteFor(event) {
   if (routeVisible(routeId)) return [routeId, ...rest];
   // Vereinsverwaltung ohne "Einheiten & Feedback": Anwesenheitsstatistik.
   if (routeId === 'sessions' && routeVisible('attendance')) return ['attendance'];
+  // Kampfrichter:innen ohne Qualifikationsseite: Status im Kampfrichter-Modul.
+  if (routeId === 'qualifications' && routeVisible('kampfrichter') && hasRole('referee')) return ['kampfrichter'];
   return null;
 }
 
@@ -209,8 +235,9 @@ async function renderParent(container, isCurrent, user, types, params) {
   const state = initialState(user, types, params, false);
   const loaded = parentFetchRange(state.anchor);
   let children;
+  let remote;
   try {
-    ({ children } = await api.getParentCalendar(loaded));
+    [{ children }, remote] = await Promise.all([api.getParentCalendar(loaded), loadRemote(types)]);
   } catch (err) {
     if (!isCurrent()) return;
     container.appendChild(el('div', { class: 'empty-state' }, [el('h3', {}, t('common.somethingWentWrong')), el('p', {}, api.describeError(err))]));
@@ -218,6 +245,10 @@ async function renderParent(container, isCurrent, user, types, params) {
   }
   if (!isCurrent()) return;
   if (children.length === 0) {
+    // Noch kein Kind verknüpft, aber eigene Termine (z. B. als
+    // Kampfrichter:in): die eigene Ansicht statt eines leeren Hinweises.
+    const own = ownRemoteTypes();
+    if (own.length > 0) return renderOwn(container, isCurrent, user, types.filter((type) => own.includes(type)), params);
     container.appendChild(el('div', { class: 'empty-state' }, [el('h3', {}, t('parentView.noneLinkedTitle')), el('p', {}, t('parentView.noneLinkedMsg'))]));
     return;
   }
@@ -226,12 +257,13 @@ async function renderParent(container, isCurrent, user, types, params) {
   const data = {
     athletes: [child.athlete], groups: child.groups, calendarEntries: child.calendarEntries, plans: child.plans,
     sessions: child.sessions, competitions: child.competitions, entries: child.entries,
+    ...remote.data,
   };
   // Ausgewertet wie der Kalender der Athlet:in selbst ("Meine Termine").
   const ctx = personalContext({ user: { id: user?.id, athleteId: child.athlete.id }, staff: false, athletes: data.athletes, groups: data.groups });
   const reload = () => calendarModule.render(container, [state.view, state.anchor]);
   renderPage(container, {
-    data, remoteFailed: false, types, ctx, state, staff: false, reload,
+    data, remoteFailed: remote.failed, types, ctx, state, staff: false, reload,
     parent: {
       children, child, loaded,
       selectChild: (id) => { writePref(user, 'child', id); reload(); },
