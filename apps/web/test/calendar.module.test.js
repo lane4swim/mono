@@ -127,7 +127,7 @@ describe('calendarModule', () => {
     session.enabledModules = MODULE_KEYS.filter((k) => k !== 'competitions' && k !== 'plans');
     expect(availableTypes()).toEqual([...SEASON, 'deadline', 'qualification', 'trainingSlot', 'session']);
     loginAs('referee');
-    expect(availableTypes()).toEqual(['referee']);
+    expect(availableTypes()).toEqual(['qualification', 'referee']);
     session.demo = true;
     expect(availableTypes()).toEqual([]);
   });
@@ -228,6 +228,26 @@ describe('calendarModule', () => {
     expect(chipTitles(c.querySelector('.cal-month'))).toContain('Plan Leistung');
   });
 
+  it('Kampfrichter:in: Fristen eigener Qualifikationen erscheinen und führen ins Kampfrichter-Modul', async () => {
+    loginAs('referee');
+    apiMocks.listMyQualifications.mockResolvedValue({ qualifications: [{ id: 'q1', type: 'kampfrichter', expiresOn: '2026-10-30T00:00:00.000Z', renewalCourseOrganizedOn: null, note: '' }] });
+    expect(availableTypes()).toContain('qualification');
+    const c = await render();
+    const chip = c.querySelector('.cal-month .cal-chip.cal-type-qualification');
+    expect(chip).not.toBeNull();
+    expect(chip.tagName).toBe('BUTTON');
+    chip.click();
+    expect(location.hash).toBe('#/kampfrichter');
+  });
+
+  it('Kampfrichter:in ohne gebuchtes Qualifikationspaket: keine Qualifikationsfristen', async () => {
+    loginAs('referee');
+    session.enabledModules = MODULE_KEYS.filter((k) => k !== 'qualifications');
+    expect(availableTypes()).not.toContain('qualification');
+    await render();
+    expect(apiMocks.listMyQualifications).not.toHaveBeenCalled();
+  });
+
   it('Demo-Modus ruft keine REST-Endpunkte auf', async () => {
     loginAs('trainer');
     session.demo = true;
@@ -304,7 +324,7 @@ describe('calendarModule', () => {
       { roles: ['trainer', 'athlete'], types: [...SEASON, 'competition', 'deadline', 'qualification', 'trainingSlot', 'training', 'session'], edit: true, teams: true, slot: 'plan' },
       { roles: ['admin', 'referee'], types: [...SEASON, 'competition', 'deadline', 'qualification', 'referee', 'trainingSlot', 'session'], edit: true, teams: true, slot: 'edit' },
       // Reine Kampfrichter:innen synchronisieren nicht — nur eigene Einsätze.
-      { roles: ['referee'], types: ['referee'], edit: false, teams: false, slot: null },
+      { roles: ['referee'], types: ['qualification', 'referee'], edit: false, teams: false, slot: null },
     ];
 
     for (const row of MATRIX) {

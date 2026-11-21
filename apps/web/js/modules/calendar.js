@@ -125,8 +125,14 @@ function ownRemoteTypes() {
   // demo.html hat kein Backend dahinter (Issue #56).
   if (IS_DEMO) return [];
   const out = [];
-  if (routeVisible('qualifications')) out.push('qualification');
-  if (routeVisible('kampfrichter') && hasRole('referee')) out.push('referee');
+  const referee = routeVisible('kampfrichter') && hasRole('referee');
+  // Kampfrichter:innen sehen die allgemeine Qualifikationsseite nicht
+  // (Rollen-Gate admin/trainer/athlete), ihre eigenen Qualifikationen aber
+  // im Kampfrichter-Modul — deren Fristen gehören daher auch in den
+  // Kalender, sofern das Qualifikationspaket gebucht ist (die API prüft das
+  // ebenfalls, qualifications.route.ts: requireQualificationsModule).
+  if (routeVisible('qualifications') || (referee && getEnabledModules().includes('qualifications'))) out.push('qualification');
+  if (referee) out.push('referee');
   return out;
 }
 
@@ -179,6 +185,8 @@ function openRouteFor(event) {
   if (routeVisible(routeId)) return [routeId, ...rest];
   // Vereinsverwaltung ohne "Einheiten & Feedback": Anwesenheitsstatistik.
   if (routeId === 'sessions' && routeVisible('attendance')) return ['attendance'];
+  // Kampfrichter:innen ohne Qualifikationsseite: Status im Kampfrichter-Modul.
+  if (routeId === 'qualifications' && routeVisible('kampfrichter') && hasRole('referee')) return ['kampfrichter'];
   return null;
 }
 
