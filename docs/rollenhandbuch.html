@@ -328,6 +328,7 @@
           <div><dt>Grenze</dt><dd>Die <code class="mono">clubId</code> einer ausgestellten Einladung wird serverseitig erzwungen — ein Admin kann nicht in einen fremden Verein einladen, selbst wenn er sie im Request angibt.</dd></div>
           <div><dt>Zusatzrecht ggü. Trainer</dt><dd>Nur für Admins: <em>Nutzerverwaltung</em>, <em>Audit-Log</em>, <em>Anwesenheitsstatistik</em> und die Verwaltung im <em>Kampfrichter</em>-Modul.</dd></div>
           <div><dt>Ohne Trainer-Rolle nicht sichtbar</dt><dd>Trainingspläne, Vorlagen, Abschnitts-Vorlagen, Übungskatalog, Einheiten &amp; Feedback — wer als Admin auch plant, braucht zusätzlich die Rolle Trainer.</dd></div>
+          <div><dt>Datenzugriff Trainingsplanung</dt><dd>Admin ist Vereinsverwaltung (Issue #142): Pläne und Einheiten nur lesend (für Anwesenheitsstatistik, Statistiken inkl. RPE, Dashboard und Athletenseite), Vorlagen, Zyklen, Übungen und Abschnitts-Vorlagen gar nicht. Fremde Kommentare löschen (moderieren) nur Trainer:innen.</dd></div>
         </dl>
       </div>
 
@@ -596,8 +597,8 @@ erDiagram
         <div class="entity"><div class="ename">Athlete</div><div class="edesc">Athlet:innen-Stammdatensatz (Name, Geburtsdatum, Gruppe, Status). Unabhängig vom optionalen <code>User</code>-Konto.</div></div>
         <div class="entity"><div class="ename">Exercise</div><div class="edesc">Übungskatalog-Eintrag (Kategorie, Lage, Standarddistanz, Ausrüstung).</div></div>
         <div class="entity"><div class="ename">Template</div><div class="edesc">Wiederverwendbare Vorlage; <code>sets</code> als JSON — Mix aus Einzelsätzen und Wiederholungsblöcken, keine eigene Kopie beim Einsatz in einem Plan.</div></div>
-        <div class="entity"><div class="ename">Plan</div><div class="edesc">Wochenplan je Gruppe; <code>days</code> als JSON-Array (Datum + Sets). Schreiben nur trainer/admin.</div></div>
-        <div class="entity"><div class="ename">Comment</div><div class="edesc">Kommentar als eigener Datensatz (Issue #141) mit Ziel <code>targetStore</code>/<code>targetId</code> (Plan, Übung, Vorlage, Abschnitts-Vorlage, Ergebnis), bei Sätzen zusätzlich <code>entryId</code>. Anlegen jede Team-Rolle im eigenen Namen, bearbeiten nur die Autor:in, löschen die Autor:in oder trainer/admin.</div></div>
+        <div class="entity"><div class="ename">Plan</div><div class="edesc">Wochenplan je Gruppe; <code>days</code> als JSON-Array (Datum + Sets). Schreiben nur trainer; admin und athlete lesen.</div></div>
+        <div class="entity"><div class="ename">Comment</div><div class="edesc">Kommentar als eigener Datensatz (Issue #141) mit Ziel <code>targetStore</code>/<code>targetId</code> (Plan, Übung, Vorlage, Abschnitts-Vorlage, Ergebnis), bei Sätzen zusätzlich <code>entryId</code>. Anlegen jede Team-Rolle im eigenen Namen, bearbeiten nur die Autor:in, löschen die Autor:in oder trainer (Moderation).</div></div>
         <div class="entity"><div class="ename">TrainingSession</div><div class="edesc">Durchgeführte Einheit; <code>attendance</code> als JSON-Array — ein Eintrag je Athlet:in mit Anwesenheit, RPE und Notiz.</div></div>
         <div class="entity"><div class="ename">Competition</div><div class="edesc">Wettkampf: Ort, Datum, Bahnlänge (<code>LCM</code>/<code>SCM</code>).</div></div>
         <div class="entity"><div class="ename">StartlistEntry</div><div class="edesc">Meldung zu einem Wettkampf: Strecke, Lauf, Bahn, Meldezeit.</div></div>

@@ -15,6 +15,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 vi.mock('../js/demoMode.js', () => ({ IS_DEMO: false }));
 vi.mock('../js/state.js', () => ({
   isTrainerOrAdmin: () => true,
+  hasRole: (role) => role === 'trainer',
   isAthleteScoped: () => false,
   isAdminOrSuperAdmin: () => false,
   getCurrentUser: () => null,

@@ -164,9 +164,10 @@ function canEditEntries() {
 }
 
 // Unverplante Trainingszeit -> neuer Plan, sofern die Person Pläne anlegen
-// darf (plans-Route sichtbar + Staff, wie die "Plan erstellen"-Schaltfläche).
+// darf (plans-Route sichtbar + Rolle trainer, wie die "Plan erstellen"-
+// Schaltfläche; admin schreibt keine Pläne, Issue #142).
 function canCreatePlan() {
-  return isTrainerOrAdmin() && routeVisible('plans');
+  return hasRole('trainer') && routeVisible('plans');
 }
 
 function createPlanFor(event) {

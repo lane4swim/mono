@@ -11,7 +11,7 @@ import { field, textInput, selectInput, dateInput, formActions } from '../forms.
 import { cloneItems } from './setEditor.js';
 import { isoAddDays, startOfWeek, todayISO, toIsoDateTime } from '../dates.js';
 import { navigate } from '../router.js';
-import { isTrainerOrAdmin } from '../state.js';
+import { hasRole } from '../state.js';
 import { t } from '../i18n.js';
 
 // dayOfWeek 0..6 -> Übersetzungsschlüssel unter i18n "weekdays" (Montag = 0,
@@ -51,7 +51,8 @@ export async function renderCyclesRoute(container, isCurrent, params) {
 }
 
 function renderCyclesList(container, cycles, templates) {
-  const canManage = isTrainerOrAdmin();
+  // Zyklen pflegen nur Trainer:innen (sync.permissions.ts, Issue #142).
+  const canManage = hasRole('trainer');
   const wrap = el('div');
   wrap.appendChild(el('button', { class: 'btn btn-ghost btn-sm mb-16', onclick: () => navigate('plans') }, t('planCycles.backToPlans')));
   wrap.appendChild(el('div', { class: 'page-head' }, [
@@ -84,7 +85,8 @@ function renderCycleDetail(container, cycleId, cycles, templates, groups) {
     return;
   }
 
-  const canManage = isTrainerOrAdmin();
+  // Zyklen pflegen nur Trainer:innen (sync.permissions.ts, Issue #142).
+  const canManage = hasRole('trainer');
   const wrap = el('div');
   wrap.appendChild(el('button', { class: 'btn btn-ghost btn-sm mb-16', onclick: () => navigate('plans', 'cycles') }, t('planCycles.backToList')));
   wrap.appendChild(el('div', { class: 'page-head' }, [

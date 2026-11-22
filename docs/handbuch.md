@@ -59,9 +59,9 @@ Kampfrichter:in. Sichtbar ist dann alles, was mindestens eine der Rollen darf.
 | Rolle | Aufgabe |
 |---|---|
 | **Superadmin** | Betreibt die Plattform: legt Vereine an, lädt deren ersten Admin ein, schaltet Module frei. Eigene Oberfläche unter `/admin`. Gehört zu keinem Verein. |
-| **Admin** | Verwaltet einen Verein: Einladungen, Rollen, Athletenprofile, Vereinsangaben, Qualifikationen, Audit-Log. |
+| **Admin** | Verwaltet einen Verein: Einladungen, Rollen, Athletenprofile, Vereinsangaben, Qualifikationen, Audit-Log. Plant kein Training: Pläne und Einheiten sieht die Rolle nur in Dashboard, Statistiken und Anwesenheitsstatistik (lesend), Vorlagen und Übungskatalog gar nicht. Wer verwaltet und trainiert, bekommt zusätzlich die Rolle Trainer:in. |
 | **Trainer:in** | Trainingsplanung, Einheiten und Feedback, Wettkämpfe, Zeiten, Statistiken. Sieht alle Athlet:innen des Vereins. |
-| **Athlet:in** | Sieht eigene Zeiten, Pläne der eigenen Gruppe, eigene Einheiten und Handlungsfelder. Optional mit einem Athletenprofil verknüpft. |
+| **Athlet:in** | Sieht eigene Zeiten, Pläne der eigenen Gruppe (lesend, mit Kommentarfunktion), eigene Einheiten und Handlungsfelder. Optional mit einem Athletenprofil verknüpft. |
 | **Kampfrichter:in** | Pflegt eigene Wettkampfeinsätze und sieht den eigenen Kampfrichter-Qualifikationsstatus. |
 | **Erziehungsberechtigte:r** | Sieht eine eingeschränkte Übersicht der verknüpften Kinder (siehe [10.3](#103-eltern-zugang)). |
 
@@ -90,6 +90,10 @@ Welche Menüpunkte welche Rolle sieht:
 | Mein Profil, Rechtliches | ● | ● | ● | ● | ● |
 
 \* zubuchbares Modul — nur sichtbar, wenn der Verein es gebucht hat.
+
+Trainingspläne, Zyklen, Vorlagen, Abschnitts-Vorlagen, Übungen und Einheiten
+**bearbeiten** ausschließlich Trainer:innen — auch ein Konto, das Admin und
+Athlet:in zugleich ist, sieht Pläne nur lesend.
 
 ## 3. Zugang, Anmeldung und Konto
 
@@ -143,7 +147,8 @@ befristeten, einmal verwendbaren Einladungslink:
 - **Trainer:innen/Admins:** aktive Athlet:innen und Gruppen, nächster
   Wettkampf, offene Handlungsfelder, kommende Trainingseinheiten mit geplanten
   Metern, letzte Einheiten mit Anwesenheit und Ø RPE, Hinweis auf auffällig
-  gesunkene Anwesenheit, neueste Ankündigungen.
+  gesunkene Anwesenheit, neueste Ankündigungen. Admins ohne Trainer-Rolle
+  sehen Pläne und Einheiten hier nur als Übersicht, ohne „Plan erstellen“.
 - **Athlet:innen:** persönliche Bestzeiten, nächstes Training, offene Ziele,
   anstehende Wettkämpfe.
 
@@ -173,7 +178,7 @@ wechseln zwischen **Meine Termine** (betreute Gruppen, zugewiesene Fristen) und
 Hallenbadschließungen und Trainingslager für den Verein oder eine Gruppe sowie
 regelmäßige Trainingszeiten (Wochentage, Uhrzeit, Gültigkeitszeitraum, Ausfall
 während Ferien oder Schließungen). Ein Klick auf einen Trainingstag ohne Plan
-legt direkt einen Plan an.
+legt direkt einen Plan an (nur Trainer:innen).
 
 ## 5. Athlet:innen und Gruppen
 
@@ -205,28 +210,29 @@ legt direkt einen Plan an.
 - Intensitätsstufen: Regeneration, Locker (GA2), Grundlage (GA1), Schwelle,
   Renntempo, Sprint/Maximal.
 - Automatisch berechnete Gesamtmeter und geplante Gesamtzeit.
-- Pläne duplizieren, aus Vorlagen befüllen, Übungen direkt im Editor
-  einsehen und bearbeiten.
+- Pläne anlegen, bearbeiten, duplizieren, löschen, aus Vorlagen befüllen und
+  Übungen direkt im Editor einsehen und bearbeiten — das alles nur
+  Trainer:innen.
 - **Kommentare** am ganzen Plan und an einzelnen Sätzen — auch von
   Athlet:innen, die den Plan selbst nicht bearbeiten. Eigene Kommentare lassen
-  sich bearbeiten und löschen; Trainer:innen und Admins können jeden Kommentar
-  entfernen.
+  sich bearbeiten (danach als „bearbeitet“ markiert) und löschen.
+  Trainer:innen können jeden Kommentar entfernen; Admins moderieren nicht.
 - **Drucken / als PDF speichern:** druckoptimierte Ansicht für den ganzen Plan
   oder einen einzelnen Tag, funktioniert offline.
-- **Export/Import (JSON):** einzelne Pläne zwischen Trainer:innen oder Vereinen
+- **Export/Import (JSON, nur Trainer:innen):** einzelne Pläne zwischen Trainer:innen oder Vereinen
   austauschen; der Export enthält keine Kommentare oder Vereinsdaten, fehlende
   Übungen werden beim Import im Katalog angelegt.
 - Athlet:innen sehen die Pläne ihrer Gruppe lesend.
 
 ### 6.2 Trainingsmodus
 Für den Beckenrand: führt Tag für Tag durch den Plan, Sätze lassen sich
-abhaken, der Bildschirm bleibt eingeschaltet. Nur für Trainer:innen/Admins.
+abhaken, der Bildschirm bleibt eingeschaltet. Nur für Trainer:innen.
 
 ### 6.3 Vorlagen-Zyklen
 Ein Zyklus bündelt mehrere Wochen aus Vorlagen, z. B. für die
 Wettkampfvorbereitung. Beim **Anwenden** wählt man Startdatum und Zielgruppe;
 Lane 1 erzeugt daraus die einzelnen Wochenpläne. Wochen lassen sich duplizieren
-und entfernen.
+und entfernen. Zyklen pflegen und anwenden nur Trainer:innen.
 
 ### 6.4 Vorlagen, Abschnitts-Vorlagen und Übungskatalog
 - **Vorlagen:** wiederverwendbare Trainingseinheiten mit Sätzen, Blöcken und
@@ -318,7 +324,7 @@ Zeiten aus Training und Wettkampf erfassen (Athlet:in, Disziplin, Zeit, Datum,
 Bahnlänge, PB), filtern nach Athlet:in und Disziplin, Verlaufsdiagramm je
 Disziplin. Athlet:innen sehen ihre eigenen Zeiten.
 
-### 9.2 Statistiken (Trainer:innen/Admins)
+### 9.2 Statistiken (Trainer:innen/Admins, inkl. RPE)
 - **Anwesenheit:** Quote je Gruppe, Trend über die Zeit, **Frühindikator** für
   Athlet:innen mit deutlich gesunkener Anwesenheit.
 - **Belastung:** Trainingsumfang je Gruppe (m pro Kopf), Umfang gegenüber

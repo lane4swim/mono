@@ -5,6 +5,7 @@
 // enabledModules-Dimension, inklusive des "results"-Sonderfalls (von ZWEI
 // Paketen gemeinsam genutzt, siehe sync.permissions.ts: STORE_MODULE_MAP).
 import { describe, it, expect } from 'vitest';
+import { MODULE_KEYS } from '@lane1/shared-types';
 import { canRead, canWrite } from '../../src/modules/sync/sync.permissions.js';
 
 describe('canRead()/canWrite() — Modul-Gating', () => {
@@ -105,11 +106,31 @@ describe('canRead()/canWrite() — Modul-Gating', () => {
   // Issue #141: Pläne schreiben nur trainer/admin; Kommentare sind an kein
   // Paket gebunden (ihre Sichtbarkeit folgt dem Ziel, sync.comments.ts) und
   // für alle drei Team-Rollen schreibbar.
-  it('"plans" schreiben nur trainer/admin, Athlet:innen lesen', () => {
-    expect(canRead('plans', ['athlete'], ['plans'])).toBe(true);
-    expect(canWrite('plans', ['athlete'], ['plans'])).toBe(false);
-    expect(canWrite('plans', ['trainer'], ['plans'])).toBe(true);
-    expect(canWrite('plans', ['admin'], ['plans'])).toBe(true);
+  // Issues #141/#142: Pläne und Einheiten schreiben nur Trainer:innen;
+  // admin (Vereinsverwaltung) liest sie für Anwesenheit, Statistik und
+  // Dashboard weiter mit.
+  it.each(['plans', 'sessions'] as const)('"%s": nur trainer schreibt, admin und athlete lesen', (store) => {
+    expect(canWrite(store, ['trainer'], MODULE_KEYS)).toBe(true);
+    for (const role of ['admin', 'athlete'] as const) {
+      expect(canRead(store, [role], MODULE_KEYS)).toBe(true);
+      expect(canWrite(store, [role], MODULE_KEYS)).toBe(false);
+    }
+  });
+
+  // Issue #142: Vorlagen, Zyklen, Übungen und Abschnitte nutzt kein
+  // Admin-Bildschirm — admin liest sie gar nicht mit.
+  it.each(['templates', 'planCycles', 'exercises', 'sectionTemplates'] as const)('"%s": trainer schreibt, athlete liest, admin weder noch', (store) => {
+    expect(canWrite(store, ['trainer'], MODULE_KEYS)).toBe(true);
+    expect(canRead(store, ['athlete'], MODULE_KEYS)).toBe(true);
+    expect(canWrite(store, ['athlete'], MODULE_KEYS)).toBe(false);
+    expect(canRead(store, ['admin'], MODULE_KEYS)).toBe(false);
+    expect(canWrite(store, ['admin'], MODULE_KEYS)).toBe(false);
+  });
+
+  it('admin mit zusätzlicher Rolle trainer behält vollen Zugriff auf die Trainingsplanung', () => {
+    for (const store of ['plans', 'sessions', 'templates', 'planCycles', 'exercises', 'sectionTemplates'] as const) {
+      expect(canWrite(store, ['admin', 'trainer'], MODULE_KEYS)).toBe(true);
+    }
   });
 
   it('"comments" ist ohne gebuchtes Paket für alle Team-Rollen les- und schreibbar, nicht für referee/parent', () => {

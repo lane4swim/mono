@@ -13,12 +13,13 @@
 // durchgesetzt, hier nur gespiegelt, damit keine Schaltfläche erscheint,
 // deren Änderung der Server ablehnen würde):
 //   - bearbeiten: nur die Autor:in, nur den Text (markiert mit editedAt)
-//   - löschen: die Autor:in oder trainer/admin (Moderation)
+//   - löschen: die Autor:in oder eine Trainer:in (Moderation; admin ist
+//     Vereinsverwaltung und moderiert nicht, Issue #142)
 import { el, clear } from '../dom.js';
 import { fmtDateTime } from '../dates.js';
 import { toast } from '../ui.js';
 import { openModal } from '../modal.js';
-import { getCurrentUser, isTrainerOrAdmin } from '../state.js';
+import { getCurrentUser, hasRole } from '../state.js';
 import { getAll, put, remove } from '../db.js';
 import { t } from '../i18n.js';
 
@@ -48,7 +49,7 @@ export function canEditComment(comment, user = getCurrentUser()) {
 }
 
 export function canDeleteComment(comment, user = getCurrentUser()) {
-  return canEditComment(comment, user) || isTrainerOrAdmin();
+  return canEditComment(comment, user) || hasRole('trainer');
 }
 
 // Zeichnet die Kommentare eines Ziels samt Eingabefeld in `hostNode`.

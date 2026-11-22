@@ -29,7 +29,7 @@ interface StoreAccess {
 // dürfen (siehe SyncRequester.clubId-Kommentar in sync.service.ts).
 const TEAM_ROLES: readonly Role[] = ['trainer', 'admin', 'athlete'];
 
-// Drei wiederkehrende Zugriffsprofile. `adminManaged` gilt allein für
+// Wiederkehrende Zugriffsprofile. `adminManaged` gilt allein für
 // "athletes" und ist bewusst enger als `coachManaged`: die Athleten-Stamm-
 // daten sind in der Oberfläche auch vor "trainer" verborgen, nicht nur vor
 // "athlete" — ein gemeinsames Profil ließe diese Restriktion per direktem
@@ -37,26 +37,35 @@ const TEAM_ROLES: readonly Role[] = ['trainer', 'admin', 'athlete'];
 const shared: StoreAccess = { read: new Set(TEAM_ROLES), write: new Set(TEAM_ROLES) };
 const coachManaged: StoreAccess = { read: new Set(TEAM_ROLES), write: new Set(['trainer', 'admin']) };
 const adminManaged: StoreAccess = { read: new Set(TEAM_ROLES), write: new Set(['admin']) };
+// Trainingsplanung (Issue #142): "admin" ist Vereinsverwaltung, keine
+// Trainer:innen-Rolle. `trainingRecords` (Pläne, Einheiten): admin liest
+// weiter mit, weil Anwesenheitsübersicht, Statistiken, Dashboard und
+// Athletenseite darauf aufbauen, schreibt aber nicht. `trainingLibrary`
+// (Vorlagen, Zyklen, Übungen, Abschnitte): kein Admin-Bildschirm nutzt
+// sie, admin liest daher gar nicht mit. Wer verwaltet UND trainiert,
+// bekommt zusätzlich die Rolle "trainer".
+const trainingRecords: StoreAccess = { read: new Set(TEAM_ROLES), write: new Set(['trainer']) };
+const trainingLibrary: StoreAccess = { read: new Set(['trainer', 'athlete']), write: new Set(['trainer']) };
 
 export const STORE_PERMISSIONS: Record<EntityStoreName, StoreAccess> = {
   results: shared,
-  // Trainingspläne schreiben nur trainer/admin (Issue #141). Athlet:innen
-  // kommentieren sie über den eigenen Store "comments", statt dafür den
-  // ganzen Plan zu speichern.
-  plans: coachManaged,
+  // Trainingspläne schreiben nur Trainer:innen (Issues #141, #142).
+  // Athlet:innen kommentieren sie über den eigenen Store "comments", statt
+  // dafür den ganzen Plan zu speichern.
+  plans: trainingRecords,
   // Wie "templates": Athlet:innen lesen mit, anlegen/bearbeiten/anwenden
-  // bleibt trainer/admin vorbehalten (docs/Plans/trainingsplanung-phase1-plan.md,
+  // bleibt Trainer:innen vorbehalten (docs/Plans/trainingsplanung-phase1-plan.md,
   // Abschnitt 1.5).
-  planCycles: coachManaged,
+  planCycles: trainingLibrary,
   athletes: adminManaged,
   groups: coachManaged,
-  exercises: coachManaged,
-  templates: coachManaged,
-  sectionTemplates: coachManaged,
+  exercises: trainingLibrary,
+  templates: trainingLibrary,
+  sectionTemplates: trainingLibrary,
   competitions: coachManaged,
   entries: coachManaged,
   actionItems: coachManaged,
-  sessions: coachManaged,
+  sessions: trainingRecords,
   // Vereinsinterne Nachrichten/Ankündigungen (Phase 2, Abschnitt 4.1):
   // wie "templates"/"planCycles" — alle drei Team-Rollen lesen,
   // anlegen/bearbeiten bleibt trainer/admin vorbehalten.

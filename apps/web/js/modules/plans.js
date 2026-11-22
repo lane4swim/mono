@@ -14,7 +14,12 @@ import { renderCyclesRoute } from './planCycles.js';
 import { renderLiveMode } from './planLive.js';
 import { navigate } from '../router.js';
 import { t, trLabel, trOptions } from '../i18n.js';
-import { isTrainerOrAdmin } from '../state.js';
+import { hasRole } from '../state.js';
+
+// Pläne schreiben nur Trainer:innen (sync.permissions.ts, Issues #141/#142) —
+// admin ist Vereinsverwaltung. Ein Konto mit admin UND athlete sieht Pläne
+// daher nur lesend.
+const canWritePlans = () => hasRole('trainer');
 
 // poolLength ist nullable (siehe PlanDaySchema) — eine leere Option bildet
 // "nicht festgelegt" ab, siehe docs/Plans/beckenlaenge-regeneration-plan.md.
@@ -92,7 +97,7 @@ export const plansModule = {
     // Athlet:in, die die Route direkt aufruft (die Plan-ANSICHT selbst
     // bleibt ihr erlaubt, siehe plansModule.roles oben), landet
     // stattdessen auf der normalen, schreibgeschützten Plandetailseite.
-    if (params[0] && params[1] === 'live' && isTrainerOrAdmin()) {
+    if (params[0] && params[1] === 'live' && canWritePlans()) {
       return renderLiveMode(container, params[0], parseInt(params[2], 10) || 0);
     }
     // Detailansicht lädt ihre Daten selbst (siehe renderDetail()) — vor dem
@@ -110,9 +115,9 @@ function renderList(container, plans, groups, templates, exercises, sectionTempl
     el('div', {}, [el('h1', { class: 'mt-0' }, t('plans.title'))]),
     el('div', { class: 'page-actions' }, [
       el('button', { class: 'btn btn-ghost', onclick: () => navigate('plans', 'cycles') }, t('plans.manageCycles')),
-      isTrainerOrAdmin() ? planImportButton() : null,
+      canWritePlans() ? planImportButton() : null,
       // Pläne schreiben nur trainer/admin (Issue #141, sync.permissions.ts).
-      isTrainerOrAdmin() ? el('button', { class: 'btn btn-primary', onclick: () => openPlanModal(null, groups, templates, exercises, sectionTemplates, refresh) }, t('plans.createPlan')) : null,
+      canWritePlans() ? el('button', { class: 'btn btn-primary', onclick: () => openPlanModal(null, groups, templates, exercises, sectionTemplates, refresh) }, t('plans.createPlan')) : null,
     ]),
   ]));
   wrap.appendChild(laneWave());
@@ -153,10 +158,10 @@ async function renderDetail(container, planId) {
     el('div', {}, [el('div', { class: 'page-eyebrow' }, group?.name || t('plans.noGroup')), el('h1', { class: 'mt-0' }, plan.name)]),
     el('div', { class: 'page-actions' }, [
       el('button', { class: 'btn btn-ghost', onclick: () => exportPlanToPdf(plan, group, exercises) }, t('plans.exportPdf')),
-      isTrainerOrAdmin() ? el('button', { class: 'btn btn-ghost', onclick: () => exportPlanToJson(plan) }, t('planTransfer.exportButton')) : null,
+      canWritePlans() ? el('button', { class: 'btn btn-ghost', onclick: () => exportPlanToJson(plan) }, t('planTransfer.exportButton')) : null,
       // Bearbeiten nur für trainer/admin (Issue #141); Athlet:innen
       // kommentieren stattdessen.
-      ...(isTrainerOrAdmin() ? [
+      ...(canWritePlans() ? [
         el('button', { class: 'btn btn-ghost', onclick: () => openPlanModal(plan, groups, templates, exercises, sectionTemplates, () => renderDetail(container, planId)) }, t('common.edit')),
         el('button', { class: 'btn btn-ghost', onclick: async () => { const copy = await put('plans', duplicatePlan(plan)); toast(t('plans.duplicated')); navigate('plans', copy.id); } }, t('common.duplicate')),
         el('button', { class: 'btn btn-danger', onclick: () => confirmAction(t('plans.deleteConfirm'), async () => { await remove('plans', planId); toast(t('plans.deleted')); navigate('plans'); }) }, t('common.delete')),
@@ -193,7 +198,7 @@ async function renderDetail(container, planId) {
           // Issue #78: Trainingsmodus nur für Trainer:innen/Admins
           // anbieten — Athlet:innen sehen den Plan weiterhin (siehe
           // plansModule.roles), aber ohne diesen Einstieg.
-          isTrainerOrAdmin() ? el('button', { class: 'btn btn-accent btn-sm', onclick: () => navigate('plans', plan.id, 'live', String(dayIndex)) }, t('plans.liveModeStart')) : null,
+          canWritePlans() ? el('button', { class: 'btn btn-accent btn-sm', onclick: () => navigate('plans', plan.id, 'live', String(dayIndex)) }, t('plans.liveModeStart')) : null,
           el('button', { class: 'btn btn-ghost btn-sm', onclick: () => exportDayToPdf(plan, day, group, exercises) }, t('plans.exportDayPdf')),
         ]);
     const body = el('div', { class: 'day-body' });

@@ -1,14 +1,14 @@
 // @vitest-environment jsdom
 // Kommentar-Widget auf dem eigenen Store "comments" (Issue #141): anlegen
 // mit Ziel, eigene Kommentare bearbeiten, löschen durch Autor:in oder
-// moderierend durch trainer/admin.
+// moderierend durch trainer (nicht admin, Issue #142).
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const session = vi.hoisted(() => ({ user: null, staff: false }));
+const session = vi.hoisted(() => ({ user: null, roles: [] }));
 const store = vi.hoisted(() => ({ rows: [] }));
 vi.mock('../js/state.js', () => ({
   getCurrentUser: () => session.user,
-  isTrainerOrAdmin: () => session.staff,
+  hasRole: (role) => session.roles.includes(role),
 }));
 vi.mock('../js/db.js', () => ({
   getAll: vi.fn(async () => store.rows),
@@ -31,7 +31,7 @@ const flush = () => new Promise((r) => setTimeout(r, 0));
 
 beforeEach(() => {
   session.user = { id: 'u-ath', name: 'Mara' };
-  session.staff = false;
+  session.roles = ['athlete'];
   store.rows = [];
   vi.mocked(db.put).mockClear();
   vi.mocked(db.remove).mockClear();
@@ -51,13 +51,15 @@ describe('commentsFor()', () => {
 });
 
 describe('Rechte', () => {
-  it('bearbeiten nur die Autor:in, löschen zusätzlich trainer/admin', () => {
+  it('bearbeiten nur die Autor:in, löschen zusätzlich trainer — admin moderiert nicht', () => {
     expect(canEditComment(comment())).toBe(true);
     expect(canDeleteComment(comment())).toBe(true);
     const foreign = comment({ authorId: 'u-other' });
     expect(canEditComment(foreign)).toBe(false);
     expect(canDeleteComment(foreign)).toBe(false);
-    session.staff = true;
+    session.roles = ['admin'];
+    expect(canDeleteComment(foreign)).toBe(false);
+    session.roles = ['trainer'];
     expect(canEditComment(foreign)).toBe(false);
     expect(canDeleteComment(foreign)).toBe(true);
   });
@@ -70,7 +72,7 @@ describe('renderCommentThread()', () => {
     expect(buttons(host)).not.toContain(t('common.edit'));
     expect(buttons(host)).not.toContain(t('common.delete'));
 
-    session.staff = true;
+    session.roles = ['trainer'];
     renderCommentThread(host, PLAN, { initialComments: [comment({ authorId: 'u-other' })] });
     expect(buttons(host)).toContain(t('common.delete'));
     expect(buttons(host)).not.toContain(t('common.edit'));
@@ -105,7 +107,7 @@ describe('renderCommentThread()', () => {
   });
 
   it('löscht moderierend einen fremden Kommentar', async () => {
-    session.staff = true;
+    session.roles = ['trainer'];
     const host = document.createElement('div');
     renderCommentThread(host, PLAN, { initialComments: [comment({ authorId: 'u-other' })] });
     [...host.querySelectorAll('button')].find((b) => b.textContent === t('common.delete')).click();
