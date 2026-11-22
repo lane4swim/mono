@@ -522,6 +522,8 @@ gezielten Regressionstests abgesichert. Übersicht:
 
 ## 16. Kommentarfunktion für Trainingspläne, Übungen und Übungskatalog (nicht Teil der ursprünglichen Phasen 0–4)
 
+> **Abgelöst durch Issue #141 (November 2026):** Kommentare liegen nicht mehr eingebettet in den kommentierten Datensätzen, sondern im eigenen Sync-Store `comments` (Tabelle `comments`, Migration `20261122120000_move_comments_to_own_table`). Ein Kommentar zeigt über `targetStore`/`targetId` (bei Sätzen zusätzlich `entryId`) auf sein Ziel. Anlegen darf jede Team-Rolle, die das Ziel lesen darf, im eigenen Namen; bearbeiten nur die Autor:in; löschen die Autor:in oder trainer/admin (`apps/api/src/modules/sync/sync.comments.ts`). `plans` ist seitdem `coachManaged`. Die Beschreibung unten gibt den früheren Stand wieder.
+
 Nachträglich ergänzt: Kommentar-Threads (Autor:in, Zeitstempel, Text) an
 drei Stellen, jeweils als eingebettetes Array, **keine** eigene
 Sync-Store-Kategorie:

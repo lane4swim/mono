@@ -153,7 +153,6 @@ function remapSetEntry(entry, idMap) {
     reps: intOr(entry?.reps, 1, { min: 1 }),
     intensity: entry?.intensity || '',
     restSec: intOr(entry?.restSec, 0),
-    comments: [],
     exerciseId: entry?.exerciseId && idMap.has(entry.exerciseId) ? idMap.get(entry.exerciseId) : null,
     ...(Array.isArray(entry?.equipment) ? { equipment: entry.equipment.filter(eq => typeof eq === 'string') } : {}),
   };
@@ -192,7 +191,6 @@ export async function importPlan(dump) {
       defaultDurationSec: ex.defaultDurationSec ?? null,
       tags: Array.isArray(ex.tags) ? ex.tags : [],
       equipment: Array.isArray(ex.equipment) ? ex.equipment : [],
-      comments: [],
     });
     idMap.set(ex.id, saved.id);
     byKey.set(exerciseKey(saved), saved);
@@ -210,7 +208,6 @@ export async function importPlan(dump) {
     weekStart: toIsoDateTime(weekStart),
     groupId: group?.id ?? null,
     status: src.status === 'archiv' ? 'archiv' : 'aktiv',
-    comments: [],
     days: (Array.isArray(src.days) ? src.days : []).filter(d => d && isValidDate(d.date)).map(d => ({
       date: toIsoDateTime(d.date),
       poolLength: COURSE_VALUES.has(d.poolLength) ? d.poolLength : null,

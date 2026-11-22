@@ -102,6 +102,25 @@ describe('canRead()/canWrite() — Modul-Gating', () => {
     expect(canRead('results', ['trainer'], [])).toBe(false);
   });
 
+  // Issue #141: Pläne schreiben nur trainer/admin; Kommentare sind an kein
+  // Paket gebunden (ihre Sichtbarkeit folgt dem Ziel, sync.comments.ts) und
+  // für alle drei Team-Rollen schreibbar.
+  it('"plans" schreiben nur trainer/admin, Athlet:innen lesen', () => {
+    expect(canRead('plans', ['athlete'], ['plans'])).toBe(true);
+    expect(canWrite('plans', ['athlete'], ['plans'])).toBe(false);
+    expect(canWrite('plans', ['trainer'], ['plans'])).toBe(true);
+    expect(canWrite('plans', ['admin'], ['plans'])).toBe(true);
+  });
+
+  it('"comments" ist ohne gebuchtes Paket für alle Team-Rollen les- und schreibbar, nicht für referee/parent', () => {
+    for (const role of ['trainer', 'admin', 'athlete'] as const) {
+      expect(canRead('comments', [role], [])).toBe(true);
+      expect(canWrite('comments', [role], [])).toBe(true);
+    }
+    expect(canWrite('comments', ['referee'], [])).toBe(false);
+    expect(canRead('comments', ['parent'], [])).toBe(false);
+  });
+
   it('ein unbekannter Store bleibt unabhängig von enabledModules verweigert', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     expect(canRead('users' as any, ['trainer'], ['athletes', 'competitions', 'times'])).toBe(false);

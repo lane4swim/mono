@@ -45,14 +45,12 @@ export const templatesModule = {
 
 // Baut eine unabhängige Kopie einer Vorlage für "Duplizieren" — id/
 // Zeitstempel übernimmt put() automatisch (siehe db.js). `sets` wird per
-// cloneItems(..., { resetComments: true }) tief kopiert: frische
-// Eintrags-ids (sonst teilen sich Original und Kopie dieselben Objekte)
-// UND geleerte Kommentare — sync.commentAuthorship.ts würde einen
-// fremdautorisierten Kommentar unter der neuen id sonst beim Push ablehnen
-// (siehe auch importLibrary() in libraryTransfer.js).
+// cloneItems() tief kopiert: frische Eintrags-ids, sonst teilen sich
+// Original und Kopie dieselben Objekte. Kommentare liegen im eigenen Store
+// und bleiben am Original (Issue #141).
 export function duplicateTemplate(template) {
   const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, deletedAt: _deletedAt, ...rest } = template;
-  return { ...rest, name: t('common.copyOf', { name: template.name }), sets: cloneItems(template.sets || [], { resetComments: true }) };
+  return { ...rest, name: t('common.copyOf', { name: template.name }), sets: cloneItems(template.sets || []) };
 }
 
 function renderList(container, templates, exercises, sectionTemplates) {

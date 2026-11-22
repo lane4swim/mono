@@ -24,6 +24,7 @@ function makeFakePrismaClient(): PrismaClient {
     announcement: makeDelegate('announcement'),
     calendarEntry: makeDelegate('calendarEntry'),
     requiredTimeSet: makeDelegate('requiredTimeSet'),
+    comment: makeDelegate('comment'),
   } as unknown as PrismaClient;
 }
 
@@ -68,8 +69,8 @@ describe('getEntityDelegate', () => {
 });
 
 describe('ENTITY_STORE_NAMES', () => {
-  it('enthält genau die fünfzehn fachlichen Stores (ohne "users")', () => {
-    expect(ENTITY_STORE_NAMES).toHaveLength(15);
+  it('enthält genau die sechzehn fachlichen Stores (ohne "users")', () => {
+    expect(ENTITY_STORE_NAMES).toHaveLength(16);
     expect(ENTITY_STORE_NAMES).not.toContain('users');
   });
 });

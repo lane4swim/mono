@@ -40,7 +40,10 @@ const adminManaged: StoreAccess = { read: new Set(TEAM_ROLES), write: new Set(['
 
 export const STORE_PERMISSIONS: Record<EntityStoreName, StoreAccess> = {
   results: shared,
-  plans: shared,
+  // Trainingspläne schreiben nur trainer/admin (Issue #141). Athlet:innen
+  // kommentieren sie über den eigenen Store "comments", statt dafür den
+  // ganzen Plan zu speichern.
+  plans: coachManaged,
   // Wie "templates": Athlet:innen lesen mit, anlegen/bearbeiten/anwenden
   // bleibt trainer/admin vorbehalten (docs/Plans/trainingsplanung-phase1-plan.md,
   // Abschnitt 1.5).
@@ -64,13 +67,21 @@ export const STORE_PERMISSIONS: Record<EntityStoreName, StoreAccess> = {
   // Normtabellen für Pflichtzeiten (Paket "competitions"): alle lesen,
   // trainer/admin pflegen — wie die Wettkämpfe selbst.
   requiredTimeSets: coachManaged,
+  // Kommentare (Issue #141): alle drei Team-Rollen lesen und schreiben;
+  // wer welchen Kommentar anlegen, ändern oder löschen darf, regelt
+  // sync.comments.ts je Zeile, und sichtbar ist ein Kommentar nur, wenn
+  // sein Ziel lesbar ist.
+  comments: shared,
 };
 
 // Stores der Kernmodule (apps/web/js/router.js: CORE_MODULE_IDS) — an kein
 // zubuchbares Paket gebunden, für jeden Verein freigeschaltet. Der Kalender
 // selbst ist ein Kernmodul; seine eigenen Einträge dürfen daher nicht von
 // einem Paket abhängen.
-const CORE_STORES: ReadonlySet<EntityStoreName> = new Set(['calendarEntries']);
+//
+// "comments" gehört ebenfalls dazu: ein Kommentar hängt am Paket seines
+// Ziels, nicht an einem eigenen (siehe sync.comments.ts).
+const CORE_STORES: ReadonlySet<EntityStoreName> = new Set(['calendarEntries', 'comments']);
 
 // Nimmt den weiteren Wire-Typ `SyncStore` entgegen, nicht nur
 // `EntityStoreName`: `SyncStore` führt zusätzlich "users", das die

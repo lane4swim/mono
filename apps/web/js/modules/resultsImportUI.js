@@ -193,7 +193,6 @@ function planRowNode(row) {
     el('td', {}, [
       badge(isUpdate ? t('resultsImport.rowUpdate') : t('resultsImport.rowNew'), isUpdate ? 'neutral' : 'accent'),
       statusBadge(row.proposed.status),
-      row.proposed.comments?.length > 0 ? badge(t('resultsImport.rowCommentsKept', { count: row.proposed.comments.length }), 'neutral') : null,
     ].filter(Boolean)),
   ]);
 }

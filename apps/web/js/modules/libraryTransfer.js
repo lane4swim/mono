@@ -131,7 +131,6 @@ function remapSetEntry(entry, idMap) {
     reps: entry?.reps || 1,
     intensity: entry?.intensity || '',
     restSec: entry?.restSec ?? 0,
-    comments: [],
     exerciseId: entry?.exerciseId && idMap.has(entry.exerciseId) ? idMap.get(entry.exerciseId) : null,
   };
 }
@@ -177,7 +176,6 @@ export async function importLibrary(dump) {
       defaultDurationSec: ex.defaultDurationSec ?? null,
       tags: ex.tags || [],
       equipment: ex.equipment || [],
-      comments: [],
       createdAt: now,
       updatedAt: now,
     };

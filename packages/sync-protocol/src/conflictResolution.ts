@@ -32,6 +32,10 @@ const STRATEGY_BY_STORE: Record<SyncStore, ConflictStrategy> = {
   calendarEntries: 'last-write-wins',
   // Normtabellen (Pflichtzeiten): ein Dokument, das als Ganzes gepflegt wird.
   requiredTimeSets: 'last-write-wins',
+  // Kommentare (Issue #141): je Kommentar ein eigener Datensatz, den nur
+  // die Autor:in ändert — ein Kommentar zu einem Plan kollidiert damit
+  // nicht mehr mit einer gleichzeitigen Bearbeitung des Plans.
+  comments: 'last-write-wins',
 };
 
 export function strategyForStore(store: SyncStore): ConflictStrategy {

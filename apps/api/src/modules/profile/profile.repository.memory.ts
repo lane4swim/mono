@@ -59,6 +59,7 @@ export interface InMemoryProfileDatabase {
   // neues Feld hinzukam — siehe Default `?? []` in exportUserData() unten.
   qualifications?: InMemoryQualificationRow[];
   refereeAssignments?: InMemoryRefereeAssignmentRow[];
+  comments?: Array<{ id: string; authorId: string | null; [key: string]: unknown }>;
 }
 
 // Test-Double für ProfileDataGateway — hält eine kleine, injizierbare
@@ -95,6 +96,7 @@ export class InMemoryProfileDataGateway implements ProfileDataGateway {
 
     const qualifications = (this.db.qualifications ?? []).filter((q) => q.userId === userId);
     const refereeAssignments = (this.db.refereeAssignments ?? []).filter((r) => r.userId === userId);
+    const comments = (this.db.comments ?? []).filter((c) => c.authorId === userId);
 
     // Kein Passwort-Hash und kein (verschlüsseltes) TOTP-Secret im Export;
     // ob TOTP eingerichtet ist (totpEnabledAt), gehört dagegen dazu.
@@ -110,6 +112,7 @@ export class InMemoryProfileDataGateway implements ProfileDataGateway {
       attendance,
       qualifications,
       refereeAssignments,
+      comments,
     };
   }
 

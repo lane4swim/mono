@@ -133,25 +133,17 @@ describe('cloneItems()', () => {
     expect(list[0].id).toBe('x'); // Original unverändert
   });
 
-  it('behält Kommentare standardmäßig bei (resetComments nicht gesetzt)', () => {
-    const withComments = { ...set('a'), comments: [{ id: 'c1', text: 'Hinweis' }] };
-    const [cloned] = cloneItems([withComments]);
-    expect(cloned.comments).toEqual([{ id: 'c1', text: 'Hinweis' }]);
-  });
-
-  // Für "Duplizieren" (duplicatePlan()/duplicateTemplate()/
-  // duplicateSectionTemplate()) müssen Kommentare geleert werden, sonst
-  // lehnt sync.commentAuthorship.ts (apps/api) einen fremdautorisierten
-  // Kommentar unter der neuen id ab — siehe Kommentar bei cloneItems().
-  it('leert Kommentare auf jeder Verschachtelungsebene, wenn resetComments gesetzt ist', () => {
+  // Kommentare liegen im eigenen Store (Issue #141); ein noch eingebettetes
+  // Alt-Feld `comments` fällt beim Kopieren auf jeder Ebene weg.
+  it('entfernt eingebettete Alt-Kommentare auf jeder Verschachtelungsebene', () => {
     const section = { kind: 'section', id: 'sec', heading: 'H', entries: [{ ...set('a'), comments: [{ id: 'c1' }] }] };
     const block = { kind: 'block', id: 'blk', repeatCount: 2, sets: [{ ...set('b'), comments: [{ id: 'c2' }] }] };
     const plain = { ...set('x'), comments: [{ id: 'c3' }] };
-    const [clonedPlain, clonedSection, clonedBlock] = cloneItems([plain, section, block], { resetComments: true });
+    const [clonedPlain, clonedSection, clonedBlock] = cloneItems([plain, section, block]);
 
-    expect(clonedPlain.comments).toEqual([]);
-    expect(clonedSection.entries[0].comments).toEqual([]);
-    expect(clonedBlock.sets[0].comments).toEqual([]);
+    expect(clonedPlain).not.toHaveProperty('comments');
+    expect(clonedSection.entries[0]).not.toHaveProperty('comments');
+    expect(clonedBlock.sets[0]).not.toHaveProperty('comments');
   });
 });
 

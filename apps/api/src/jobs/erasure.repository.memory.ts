@@ -2,24 +2,18 @@ import { ANONYMIZED_INVITATION_EMAIL, type ErasureJobGateway, type DueErasureReq
 import type { TombstoneRecord } from '../modules/sync/sync.gateway.js';
 import type { AuditLogEntryRecord } from '../modules/auditLog/auditLog.repository.js';
 import { newAuditPseudonym, pseudonymizeAuditEntry } from './auditLogPseudonymization.js';
-import { anonymizeCommentAuthors } from './commentAnonymization.js';
-import { COMMENT_LOCATIONS, type CommentBearingStore } from '../modules/shared/commentLocations.js';
+import { ANONYMIZED_COMMENT_FIELDS, isCommentByAuthor } from './commentAnonymization.js';
 
 export interface InMemoryErasureDatabase {
   users: Array<{ id: string; clubId: string | null; athleteId: string | null; [key: string]: unknown }>;
   athletes: Array<{ id: string; [key: string]: unknown }>;
-  // `clubId`/`comments` optional — nur Tests der Kommentar-Anonymisierung
-  // (Issue #151) brauchen sie.
-  results: Array<{ id: string; athleteId: string; clubId?: string; comments?: unknown; [key: string]: unknown }>;
+  results: Array<{ id: string; athleteId: string; clubId?: string; [key: string]: unknown }>;
   entries: Array<{ id: string; athleteId: string; [key: string]: unknown }>;
   actionItems: Array<{ id: string; athleteId: string; [key: string]: unknown }>;
   sessions: Array<{ id: string; clubId: string; attendance: Array<{ athleteId?: string; [key: string]: unknown }> }>;
-  // Optional (Sicherheitsreview 2026-08, Befund N5) — nicht jeder
-  // bestehende Test braucht diese Stores, siehe commentAnonymization.ts.
-  plans?: Array<{ id: string; clubId: string; comments: unknown; days: unknown }>;
-  exercises?: Array<{ id: string; clubId: string; comments: unknown }>;
-  templates?: Array<{ id: string; clubId: string; sets: unknown }>;
-  sectionTemplates?: Array<{ id: string; clubId: string; entries: unknown }>;
+  // Optional — nur Tests der Kommentar-Anonymisierung brauchen sie, siehe
+  // commentAnonymization.ts.
+  comments?: Array<{ id: string; clubId: string; targetStore: string; targetId: string; authorId: string | null; authorName: string; [key: string]: unknown }>;
   // Optional (Sicherheitsreview 2026-08-27, Befund M1) — siehe
   // erasure.repository.ts (Prisma-Pendant) für die ausführliche
   // Begründung.
@@ -39,16 +33,6 @@ export interface InMemoryErasureDatabase {
   // Optional (Issue #96) — siehe auditLogPseudonymization.ts.
   auditLogEntries?: AuditLogEntryRecord[];
 }
-
-// Welches Array der In-Memory-Datenbank zu welchem Store mit Kommentaren
-// gehört — Gegenstück zu COMMENT_PURGE_TABLES in erasure.repository.ts.
-const COMMENT_STORE_ROWS = {
-  exercises: 'exercises',
-  plans: 'plans',
-  templates: 'templates',
-  sectionTemplates: 'sectionTemplates',
-  results: 'results',
-} as const satisfies Record<CommentBearingStore, keyof InMemoryErasureDatabase>;
 
 export class InMemoryErasureJobGateway implements ErasureJobGateway {
   constructor(private readonly db: InMemoryErasureDatabase) {}
@@ -71,16 +55,20 @@ export class InMemoryErasureJobGateway implements ErasureJobGateway {
       const purgedResults = this.db.results.filter((r) => r.athleteId === user.athleteId);
       const purgedEntries = this.db.entries.filter((e) => e.athleteId === user.athleteId);
       const purgedActionItems = this.db.actionItems.filter((a) => a.athleteId === user.athleteId);
+      const purgedResultIds = new Set(purgedResults.map((r) => r.id));
+      const purgedComments = (this.db.comments ?? []).filter((c) => c.targetStore === 'results' && purgedResultIds.has(c.targetId));
 
       if (this.db.tombstones) {
         this.db.tombstones.push(
           ...purgedResults.map((r): TombstoneRecord => ({ clubId, store: 'results', entityId: r.id, deletedAt: now })),
           ...purgedEntries.map((e): TombstoneRecord => ({ clubId, store: 'entries', entityId: e.id, deletedAt: now })),
           ...purgedActionItems.map((a): TombstoneRecord => ({ clubId, store: 'actionItems', entityId: a.id, deletedAt: now })),
+          ...purgedComments.map((c): TombstoneRecord => ({ clubId, store: 'comments', entityId: c.id, deletedAt: now })),
           { clubId, store: 'athletes', entityId: user.athleteId, deletedAt: now },
         );
       }
 
+      if (this.db.comments) this.db.comments = this.db.comments.filter((c) => !purgedComments.includes(c));
       this.db.results = this.db.results.filter((r) => r.athleteId !== user.athleteId);
       this.db.entries = this.db.entries.filter((e) => e.athleteId !== user.athleteId);
       this.db.actionItems = this.db.actionItems.filter((a) => a.athleteId !== user.athleteId);
@@ -90,24 +78,12 @@ export class InMemoryErasureJobGateway implements ErasureJobGateway {
       this.db.athletes = this.db.athletes.filter((a) => a.id !== user.athleteId);
     }
 
-    // Sicherheitskorrektur (Sicherheitsreview 2026-08, Befund N5) — siehe
-    // ausführliche Begründung in erasure.repository.ts (Prisma-Pendant)
-    // bzw. commentAnonymization.ts. Bewusst NICHT an `user.athleteId`
-    // gekoppelt (anders als der Block oben), da Kommentare ebenso von
-    // Trainer:innen/Admins ohne athleteId stammen.
-    //
-    // Sicherheitsreview 2026-08-27, Befund M2: Abgleich läuft jetzt über
-    // `authorId` (stabile User-ID) statt über den frei wählbaren
-    // `authorName` — siehe ausführliche Begründung im Prisma-Pendant.
+    // Kommentar-Anonymisierung — siehe Prisma-Pendant (erasure.repository.ts).
     if (user.clubId) {
-      const clubId = user.clubId;
       const author = { id: userId, name: typeof user.name === 'string' ? user.name : null };
-      for (const store of Object.keys(COMMENT_LOCATIONS) as CommentBearingStore[]) {
-        const rows = (this.db[COMMENT_STORE_ROWS[store]] ?? []) as Array<{ clubId?: string } & Record<string, unknown>>;
-        for (const row of rows) {
-          if (row.clubId !== clubId) continue;
-          const { changed, fields } = anonymizeCommentAuthors(store, row, author);
-          if (changed) Object.assign(row, fields);
+      for (const comment of this.db.comments ?? []) {
+        if (comment.clubId === user.clubId && isCommentByAuthor(comment, author)) {
+          Object.assign(comment, ANONYMIZED_COMMENT_FIELDS, { updatedAt: new Date() });
         }
       }
     }

@@ -102,6 +102,7 @@ model Club {
   planCycles                    PlanCycle[]
   calendarEntries               CalendarEntry[]
   requiredTimeSets              RequiredTimeSet[]
+  comments                      Comment[]
   sessions                      TrainingSession[]
   actionItems                   ActionItem[]
   qualificationReminderSettings ClubQualificationReminderSetting[]
@@ -456,6 +457,39 @@ model Competition {
 // Eltern-Konto (Rolle "parent") und einem/mehreren Athletenprofilen
 // (Geschwister im selben Verein). onDelete: Cascade auf beiden Seiten —
 // eine Verknüpfung ohne eine der beiden Seiten ist bedeutungslos.
+// Kommentare zu Plänen (auch zu einzelnen Sätzen), Übungen, Vorlagen,
+// Abschnitts-Vorlagen und Ergebnissen — Issue #141. Vorher als JSON-Arrays
+// in den kommentierten Datensätzen eingebettet; als eigener Sync-Store
+// hängen die Schreibrechte am Kommentar (Autor:in bzw. Moderation durch
+// trainer/admin, siehe sync.comments.ts), nicht am kommentierten Datensatz.
+//
+// targetStore/targetId ohne Fremdschlüssel (polymorph über mehrere
+// Tabellen) — die Vereinszugehörigkeit des Ziels prüft sync.foreignKeys.ts.
+// entryId ist die client-vergebene Satz-id innerhalb von Plan.days /
+// Template.sets / SectionTemplate.entries. authorId wie Group.trainerIds
+// ohne Fremdschlüssel: null bei Altbestand ohne Zuordnung und nach der
+// Art.-17-Anonymisierung (jobs/erasure.repository.ts).
+model Comment {
+  id          String    @id @default(uuid())
+  clubId      String
+  club        Club      @relation(fields: [clubId], references: [id])
+  targetStore String
+  targetId    String
+  entryId     String?
+  authorId    String?
+  authorName  String
+  text        String
+  editedAt    DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  @@index([clubId, updatedAt])
+  @@index([targetStore, targetId])
+  @@index([authorId])
+  @@map("comments")
+}
+
 model ParentLink {
   id        String   @id @default(uuid())
   userId    String
@@ -528,11 +562,6 @@ model Result {
   // übernommen).
   status        String       @default("OK")
   statusNote    String?
-  // Diskussions-/Hinweiskommentare zum Ergebnis — Struktur siehe
-  // CommentSchema in packages/shared-types/src/entities.ts. Bleibt bei
-  // einem Ergebnisimport (Überschreiben von time/place/splits/status)
-  // unangetastet erhalten, siehe docs/Plans/dsv7-lenex-import-plan.md Abschnitt 5.
-  comments      Json         @default("[]")
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
   deletedAt     DateTime?
@@ -556,11 +585,6 @@ model Exercise {
   defaultDistance Int?
   tags            String[]  @default([])
   equipment       String[]  @default([])
-  // Diskussions-/Hinweiskommentare im Übungskatalog — Struktur siehe
-  // CommentSchema in packages/shared-types/src/entities.ts. Als Json
-  // gespeichert (analog zu Template.sets/Plan.days), da es sich um eine
-  // eingebettete Liste handelt, keine eigenständig referenzierte Entität.
-  comments        Json      @default("[]")
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   deletedAt       DateTime?
@@ -626,12 +650,9 @@ model Plan {
   group     Group?    @relation(fields: [groupId], references: [id])
   status    String    @default("aktiv") // "aktiv" | "archiv"
   // Array von { date, sets } — je Tag dieselbe Sets/Blöcke-Struktur wie
-  // Template.sets. Einzelne Sätze können jeweils ein eigenes
-  // "comments"-Array tragen (siehe CommentSchema) — das lebt mit im
-  // selben Json-Blob, es gibt dafür keine eigene Spalte.
+  // Template.sets. Kommentare zum Plan und zu einzelnen Sätzen liegen in
+  // "comments" (Comment.targetStore = "plans").
   days      Json
-  // Kommentare zum gesamten Plan (nicht zu einem einzelnen Satz).
-  comments  Json      @default("[]")
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?

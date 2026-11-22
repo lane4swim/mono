@@ -136,10 +136,10 @@ describe('buildImportPlan()', () => {
     const rows = buildImportPlan({ ...baseArgs, importedResults: [importedResult()], existingResults: [] });
     expect(rows).toHaveLength(1);
     expect(rows[0].kind).toBe('new');
-    expect(rows[0].proposed).toMatchObject({ athleteId: 'a1', event: '100 Freistil', time: 60, place: 1, status: 'OK', comments: [] });
+    expect(rows[0].proposed).toMatchObject({ athleteId: 'a1', event: '100 Freistil', time: 60, place: 1, status: 'OK' });
   });
 
-  it('überschreibt time/place/status/splits eines bestehenden Results, behält aber comments/id/createdAt', () => {
+  it('überschreibt time/place/status/splits eines bestehenden Results, behält aber id/createdAt', () => {
     const existingResult = {
       id: 'r1', athleteId: 'a1', event: '100 Freistil', competitionId: 'comp1',
       time: 99, place: 5, status: 'OK', isPB: true, createdAt: '2020-01-01T00:00:00.000Z',
@@ -153,8 +153,9 @@ describe('buildImportPlan()', () => {
       time: 58.5,
       place: 2, // Platz wird IMMER aus der Datei übernommen (Plan Abschnitt 5.5), auch bei Abweichung
       createdAt: '2020-01-01T00:00:00.000Z',
-      comments: existingResult.comments,
     });
+    // Kommentare liegen im eigenen Store und hängen an der id (Issue #141).
+    expect(rows[0].proposed).not.toHaveProperty('comments');
   });
 
   it('reduziert mehrere Runden desselben Events auf die beste (Finale/Entscheidung vor Vorlauf)', () => {

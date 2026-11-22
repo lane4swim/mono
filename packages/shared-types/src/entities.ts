@@ -16,7 +16,7 @@
 // Karriere hinweg) 10000 Zeichen.
 //
 // Aufräumarbeit (Code-Review, Befund S7): dieselbe Begründung galt bislang
-// NICHT für Array-Felder (tags, equipment, comments, laps, attendance,
+// NICHT für Array-Felder (tags, equipment, laps, attendance,
 // days, sets) — ein einzelner Datensatz mit z. B. 20.000 Kommentaren wäre
 // unter dem 1-MB-Bodylimit geblieben und dauerhaft gespeichert worden,
 // obwohl jedes eingebettete Textfeld längst begrenzt ist. Jetzt trägt auch
@@ -29,56 +29,6 @@ import { SyncStoreSchema } from './syncEvent.js';
 
 const isoDate = z.string().datetime();
 const nullableIsoDate = z.string().datetime().nullable();
-
-// Ein einzelner Kommentar — wird an drei Stellen eingebettet (siehe unten):
-// am Trainingsplan selbst (PlanSchema.comments), an einer einzelnen
-// Übung/einem Satz innerhalb eines Plans (PlainSetSchema.comments) sowie
-// im Übungskatalog (ExerciseSchema.comments). `id` ist bewusst kein UUID
-// (wie z. B. bei PlainSetSchema.id) — Kommentare sind Einträge in einer
-// eingebetteten Liste, keine eigenständig referenzierten Entitäten.
-//
-// `authorName` wird vom Frontend beim Anlegen aus dem eingeloggten Konto
-// übernommen (reiner Anzeige-Zweck, kann sich ändern, wenn die Person
-// später ihren Namen ändert — deshalb KEIN Abgleichsschlüssel).
-//
-// `authorId` (Sicherheitsreview 2026-08-27, Befund M2): bis hierhin gab
-// es überhaupt keine serverseitige Autor:innen-Verifikation — jedes
-// Vereinsmitglied konnte per direktem POST /api/sync/push einen
-// Kommentar unter einem beliebigen `authorName` hinterlassen
-// (Identitätsvortäuschung), und die Art.-17-Anonymisierung (Befund N5
-// des Vorreviews) ließ sich über einen bewusst abweichenden Namen gezielt
-// umgehen. `authorId` ist die tatsächliche, stabile User-ID — anders als
-// `authorName` NICHT frei wählbar: `sync.commentAuthorship.ts` erzwingt
-// beim Push, dass ein NEUER Kommentar `authorId === request.user.sub`
-// trägt und ein BESTEHENDER Kommentar seine ursprüngliche Zuordnung
-// behält (siehe dort). `jobs/commentAnonymization.ts` gleicht seither
-// gegen `authorId` statt gegen `authorName` ab — die dort zuvor
-// dokumentierte Unschärfe (Namensgleichheit, nachträgliche
-// Namensänderung) entfällt dadurch.
-export const CommentSchema = z.object({
-  id: z.string().min(1),
-  // `.optional()` ist KEINE Aufweichung der Durchsetzung, sondern eine
-  // Migrationsnotwendigkeit: Kommentare leben als eingebettetes JSONB in
-  // plans/exercises/templates, es gibt für sie also keine Spalten-
-  // Migration, die ein neues Pflichtfeld nachträglich befüllen könnte.
-  // Wäre `authorId` hier verpflichtend, würde JEDER vor dieser Änderung
-  // gespeicherte Kommentar seinen umgebenden Datensatz dauerhaft
-  // unspeicherbar machen: der Client pullt den Altbestand unverändert,
-  // schickt ihn beim nächsten Bearbeiten zurück, und der `.strict()`-
-  // Check lehnte ihn ab ("Payload entspricht nicht dem Schema") — ein
-  // Plan mit Alt-Kommentaren ließe sich nie wieder ändern. Die
-  // eigentliche Sperre sitzt deshalb eine Ebene höher, wo sie zwischen
-  // "Altbestand" und "neu" unterscheiden kann: assertCommentAuthorship()
-  // (apps/api/src/modules/sync/sync.commentAuthorship.ts) verlangt für
-  // jeden NEUEN Kommentar `authorId === request.user.sub` und lässt einen
-  // Kommentar ohne `authorId` ausschließlich dann durch, wenn er
-  // unverändert aus dem bereits gespeicherten Datensatz stammt.
-  authorId: z.string().guid().optional(),
-  authorName: z.string().min(1).max(200),
-  text: z.string().min(1).max(5000),
-  createdAt: isoDate,
-}).strict();
-export type Comment = z.infer<typeof CommentSchema>;
 
 export const GroupSchema = z.object({
   id: z.string().guid(),
@@ -315,10 +265,6 @@ export const ResultSchema = z.object({
   splits: z.array(ResultSplitSchema).max(200).nullable().optional(),
   status: ResultStatusSchema.default('OK'),
   statusNote: z.string().max(2000).nullable().optional(),
-  // Diskussions-/Hinweiskommentare zum Ergebnis — bleiben bei einem
-  // Ergebnisimport unangetastet erhalten (siehe COMMENT_BEARING_STORES in
-  // sync.commentAuthorship.ts).
-  comments: z.array(CommentSchema).max(500).default([]),
   createdAt: isoDate,
   updatedAt: isoDate,
 }).strict();
@@ -340,9 +286,6 @@ export const ExerciseSchema = z.object({
   defaultDurationSec: z.number().int().positive().nullable().default(null),
   tags: z.array(z.string().max(100)).max(50).default([]),
   equipment: z.array(z.string().max(100)).max(50).default([]),
-  // Diskussions-/Hinweiskommentare im Übungskatalog (z. B. Technikhinweise
-  // mehrerer Trainer:innen zu derselben Übung).
-  comments: z.array(CommentSchema).max(500).default([]),
   createdAt: isoDate,
   updatedAt: isoDate,
 }).strict();
@@ -373,10 +316,6 @@ export const PlainSetSchema = z.object({
   // zurück" (siehe equipmentForEntry() in js/modules/setEditor.js) — das
   // ist etwas anderes als ein bewusst geleertes Array (Material entfernt).
   equipment: z.array(z.string().max(100)).max(50).optional(),
-  // Kommentare zu genau diesem Satz/dieser Übung innerhalb eines
-  // Trainingsplans (bzw. einer Vorlage, da Templates dieselbe Struktur
-  // verwenden) — z. B. Rückfragen oder Feedback zu einer konkreten Serie.
-  comments: z.array(CommentSchema).max(200).default([]),
 }).strict();
 export type PlainSet = z.infer<typeof PlainSetSchema>;
 
@@ -468,9 +407,6 @@ export const PlanSchema = z.object({
   groupId: z.string().guid().nullable(),
   status: PlanStatusSchema,
   days: z.array(PlanDaySchema).max(60),
-  // Kommentare zum gesamten Trainingsplan (nicht zu einem einzelnen Satz
-  // — siehe dafür PlainSetSchema.comments oben).
-  comments: z.array(CommentSchema).max(500).default([]),
   createdAt: isoDate,
   updatedAt: isoDate,
 }).strict();
@@ -637,6 +573,44 @@ export const RequiredTimeSetSchema = z.object({
 export type RequiredTimeSet = z.infer<typeof RequiredTimeSetSchema>;
 
 // ---- Registry: SyncStore -> Zod-Schema -------------------------------
+// Kommentare (Issue #141) — ein eigener Sync-Store statt eingebetteter
+// Arrays in Plänen, Übungen, Vorlagen und Ergebnissen. Damit hängen die
+// Schreibrechte am Kommentar selbst, nicht am kommentierten Datensatz:
+// Athlet:innen kommentieren Pläne, die sie nicht bearbeiten dürfen, und
+// nur die Autor:in (oder eine Trainer:in/Admin zur Moderation) darf einen
+// Kommentar ändern bzw. löschen (sync.comments.ts).
+//
+// Ziel: `targetStore` + `targetId`, bei Sätzen innerhalb eines Plans oder
+// einer Vorlage zusätzlich `entryId` (die client-vergebene Satz-id,
+// PlainSetSchema.id). `authorId` ist null nur bei Altbestand, der noch
+// ohne Autor:innen-Zuordnung gespeichert wurde, und nach der
+// Art.-17-Anonymisierung.
+// `editedAt` markiert eine nachträgliche Änderung des Texts.
+export const COMMENT_TARGET_STORES = ['plans', 'exercises', 'templates', 'sectionTemplates', 'results'] as const;
+export const CommentTargetStoreSchema = z.enum(COMMENT_TARGET_STORES);
+export type CommentTargetStore = z.infer<typeof CommentTargetStoreSchema>;
+// Stores, deren Datensätze Sätze tragen, an denen ein Kommentar hängen kann.
+export const COMMENT_ENTRY_TARGET_STORES: ReadonlySet<CommentTargetStore> = new Set(['plans', 'templates', 'sectionTemplates']);
+
+export const CommentSchema = z.object({
+  id: z.string().guid(),
+  clubId: z.string().guid(),
+  targetStore: CommentTargetStoreSchema,
+  targetId: z.string().guid(),
+  entryId: z.string().min(1).max(200).nullable().default(null),
+  authorId: z.string().guid().nullable(),
+  authorName: z.string().min(1).max(200),
+  text: z.string().trim().min(1).max(5000),
+  editedAt: nullableIsoDate.default(null),
+  createdAt: isoDate,
+  updatedAt: isoDate,
+}).strict().superRefine((comment, ctx) => {
+  if (comment.entryId !== null && !COMMENT_ENTRY_TARGET_STORES.has(comment.targetStore)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['entryId'], message: `Kommentare an "${comment.targetStore}" haben keine entryId.` });
+  }
+});
+export type Comment = z.infer<typeof CommentSchema>;
+
 // Zentrale Zuordnung, welches Schema zu welchem Store-Namen gehört. Wird
 // in Phase 3 direkt von der generischen Sync-API (`POST /api/sync/push`)
 // genutzt, um ein eingehendes Event-Payload gegen das richtige Schema zu
@@ -659,6 +633,7 @@ export const ENTITY_SCHEMAS = {
   announcements: AnnouncementSchema,
   calendarEntries: CalendarEntrySchema,
   requiredTimeSets: RequiredTimeSetSchema,
+  comments: CommentSchema,
 } satisfies Partial<Record<z.infer<typeof SyncStoreSchema>, z.ZodTypeAny>>;
 
 export type EntityStoreName = keyof typeof ENTITY_SCHEMAS;

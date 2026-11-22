@@ -1,60 +1,111 @@
-// shared "Kommentare" thread widget.
+// Gemeinsames Kommentar-Widget (Issue #141).
 //
-// Used at three places (see backend packages/shared-types/src/entities.ts,
-// CommentSchema): on a whole Trainingsplan (Plan.comments), on an
-// individual Satz/Übung within a plan (PlainSet.comments — same widget
-// works inside a repeat block, since blocks' inner sets are PlainSet
-// too), and in the Übungskatalog (Exercise.comments).
+// Kommentare liegen im eigenen Sync-Store "comments" (siehe
+// packages/shared-types/src/entities.ts: CommentSchema), nicht mehr
+// eingebettet im kommentierten Datensatz. Ein Kommentar zeigt über
+// `targetStore` + `targetId` auf sein Ziel, bei einem einzelnen Satz eines
+// Plans zusätzlich über `entryId` (die Satz-id). Genutzt für:
+//   - den ganzen Trainingsplan   { targetStore: 'plans', targetId }
+//   - einen Satz im Plan         { targetStore: 'plans', targetId, entryId }
+//   - eine Übung im Katalog      { targetStore: 'exercises', targetId }
 //
-// This module owns rendering + the add/delete interaction, but NOT
-// persistence — the caller passes a `persist(nextComments)` function
-// that knows how to save the updated array back into the surrounding
-// entity (a whole Plan/Exercise/Template record, since comments live
-// embedded in that record's JSON, not as their own sync store) and
-// awaits it before the thread re-draws. This keeps the widget reusable
-// across very different "where does this array actually live" contexts
-// without needing to know about plans/exercises/db.js itself.
-import { el, clear, localId } from '../dom.js';
+// Rechte (serverseitig in apps/api/src/modules/sync/sync.comments.ts
+// durchgesetzt, hier nur gespiegelt, damit keine Schaltfläche erscheint,
+// deren Änderung der Server ablehnen würde):
+//   - bearbeiten: nur die Autor:in, nur den Text (markiert mit editedAt)
+//   - löschen: die Autor:in oder trainer/admin (Moderation)
+import { el, clear } from '../dom.js';
 import { fmtDateTime } from '../dates.js';
 import { toast } from '../ui.js';
 import { openModal } from '../modal.js';
-import { getCurrentUser } from '../state.js';
+import { getCurrentUser, isTrainerOrAdmin } from '../state.js';
+import { getAll, put, remove } from '../db.js';
 import { t } from '../i18n.js';
 
 // Muss exakt ANONYMIZED_COMMENT_AUTHOR aus
 // apps/api/src/jobs/commentAnonymization.ts entsprechen.
 const DELETED_ACCOUNT_AUTHOR_SENTINEL = '__deleted_account__';
 
-// Renders an existing list of comments plus an add-comment form into
-// `hostNode`. `persist(nextComments)` is called (and awaited) after
-// every add/delete with the FULL new array — the caller is responsible
-// for writing it back to IndexedDB (e.g. `put('plans', { ...plan,
-// comments: nextComments })`) and for triggering any outer-page refresh
-// it might need (this widget only redraws itself, not the host page).
-export function renderCommentThread(hostNode, initialComments, persist) {
-  let comments = (initialComments || []).slice();
+const sameTarget = (comment, target) =>
+  comment.targetStore === target.targetStore &&
+  comment.targetId === target.targetId &&
+  (comment.entryId ?? null) === (target.entryId ?? null);
+
+const byCreatedAt = (a, b) => (a.createdAt || '').localeCompare(b.createdAt || '');
+
+// Alle lokal gehaltenen Kommentare — einmal je Seitenaufbau laden und mit
+// commentsFor() je Ziel filtern, statt je Satz erneut zu lesen.
+export async function loadComments() {
+  return getAll('comments');
+}
+
+export function commentsFor(allComments, target) {
+  return (allComments || []).filter((c) => sameTarget(c, target)).sort(byCreatedAt);
+}
+
+export function canEditComment(comment, user = getCurrentUser()) {
+  return !!user?.id && comment.authorId === user.id;
+}
+
+export function canDeleteComment(comment, user = getCurrentUser()) {
+  return canEditComment(comment, user) || isTrainerOrAdmin();
+}
+
+// Zeichnet die Kommentare eines Ziels samt Eingabefeld in `hostNode`.
+// `initialComments` (optional) sind die bereits geladenen Kommentare dieses
+// Ziels; ohne sie lädt das Widget selbst. `onChange(comments)` wird nach
+// jedem Anlegen/Bearbeiten/Löschen mit der neuen Liste aufgerufen (z. B.
+// um die Zahl auf einer Schaltfläche nachzuziehen).
+export function renderCommentThread(hostNode, target, { initialComments, onChange } = {}) {
+  let comments = initialComments ? initialComments.slice().sort(byCreatedAt) : null;
+  let editingId = null;
+
+  function changed() {
+    onChange?.(comments);
+    draw();
+  }
+
+  function renderComment(c) {
+    const author = c.authorName === DELETED_ACCOUNT_AUTHOR_SENTINEL ? t('comments.deletedAuthor') : c.authorName;
+    const meta = c.editedAt ? `${fmtDateTime(c.createdAt)} · ${t('comments.edited')}` : fmtDateTime(c.createdAt);
+    const card = el('div', { class: 'card comment', style: 'padding:10px;margin-bottom:8px' }, [
+      el('div', { class: 'flex justify-between items-center' }, [
+        el('strong', {}, author),
+        el('span', { class: 'hint' }, meta),
+      ]),
+    ]);
+    if (editingId === c.id) {
+      const textArea = el('textarea', { rows: 3, style: 'width:100%' });
+      textArea.value = c.text;
+      card.appendChild(el('form', { class: 'comment-edit' }, [
+        textArea,
+        el('div', { class: 'flex gap-8' }, [
+          el('button', { type: 'submit', class: 'btn btn-primary btn-sm' }, t('common.save')),
+          el('button', { type: 'button', class: 'btn btn-ghost btn-sm', onclick: () => { editingId = null; draw(); } }, t('common.cancel')),
+        ]),
+      ]));
+      card.querySelector('form').addEventListener('submit', (e) => { e.preventDefault(); saveEdit(c, textArea.value); });
+      return card;
+    }
+    card.appendChild(el('p', { class: 'text-sm mt-0', style: 'white-space:pre-wrap' }, c.text));
+    const actions = [
+      canEditComment(c) ? el('button', { type: 'button', class: 'btn btn-ghost btn-sm', onclick: () => { editingId = c.id; draw(); } }, t('common.edit')) : null,
+      canDeleteComment(c) ? el('button', { type: 'button', class: 'btn btn-ghost btn-sm', onclick: () => removeComment(c) }, t('common.delete')) : null,
+    ].filter(Boolean);
+    if (actions.length > 0) card.appendChild(el('div', { class: 'flex gap-8' }, actions));
+    return card;
+  }
 
   function draw() {
     clear(hostNode);
+    if (!comments) {
+      hostNode.appendChild(el('p', { class: 'hint' }, t('common.loading')));
+      return;
+    }
 
     const list = el('div', { class: 'comment-list' });
-    if (comments.length === 0) {
-      list.appendChild(el('p', { class: 'hint' }, t('comments.empty')));
-    } else {
-      comments
-        .slice()
-        .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-        .forEach((c) => {
-          list.appendChild(el('div', { class: 'card', style: 'padding:10px;margin-bottom:8px' }, [
-            el('div', { class: 'flex justify-between items-center' }, [
-              el('strong', {}, c.authorName === DELETED_ACCOUNT_AUTHOR_SENTINEL ? t('comments.deletedAuthor') : c.authorName),
-              el('span', { class: 'hint' }, fmtDateTime(c.createdAt)),
-            ]),
-            el('p', { class: 'text-sm mt-0', style: 'white-space:pre-wrap' }, c.text),
-            el('button', { type: 'button', class: 'btn btn-ghost btn-sm', onclick: () => removeComment(c.id) }, t('common.delete')),
-          ]));
-        });
-    }
+    if (comments.length === 0) list.appendChild(el('p', { class: 'hint' }, t('comments.empty')));
+    else comments.forEach((c) => list.appendChild(renderComment(c)));
     hostNode.appendChild(list);
 
     const form = el('form', { class: 'flex gap-8', style: 'align-items:flex-start' });
@@ -69,51 +120,58 @@ export function renderCommentThread(hostNode, initialComments, persist) {
     const text = (rawText || '').trim();
     if (!text) { toast(t('comments.validationText'), 'error'); return; }
     const user = getCurrentUser();
-    // Sicherheitsreview 2026-08-27, Befund M2: Ein NEUER Kommentar muss
-    // serverseitig der eigenen Identität zugeordnet sein
-    // (sync.commentAuthorship.ts prüft `authorId === request.user.sub`).
-    // Ohne bekannte eigene id hier abbrechen, statt den Kommentar lokal
-    // anzulegen: gespeichert würde er trotzdem, der Sync-Push scheiterte
-    // danach aber dauerhaft (fünf Fehlversuche, dann Status 'failed',
-    // siehe syncClient.js) — der Kommentar sähe für die schreibende
-    // Person aus wie gespeichert, käme aber nie bei den anderen an. Ein
-    // klarer Fehler sofort ist besser als ein stiller Verlust später.
-    // Anders als beim reinen Anzeigefeld `authorName` (Rückfall auf
-    // E-Mail/"—") gibt es für die Identität bewusst keinen Ersatzwert.
+    // Ein neuer Kommentar muss serverseitig der eigenen Identität
+    // zugeordnet sein (sync.comments.ts). Ohne bekannte eigene id hier
+    // abbrechen, statt ihn lokal anzulegen: der Sync-Push scheiterte sonst
+    // dauerhaft, und der Kommentar sähe gespeichert aus, käme aber nie bei
+    // den anderen an.
     if (!user?.id) { toast(t('comments.validationNoIdentity'), 'error'); return; }
-    const next = [...comments, {
-      id: localId('comment'),
+    const saved = await put('comments', {
+      targetStore: target.targetStore,
+      targetId: target.targetId,
+      entryId: target.entryId ?? null,
       authorId: user.id,
       authorName: user.name || user.email || '—',
       text,
-      createdAt: new Date().toISOString(),
-    }];
-    comments = next;
-    await persist(comments);
+      editedAt: null,
+    });
+    comments = [...comments, saved];
     toast(t('comments.added'));
-    draw();
+    changed();
   }
 
-  async function removeComment(commentId) {
-    comments = comments.filter((c) => c.id !== commentId);
-    await persist(comments);
+  async function saveEdit(comment, rawText) {
+    const text = (rawText || '').trim();
+    if (!text) { toast(t('comments.validationText'), 'error'); return; }
+    editingId = null;
+    if (text === comment.text) { draw(); return; }
+    const { deletedAt: _deletedAt, ...rest } = comment;
+    const saved = await put('comments', { ...rest, text, editedAt: new Date().toISOString() });
+    comments = comments.map((c) => (c.id === saved.id ? saved : c));
+    toast(t('comments.updated'));
+    changed();
+  }
+
+  async function removeComment(comment) {
+    await remove('comments', comment.id);
+    comments = comments.filter((c) => c.id !== comment.id);
     toast(t('comments.deleted'));
-    draw();
+    changed();
   }
 
   draw();
+  if (!comments) {
+    loadComments().then((all) => { comments = commentsFor(all, target); draw(); });
+  }
 }
 
-// Convenience: a small "💬 N" button that opens a modal containing the
-// comment thread for `comments`. Used wherever showing the thread inline
-// would be too heavy (e.g. one button per set-row in a plan's table).
-//
-// The button's own label is a snapshot taken when the row was drawn, so
-// it re-labels itself after every add/delete in the modal instead of
-// waiting for the host page's next full re-render (which previously only
-// happened on reload).
-export function commentsButton(initialComments, { title, persist }) {
-  let comments = initialComments || [];
+// Kleine "💬 N"-Schaltfläche, die die Kommentare eines Ziels in einem
+// Dialog öffnet — wo eine Inline-Liste zu schwer wäre (z. B. eine
+// Schaltfläche je Satz in der Plantabelle). Die Beschriftung zieht nach
+// jedem Anlegen/Löschen im Dialog nach, ohne auf ein Neuzeichnen der
+// Seite zu warten.
+export function commentsButton(target, { title, initialComments = [] }) {
+  let comments = initialComments;
   const btn = el('button', { type: 'button', class: 'btn btn-ghost btn-sm', title: t('comments.title') });
 
   function updateLabel() {
@@ -124,10 +182,9 @@ export function commentsButton(initialComments, { title, persist }) {
   btn.addEventListener('click', () => {
     const body = el('div');
     openModal({ title, bodyNode: body });
-    renderCommentThread(body, comments, async (nextComments) => {
-      comments = nextComments;
-      await persist(nextComments);
-      updateLabel();
+    renderCommentThread(body, target, {
+      initialComments: comments,
+      onChange: (next) => { comments = next; updateLabel(); },
     });
   });
   return btn;

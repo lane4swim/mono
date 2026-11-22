@@ -7,7 +7,7 @@ import { openModal, confirmAction } from '../modal.js';
 import { field, textInput, selectInput, dateInput, formActions } from '../forms.js';
 import { EQUIPMENT_ITEMS, COURSES } from '../refdata.js';
 import { renderSetEditor, totalDistance, totalDuration, formatTotalDuration, formatDuration, cloneItems, collectEquipment, equipmentForEntry, exerciseById } from './setEditor.js';
-import { renderCommentThread, commentsButton } from './comments.js';
+import { renderCommentThread, commentsButton, loadComments, commentsFor } from './comments.js';
 import { exportPlanToPdf, exportDayToPdf } from './planPdfExport.js';
 import { exportPlanToJson, planImportButton } from './planTransfer.js';
 import { renderCyclesRoute } from './planCycles.js';
@@ -61,19 +61,17 @@ function collapseToggle(initiallyExpanded, onChange) {
 // unverändert (die Person passt das Datum bei Bedarf selbst über
 // "Bearbeiten" an), status wird auf "aktiv" zurückgesetzt (eine Kopie
 // eines archivierten Plans landet sonst sofort wieder im Archiv, wo sie
-// kaum auffällt). Jeder Tag wird per cloneItems(..., { resetComments:
-// true }) tief kopiert: frische Eintrags-ids (sonst teilen sich Original
-// und Kopie dieselben Objekte) UND geleerte Kommentare — analog zu
-// duplicateTemplate() in templates.js (siehe dortiger Kommentar zur
-// Kommentar-Autorenschaft), gilt hier zusätzlich für plan.comments selbst.
+// kaum auffällt). Jeder Tag wird per cloneItems() tief kopiert: frische
+// Eintrags-ids, sonst teilen sich Original und Kopie dieselben Objekte.
+// Kommentare liegen im eigenen Store und bleiben am Original (Issue #141);
+// ein noch eingebettetes Alt-Feld `comments` fällt weg.
 export function duplicatePlan(plan) {
-  const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, deletedAt: _deletedAt, ...rest } = plan;
+  const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, deletedAt: _deletedAt, comments: _comments, ...rest } = plan;
   return {
     ...rest,
     name: t('common.copyOf', { name: plan.name }),
     status: 'aktiv',
-    comments: [],
-    days: (plan.days || []).map(d => ({ ...d, sets: cloneItems(d.sets || [], { resetComments: true }) })),
+    days: (plan.days || []).map(d => ({ ...d, sets: cloneItems(d.sets || []) })),
   };
 }
 
@@ -113,7 +111,8 @@ function renderList(container, plans, groups, templates, exercises, sectionTempl
     el('div', { class: 'page-actions' }, [
       el('button', { class: 'btn btn-ghost', onclick: () => navigate('plans', 'cycles') }, t('plans.manageCycles')),
       isTrainerOrAdmin() ? planImportButton() : null,
-      el('button', { class: 'btn btn-primary', onclick: () => openPlanModal(null, groups, templates, exercises, sectionTemplates, refresh) }, t('plans.createPlan')),
+      // Pläne schreiben nur trainer/admin (Issue #141, sync.permissions.ts).
+      isTrainerOrAdmin() ? el('button', { class: 'btn btn-primary', onclick: () => openPlanModal(null, groups, templates, exercises, sectionTemplates, refresh) }, t('plans.createPlan')) : null,
     ]),
   ]));
   wrap.appendChild(laneWave());
@@ -141,7 +140,7 @@ function renderList(container, plans, groups, templates, exercises, sectionTempl
 
 async function renderDetail(container, planId) {
   const isCurrent = beginRender(container);
-  const [plans, groups, templates, exercises, sectionTemplates] = await Promise.all([getAll('plans'), getAll('groups'), getAll('templates'), getAll('exercises'), getAll('sectionTemplates')]);
+  const [plans, groups, templates, exercises, sectionTemplates, comments] = await Promise.all([getAll('plans'), getAll('groups'), getAll('templates'), getAll('exercises'), getAll('sectionTemplates'), loadComments()]);
   if (!isCurrent()) return;
   clear(container);
   const plan = plans.find(p => p.id === planId);
@@ -155,9 +154,13 @@ async function renderDetail(container, planId) {
     el('div', { class: 'page-actions' }, [
       el('button', { class: 'btn btn-ghost', onclick: () => exportPlanToPdf(plan, group, exercises) }, t('plans.exportPdf')),
       isTrainerOrAdmin() ? el('button', { class: 'btn btn-ghost', onclick: () => exportPlanToJson(plan) }, t('planTransfer.exportButton')) : null,
-      el('button', { class: 'btn btn-ghost', onclick: () => openPlanModal(plan, groups, templates, exercises, sectionTemplates, () => renderDetail(container, planId)) }, t('common.edit')),
-      el('button', { class: 'btn btn-ghost', onclick: async () => { const copy = await put('plans', duplicatePlan(plan)); toast(t('plans.duplicated')); navigate('plans', copy.id); } }, t('common.duplicate')),
-      el('button', { class: 'btn btn-danger', onclick: () => confirmAction(t('plans.deleteConfirm'), async () => { await remove('plans', planId); toast(t('plans.deleted')); navigate('plans'); }) }, t('common.delete')),
+      // Bearbeiten nur für trainer/admin (Issue #141); Athlet:innen
+      // kommentieren stattdessen.
+      ...(isTrainerOrAdmin() ? [
+        el('button', { class: 'btn btn-ghost', onclick: () => openPlanModal(plan, groups, templates, exercises, sectionTemplates, () => renderDetail(container, planId)) }, t('common.edit')),
+        el('button', { class: 'btn btn-ghost', onclick: async () => { const copy = await put('plans', duplicatePlan(plan)); toast(t('plans.duplicated')); navigate('plans', copy.id); } }, t('common.duplicate')),
+        el('button', { class: 'btn btn-danger', onclick: () => confirmAction(t('plans.deleteConfirm'), async () => { await remove('plans', planId); toast(t('plans.deleted')); navigate('plans'); }) }, t('common.delete')),
+      ] : []),
     ]),
   ]));
   wrap.appendChild(laneWave());
@@ -175,9 +178,10 @@ async function renderDetail(container, planId) {
   const planCommentsHost = el('div');
   planCommentsCard.appendChild(planCommentsHost);
   wrap.appendChild(planCommentsCard);
-  renderCommentThread(planCommentsHost, plan.comments, async (nextComments) => {
-    await put('plans', { ...plan, comments: nextComments });
-  });
+  const planTarget = { targetStore: 'plans', targetId: plan.id };
+  renderCommentThread(planCommentsHost, planTarget, { initialComments: commentsFor(comments, planTarget) });
+  // Satz- und Übungskommentare lesen aus derselben, einmal geladenen Liste.
+  const ctx = { plan, comments };
 
   const firstExpanded = nextSessionDay(plan.days);
   (plan.days || []).slice().sort((a, b) => a.date.localeCompare(b.date)).forEach((day, dayIndex) => {
@@ -210,7 +214,7 @@ async function renderDetail(container, planId) {
       dayEquipment.length > 0
         ? `${t('setEditor.equipmentSummary')} ${dayEquipment.map(eq => trLabel(EQUIPMENT_ITEMS, eq, 'equipment')).join(', ')}`
         : t('setEditor.equipmentNone')));
-    body.appendChild(renderDayItems(day.sets || [], exercises, plan));
+    body.appendChild(renderDayItems(day.sets || [], exercises, ctx));
     wrap.appendChild(dayCard);
   });
 
@@ -236,14 +240,14 @@ function dayTotalBadgeLabel(items) {
     : t('plans.totalBadge', { m: totalDistance(items) });
 }
 
-function renderDayItems(items, exercises, plan) {
+function renderDayItems(items, exercises, ctx) {
   const host = el('div');
   if (items.length === 0) { host.appendChild(el('p', {}, t('plans.noSetsPlanned'))); return host; }
-  appendEntryRows(host, items, exercises, plan);
+  appendEntryRows(host, items, exercises, ctx);
   return host;
 }
 
-function appendEntryRows(host, items, exercises, plan) {
+function appendEntryRows(host, items, exercises, ctx) {
   let pendingRows = [];
   function flushTable() {
     if (pendingRows.length === 0) return;
@@ -254,12 +258,12 @@ function appendEntryRows(host, items, exercises, plan) {
   items.forEach(entry => {
     if (entry.kind === 'block') {
       flushTable();
-      host.appendChild(renderBlockBox(entry, exercises, plan));
+      host.appendChild(renderBlockBox(entry, exercises, ctx));
     } else if (entry.kind === 'section') {
       flushTable();
-      host.appendChild(renderSectionBox(entry, exercises, plan));
+      host.appendChild(renderSectionBox(entry, exercises, ctx));
     } else {
-      pendingRows.push(setRow(entry, exercises, plan));
+      pendingRows.push(setRow(entry, exercises, ctx));
     }
   });
   flushTable();
@@ -283,38 +287,30 @@ function setsTable(rows) {
   return table;
 }
 
-function setRow(entry, exercises, plan) {
+function setRow(entry, exercises, ctx) {
   return el('tr', {}, [
-    el('td', {}, equipmentDescCell(entry, exercises)), el('td', {}, `${entry.distance ?? '—'} m`), el('td', {}, entry.durationSec != null ? formatDuration(entry.durationSec) : '—'), el('td', {}, entry.reps), el('td', {}, `${entry.restSec || 0}s`),
-    el('td', {}, setCommentsButton(entry, plan)),
+    el('td', {}, equipmentDescCell(entry, exercises, ctx)), el('td', {}, `${entry.distance ?? '—'} m`), el('td', {}, entry.durationSec != null ? formatDuration(entry.durationSec) : '—'), el('td', {}, entry.reps), el('td', {}, `${entry.restSec || 0}s`),
+    el('td', {}, setCommentsButton(entry, ctx)),
   ]);
 }
 
-function renderSectionBox(section, exercises, plan) {
+function renderSectionBox(section, exercises, ctx) {
   const box = el('div', { class: 'section-block-view' });
   box.appendChild(el('h4', { class: 'section-heading-view mt-0' }, section.heading || t('plans.defaultSectionHeading')));
   if (!section.entries || section.entries.length === 0) {
     box.appendChild(el('p', { class: 'hint mt-0' }, t('plans.sectionNoEntries')));
   } else {
-    appendEntryRows(box, section.entries, exercises, plan);
+    appendEntryRows(box, section.entries, exercises, ctx);
   }
   return box;
 }
 
-// Opens a modal with the comment thread for a single set/exercise entry
-// within a plan (works the same whether `entry` sits directly in a day's
-// `sets` array or inside a repeat block's `sets` array, since both are
-// the same object reference living somewhere inside `plan.days`).
-// Persisting just re-saves the whole plan — mutating `entry.comments`
-// in place already updated the right spot inside `plan.days`.
-function setCommentsButton(entry, plan) {
-  return commentsButton(entry.comments, {
-    title: t('comments.setCommentsTitle'),
-    persist: async (nextComments) => {
-      entry.comments = nextComments;
-      await put('plans', { ...plan });
-    },
-  });
+// Kommentare zu einem einzelnen Satz im Plan (direkt im Tag, in einem
+// Block oder einem Abschnitt) — Ziel ist der Plan, die Satz-id steht in
+// entryId (siehe comments.js).
+function setCommentsButton(entry, ctx) {
+  const target = { targetStore: 'plans', targetId: ctx.plan.id, entryId: entry.id };
+  return commentsButton(target, { title: t('comments.setCommentsTitle'), initialComments: commentsFor(ctx.comments, target) });
 }
 
 // Builds the "Beschreibung" cell content: the set's text, plus a small
@@ -326,7 +322,7 @@ function setCommentsButton(entry, plan) {
 // not the set's own comments — see setCommentsButton): so far those were
 // only visible inside the Übungskatalog's edit modal, never here where the
 // exercise is actually used inside a plan.
-function equipmentDescCell(entry, exercises) {
+function equipmentDescCell(entry, exercises, ctx) {
   const wrap = el('div');
   wrap.appendChild(el('div', {}, entry.description || '—'));
   const equipment = equipmentForEntry(entry, exercises);
@@ -336,7 +332,7 @@ function equipmentDescCell(entry, exercises) {
   }
   if (entry.exerciseId) {
     const ex = exerciseById(exercises).get(entry.exerciseId);
-    if (ex) wrap.appendChild(el('div', { style: 'margin-top:3px' }, exerciseCommentsHint(ex)));
+    if (ex) wrap.appendChild(el('div', { style: 'margin-top:3px' }, exerciseCommentsHint(ex, ctx)));
   }
   return wrap;
 }
@@ -347,11 +343,14 @@ function equipmentDescCell(entry, exercises) {
 // same comment-thread widget the catalog's edit modal uses; the label
 // (and its visibility) updates immediately after every add/delete instead
 // of waiting for the page's next full re-render.
-function exerciseCommentsHint(ex) {
+function exerciseCommentsHint(ex, ctx) {
   const btn = el('button', { type: 'button', class: 'btn btn-ghost btn-sm', title: t('comments.exerciseCommentsTitle') });
 
+  const target = { targetStore: 'exercises', targetId: ex.id };
+  let comments = commentsFor(ctx.comments, target);
+
   function updateLabel() {
-    const count = (ex.comments || []).length;
+    const count = comments.length;
     btn.textContent = t('comments.exerciseHintButton', { count });
     btn.style.display = count === 0 ? 'none' : '';
   }
@@ -360,16 +359,15 @@ function exerciseCommentsHint(ex) {
   btn.addEventListener('click', () => {
     const body = el('div');
     openModal({ title: t('comments.exerciseCommentsTitle'), bodyNode: body });
-    renderCommentThread(body, ex.comments, async (nextComments) => {
-      ex.comments = nextComments;
-      await put('exercises', { ...ex });
-      updateLabel();
+    renderCommentThread(body, target, {
+      initialComments: comments,
+      onChange: (next) => { comments = next; updateLabel(); },
     });
   });
   return btn;
 }
 
-function renderBlockBox(block, exercises, plan) {
+function renderBlockBox(block, exercises, ctx) {
   const innerDist = totalDistance(block.sets || []);
   const innerDuration = totalDuration(block.sets || []);
   const repeatCount = block.repeatCount || 1;
@@ -389,7 +387,7 @@ function renderBlockBox(block, exercises, plan) {
   if (!block.sets || block.sets.length === 0) {
     box.appendChild(el('p', { class: 'hint mt-0' }, t('plans.blockNoSets')));
   } else {
-    box.appendChild(el('div', { class: 'table-wrap' }, setsTable(block.sets.map(s => setRow(s, exercises, plan)))));
+    box.appendChild(el('div', { class: 'table-wrap' }, setsTable(block.sets.map(s => setRow(s, exercises, ctx)))));
   }
   box.appendChild(el('div', { class: 'hint', style: 'margin-top:8px;margin-bottom:0' }, t('plans.blockSummary', { inner: innerDist, n: repeatCount, total: innerDist * repeatCount })));
   return box;

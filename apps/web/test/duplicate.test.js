@@ -59,12 +59,11 @@ describe('duplicateExercise()', () => {
     expect(dup.defaultDistance).toBe(100);
   });
 
-  // sync.commentAuthorship.ts (apps/api) lehnt einen fremdautorisierten
-  // Kommentar unter einer neuen id ab — die Kopie darf ihn deshalb nicht
-  // übernehmen (siehe Kommentar in catalog.js).
+  // Kommentare liegen im eigenen Store und bleiben am Original (Issue #141);
+  // ein eingebettetes Alt-Feld fällt weg.
   it('übernimmt keine Kommentare des Originals', () => {
     const dup = duplicateExercise(baseExercise());
-    expect(dup.comments).toEqual([]);
+    expect(dup).not.toHaveProperty('comments');
   });
 
   it('legt sich über put() als eigenständiger, schemagültiger Datensatz mit neuer id an', async () => {
@@ -111,8 +110,8 @@ describe('duplicateTemplate()', () => {
 
   it('übernimmt keine Satz-Kommentare des Originals', () => {
     const dup = duplicateTemplate(baseTemplate());
-    expect(dup.sets[0].comments).toEqual([]);
-    expect(dup.sets[1].sets[0].comments).toEqual([]);
+    expect(dup.sets[0]).not.toHaveProperty('comments');
+    expect(dup.sets[1].sets[0]).not.toHaveProperty('comments');
   });
 
   it('legt sich über put() als eigenständiger, schemagültiger Datensatz an', async () => {
@@ -137,7 +136,7 @@ describe('duplicateSectionTemplate()', () => {
     expect(dup.id).toBeUndefined();
     expect(dup.name).toBe('Einschwimmen (Kopie)');
     expect(dup.entries[0].id).not.toBe('e1');
-    expect(dup.entries[0].comments).toEqual([]);
+    expect(dup.entries[0]).not.toHaveProperty('comments');
   });
 
   it('legt sich über put() als eigenständiger, schemagültiger Datensatz an', async () => {
@@ -179,8 +178,8 @@ describe('duplicatePlan()', () => {
 
   it('übernimmt weder Plan- noch Satz-Kommentare des Originals', () => {
     const dup = duplicatePlan(basePlan());
-    expect(dup.comments).toEqual([]);
-    expect(dup.days[0].sets[0].comments).toEqual([]);
+    expect(dup).not.toHaveProperty('comments');
+    expect(dup.days[0].sets[0]).not.toHaveProperty('comments');
   });
 
   it('vergibt den Sätzen jedes Tages frische ids, ohne das Original zu verändern', () => {
