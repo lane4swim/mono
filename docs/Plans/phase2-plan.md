@@ -550,6 +550,34 @@ unbegrenzter Export (Datenminimierung, s. o.; ein vollständiger
 DSGVO-Auskunftsexport bleibt dem Kind/den Admins vorbehalten, nicht
 Aufgabe dieser Übersicht).
 
+#### Freigegebene Felder (Issue #145, November 2026)
+
+Die Skizze oben ist überholt; maßgeblich sind die strikten Schemas in
+`packages/shared-types/src/parent.ts`. Jede Antwort von
+`/api/parents/overview`, `/api/parents/calendar` und
+`/api/parents/:userId/links` wird vor dem Versand dagegen geprüft
+(`parents.service.ts`); ein nicht freigegebenes Feld führt zu einem
+Serverfehler statt an Eltern zu gehen. `test/parents/parents.allowlist.test.ts`
+schreibt die Liste aus.
+
+| Bereich | Freigegeben | Nie |
+|---|---|---|
+| Kind | Name, Gruppe, Namen der zuständigen Trainer:innen (`Group.trainerIds`) | Geburtsdatum, Geschlecht, Notizen, Athletenkennung, Kontaktdaten von Trainer:innen |
+| Einheiten | Termin, Gruppe, eigene Anwesenheit (anwesend/abwesend) | RPE, Feedback-Notiz, Trainer:innen-Notiz, Anwesenheit anderer, anwesende Trainer:innen |
+| Pläne | Name, Tage (Datum) | Sätze, Kommentare |
+| Wettkämpfe | Name, Datum, Ort, Bahn, Meldeschluss, interne Auswahlfrist; aus der eigenen Meldung Strecke, Wettkampfnummer, Lauf, Bahn, Meldezeit | Notizen, Pflichtzeiten, Meldungen anderer |
+| Ergebnisse | Strecke, Zeit, Datum, Bestzeit, Status | Kommentare, Platz, Zwischenzeiten |
+| Saisonplanung | Art, Titel, Zeitraum, Wochentage, Uhrzeit, Ausfall, Ort | Notiz, Beckenlänge |
+
+Handlungsfelder und Kommentare erreichen Eltern nie.
+
+**Volljährigkeit:** der Zugang stützt sich auf die elterliche Sorge für ein
+minderjähriges Kind (Abschnitt 3.3). Ab dem 18. Geburtstag erscheint ein Kind
+weder in der Übersicht noch im Kalender (`parents.age.ts`). Admins sehen die
+Verknüpfung unter „Kinder verwalten" als „volljährig" markiert und können sie
+entfernen; ohne Geburtsdatum bleibt sie wirksam und ist als „Geburtsdatum
+fehlt" markiert.
+
 ### 3.5 Admin-Verwaltung der Verknüpfungen
 
 `GET /api/parents/:userId/links`, `POST /api/parents/:userId/links`

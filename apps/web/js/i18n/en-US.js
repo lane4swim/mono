@@ -545,6 +545,8 @@ export default {
     upcomingCompetitionsTitle: 'Upcoming Competitions', noneUpcomingCompetitions: 'No upcoming competitions.',
     recentResultsTitle: 'Recent Results', noneResults: 'No results recorded yet.',
     pbBadge: 'Personal Best',
+    trainers: 'Coaches: {names}',
+    eventNumber: 'Event {n}', heat: 'Heat {n}', lane: 'Lane {n}', seedTime: 'Entry time {time}',
   },
   stats: {
     tabAttendance: 'Attendance', tabLoad: 'Training load', tabPerformance: 'Performance',
@@ -700,6 +702,8 @@ export default {
     manageChildrenHint: 'Select the athletes whose data {name} may view.',
     manageChildrenNoAthletes: 'No athletes added to the club yet.',
     manageChildrenSaved: 'Links saved',
+    childAdult: 'adult — hidden from the parent', childBirthdateMissing: 'Birthdate missing',
+    manageChildrenAdultHint: 'From their 18th birthday a child no longer appears for the parent. The link can be removed.',
     statusPending: 'Pending', statusUsed: 'Accepted', statusExpired: 'Expired', statusRevoked: 'Revoked',
     revokeInvite: 'Revoke', revokeConfirm: 'Revoke this invitation? The link will stop working immediately.',
     regenerateLinkButton: 'Renew link', regenerateLinkTitle: 'Renew invitation link',

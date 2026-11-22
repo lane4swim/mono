@@ -17,7 +17,7 @@ const CHILD_B_ID = '22222222-2222-2222-2222-222222222222';
 
 function makeOverview(athleteId: string): ParentChildOverview {
   return {
-    athlete: { id: athleteId, firstName: 'Mara', lastName: 'Vogel', groupId: null, groupName: null },
+    athlete: { id: athleteId, firstName: 'Mara', lastName: 'Vogel', groupId: null, groupName: null, trainerNames: [] },
     upcomingSessions: [],
     upcomingCompetitions: [],
     recentResults: [],
@@ -33,7 +33,7 @@ function makeUsers(records: Record<string, { clubId: string | null; roles: strin
   };
 }
 
-function makeAthletes(records: Record<string, { clubId: string; firstName: string; lastName: string }>) {
+function makeAthletes(records: Record<string, { clubId: string; firstName: string; lastName: string; birthdate?: Date | null }>) {
   return {
     async findById(id: string) {
       const r = records[id];
@@ -121,7 +121,7 @@ describe('parentsService — Admin-Verknüpfungsverwaltung', () => {
     const { service } = build();
     await service.addLink(PARENT_ID, CHILD_A_ID, { id: 'admin-1', clubId: CLUB_A });
     const links = await service.listLinks(PARENT_ID, { id: 'admin-1', clubId: CLUB_A });
-    expect(links).toEqual([{ athleteId: CHILD_A_ID, firstName: 'Mara', lastName: 'Vogel' }]);
+    expect(links).toEqual([{ athleteId: CHILD_A_ID, firstName: 'Mara', lastName: 'Vogel', ageStatus: 'birthdateMissing' }]);
   });
 
   it('removeLink() entfernt eine bestehende Verknüpfung', async () => {

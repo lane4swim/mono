@@ -9,9 +9,9 @@ describe('ParentOverviewResponseSchema', () => {
     const response = {
       children: [
         {
-          athlete: { id: CHILD_ID, firstName: 'Mara', lastName: 'Vogel', groupId: null, groupName: null },
+          athlete: { id: CHILD_ID, firstName: 'Mara', lastName: 'Vogel', groupId: null, groupName: null, trainerNames: ['Nina Brandt'] },
           upcomingSessions: [{ id: CHILD_ID, date: now, groupName: 'Leistungsgruppe' }],
-          upcomingCompetitions: [{ competitionId: CHILD_ID, competitionName: 'Bezirksmeisterschaften', date: now, event: '100 Freistil' }],
+          upcomingCompetitions: [{ competitionId: CHILD_ID, competitionName: 'Bezirksmeisterschaften', date: now, event: '100 Freistil', eventNumber: '12', heat: 3, lane: 4, seedTime: 72.35 }],
           recentResults: [{ id: CHILD_ID, event: '100 Freistil', time: 62.35, date: now, isPB: true, status: 'OK' }],
         },
       ],
@@ -26,7 +26,7 @@ describe('ParentOverviewResponseSchema', () => {
   it('lehnt ein Result mit ungültigem status-Typ ab', () => {
     const response = {
       children: [{
-        athlete: { id: CHILD_ID, firstName: 'Mara', lastName: 'Vogel', groupId: null, groupName: null },
+        athlete: { id: CHILD_ID, firstName: 'Mara', lastName: 'Vogel', groupId: null, groupName: null, trainerNames: ['Nina Brandt'] },
         upcomingSessions: [],
         upcomingCompetitions: [],
         recentResults: [{ id: CHILD_ID, event: '100 Freistil', time: null, date: now, isPB: false, status: 123 }],
@@ -38,7 +38,28 @@ describe('ParentOverviewResponseSchema', () => {
 
 describe('ParentLinksResponseSchema', () => {
   it('akzeptiert eine Liste verknüpfter Kinder', () => {
-    expect(ParentLinksResponseSchema.safeParse({ links: [{ athleteId: CHILD_ID, firstName: 'Mara', lastName: 'Vogel' }] }).success).toBe(true);
+    expect(ParentLinksResponseSchema.safeParse({ links: [{ athleteId: CHILD_ID, firstName: 'Mara', lastName: 'Vogel', ageStatus: 'minor' }] }).success).toBe(true);
+  });
+
+  it('verlangt den Altersstand und lehnt unbekannte Werte ab', () => {
+    expect(ParentLinksResponseSchema.safeParse({ links: [{ athleteId: CHILD_ID, firstName: 'Mara', lastName: 'Vogel' }] }).success).toBe(false);
+    expect(ParentLinksResponseSchema.safeParse({ links: [{ athleteId: CHILD_ID, firstName: 'Mara', lastName: 'Vogel', ageStatus: 'teen' }] }).success).toBe(false);
+  });
+});
+
+// Issue #145: die Schemas sind die Freigabeliste — unbekannte Felder werden
+// abgelehnt, auch verschachtelt.
+describe('Strikte Eltern-Schemas', () => {
+  const child = {
+    athlete: { id: CHILD_ID, firstName: 'Mara', lastName: 'Vogel', groupId: null, groupName: null, trainerNames: [] },
+    upcomingSessions: [], upcomingCompetitions: [], recentResults: [],
+  };
+  it('lehnt ein zusätzliches Feld beim Kind ab', () => {
+    expect(ParentOverviewResponseSchema.safeParse({ children: [{ ...child, athlete: { ...child.athlete, notes: 'x' } }] }).success).toBe(false);
+  });
+  it('lehnt RPE in einer Einheit ab', () => {
+    const session = { id: CHILD_ID, date: now, groupName: null, rpe: 7 };
+    expect(ParentOverviewResponseSchema.safeParse({ children: [{ ...child, upcomingSessions: [session] }] }).success).toBe(false);
   });
 });
 

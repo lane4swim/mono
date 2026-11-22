@@ -568,6 +568,8 @@ export default {
     upcomingCompetitionsTitle: 'Bevorstehende Wettkämpfe', noneUpcomingCompetitions: 'Keine bevorstehenden Wettkämpfe.',
     recentResultsTitle: 'Letzte Ergebnisse', noneResults: 'Noch keine Ergebnisse erfasst.',
     pbBadge: 'Bestzeit',
+    trainers: 'Trainer:innen: {names}',
+    eventNumber: 'Wk-Nr. {n}', heat: 'Lauf {n}', lane: 'Bahn {n}', seedTime: 'Meldezeit {time}',
   },
   stats: {
     tabAttendance: 'Anwesenheit', tabLoad: 'Belastung', tabPerformance: 'Leistung',
@@ -724,6 +726,8 @@ export default {
     manageChildrenHint: 'Athlet:innen auswählen, deren Daten {name} einsehen darf.',
     manageChildrenNoAthletes: 'Noch keine Athlet:innen im Verein angelegt.',
     manageChildrenSaved: 'Verknüpfungen gespeichert',
+    childAdult: 'volljährig — für die Eltern ausgeblendet', childBirthdateMissing: 'Geburtsdatum fehlt',
+    manageChildrenAdultHint: 'Ab dem 18. Geburtstag sehen Eltern ein Kind nicht mehr. Die Verknüpfung kann entfernt werden.',
     statusPending: 'Ausstehend', statusUsed: 'Angenommen', statusExpired: 'Abgelaufen', statusRevoked: 'Widerrufen',
     revokeInvite: 'Widerrufen', revokeConfirm: 'Diese Einladung widerrufen? Der Link funktioniert danach nicht mehr.',
     regenerateLinkButton: 'Link erneuern', regenerateLinkTitle: 'Einladungslink erneuern',
