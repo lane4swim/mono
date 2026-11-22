@@ -582,8 +582,9 @@ export type RequiredTimeSet = z.infer<typeof RequiredTimeSetSchema>;
 //
 // Ziel: `targetStore` + `targetId`, bei Sätzen innerhalb eines Plans oder
 // einer Vorlage zusätzlich `entryId` (die client-vergebene Satz-id,
-// PlainSetSchema.id). `authorId` ist null nur bei Altbestand ohne
-// Zuordnung (vor Befund M2) und nach der Art.-17-Anonymisierung.
+// PlainSetSchema.id). `authorId` ist null nur bei Altbestand, der noch
+// ohne Autor:innen-Zuordnung gespeichert wurde, und nach der
+// Art.-17-Anonymisierung.
 // `editedAt` markiert eine nachträgliche Änderung des Texts.
 export const COMMENT_TARGET_STORES = ['plans', 'exercises', 'templates', 'sectionTemplates', 'results'] as const;
 export const CommentTargetStoreSchema = z.enum(COMMENT_TARGET_STORES);

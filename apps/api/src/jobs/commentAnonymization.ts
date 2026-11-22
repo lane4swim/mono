@@ -3,7 +3,7 @@
 // entfernt, der Text bleibt als Teil der Diskussion erhalten.
 //
 // Abgeglichen wird über `authorId` (serverseitig beim Anlegen erzwungen,
-// sync.comments.ts). Altbestand ohne `authorId` — vor Sicherheitsbefund M2
+// sync.comments.ts). Altbestand ohne `authorId` — noch ohne Zuordnung
 // angelegt und bei der Migration ohne Zuordnung übernommen — lässt sich nur
 // über den Namen erkennen, samt dessen Unschärfe (Namensgleichheit,
 // nachträgliche Umbenennung). Ohne diesen Rückfall verlören ausgerechnet
