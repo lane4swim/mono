@@ -1706,19 +1706,28 @@ describe('syncService — Store "comments" (Issue #141)', () => {
       expect(results[0]).toMatchObject({ status: 'error', code: 'comment_not_permitted' });
     });
 
-    it.each([['trainer', asTrainer], ['admin', asAdmin]] as const)('%s löscht moderierend jeden Kommentar', async (_role, requester) => {
+    it('Trainer:innen löschen moderierend jeden Kommentar', async () => {
       const { service, gateway } = makeService();
       seedTargets(gateway);
       seedComment(gateway);
-      const results = await push(service, 'delete', null, requester(CLUB_A));
+      const results = await push(service, 'delete', null, asTrainer(CLUB_A));
       expect(results[0]!.status).toBe('applied');
+    });
+
+    // Issue #142: admin ist Vereinsverwaltung und moderiert nicht.
+    it('lehnt das Löschen eines fremden Kommentars durch admin ab', async () => {
+      const { service, gateway } = makeService();
+      seedTargets(gateway);
+      seedComment(gateway);
+      const results = await push(service, 'delete', null, asAdmin(CLUB_A));
+      expect(results[0]).toMatchObject({ status: 'error', code: 'comment_not_permitted' });
     });
 
     it('Altbestand ohne Zuordnung lässt sich moderierend löschen', async () => {
       const { service, gateway } = makeService();
       seedTargets(gateway);
       seedComment(gateway, { authorId: null });
-      const results = await push(service, 'delete', null, asAdmin(CLUB_A));
+      const results = await push(service, 'delete', null, asTrainer(CLUB_A));
       expect(results[0]!.status).toBe('applied');
     });
   });

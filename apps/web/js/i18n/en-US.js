@@ -68,7 +68,7 @@ export default {
       foreign_entity_missing: 'The referenced person or record no longer exists (it was likely permanently deleted in the meantime).',
       results_own_only: 'You may only edit your own results.',
       athlete_has_account: 'An athlete profile with an account or an open invitation cannot be switched to "managed by the club only".',
-      comment_not_permitted: 'You can\'t change or delete this comment: only its author can edit it, and only its author or a coach or admin can delete it.',
+      comment_not_permitted: 'You can\'t change or delete this comment: only its author can edit it, and only its author or a coach can delete it.',
       sync_internal_error: 'The operation could not be applied (internal error).',
     },
   },

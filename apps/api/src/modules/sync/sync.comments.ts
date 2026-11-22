@@ -7,7 +7,8 @@
 //     immer im eigenen Namen (authorId === requester.userId).
 //   * Ändern darf nur die Autor:in selbst, und nur den Text (samt
 //     editedAt) und den angezeigten Namen. Ziel und Zuordnung bleiben fest.
-//   * Löschen darf die Autor:in oder eine Trainer:in/Admin (Moderation).
+//   * Löschen darf die Autor:in oder eine Trainer:in (Moderation, Issue
+//     #142: admin ist Vereinsverwaltung und moderiert nicht).
 //     Altbestand ohne authorId (und anonymisierte Kommentare) lässt sich
 //     daher nur noch moderierend löschen.
 //
@@ -18,7 +19,7 @@ import { canRead } from './sync.permissions.js';
 
 export const COMMENT_NOT_PERMITTED_CODE = 'comment_not_permitted';
 
-const MODERATOR_ROLES: readonly Role[] = ['trainer', 'admin'];
+const MODERATOR_ROLES: readonly Role[] = ['trainer'];
 
 export function canModerateComments(roles: readonly Role[]): boolean {
   return roles.some((role) => MODERATOR_ROLES.includes(role));
@@ -56,7 +57,7 @@ export function assertCommentWrite(
     // Nichts zu löschen — die Löschung ist ohnehin wirkungslos.
     if (!existing) return null;
     if (existing.authorId === requester.userId || canModerateComments(requester.roles)) return null;
-    return 'Kommentare anderer Personen können nur Trainer:innen und Admins löschen.';
+    return 'Kommentare anderer Personen können nur Trainer:innen löschen.';
   }
 
   const targetStore = payload?.targetStore as EntityStoreName;

@@ -209,7 +209,7 @@ legt direkt einen Plan an.
   einsehen und bearbeiten.
 - **Kommentare** am ganzen Plan und an einzelnen Sätzen — auch von
   Athlet:innen, die den Plan selbst nicht bearbeiten. Eigene Kommentare lassen
-  sich bearbeiten und löschen; Trainer:innen und Admins können jeden Kommentar
+  sich bearbeiten und löschen; Trainer:innen können jeden Kommentar
   entfernen.
 - **Drucken / als PDF speichern:** druckoptimierte Ansicht für den ganzen Plan
   oder einen einzelnen Tag, funktioniert offline.
