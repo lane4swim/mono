@@ -52,7 +52,7 @@ export class PrismaParentsAthleteLookup {
   async findById(id: string) {
     return this.prisma.athlete.findUnique({
       where: { id },
-      select: { id: true, clubId: true, firstName: true, lastName: true },
+      select: { id: true, clubId: true, firstName: true, lastName: true, birthdate: true },
     });
   }
 }

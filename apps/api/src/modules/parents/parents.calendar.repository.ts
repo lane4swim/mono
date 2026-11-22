@@ -63,7 +63,8 @@ export function shapeChildCalendar(raw: RawChildCalendar, range: DateRange): Par
     })
     .filter((p) => p.days.length > 0);
 
-  // Einheiten nur mit eigener Anwesenheit — und davon nur "anwesend".
+  // Einheiten nur mit eigener Anwesenheit (anwesend/abwesend), ohne RPE
+  // und Notizen (Issue #145).
   const sessions = raw.sessions
     .filter((s) => sameClub(s) && inRange(s.date, range))
     .flatMap((s) => {

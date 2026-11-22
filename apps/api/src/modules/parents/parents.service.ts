@@ -1,6 +1,7 @@
 // Business-Logik für den Eltern-/Erziehungsberechtigten-Zugang (Phase 2,
 // Abschnitt 4.2 — docs/Plans/phase2-plan.md).
-import type { ParentOverviewResponse, ParentLink, ParentCalendarResponse } from '@lane1/shared-types';
+import { ParentOverviewResponseSchema, ParentCalendarResponseSchema, ParentLinkSchema, type ParentOverviewResponse, type ParentLink, type ParentCalendarResponse } from '@lane1/shared-types';
+import { parentLinkAgeStatus } from './parents.age.js';
 import type { ParentLinkRepository } from './parents.repository.js';
 import type { ParentOverviewGateway } from './parents.overview.repository.js';
 import type { ParentCalendarGateway, DateRange } from './parents.calendar.repository.js';
@@ -14,7 +15,7 @@ export interface ParentsUserLookup {
   findById(id: string): Promise<{ id: string; clubId: string | null; roles: readonly string[] } | null>;
 }
 export interface ParentsAthleteLookup {
-  findById(id: string): Promise<{ id: string; clubId: string; firstName: string; lastName: string } | null>;
+  findById(id: string): Promise<{ id: string; clubId: string; firstName: string; lastName: string; birthdate?: Date | null } | null>;
 }
 
 export interface ParentsServiceDeps {
@@ -25,6 +26,7 @@ export interface ParentsServiceDeps {
   users: ParentsUserLookup;
   athletes: ParentsAthleteLookup;
   auditLog: AuditLogWriter;
+  now?: () => Date;
 }
 
 export class ParentNotInClubError extends Error {}
@@ -34,27 +36,45 @@ export class UserNotParentError extends Error {}
 export type RequesterContext = Pick<Requester, 'id' | 'clubId'>;
 
 export function createParentsService(deps: ParentsServiceDeps) {
+  const now = deps.now ?? (() => new Date());
+
+  // Verknüpfte Kinder, die Eltern sehen dürfen: ab dem 18. Geburtstag nicht
+  // mehr (Issue #145, parents.age.ts). Ein nicht mehr vorhandenes Profil
+  // filtert anschließend das jeweilige Gateway heraus.
+  async function visibleChildIds(userId: string): Promise<string[]> {
+    const links = await deps.parentLinks.listByUser(userId);
+    const today = now();
+    const athletes = await Promise.all(links.map((link) => deps.athletes.findById(link.athleteId)));
+    return links
+      .filter((_link, i) => parentLinkAgeStatus(athletes[i]?.birthdate, today) !== 'adult')
+      .map((link) => link.athleteId);
+  }
+
   return {
     // Eigene, stark eingeschränkte Sicht (Plan Abschnitt 3.4) — nur die
     // eigenen verknüpften Kinder, nie fremde. `requester.id` kommt
     // aus dem Access Token, nicht aus der Anfrage — eine `parent`-Person
     // kann dadurch strukturell nur ihre eigenen Verknüpfungen abrufen.
+    //
+    // Die Antwort wird gegen das strikte Schema geprüft (Issue #145): ein
+    // nicht freigegebenes Feld bricht die Anfrage ab, statt an Eltern zu
+    // gehen (siehe packages/shared-types/src/parent.ts).
     async getOverview(requester: RequesterContext): Promise<ParentOverviewResponse> {
-      const links = await deps.parentLinks.listByUser(requester.id);
-      const children = await Promise.all(links.map((link) => deps.overview.buildChildOverview(link.athleteId)));
+      const childIds = await visibleChildIds(requester.id);
+      const children = await Promise.all(childIds.map((id) => deps.overview.buildChildOverview(id)));
       // Verwaiste Verknüpfungen (Athletenprofil zwischenzeitlich gelöscht)
       // werden stillschweigend herausgefiltert statt einen Fehler zu
       // werfen — die übrigen Kinder sollen weiterhin sichtbar bleiben.
-      return { children: children.filter((c): c is NonNullable<typeof c> => c !== null) };
+      return ParentOverviewResponseSchema.parse({ children: children.filter((c): c is NonNullable<typeof c> => c !== null) });
     },
 
     // Kalender der eigenen verknüpften Kinder — wie getOverview() kommt
     // die Person aus dem Access Token, nie aus der Anfrage.
     async getCalendar(requester: RequesterContext, range: DateRange): Promise<ParentCalendarResponse> {
       if (!deps.calendar) return { children: [] };
-      const links = await deps.parentLinks.listByUser(requester.id);
-      const children = await Promise.all(links.map((link) => deps.calendar!.buildChildCalendar(link.athleteId, range)));
-      return { children: children.filter((c): c is NonNullable<typeof c> => c !== null) };
+      const childIds = await visibleChildIds(requester.id);
+      const children = await Promise.all(childIds.map((id) => deps.calendar!.buildChildCalendar(id, range)));
+      return ParentCalendarResponseSchema.parse({ children: children.filter((c): c is NonNullable<typeof c> => c !== null) });
     },
 
     // Admin-Verwaltung (Plan Abschnitt 3.5) — `admin`/`superadmin`-geschützt
@@ -68,9 +88,12 @@ export function createParentsService(deps: ParentsServiceDeps) {
 
       const links = await deps.parentLinks.listByUser(targetUserId);
       const athletes = await Promise.all(links.map((link) => deps.athletes.findById(link.athleteId)));
+      const today = now();
       return athletes
         .filter((a): a is NonNullable<typeof a> => a !== null)
-        .map((a) => ({ athleteId: a.id, firstName: a.firstName, lastName: a.lastName }));
+        .map((a) => ParentLinkSchema.parse({
+          athleteId: a.id, firstName: a.firstName, lastName: a.lastName, ageStatus: parentLinkAgeStatus(a.birthdate, today),
+        }));
     },
 
     async addLink(targetUserId: string, athleteId: string, requester: RequesterContext): Promise<void> {

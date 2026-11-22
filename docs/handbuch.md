@@ -354,8 +354,16 @@ In **Mein Profil** pro Gerät aktivierbar. Lane 1 schickt Push-Nachrichten
 Admins laden Erziehungsberechtigte ein und verknüpfen sie in der
 Nutzerverwaltung mit einem oder mehreren Kindern (**Kinder verwalten**).
 Eltern sehen unter **Mein Kind** eine rein lesende Übersicht je Kind:
-bevorstehende Einheiten und Wettkämpfe, letzte Ergebnisse, Bestzeiten,
-Anwesenheit sowie den Kalender des Kindes.
+Gruppe und zuständige Trainer:innen (nur Namen), bevorstehende Einheiten,
+bevorstehende Wettkämpfe mit Wettkampfnummer, Lauf, Bahn und Meldezeit,
+letzte Ergebnisse und Bestzeiten, die eigene Anwesenheit (anwesend/abwesend)
+sowie den Kalender des Kindes. Belastungsangaben (RPE), Notizen,
+Handlungsfelder und Kommentare sehen Eltern nie.
+
+Ab dem **18. Geburtstag** erscheint ein Kind für die Eltern nicht mehr. Admins
+sehen solche Verknüpfungen unter **Kinder verwalten** als „volljährig“ markiert
+und können sie entfernen; fehlt das Geburtsdatum, bleibt die Verknüpfung
+wirksam und ist als „Geburtsdatum fehlt“ markiert.
 
 ## 11. Qualifikationen und Kampfrichterwesen
 

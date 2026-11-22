@@ -33,7 +33,7 @@ async function buildTestApp() {
   const parentLinks = new InMemoryParentLinkRepository();
   await parentLinks.create('parent-1', CHILD_ID);
   const overview: ParentChildOverview = {
-    athlete: { id: CHILD_ID, firstName: 'Mara', lastName: 'Vogel', groupId: null, groupName: null },
+    athlete: { id: CHILD_ID, firstName: 'Mara', lastName: 'Vogel', groupId: null, groupName: null, trainerNames: [] },
     upcomingSessions: [],
     upcomingCompetitions: [],
     recentResults: [],
@@ -90,7 +90,7 @@ describe('Admin-Verwaltung der Eltern-Kind-Verknüpfungen', () => {
     const token = await tokenFor(keyPair, 'admin-1', 'admin', club.id);
     const response = await app.inject({ method: 'GET', url: '/api/parents/parent-1/links', headers: { authorization: `Bearer ${token}` } });
     expect(response.statusCode).toBe(200);
-    expect(response.json().links).toEqual([{ athleteId: CHILD_ID, firstName: 'Mara', lastName: 'Vogel' }]);
+    expect(response.json().links).toEqual([{ athleteId: CHILD_ID, firstName: 'Mara', lastName: 'Vogel', ageStatus: 'birthdateMissing' }]);
     await app.close();
   });
 
@@ -107,6 +107,36 @@ describe('Admin-Verwaltung der Eltern-Kind-Verknüpfungen', () => {
     const token = await tokenFor(keyPair, 'parent-1', 'parent', club.id);
     const response = await app.inject({ method: 'GET', url: '/api/parents/parent-1/links', headers: { authorization: `Bearer ${token}` } });
     expect(response.statusCode).toBe(403);
+    await app.close();
+  });
+});
+
+// Issue #145: ein nicht freigegebenes Feld verlässt den Server nicht — die
+// Anfrage scheitert als Serverfehler, und der Wert taucht in der Antwort
+// nicht auf.
+describe('GET /api/parents/overview — nicht freigegebene Felder', () => {
+  it('antwortet mit 500 und ohne den Wert, statt ihn an Eltern zu senden', async () => {
+    const keyPair = generateFreshKeyPair();
+    const clubs = new InMemoryClubRepository();
+    const club = await clubs.create({ name: 'SV Wasserfreunde', enabledModules: [] });
+    const parentLinks = new InMemoryParentLinkRepository();
+    await parentLinks.create('parent-1', CHILD_ID);
+    const leaky = {
+      athlete: { id: CHILD_ID, firstName: 'Mara', lastName: 'Vogel', groupId: null, groupName: null, trainerNames: [], notes: 'GEHEIME-NOTIZ' },
+      upcomingSessions: [], upcomingCompetitions: [], recentResults: [],
+    } as unknown as ParentChildOverview;
+    const parentsService = createParentsService({
+      parentLinks,
+      overview: new InMemoryParentOverviewGateway(new Map([[CHILD_ID, leaky]])),
+      users: makeUsers({}),
+      athletes: makeAthletes({}),
+      auditLog: { record: async () => {} },
+    });
+    const app = await buildApp(testEnv, { clubs, keyPair, parentsService });
+    const token = await tokenFor(keyPair, 'parent-1', 'parent', club.id);
+    const response = await app.inject({ method: 'GET', url: '/api/parents/overview', headers: { authorization: `Bearer ${token}` } });
+    expect(response.statusCode).toBe(500);
+    expect(response.body).not.toContain('GEHEIME-NOTIZ');
     await app.close();
   });
 });

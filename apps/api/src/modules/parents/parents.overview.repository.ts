@@ -30,7 +30,11 @@ export class PrismaParentOverviewGateway implements ParentOverviewGateway {
 
     const now = new Date();
 
-    const [sessions, entries, results] = await Promise.all([
+    // Zuständige Trainer:innen der Gruppe (Group.trainerIds) — nur der Name,
+    // keine Kontaktdaten (Issue #145); nur aktive Konten des Vereins.
+    const trainerIds = athlete.group?.trainerIds ?? [];
+
+    const [sessions, entries, results, trainers] = await Promise.all([
       athlete.groupId
         ? this.prisma.trainingSession.findMany({
             where: { groupId: athlete.groupId, deletedAt: null, date: { gte: now } },
@@ -50,6 +54,12 @@ export class PrismaParentOverviewGateway implements ParentOverviewGateway {
         orderBy: { date: 'desc' },
         take: OVERVIEW_ITEM_LIMIT,
       }),
+      trainerIds.length > 0
+        ? this.prisma.user.findMany({
+            where: { id: { in: trainerIds }, clubId: athlete.clubId, deletedAt: null },
+            select: { name: true },
+          })
+        : Promise.resolve([]),
     ]);
 
     return {
@@ -59,6 +69,7 @@ export class PrismaParentOverviewGateway implements ParentOverviewGateway {
         lastName: athlete.lastName,
         groupId: athlete.groupId,
         groupName: athlete.group?.name ?? null,
+        trainerNames: trainers.map((u) => u.name).sort((a, b) => a.localeCompare(b, 'de')),
       },
       upcomingSessions: sessions.map((s) => ({ id: s.id, date: s.date.toISOString(), groupName: s.group?.name ?? null })),
       upcomingCompetitions: entries
@@ -68,6 +79,10 @@ export class PrismaParentOverviewGateway implements ParentOverviewGateway {
           competitionName: e.competition!.name,
           date: e.competition!.date.toISOString(),
           event: e.event,
+          eventNumber: e.eventNumber,
+          heat: e.heat,
+          lane: e.lane,
+          seedTime: e.seedTime,
         })),
       recentResults: results.map((r) => ({
         id: r.id,

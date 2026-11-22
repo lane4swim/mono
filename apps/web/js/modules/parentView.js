@@ -57,11 +57,19 @@ function renderOverview(container, children) {
         el('button', { type: 'button', class: 'btn btn-ghost btn-sm', onclick: () => openChildCalendar(child.athlete.id) }, t('parentView.openCalendar')),
       ]),
       child.athlete.groupName ? el('div', { class: 'pill-group mb-16' }, [badge(child.athlete.groupName, 'neutral')]) : null,
+      // Zuständige Trainer:innen der Gruppe — nur Namen (Issue #145).
+      (child.athlete.trainerNames || []).length > 0
+        ? el('p', { class: 'text-sm' }, t('parentView.trainers', { names: child.athlete.trainerNames.join(', ') }))
+        : null,
       buildSection(t('parentView.upcomingSessionsTitle'), child.upcomingSessions, t('parentView.noneUpcomingSessions'), (s) => el('div', { class: 'list-row' }, [
         el('div', { style: 'flex:1' }, [el('div', {}, fmtDateLong(s.date)), s.groupName ? el('div', { class: 'text-slate text-sm' }, s.groupName) : null].filter(Boolean)),
       ])),
       buildSection(t('parentView.upcomingCompetitionsTitle'), child.upcomingCompetitions, t('parentView.noneUpcomingCompetitions'), (c) => el('div', { class: 'list-row' }, [
-        el('div', { style: 'flex:1' }, [el('div', {}, c.competitionName), el('div', { class: 'text-slate text-sm' }, `${fmtDateLong(c.date)} — ${trCode(c.event, 'events')}`)]),
+        el('div', { style: 'flex:1' }, [
+          el('div', {}, c.competitionName),
+          el('div', { class: 'text-slate text-sm' }, `${fmtDateLong(c.date)} — ${trCode(c.event, 'events')}`),
+          entryDetails(c) ? el('div', { class: 'text-slate text-sm' }, entryDetails(c)) : null,
+        ].filter(Boolean)),
       ])),
       buildSection(t('parentView.recentResultsTitle'), child.recentResults, t('parentView.noneResults'), (r) => el('div', { class: 'list-row' }, [
         el('div', { style: 'flex:1' }, [el('div', {}, trCode(r.event, 'events')), el('div', { class: 'text-slate text-sm' }, fmtDateLong(r.date))]),
@@ -72,6 +80,17 @@ function renderOverview(container, children) {
   });
 
   container.appendChild(wrap);
+}
+
+// Wettkampfnummer, Lauf, Bahn und Meldezeit der Meldung (Issue #145) —
+// nur, was erfasst ist.
+export function entryDetails(c) {
+  return [
+    c.eventNumber ? t('parentView.eventNumber', { n: c.eventNumber }) : null,
+    c.heat != null ? t('parentView.heat', { n: c.heat }) : null,
+    c.lane != null ? t('parentView.lane', { n: c.lane }) : null,
+    c.seedTime != null ? t('parentView.seedTime', { time: secToTime(c.seedTime) }) : null,
+  ].filter(Boolean).join(' · ');
 }
 
 function buildSection(title, items, emptyMsg, renderItem) {

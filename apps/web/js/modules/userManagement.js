@@ -246,9 +246,19 @@ const ASSIGNABLE_ROLES = ['admin', 'trainer', 'athlete', 'referee', 'parent'];
 async function openManageParentLinksModal(member) {
   const [athletes, { links: currentLinks }] = await Promise.all([getAll('athletes'), api.listParentLinks(member.id)]);
   const linkedIds = new Set(currentLinks.map((l) => l.athleteId));
+  // Altersstand je verknüpftem Kind (Issue #145): volljährige Kinder sehen
+  // Eltern nicht mehr; ohne Geburtsdatum ist das nicht prüfbar.
+  const ageStatusById = new Map(currentLinks.map((l) => [l.athleteId, l.ageStatus]));
+  const ageBadge = (athleteId) => {
+    const status = ageStatusById.get(athleteId);
+    if (status === 'adult') return badge(t('usermgmt.childAdult'), 'open');
+    if (status === 'birthdateMissing') return badge(t('usermgmt.childBirthdateMissing'), 'neutral');
+    return null;
+  };
 
   const body = el('div');
   body.appendChild(el('p', { class: 'text-sm' }, t('usermgmt.manageChildrenHint', { name: member.name })));
+  if (currentLinks.some((l) => l.ageStatus === 'adult')) body.appendChild(el('p', { class: 'hint' }, t('usermgmt.manageChildrenAdultHint')));
   const checkboxes = new Map();
   athletes
     .filter((a) => a.active !== false)
@@ -256,7 +266,7 @@ async function openManageParentLinksModal(member) {
     .forEach((athlete) => {
       const cb = el('input', { type: 'checkbox', checked: linkedIds.has(athlete.id) });
       checkboxes.set(athlete.id, cb);
-      body.appendChild(el('label', { class: 'flex items-center gap-8', style: 'display:flex;margin-bottom:6px' }, [cb, fullName(athlete)]));
+      body.appendChild(el('label', { class: 'flex items-center gap-8', style: 'display:flex;margin-bottom:6px' }, [cb, fullName(athlete), ageBadge(athlete.id)].filter(Boolean)));
     });
   if (athletes.length === 0) body.appendChild(el('p', {}, t('usermgmt.manageChildrenNoAthletes')));
 
