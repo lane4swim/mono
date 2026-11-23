@@ -20,12 +20,13 @@ vi.mock('../js/apiClient.js', () => ({
   refreshTokens: vi.fn(),
   getStoredRefreshToken: vi.fn(() => 'stored-refresh-token'),
   clearTokens: vi.fn(),
+  logoutRemote: vi.fn(),
   ApiError: class ApiError extends Error {},
 }));
 
 import * as api from '../js/apiClient.js';
 import * as db from '../js/db.js'; // REAL db.js, real IndexedDB
-import { login } from '../js/state.js'; // REAL guard (ensureLocalStoreBelongsTo)
+import { login, logout } from '../js/state.js'; // REAL guard (ensureLocalStoreBelongsTo)
 
 const CLUB_B_USER = { id: 'userB', clubId: 'club-B', name: 'Coach B', roles: ['trainer'], role: 'trainer', locale: 'de-DE', enabledModules: [] };
 const CLUB_A_USER = { id: 'userA', clubId: 'club-A', name: 'Athlet A', roles: ['athlete'], role: 'athlete', locale: 'de-DE', enabledModules: [] };
@@ -110,5 +111,32 @@ describe('H1 — shared-device offline cache, real db.js + real state.js', () =>
 
     expect(await db.getAll('athletes')).toHaveLength(1);
     expect((await db.get('meta', 'localStoreOwner')).userId).toBe('userB');
+  });
+
+  it('logout() wipes the cache', async () => {
+    api.login.mockResolvedValue(CLUB_B_USER);
+    await login('coachB@example.org', 'pw', true);
+    await clubBSyncsItsData();
+
+    api.logoutRemote.mockResolvedValue(undefined);
+    await logout();
+
+    expect(await db.getAll('athletes')).toHaveLength(0);
+    expect(await db.get('meta', 'localStoreOwner')).toBeNull();
+  });
+
+  it('logout() wipes the cache even when the server revocation fails (finally)', async () => {
+    api.login.mockResolvedValue(CLUB_B_USER);
+    await login('coachB@example.org', 'pw', true);
+    await clubBSyncsItsData();
+
+    // Offline / server error: logoutRemote() rejects. Local cleanup must
+    // still run, and the error must still surface to the caller.
+    api.logoutRemote.mockRejectedValue(new Error('network down'));
+    await expect(logout()).rejects.toThrow('network down');
+
+    expect(await db.getAll('athletes')).toHaveLength(0);
+    expect(await db.getAll('sessions')).toHaveLength(0);
+    expect(await db.getAll('results')).toHaveLength(0);
   });
 });
