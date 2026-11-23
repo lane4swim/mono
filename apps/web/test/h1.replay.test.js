@@ -1,5 +1,6 @@
-// Hardening regression for Sicherheitsreview 2026-08-29, Befund H1
-// (shared-device cross-tenant read via the offline IndexedDB cache).
+// Hardening regression against a shared-device cross-tenant read through
+// the offline IndexedDB cache: synced data from one account's session must
+// not be readable by the next account that signs in on the same device.
 //
 // Complements state.localStoreOwner.test.js (which mocks db.js): this suite
 // drives the REAL db.js against a real (fake-indexeddb) IndexedDB and the
