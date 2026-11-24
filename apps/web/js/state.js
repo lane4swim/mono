@@ -313,13 +313,24 @@ export function loginDemo(user) {
 // Notizen, Sessions ...) nach dem Logout unverändert in der Browser-DB
 // liegen und wären auf einem geteilten Gerät ohne erneuten Login über
 // DevTools auslesbar.
+//
+// Die lokale Bereinigung (Tokens, IndexedDB, Sitzung) läuft im finally,
+// also AUCH dann, wenn der serverseitige Widerruf (logoutRemote())
+// fehlschlägt — z. B. offline oder bei einem Serverfehler. Andernfalls
+// hinterließe genau dieser Fall den vollständigen Vereinsbestand auf dem
+// Gerät, obwohl die Person sich abmelden wollte. Der Fehler wird danach
+// weitergereicht (finally verschluckt ihn nicht), damit die Oberfläche
+// einen fehlgeschlagenen Server-Widerruf melden kann.
 export async function logout() {
   if (IS_DEMO) { current = null; emit(); return; }
-  await api.logoutRemote();
-  api.clearTokens();
-  await wipeAll();
-  current = null;
-  emit();
+  try {
+    await api.logoutRemote();
+  } finally {
+    api.clearTokens();
+    await wipeAll();
+    current = null;
+    emit();
+  }
 }
 
 // Ändert und speichert die bevorzugte Anzeigesprache der/des AKTUELL
